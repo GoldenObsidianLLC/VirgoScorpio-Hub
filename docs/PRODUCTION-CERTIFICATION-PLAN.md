@@ -196,3 +196,11 @@ Start with #13 to freeze the supported release scope, then #14 to commission the
 ## Appendix C — Recommended release scope
 
 The proposed baseline for VirgoScorpio Hub 0.5.1 is recorded in [RELEASE-SCOPE.md](RELEASE-SCOPE.md). It follows the current manifest and environment defaults, limits 0.5.1 to an isolated developer preview, identifies provider/feature exclusions, and requires named release-owner approval before becoming an official product decision. The production evidence gates remain open.
+
+## Supplemental gate — public asset delivery and revocation (7 November 2026)
+
+PR #99 hardened application-level byte delivery, but production certification also requires deployment-specific evidence for the selected object store, edge/CDN, and reverse proxy. Retain `artifacts/evidence/public-asset-delivery.json` for the exact candidate and follow the [Public Asset Delivery Deployment Contract](security/PUBLIC-ASSET-DELIVERY-DEPLOYMENT-CONTRACT.md).
+
+The evidence must prove that anonymous object-origin reads are denied, public origin access is blocked, and only the approved application identity can read objects. For both `/media/` and `/library/public/`, prove shared-cache bypass, preservation of origin `Cache-Control: private, no-store`, zero success and negative TTLs, and disabled direct-object redirects. Using a disposable public test asset, verify successful origin/edge reads and then prove that visibility revocation produces non-cacheable HTTP 404 responses at both origin and edge. Resolve older direct-CDN URLs with a current `none-issued` inventory or provider purge evidence plus post-purge denial checks.
+
+Run `npm run public-assets:validate` with `VIRGOSCORPIO_HUB_EXPECTED_SOURCE_REVISION` set to the candidate's full Git SHA. A successful result validates manifest structure, references, freshness, and source binding only; it does not contact cloud providers, authenticate external evidence, change infrastructure, or certify production. Human review, live provider verification, independent security review, and release-owner approval remain required. This gate does not close issues #14 or #25 and does not change the production `NO-GO / NOT_PRODUCTION_CERTIFIED` decision.

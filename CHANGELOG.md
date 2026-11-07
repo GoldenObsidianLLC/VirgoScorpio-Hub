@@ -8,6 +8,10 @@ All notable project-level changes should be recorded here. This changelog does n
 
 - Public media, library assets, and variants now return Cache-Control: private, no-store and recheck current visibility before serving bytes. S3 media objects are stored with private/no-store metadata; direct public CDN URLs are disabled, and MEDIA_CDN_PUBLIC=true fails closed until a provider-backed invalidation contract and edge-revocation tests exist. Reverse-proxy/CDN cache overrides and provider-side purging of legacy direct-CDN URLs issued before this change remain deployment review gates. This is security hardening within the unreleased 0.6.2 candidate; no release or production certification is implied.
 
+### Public asset deployment evidence contract
+
+- Add a provider-neutral, source-bound manifest and fail-closed validator covering private object origins, the `/media/` and `/library/public/` cache-bypass contract, non-cacheable `private, no-store` success and revocation probes, and legacy direct-CDN URL disposition. The validator checks manifest structure, typed evidence references, freshness, and candidate SHA only; it does not query or configure providers or certify production. This is an unreleased 0.6.2 candidate change with no dependency, runtime delivery, database, or SemVer change.
+
 ### EnginEx repository linkage
 
 - Replaced the copied EnginEx source directory with a Git submodule linked to GoldenObsidianLLC/EnginEx and pinned the renderer to an exact commit.

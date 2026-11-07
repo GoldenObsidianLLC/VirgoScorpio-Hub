@@ -1,0 +1,106 @@
+{
+  "schemaVersion": 1,
+  "environment": "production",
+  "deploymentId": "<deployment identifier>",
+  "sourceRevision": "<full 40-character Git commit SHA>",
+  "decision": {
+    "status": "draft",
+    "approvedAt": "<UTC timestamp YYYY-MM-DDTHH:mm:ss.sssZ>",
+    "approvedBy": "team:<approved release owner>",
+    "changeReference": "change:<approved change record>"
+  },
+  "providers": {
+    "objectStorage": {
+      "provider": "<selected object storage provider>",
+      "service": "<non-secret bucket or service label>",
+      "verificationReference": "artifact:<private origin policy evidence>"
+    },
+    "edge": {
+      "provider": "<selected edge or CDN provider>",
+      "service": "<non-secret edge distribution label>",
+      "verificationReference": "artifact:<edge cache policy evidence>"
+    },
+    "reverseProxy": {
+      "provider": "<proxy provider or none>",
+      "service": "<proxy service label or none>",
+      "verificationReference": "artifact:<proxy policy evidence> or policy:no-reverse-proxy"
+    }
+  },
+  "origin": {
+    "anonymousObjectReadDenied": false,
+    "publicAccessBlocked": false,
+    "approvedReadIdentityReference": "identity:<application object-read identity>",
+    "privateBucketEvidence": "artifact:<private bucket policy evidence>"
+  },
+  "delivery": {
+    "routes": [
+      {
+        "prefix": "/media/",
+        "cacheMode": "<must be bypass>",
+        "originCacheControlHonored": false,
+        "sharedCacheStoresResponses": true,
+        "successCacheControl": "<must be private, no-store>",
+        "maxSuccessTtlSeconds": 1,
+        "maxNegativeTtlSeconds": 1,
+        "directObjectRedirects": true
+      },
+      {
+        "prefix": "/library/public/",
+        "cacheMode": "<must be bypass>",
+        "originCacheControlHonored": false,
+        "sharedCacheStoresResponses": true,
+        "successCacheControl": "<must be private, no-store>",
+        "maxSuccessTtlSeconds": 1,
+        "maxNegativeTtlSeconds": 1,
+        "directObjectRedirects": true
+      }
+    ]
+  },
+  "legacyUrls": {
+    "disposition": "<none-issued or purged>",
+    "verifiedAt": "<UTC timestamp YYYY-MM-DDTHH:mm:ss.sssZ>",
+    "evidenceReference": "artifact:<legacy URL inventory or purge evidence>",
+    "purgedAt": null
+  },
+  "probes": {
+    "originAnonymousReadDenial": {
+      "reference": "run:<anonymous object-origin denial probe>",
+      "executedAt": "<UTC timestamp YYYY-MM-DDTHH:mm:ss.sssZ>",
+      "statusCode": 403,
+      "cacheControl": "private, no-store",
+      "cacheable": false
+    },
+    "originSuccessNoStore": {
+      "reference": "run:<origin successful asset probe>",
+      "executedAt": "<UTC timestamp YYYY-MM-DDTHH:mm:ss.sssZ>",
+      "statusCode": 200,
+      "cacheControl": "private, no-store",
+      "cacheable": false
+    },
+    "edgeSuccessNoStore": {
+      "reference": "run:<edge successful asset probe>",
+      "executedAt": "<UTC timestamp YYYY-MM-DDTHH:mm:ss.sssZ>",
+      "statusCode": 200,
+      "cacheControl": "private, no-store",
+      "cacheable": false
+    },
+    "originRevocation": {
+      "reference": "run:<origin post-revocation probe>",
+      "executedAt": "<UTC timestamp YYYY-MM-DDTHH:mm:ss.sssZ>",
+      "statusCode": 404,
+      "cacheControl": "private, no-store",
+      "cacheable": false
+    },
+    "edgeRevocation": {
+      "reference": "run:<edge post-revocation probe>",
+      "executedAt": "<UTC timestamp YYYY-MM-DDTHH:mm:ss.sssZ>",
+      "statusCode": 404,
+      "cacheControl": "private, no-store",
+      "cacheable": false
+    }
+  },
+  "owners": {
+    "serviceOwner": "team:<service owner>",
+    "securityOwner": "team:<security owner>"
+  }
+}
