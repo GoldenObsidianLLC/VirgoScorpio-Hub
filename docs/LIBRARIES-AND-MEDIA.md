@@ -20,6 +20,8 @@
 - Keep object-storage buckets private. Any reverse proxy or CDN in front of the API must bypass caching for /media/* and /library/public/* and must not override origin cache directives. Direct object URLs or edge caching require a separately implemented and tested invalidation contract before being enabled.
 - Migration caveat: this change cannot purge CDN objects or revoke direct URLs issued by an older deployment. Before rollout where MEDIA_CDN_PUBLIC was enabled, purge every previously exposed media key/prefix at the provider, block public access to the origin bucket, and verify denial from both the edge and origin. Until that evidence exists, previously issued URLs remain a separate deployment risk.
 
+The selected production deployment must also satisfy the [Public Asset Delivery Deployment Contract](security/PUBLIC-ASSET-DELIVERY-DEPLOYMENT-CONTRACT.md): private object origin, an approved application read identity, cache bypass and origin-header preservation for both public API route families, zero positive/negative TTLs, post-revocation origin/edge denial, and an explicit legacy direct-CDN URL disposition. The validator is structural only; it does not change runtime behavior or prove provider state.
+
 ## API outline
 
 Authenticated routes use `Authorization: Bearer …` in development or an authenticated cookie/session with CSRF checks for browser write operations:
