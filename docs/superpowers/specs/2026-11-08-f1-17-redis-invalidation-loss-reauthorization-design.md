@@ -2,7 +2,7 @@
 
 **Date:** 8 November 2026
 
-**Status:** Implemented; the dedicated PostgreSQL/Redis browser regression passed **1/1** locally, the combined multi-node browser file passed **2/2**, the focused authorization/tenant/WebSocket/Redis suite passed **40/40**, and `npm run check` passed (566 tests, 563 passed, 0 failed, 3 platform skips). PR #108 is open against `main`; hosted PR CI run #461 (`42521278925`) and push CI run #462 (`42521284117`) both passed all six jobs for head `e44546e8e8353d5a7826fcdd00adffba9beab57b`. No formal review submissions or review threads are recorded.
+**Status:** Implemented; the dedicated PostgreSQL/Redis browser regression passed **1/1** locally, the combined multi-node browser file passed **2/2**, the focused authorization/tenant/WebSocket/Redis suite passed **40/40**, and `npm run check` passed (566 tests, 563 passed, 0 failed, 3 platform skips). PR #108 merged to `main` at `aaab380978edab446516fe92da99257e798a6200` without formal review submissions or review threads. The merge does not satisfy independent-review issues #14 or #25. Hosted PR CI run #461 (`42521278925`) and push CI run #462 (`42521284117`) passed all six jobs for intermediate head `e44546e8e8353d5a7826fcdd00adffba9beab57b`; final PR CI run #463 (`42521911437`) and push CI run #464 (`42521915668`) passed all six jobs for merged head `9c635b2633cfa4701b4970c3403a1673f902a76f`.
 
 **Scope:** Test-only qualification of the existing command-time WebSocket authorization check after one remote Redis authorization-invalidation delivery is intentionally dropped.
 

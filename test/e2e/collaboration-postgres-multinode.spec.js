@@ -607,7 +607,11 @@ test('independent API nodes converge PostgreSQL collaboration and propagate real
   }
 });
 
-test('WebSocket reauthorizes against PostgreSQL before accepting a command when Redis authorization invalidation is lost', async ({ browser }) => {
+for (const scenario of [
+  { name: 'before accepting a command', heartbeatMs: 30_000, triggerCommand: true },
+  { name: 'for an idle socket on the heartbeat', heartbeatMs: 5_000, triggerCommand: false }
+]) {
+test(`WebSocket reauthorizes against PostgreSQL ${scenario.name} when Redis authorization invalidation is lost`, async ({ browser }) => {
   test.skip(!integrationEnabled, 'Requires the explicit dedicated PostgreSQL and loopback Redis integration environment.');
   test.setTimeout(90_000);
 
@@ -637,13 +641,13 @@ test('WebSocket reauthorizes against PostgreSQL before accepting a command when 
   const clients = [];
 
   try {
-    siteA = await createSite(fixturePool, 'f1-17-site-a');
-    siteB = await createSite(fixturePool, 'f1-17-site-b');
-    const owner = await createUser(fixturePool, 'f1-17-owner');
+    siteA = await createSite(fixturePool, 'f1-18-site-a');
+    siteB = await createSite(fixturePool, 'f1-18-site-b');
+    const owner = await createUser(fixturePool, 'f1-18-owner');
     userIds.push(owner.id);
-    const revokedEditor = await createUser(fixturePool, 'f1-17-revoked-editor');
+    const revokedEditor = await createUser(fixturePool, 'f1-18-revoked-editor');
     userIds.push(revokedEditor.id);
-    const unaffectedEditor = await createUser(fixturePool, 'f1-17-unaffected-editor');
+    const unaffectedEditor = await createUser(fixturePool, 'f1-18-unaffected-editor');
     userIds.push(unaffectedEditor.id);
 
     const roleResult = await fixturePool.query(
@@ -677,16 +681,16 @@ test('WebSocket reauthorizes against PostgreSQL before accepting a command when 
     const siteADraft = await createDraft(storeA, {
       siteId: siteA,
       authorId: owner.id,
-      title: 'F1.17 authorization-loss Site A draft'
+      title: 'F1.18 authorization-loss Site A draft'
     });
     const siteBDraft = await createDraft(storeA, {
       siteId: siteB,
       authorId: unaffectedEditor.id,
-      title: 'F1.17 unaffected Site B draft'
+      title: 'F1.18 unaffected Site B draft'
     });
     const siteADocument = (await storeB.getById({ siteId: siteA, id: siteADraft.id })).body;
     const siteBDocument = (await storeB.getById({ siteId: siteB, id: siteBDraft.id })).body;
-    const channelPrefix = 'virgoscorpio_hub:test:f1-17:' + randomUUID();
+    const channelPrefix = 'virgoscorpio_hub:test:f1-18:' + randomUUID();
 
     // Both API nodes use their normal database-backed identity services. Node B
     // therefore rechecks authoritative membership state even if its Pub/Sub
@@ -697,7 +701,7 @@ test('WebSocket reauthorizes against PostgreSQL before accepting a command when 
       siteIds: [siteA, siteB],
       store: storeA,
       pool: poolA,
-      heartbeatMs: 30_000
+      heartbeatMs: scenario.heartbeatMs
     });
     nodeB = await createRedisApiInstance({
       redisUrl,
@@ -705,7 +709,7 @@ test('WebSocket reauthorizes against PostgreSQL before accepting a command when 
       siteIds: [siteA, siteB],
       store: storeB,
       pool: poolB,
-      heartbeatMs: 30_000
+      heartbeatMs: scenario.heartbeatMs
     });
 
     const ownerToken = await loginForSession(nodeA.baseUrl, {
@@ -725,8 +729,8 @@ test('WebSocket reauthorizes against PostgreSQL before accepting a command when 
       baseUrl: nodeB.baseUrl,
       siteId: siteA,
       contentId: siteADraft.id,
-      sessionNumber: 17,
-      clientId: 'f1-17-revoked-editor',
+      sessionNumber: 18,
+      clientId: 'f1-18-revoked-editor',
       document: siteADocument,
       sessionToken: revokedEditorToken
     });
@@ -735,8 +739,8 @@ test('WebSocket reauthorizes against PostgreSQL before accepting a command when 
       baseUrl: nodeB.baseUrl,
       siteId: siteB,
       contentId: siteBDraft.id,
-      sessionNumber: 18,
-      clientId: 'f1-17-unaffected-editor',
+      sessionNumber: 19,
+      clientId: 'f1-18-unaffected-editor',
       document: siteBDocument,
       sessionToken: unaffectedEditorToken
     });
@@ -744,6 +748,17 @@ test('WebSocket reauthorizes against PostgreSQL before accepting a command when 
 
     expect(revokedClient.joined.sequence).toBe(0);
     expect(unaffectedClient.joined.sequence).toBe(0);
+
+    // Capture close notifications before any membership state is changed so
+    // the idle-socket case cannot miss a heartbeat close racing the DB checks.
+    await revokedClient.page.evaluate(() => {
+      const socket = window.__virgoscorpio_hubCollaboration?.socket;
+      if (!socket) throw new Error('Collaboration WebSocket is unavailable.');
+      window.__f118AuthorizationClose = null;
+      socket.addEventListener('close', event => {
+        window.__f118AuthorizationClose = { code: event.code, reason: event.reason };
+      }, { once: true });
+    });
 
     // Drop exactly the next authorization-pattern delivery on node B. The
     // membership DELETE still commits on node A and its real identity callback
@@ -766,35 +781,28 @@ test('WebSocket reauthorizes against PostgreSQL before accepting a command when 
     );
     expect(removedMembership.rowCount).toBe(0);
 
-    // With the Redis hint lost and the heartbeat intentionally delayed, the
-    // established socket remains open until its next command. The gateway must
-    // reauthorize that command against PostgreSQL and close before persistence.
-    await revokedClient.page.waitForTimeout(200);
-    expect(await revokedClient.page.evaluate(
-      () => window.__virgoscorpio_hubCollaboration.socket.readyState
-    )).toBe(1);
+    if (scenario.triggerCommand) {
+      await sendCollaborationCommand(revokedClient.page, {
+        type: 'document.operation',
+        contentId: siteADraft.id,
+        operation: createTitleOperation({
+          clientId: revokedClient.clientId,
+          baseSequence: 0,
+          title: 'This unauthorized operation must never persist'
+        })
+      });
+    }
 
-    const revokedSocketClose = revokedClient.page.evaluate(() => new Promise(resolve => {
-      const socket = window.__virgoscorpio_hubCollaboration?.socket;
-      if (!socket) throw new Error('Collaboration WebSocket is unavailable.');
-      if (socket.readyState === WebSocket.CLOSED) {
-        resolve({ code: null, reason: 'already-closed' });
-        return;
-      }
-      socket.addEventListener('close', event => {
-        resolve({ code: event.code, reason: event.reason });
-      }, { once: true });
-    }));
-    await sendCollaborationCommand(revokedClient.page, {
-      type: 'document.operation',
-      contentId: siteADraft.id,
-      operation: createTitleOperation({
-        clientId: revokedClient.clientId,
-        baseSequence: 0,
-        title: 'This unauthorized operation must never persist'
-      })
-    });
-    const closeEvent = await revokedSocketClose;
+    // The idle case sends no application command after membership removal.
+    // It must close solely because the next server heartbeat reauthorizes
+    // the existing subscription against authoritative PostgreSQL membership.
+    await expect.poll(
+      () => revokedClient.page.evaluate(
+        () => window.__virgoscorpio_hubCollaboration.socket.readyState
+      ),
+      { timeout: scenario.heartbeatMs * 2 + 2_000, intervals: [100, 250, 500] }
+    ).toBe(3);
+    const closeEvent = await revokedClient.page.evaluate(() => window.__f118AuthorizationClose);
     expect(closeEvent.code).toBe(1008);
 
     expect(await unaffectedClient.page.evaluate(
@@ -841,3 +849,4 @@ test('WebSocket reauthorizes against PostgreSQL before accepting a command when 
     await fixturePool.end();
   }
 });
+}
