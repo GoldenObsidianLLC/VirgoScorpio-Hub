@@ -274,7 +274,10 @@ async function createRedisApiInstance({
   const { createRedisRealtimeBridge } = require('../../packages/realtime/src/redis-realtime');
 
   let dropNextDocumentRelay = false;
+  let dropNextAuthorizationInvalidation = false;
+  let droppedAuthorizationInvalidations = 0;
   let publisherCreated = false;
+  let subscriberCreated = false;
   const createFaultInjectingClient = options => {
     const client = createClient(options);
     if (!publisherCreated) {
@@ -288,6 +291,22 @@ async function createRedisApiInstance({
           throw error;
         }
         return publish(channel, message);
+      };
+    } else if (!subscriberCreated) {
+      subscriberCreated = true;
+      const pSubscribe = client.pSubscribe.bind(client);
+      client.pSubscribe = async (pattern, listener, ...args) => {
+        if (pattern !== channelPrefix + ':authorization') {
+          return pSubscribe(pattern, listener, ...args);
+        }
+        return pSubscribe(pattern, (message, channel) => {
+          if (dropNextAuthorizationInvalidation) {
+            dropNextAuthorizationInvalidation = false;
+            droppedAuthorizationInvalidations += 1;
+            return;
+          }
+          return listener(message, channel);
+        }, ...args);
       };
     }
     return client;
@@ -329,6 +348,12 @@ async function createRedisApiInstance({
     baseUrl,
     dropNextDocumentRelay() {
       dropNextDocumentRelay = true;
+    },
+    dropNextAuthorizationInvalidation() {
+      dropNextAuthorizationInvalidation = true;
+    },
+    get droppedAuthorizationInvalidations() {
+      return droppedAuthorizationInvalidations;
     },
     async close() {
       if (closed) return;

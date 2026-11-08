@@ -2,7 +2,7 @@
 
 **Date:** 8 November 2026
 
-**Status:** Implemented; focused, PostgreSQL/Redis browser, and full local checks passed. [PR #107](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/107) is open against `main`; hosted CI is running for the latest PR head and no review submissions are recorded.
+**Status:** Implemented and merged to `main` via [PR #107](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/107) at `5c691546a84d8ab51e35d0197bfa7ae4c8ddbeea`. Hosted CI run #457 (`42513284869`) passed all six jobs; no formal review submissions or review threads were recorded.
 
 **Scope:** Test-only qualification of the production API identity-service callback wiring for site-membership revocation across independent API nodes.
 
