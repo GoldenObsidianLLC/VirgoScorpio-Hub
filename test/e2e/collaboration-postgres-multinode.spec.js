@@ -115,11 +115,12 @@ async function openPostgresClient(browser, {
   sessionNumber,
   clientId,
   document,
-  afterSequence = 0
+  afterSequence = 0,
+  sessionToken = 'f1-13-session-' + sessionNumber
 }) {
   const context = await browser.newContext();
   try {
-    const token = 'f1-13-session-' + sessionNumber;
+    const token = sessionToken;
     await context.addCookies([{
       name: 'vsh_session',
       value: token,
@@ -165,6 +166,24 @@ async function createUser(pool, label) {
     [email, 'F1.13 ' + label]
   );
   return { id: result.rows[0].id, email };
+}
+
+async function loginForSession(baseUrl, { email, password }) {
+  const response = await fetch(baseUrl + '/api/v1/auth/login', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ email, password })
+  });
+  expect(response.status).toBe(200);
+  const setCookieValues = response.headers.getSetCookie?.()
+    || [response.headers.get('set-cookie') || ''];
+  const sessionCookie = setCookieValues.find(value => value.startsWith('vsh_session='))
+    || setCookieValues.find(value => value.includes('vsh_session='));
+  expect(sessionCookie).toBeTruthy();
+  const sessionCookieOffset = sessionCookie.indexOf('vsh_session=');
+  return decodeURIComponent(
+    sessionCookie.slice(sessionCookieOffset + 'vsh_session='.length).split(';', 1)[0].split(',', 1)[0]
+  );
 }
 
 function initialDraftDocument(contentId, title) {
@@ -574,6 +593,241 @@ test('independent API nodes converge PostgreSQL collaboration and propagate real
       poolB.end().catch(() => {}),
       authPool.end().catch(() => {})
     ]);
+    if (siteA || siteB) {
+      await fixturePool.query(
+        'DELETE FROM sites WHERE id=ANY($1::uuid[])',
+        [[siteA, siteB].filter(Boolean)]
+      ).catch(() => {});
+    }
+    if (userIds.length) {
+      await fixturePool.query('DELETE FROM auth_sessions WHERE user_id=ANY($1::uuid[])', [userIds]).catch(() => {});
+      await fixturePool.query('DELETE FROM users WHERE id=ANY($1::uuid[])', [userIds]).catch(() => {});
+    }
+    await fixturePool.end();
+  }
+});
+
+test('WebSocket reauthorizes against PostgreSQL before accepting a command when Redis authorization invalidation is lost', async ({ browser }) => {
+  test.skip(!integrationEnabled, 'Requires the explicit dedicated PostgreSQL and loopback Redis integration environment.');
+  test.setTimeout(90_000);
+
+  const fixturePool = new Pool({
+    connectionString: databaseUrl,
+    max: 3,
+    connectionTimeoutMillis: 4_000
+  });
+  const poolA = new Pool({
+    connectionString: databaseUrl,
+    max: 4,
+    connectionTimeoutMillis: 4_000
+  });
+  const poolB = new Pool({
+    connectionString: databaseUrl,
+    max: 4,
+    connectionTimeoutMillis: 4_000
+  });
+  const storeA = createPostgresStore({ pool: poolA });
+  const storeB = createPostgresStore({ pool: poolB });
+
+  let siteA;
+  let siteB;
+  const userIds = [];
+  let nodeA;
+  let nodeB;
+  const clients = [];
+
+  try {
+    siteA = await createSite(fixturePool, 'f1-17-site-a');
+    siteB = await createSite(fixturePool, 'f1-17-site-b');
+    const owner = await createUser(fixturePool, 'f1-17-owner');
+    userIds.push(owner.id);
+    const revokedEditor = await createUser(fixturePool, 'f1-17-revoked-editor');
+    userIds.push(revokedEditor.id);
+    const unaffectedEditor = await createUser(fixturePool, 'f1-17-unaffected-editor');
+    userIds.push(unaffectedEditor.id);
+
+    const roleResult = await fixturePool.query(
+      "SELECT id,slug FROM roles WHERE slug IN ('site-owner','editor')"
+    );
+    const roleIds = new Map(roleResult.rows.map(row => [row.slug, row.id]));
+    expect(roleIds.has('site-owner')).toBe(true);
+    expect(roleIds.has('editor')).toBe(true);
+
+    const ownerPassword = 'F1-17-Owner-Password-2026';
+    const revokedEditorPassword = 'F1-17-Revoked-Editor-Password-2026';
+    const unaffectedEditorPassword = 'F1-17-Unaffected-Editor-Password-2026';
+    await fixturePool.query(
+      'UPDATE users SET password_hash=CASE id WHEN $1 THEN $2 WHEN $3 THEN $4 WHEN $5 THEN $6 END WHERE id=ANY($7::uuid[])',
+      [
+        owner.id, await hashPassword(ownerPassword),
+        revokedEditor.id, await hashPassword(revokedEditorPassword),
+        unaffectedEditor.id, await hashPassword(unaffectedEditorPassword),
+        [owner.id, revokedEditor.id, unaffectedEditor.id]
+      ]
+    );
+    await fixturePool.query(
+      'INSERT INTO site_memberships(site_id,user_id,role_id) VALUES($1,$2,$3),($1,$4,$5),($6,$7,$5)',
+      [
+        siteA, owner.id, roleIds.get('site-owner'),
+        revokedEditor.id, roleIds.get('editor'),
+        siteB, unaffectedEditor.id
+      ]
+    );
+
+    const siteADraft = await createDraft(storeA, {
+      siteId: siteA,
+      authorId: owner.id,
+      title: 'F1.17 authorization-loss Site A draft'
+    });
+    const siteBDraft = await createDraft(storeA, {
+      siteId: siteB,
+      authorId: unaffectedEditor.id,
+      title: 'F1.17 unaffected Site B draft'
+    });
+    const siteADocument = (await storeB.getById({ siteId: siteA, id: siteADraft.id })).body;
+    const siteBDocument = (await storeB.getById({ siteId: siteB, id: siteBDraft.id })).body;
+    const channelPrefix = 'virgoscorpio_hub:test:f1-17:' + randomUUID();
+
+    // Both API nodes use their normal database-backed identity services. Node B
+    // therefore rechecks authoritative membership state even if its Pub/Sub
+    // authorization notification is intentionally lost by the test subscriber.
+    nodeA = await createRedisApiInstance({
+      redisUrl,
+      channelPrefix,
+      siteIds: [siteA, siteB],
+      store: storeA,
+      pool: poolA,
+      heartbeatMs: 30_000
+    });
+    nodeB = await createRedisApiInstance({
+      redisUrl,
+      channelPrefix,
+      siteIds: [siteA, siteB],
+      store: storeB,
+      pool: poolB,
+      heartbeatMs: 30_000
+    });
+
+    const ownerToken = await loginForSession(nodeA.baseUrl, {
+      email: owner.email,
+      password: ownerPassword
+    });
+    const revokedEditorToken = await loginForSession(nodeB.baseUrl, {
+      email: revokedEditor.email,
+      password: revokedEditorPassword
+    });
+    const unaffectedEditorToken = await loginForSession(nodeB.baseUrl, {
+      email: unaffectedEditor.email,
+      password: unaffectedEditorPassword
+    });
+
+    const revokedClient = await openPostgresClient(browser, {
+      baseUrl: nodeB.baseUrl,
+      siteId: siteA,
+      contentId: siteADraft.id,
+      sessionNumber: 17,
+      clientId: 'f1-17-revoked-editor',
+      document: siteADocument,
+      sessionToken: revokedEditorToken
+    });
+    clients.push(revokedClient);
+    const unaffectedClient = await openPostgresClient(browser, {
+      baseUrl: nodeB.baseUrl,
+      siteId: siteB,
+      contentId: siteBDraft.id,
+      sessionNumber: 18,
+      clientId: 'f1-17-unaffected-editor',
+      document: siteBDocument,
+      sessionToken: unaffectedEditorToken
+    });
+    clients.push(unaffectedClient);
+
+    expect(revokedClient.joined.sequence).toBe(0);
+    expect(unaffectedClient.joined.sequence).toBe(0);
+
+    // Drop exactly the next authorization-pattern delivery on node B. The
+    // membership DELETE still commits on node A and its real identity callback
+    // still publishes the notification successfully from that node.
+    nodeB.dropNextAuthorizationInvalidation();
+    const membershipRemoval = await fetch(
+      nodeA.baseUrl + '/api/v1/sites/' + siteA + '/members/' + revokedEditor.id,
+      {
+        method: 'DELETE',
+        headers: { authorization: 'Bearer ' + ownerToken }
+      }
+    );
+    expect(membershipRemoval.status).toBe(200);
+    expect((await membershipRemoval.json()).removed).toBe(true);
+    await expect.poll(() => nodeB.droppedAuthorizationInvalidations, { timeout: 5_000 }).toBe(1);
+
+    const removedMembership = await fixturePool.query(
+      'SELECT 1 FROM site_memberships WHERE site_id=$1 AND user_id=$2',
+      [siteA, revokedEditor.id]
+    );
+    expect(removedMembership.rowCount).toBe(0);
+
+    // With the Redis hint lost and the heartbeat intentionally delayed, the
+    // established socket remains open until its next command. The gateway must
+    // reauthorize that command against PostgreSQL and close before persistence.
+    await revokedClient.page.waitForTimeout(200);
+    expect(await revokedClient.page.evaluate(
+      () => window.__virgoscorpio_hubCollaboration.socket.readyState
+    )).toBe(1);
+
+    const revokedSocketClose = revokedClient.page.evaluate(() => new Promise(resolve => {
+      const socket = window.__virgoscorpio_hubCollaboration?.socket;
+      if (!socket) throw new Error('Collaboration WebSocket is unavailable.');
+      if (socket.readyState === WebSocket.CLOSED) {
+        resolve({ code: null, reason: 'already-closed' });
+        return;
+      }
+      socket.addEventListener('close', event => {
+        resolve({ code: event.code, reason: event.reason });
+      }, { once: true });
+    }));
+    await sendCollaborationCommand(revokedClient.page, {
+      type: 'document.operation',
+      contentId: siteADraft.id,
+      operation: createTitleOperation({
+        clientId: revokedClient.clientId,
+        baseSequence: 0,
+        title: 'This unauthorized operation must never persist'
+      })
+    });
+    const closeEvent = await revokedSocketClose;
+    expect(closeEvent.code).toBe(1008);
+
+    expect(await unaffectedClient.page.evaluate(
+      () => window.__virgoscorpio_hubCollaboration.socket.readyState
+    )).toBe(1);
+    await sendCollaborationCommand(unaffectedClient.page, { type: 'ping' });
+    const unaffectedPong = await waitForCollaborationMessage(
+      unaffectedClient.page,
+      'pong',
+      3_000
+    );
+    expect(unaffectedPong.type).toBe('pong');
+
+    const revokedDocumentSync = await storeB.getCollaborationSync({
+      siteId: siteA,
+      contentId: siteADraft.id,
+      afterSequence: 0
+    });
+    expect(revokedDocumentSync.sequence).toBe(0);
+    expect(revokedDocumentSync.operations).toEqual([]);
+
+    const unaffectedDocumentSync = await storeB.getCollaborationSync({
+      siteId: siteB,
+      contentId: siteBDraft.id,
+      afterSequence: 0
+    });
+    expect(unaffectedDocumentSync.sequence).toBe(0);
+    expect(unaffectedDocumentSync.operations).toEqual([]);
+  } finally {
+    await closeClients(clients);
+    await nodeA?.close().catch(() => {});
+    await nodeB?.close().catch(() => {});
+    await Promise.all([poolA.end().catch(() => {}), poolB.end().catch(() => {})]);
     if (siteA || siteB) {
       await fixturePool.query(
         'DELETE FROM sites WHERE id=ANY($1::uuid[])',
