@@ -19,7 +19,7 @@ Strengthen application-level regressions for collaboration authorization using t
 - [x] Run focused realtime/tenant/collaboration tests and `npm run check`; refresh the generated tenant route inventory using its prescribed generator after adding the regression.
 - [x] Update the realtime foundation, AI architecture, roadmap and this plan with exact evidence and explicit limitations.
 - [x] Review `git diff --check` and the complete staged diff; keep pre-existing unrelated worktree files untouched.
-- [ ] Push the branch and open a stacked PR targeting the F1.13 promotion branch; hosted CI and review remain pending. Do not merge ahead of #104. No release, tag or deployment is part of this plan.
+- [x] Pushed the branch and opened [PR #105](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/105) stacked on the F1.13 promotion branch used by PR #104. Hosted CI run #437 (`42496394083`) is in progress; review is pending. Do not merge ahead of #104 or promote the stack until its mainline integration is complete. No release, tag or deployment is part of this plan.
 
 ## Local validation record (8 November 2026)
 
