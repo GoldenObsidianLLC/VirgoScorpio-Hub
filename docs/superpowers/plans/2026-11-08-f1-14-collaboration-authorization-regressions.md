@@ -1,9 +1,9 @@
 # F1.14 Collaboration tenant and live-authorization regression — implementation plan
 
 **Date:** 2026-11-08
-**Status:** Implementation and local/hosted CI validation complete; PR #105 merged into the F1.13 feature branch, not `main`. The combined mainline promotion is open as PR #106 with F1.15; no review submissions were recorded.
+**Status:** Implemented and locally/hosted-CI validated. PR #105 merged into the former F1.13 feature branch; combined F1.14/F1.15 PR #106 subsequently merged to `main`. No review submissions were recorded.
 **Design:** [F1.14 collaboration authorization regression](../specs/2026-11-08-f1-14-collaboration-authorization-regressions-design.md)
-**Base:** PR #105 was based on F1.13 head `59ffa0d` and merged at `41d04124376b9475e870407e7a04529082602b69`. F1.13 PR #104 is now on `main` at merge commit `c97a9273629bc55be42a4b9bf5239f4313a7e448`; F1.14 still needs a separate mainline promotion.
+**Base:** PR #105 was based on F1.13 head `59ffa0d` and merged at `41d04124376b9475e870407e7a04529082602b69`. F1.13 PR #104 is on `main` at merge commit `c97a9273629bc55be42a4b9bf5239f4313a7e448`; the combined F1.14/F1.15 PR #106 is on `main` at merge commit `66f7b10059e96d4cf4345ac75edbb03f0f5c3f4a`.
 
 ## Scope guard
 
@@ -19,7 +19,7 @@ Strengthen application-level regressions for collaboration authorization using t
 - [x] Run focused realtime/tenant/collaboration tests and `npm run check`; refresh the generated tenant route inventory using its prescribed generator after adding the regression.
 - [x] Update the realtime foundation, AI architecture, roadmap and this plan with exact evidence and explicit limitations.
 - [x] Review `git diff --check` and the complete staged diff; keep pre-existing unrelated worktree files untouched.
-- [x] Pushed the branch and opened [PR #105](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/105) against the F1.13 feature branch; PR #105 merged at `41d04124376b9475e870407e7a04529082602b69`. F1.13 PR #104 subsequently merged to `main` at `c97a9273629bc55be42a4b9bf5239f4313a7e448`. Hosted PR #105 run #441 (`42496533962`) passed all six jobs. No review submissions were present. F1.14 mainline promotion is open as [PR #106](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/106), combined with F1.15; the GitHub integration endpoint returned HTTP 403, so the authenticated GitHub CLI created the PR. No release, tag or deployment is part of this plan.
+- [x] Pushed the branch and opened [PR #105](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/105) against the F1.13 feature branch; PR #105 merged at `41d04124376b9475e870407e7a04529082602b69`. F1.13 PR #104 subsequently merged to `main` at `c97a9273629bc55be42a4b9bf5239f4313a7e448`. Hosted PR #105 run #441 (`42496533962`) passed all six jobs. No review submissions were present. The combined F1.14/F1.15 promotion [PR #106](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/106) merged to `main` at `66f7b10059e96d4cf4345ac75edbb03f0f5c3f4a`; hosted CI run #452 passed all six jobs. No review submissions were present. No release, tag or deployment is part of this plan.
 
 ## Local validation record (8 November 2026)
 

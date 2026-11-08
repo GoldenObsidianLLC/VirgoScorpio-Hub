@@ -25,7 +25,7 @@ Using an already-existing browser context avoids increasing the established four
 ## Security and correctness boundaries
 
 - The separate fake identity snapshots deliberately keep node B stale. Therefore the remote WebSocket closure demonstrates receipt and application of the Redis invalidation, rather than a fresh node B authorization lookup independently denying the connection.
-- The test mutates the node A fixture snapshot and calls the bridge invalidation method directly. It does not exercise a production identity provider, production membership persistence, or the real identity service's callback wiring end-to-end.
+- The F1.15 test mutates the node A fixture snapshot and calls the bridge invalidation method directly. It does not exercise a production identity provider, production membership persistence, or the real identity service's callback wiring end-to-end. F1.16 adds a separate follow-on regression for the real API identity-service callback and membership DELETE route composition.
 - This proves the successful-delivery path only. Redis Pub/Sub remains best-effort; this is not a durability guarantee for invalidation messages or a test of Redis outage/failover, Redis Cluster, or delivery loss.
 - F1.14 continues to cover same-node REST and WebSocket edit denial before persistence. F1.15 adds the separate remote subscription-invalidation path; it does not replace fresh per-command/per-heartbeat authorization checks.
 - These maintainer-authored regression tests do not constitute the independent reviews required by issues #14 and #25, production identity-provider qualification, load/soak testing, operational readiness, or release approval.
