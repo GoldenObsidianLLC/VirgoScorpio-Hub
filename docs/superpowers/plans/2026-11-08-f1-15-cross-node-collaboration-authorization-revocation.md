@@ -41,7 +41,7 @@ The full repository check initially detected the expected stale source-anchored 
 - F1.13 PR #104 is merged to `main` at merge commit `c97a9273629bc55be42a4b9bf5239f4313a7e448`.
 - F1.14 PR #105 is merged to the temporary F1.13 feature branch at `41d04124376b9475e870407e7a04529082602b69`, not to `main`.
 - PR #105 hosted run #441 (`42496533962`) completed successfully across all six jobs. No review submissions were present.
-- The combined F1.14/F1.15 branch is pushed at `53c182b8ac074d27441473c24da154ecdd8d0dac` (`docs(security): record F1.15 promotion access limitation`) and tracks `origin/feat/f1-15-cross-node-auth-revocation-2026-11-08`.
+- The combined F1.14/F1.15 branch is pushed and tracks `origin/feat/f1-15-cross-node-auth-revocation-2026-11-08`.
 - The GitHub integration connector returned HTTP 403 (`Resource not accessible by integration`) on PR creation. The authenticated GitHub CLI then opened [PR #106](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/106) against `main`; it is open, not merged. Hosted CI is running for the current PR head and must pass before merge. No review submissions are present.
 - Do not merge or retarget PRs without explicit authorization.
 
