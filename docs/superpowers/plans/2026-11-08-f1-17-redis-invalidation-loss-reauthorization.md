@@ -2,7 +2,7 @@
 
 **Date:** 8 November 2026
 
-**Status:** Test implementation and local validation complete; the new PostgreSQL/Redis browser regression passed **1/1**, the combined multi-node browser file passed **2/2**, the focused authorization suite passed **40/40**, and `npm run check` passed (566 tests, 563 passed, 0 failed, 3 platform skips). Hosted CI is pending.
+**Status:** Test implementation and local validation complete; the new PostgreSQL/Redis browser regression passed **1/1**, the combined multi-node browser file passed **2/2**, the focused authorization suite passed **40/40**, and `npm run check` passed (566 tests, 563 passed, 0 failed, 3 platform skips). [PR #108](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/108) is open against `main`; hosted push CI run #459 (`42520267219`) passed all six jobs for implementation commit `0d42060fcaf620b3f52a8d1b0f95dc766be6a29b`. The documentation follow-up will trigger a fresh PR-head run.
 
 **Branch:** `feat/f1-17-reauthorization-after-pubsub-loss-2026-11-08`
 
@@ -33,8 +33,9 @@ Prove that when a node misses a Redis authorization-invalidation notification, i
 - [x] Run `npm run check`: **566 tests, 563 passed, 0 failed, 3 platform skips**, 230 required artifact paths and 237 JavaScript files syntax-checked.
 - [x] Run `git diff --check` and `node --check` for both changed JavaScript files.
 - [x] Update the architecture, foundation, roadmap, F1.16 merge plan/spec, and add F1.17 design/plan documentation consistently.
-- [ ] Push branch and open a PR against `main`; hosted CI must pass before any merge consideration.
-- [ ] Obtain independent review where required; no release or production authorization is implied.
+- [x] Push branch and open [PR #108](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/108) against `main`.
+- [x] Hosted push CI run #459 (`42520267219`) passed all six jobs for implementation commit `0d42060fcaf620b3f52a8d1b0f95dc766be6a29b`; the follow-up documentation commit must receive its own successful PR-head check.
+- [ ] Obtain independent review where required; PR #108 has no review submissions or review threads at this point. No release or production authorization is implied.
 
 ## Validation detail
 
