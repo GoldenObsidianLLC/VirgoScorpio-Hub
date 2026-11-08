@@ -2,7 +2,7 @@
 
 **Date:** 8 November 2026
 
-**Status:** Implementation and local validation complete; hosted CI and review pending.
+**Status:** Implementation and local validation complete; [PR #107](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/107) is open against `main`; hosted CI is running for the latest PR head. No review submissions are recorded.
 
 **Branch:** `feat/f1-16-identity-callback-revocation-2026-11-08`
 
@@ -27,7 +27,7 @@ Replace F1.15's direct bridge-invalidation-only proof with an additional integra
 - [x] Run the dedicated PostgreSQL/Redis real-browser scenario: **1/1 passed** locally.
 - [x] Run `npm run check`: **566 tests, 563 passed, 0 failed, 3 platform skips**, 230 required artifact paths and 236 JavaScript files syntax-checked.
 - [x] Run `node --check test/e2e/collaboration-postgres-multinode.spec.js`.
-- [ ] Hosted CI for the final F1.16 PR head.
+- [ ] Hosted CI for the latest F1.16 PR head; GitHub checks are in progress and must pass before merge.
 - [ ] Independent reviewer assessment and approval.
 - [ ] Merge only after required checks/review and explicit authorization.
 
@@ -42,7 +42,7 @@ The full repository check ran after regenerating the tenant inventory. The check
 - F1.13 PR #104 is merged to `main` at `c97a9273629bc55be42a4b9bf5239f4313a7e448`.
 - F1.14 PR #105 is merged into the former F1.13 feature branch; the combined F1.14/F1.15 promotion PR #106 is merged to `main` at `66f7b10059e96d4cf4345ac75edbb03f0f5c3f4a`.
 - PR #106 hosted run #452 (`42509378221`) passed all six jobs. No review submissions were recorded; this does not satisfy independent assessment issues #14/#25.
-- F1.16 is developed directly from the updated `origin/main` in the branch listed above. Hosted CI and review for the F1.16 head remain pending until its PR is opened.
+- F1.16 is developed directly from the updated `origin/main` in the branch listed above. [PR #107](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/107) is open against `main`, based on merge commit `66f7b10059e96d4cf4345ac75edbb03f0f5c3f4a`. Hosted CI is running for the latest PR head; no review submissions are recorded.
 
 ## Boundaries and release
 
