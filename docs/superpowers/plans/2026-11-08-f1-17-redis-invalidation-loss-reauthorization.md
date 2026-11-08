@@ -2,7 +2,7 @@
 
 **Date:** 8 November 2026
 
-**Status:** Test implementation and local validation complete; the new PostgreSQL/Redis browser regression passed **1/1**, the combined multi-node browser file passed **2/2**, the focused authorization suite passed **40/40**, and `npm run check` passed (566 tests, 563 passed, 0 failed, 3 platform skips). [PR #108](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/108) is open against `main`. Hosted PR CI run #461 (`42521278925`) and push CI run #462 (`42521284117`) both passed all six jobs for head `e44546e8e8353d5a7826fcdd00adffba9beab57b`. No formal review submissions or review threads are recorded.
+**Status:** Test implementation and local validation complete; the new PostgreSQL/Redis browser regression passed **1/1**, the combined multi-node browser file passed **2/2**, the focused authorization suite passed **40/40**, and `npm run check` passed (566 tests, 563 passed, 0 failed, 3 platform skips). [PR #108](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/108) merged to `main` at `aaab380978edab446516fe92da99257e798a6200`. Hosted PR CI run #463 (`42521911437`) and push CI run #464 (`42521915668`) both passed all six jobs for merged head `9c635b2633cfa4701b4970c3403a1673f902a76f`. No formal review submissions or review threads were recorded; issues #14 and #25 remain open.
 
 **Branch:** `feat/f1-17-reauthorization-after-pubsub-loss-2026-11-08`
 
@@ -35,7 +35,7 @@ Prove that when a node misses a Redis authorization-invalidation notification, i
 - [x] Update the architecture, foundation, roadmap, F1.16 merge plan/spec, and add F1.17 design/plan documentation consistently.
 - [x] Push branch and open [PR #108](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/108) against `main`.
 - [x] Hosted PR CI run #461 (`42521278925`) and push CI run #462 (`42521284117`) both passed all six jobs for head `e44546e8e8353d5a7826fcdd00adffba9beab57b`.
-- [ ] Obtain independent review where required; PR #108 has no review submissions or review threads. No release or production authorization is implied.
+- [ ] Complete independent tenant/site-isolation and security assessments under issues #14 and #25; PR #108 merged without formal review submissions or review threads. No release or production authorization is implied.
 
 ## Validation detail
 
