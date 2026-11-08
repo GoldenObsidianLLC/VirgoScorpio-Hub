@@ -2,7 +2,7 @@
 
 **Date:** 8 November 2026
 
-**Status:** Implemented; the dedicated PostgreSQL/Redis browser regression passed **1/1** locally, the combined multi-node browser file passed **2/2**, the focused authorization/tenant/WebSocket/Redis suite passed **40/40**, and `npm run check` passed (566 tests, 563 passed, 0 failed, 3 platform skips). PR #108 is open against `main`; hosted push CI run #459 (`42520267219`) passed all six jobs for implementation commit `0d42060fcaf620b3f52a8d1b0f95dc766be6a29b`. A documentation-only follow-up requires its own PR-head check.
+**Status:** Implemented; the dedicated PostgreSQL/Redis browser regression passed **1/1** locally, the combined multi-node browser file passed **2/2**, the focused authorization/tenant/WebSocket/Redis suite passed **40/40**, and `npm run check` passed (566 tests, 563 passed, 0 failed, 3 platform skips). PR #108 is open against `main`; hosted PR CI run #461 (`42521278925`) and push CI run #462 (`42521284117`) both passed all six jobs for head `e44546e8e8353d5a7826fcdd00adffba9beab57b`. No formal review submissions or review threads are recorded.
 
 **Scope:** Test-only qualification of the existing command-time WebSocket authorization check after one remote Redis authorization-invalidation delivery is intentionally dropped.
 
@@ -46,7 +46,7 @@ The new scenario uses two browser contexts and leaves the existing four-context 
 - Focused authorization/tenant/WebSocket/Redis regression suite: **40/40 passed**, no skips.
 - `npm run check`: **566 tests, 563 passed, 0 failed, 3 platform skips**, with **230 required artifact paths** and **237 JavaScript files** syntax-checked.
 - `npm run security:tenant-inventory`: **27 flow families, 78 declared route patterns, 19 implementation source files, 41 test files**.
-- Hosted push CI run #459 (`42520267219`) passed all six jobs for the implementation commit; the subsequent documentation-only PR head must also pass CI.
+- Hosted PR CI run #461 (`42521278925`) and push CI run #462 (`42521284117`) passed all six jobs for head `e44546e8e8353d5a7826fcdd00adffba9beab57b`.
 
 The local run used the repository's dedicated loopback test database and the existing Memurai service bound to `127.0.0.1:6379`. It used an ephemeral local-only Playwright configuration pointing to the cached Chromium 1228 executable because the installed browser revision did not match the repository's pinned Playwright revision. That temporary configuration is not part of the repository.
 
