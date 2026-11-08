@@ -24,6 +24,7 @@
     "start:plugin-runner": "node apps/plugin-runner/src/server.js",
     "test:integration": "node --test test/integration/*.test.js",
     "test:e2e": "playwright test",
+    "test:e2e:collaboration:postgres": "playwright test --config=playwright.collaboration-postgres.config.js",
     "test:all": "npm run check && npm run test:integration:live && npm run test:e2e",
     "sbom": "node scripts/generate-sbom.js",
     "postinstall": "node scripts/materialize-katex-assets.js",
