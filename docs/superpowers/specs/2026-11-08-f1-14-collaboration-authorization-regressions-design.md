@@ -1,7 +1,7 @@
 # F1.14 Collaboration tenant and live-authorization regression — design
 
 **Date:** 2026-11-08
-**Status:** Implemented and locally validated (focused regression suite 28/28; full repository check 566 tests, 563 passed, 0 failed, 3 platform skips). Hosted PR #105 run #441 (`42496533962`) passed all six jobs; PR #105 merged into the F1.13 feature branch but not `main`. No review submissions or independent security-review claim.
+**Status:** Implemented and locally validated (focused regression suite 28/28; full repository check 566 tests, 563 passed, 0 failed, 3 platform skips). Hosted PR #105 run #441 (`42496533962`) passed all six jobs; PR #105 merged into the F1.13 feature branch but not `main`; the combined mainline promotion is open as [PR #106](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/106). No review submissions or independent security-review claim.
 **Dependencies:** F1.9–F1.13 server-authoritative collaboration, site-bound real-time routes, and ADR-019.
 
 ## Problem
