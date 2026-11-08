@@ -254,7 +254,12 @@ test('two browser clients on independent API nodes converge from shared PostgreS
       { token: 'f1-13-session-3', sessionId: randomUUID(), userId: editorOtherDocument.id, email: editorOtherDocument.email, siteIds: [siteA] },
       { token: 'f1-13-session-4', sessionId: randomUUID(), userId: editorOtherSite.id, email: editorOtherSite.email, siteIds: [siteB] }
     ];
-    const identityService = createDatabaseBackedTestIdentityService({ sessions });
+    // Model separate API-node authorization snapshots. Node B deliberately stays stale
+    // until Redis invalidation reaches its event hub, isolating the fan-out behavior.
+    const sessionsForNodeA = sessions.map(session => ({ ...session, siteIds: [...session.siteIds] }));
+    const sessionsForNodeB = sessions.map(session => ({ ...session, siteIds: [...session.siteIds] }));
+    const identityServiceA = createDatabaseBackedTestIdentityService({ sessions: sessionsForNodeA });
+    const identityServiceB = createDatabaseBackedTestIdentityService({ sessions: sessionsForNodeB });
     const channelPrefix = 'virgoscorpio_hub:test:f1-13:' + randomUUID();
 
     nodeA = await createRedisApiInstance({
@@ -262,7 +267,7 @@ test('two browser clients on independent API nodes converge from shared PostgreS
       channelPrefix,
       siteIds: [siteA, siteB],
       store: storeA,
-      identityService,
+      identityService: identityServiceA,
       heartbeatMs: 5_000
     });
     nodeB = await createRedisApiInstance({
@@ -270,7 +275,7 @@ test('two browser clients on independent API nodes converge from shared PostgreS
       channelPrefix,
       siteIds: [siteA, siteB],
       store: storeB,
-      identityService,
+      identityService: identityServiceB,
       heartbeatMs: 5_000
     });
 
@@ -392,6 +397,58 @@ test('two browser clients on independent API nodes converge from shared PostgreS
       [primaryDraft.id]
     );
     expect(persistedRows.rows[0]).toEqual({ count: 2, min: 1, max: 2 });
+
+    // Reuse the existing Site A / other-document client as the revocation probe
+    // so the integration keeps its established four-browser-context footprint.
+    const revocationProbe = isolatedDocumentClient;
+
+    // Simulate a committed Site A membership removal on node A while node B still
+    // holds its prior authorization snapshot. Redis invalidation must close only
+    // the matching remote Site A connection; fresh authorization alone cannot
+    // make this assertion pass because node B's fixture intentionally remains stale.
+    sessionsForNodeA.find(session => session.userId === editorOtherDocument.id).siteIds = [];
+    await nodeA.bridge.invalidateAuthorization({
+      siteId: siteA,
+      principalId: editorOtherDocument.id
+    });
+    await revocationProbe.page.waitForFunction(() => {
+      const socket = window.__virgoscorpio_hubCollaboration?.socket;
+      return socket?.readyState === WebSocket.CLOSED;
+    }, null, { timeout: 7_500 });
+
+    expect(await revocationProbe.page.evaluate(
+      () => window.__virgoscorpio_hubCollaboration.socket.readyState
+    )).toBe(3);
+    expect(await clientB.page.evaluate(
+      () => window.__virgoscorpio_hubCollaboration.socket.readyState
+    )).toBe(1);
+    expect(await isolatedSiteClient.page.evaluate(
+      () => window.__virgoscorpio_hubCollaboration.socket.readyState
+    )).toBe(1);
+
+    await sendCollaborationCommand(isolatedSiteClient.page, { type: 'ping' });
+    const unaffectedSitePong = await waitForCollaborationMessage(
+      isolatedSiteClient.page,
+      'pong',
+      3_000
+    );
+    expect(unaffectedSitePong.type).toBe('pong');
+
+    const primaryAfterRevocation = await storeB.getCollaborationSync({
+      siteId: siteA,
+      contentId: primaryDraft.id,
+      afterSequence: 0
+    });
+    expect(primaryAfterRevocation.sequence).toBe(2);
+    expect(primaryAfterRevocation.operations.map(item => item.sequence)).toEqual([1, 2]);
+
+    const revokedDocumentSync = await storeB.getCollaborationSync({
+      siteId: siteA,
+      contentId: otherDocument.id,
+      afterSequence: 0
+    });
+    expect(revokedDocumentSync.sequence).toBe(0);
+    expect(revokedDocumentSync.operations).toEqual([]);
 
     await nodeA.close();
     nodeA = null;

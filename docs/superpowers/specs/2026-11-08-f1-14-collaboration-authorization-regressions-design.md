@@ -1,7 +1,7 @@
 # F1.14 Collaboration tenant and live-authorization regression — design
 
 **Date:** 2026-11-08
-**Status:** Implemented and locally validated (focused regression suite 28/28; full repository check 566 tests, 563 passed, 0 failed, 3 platform skips); hosted CI pending. No independent security-review claim.
+**Status:** Implemented and locally validated (focused regression suite 28/28; full repository check 566 tests, 563 passed, 0 failed, 3 platform skips). Hosted PR #105 run #441 (`42496533962`) passed all six jobs; PR #105 merged into the F1.13 feature branch but not `main`. No review submissions or independent security-review claim.
 **Dependencies:** F1.9–F1.13 server-authoritative collaboration, site-bound real-time routes, and ADR-019.
 
 ## Problem
@@ -28,7 +28,7 @@ Add a deterministic Node integration-style test around `createApiServer`, its re
 
 ## Local validation record (8 November 2026)
 
-The focused REST/WebSocket/site-bound test set passed **28/28**. The new test proves Site A REST read/write and document join for an authorized editor, Site B REST denials before content lookup/write, cross-site WebSocket document-join and upgrade denials without subscription side effects, and operation/REST-write denial after Site A edit capability revocation while the presence session remains active. The full `npm run check` passed with **566 tests, 563 passed, 0 failed, 3 platform skips**, 230 required artifact paths and 237 JavaScript files syntax-checked. The generated tenant-isolation inventory was refreshed with 27 families, 78 route patterns, 19 source files and 41 test files. Hosted CI remains pending; this evidence does not replace independent review under issue #14 or issue #25.
+The focused REST/WebSocket/site-bound test set passed **28/28**. The new test proves Site A REST read/write and document join for an authorized editor, Site B REST denials before content lookup/write, cross-site WebSocket document-join and upgrade denials without subscription side effects, and operation/REST-write denial after Site A edit capability revocation while the presence session remains active. The full `npm run check` passed with **566 tests, 563 passed, 0 failed, 3 platform skips**, 230 required artifact paths and 237 JavaScript files syntax-checked. The generated tenant-isolation inventory was refreshed with 27 families, 78 route patterns, 19 source files and 41 test files. Hosted PR #105 run #441 passed all six jobs; PR #105 is merged into the F1.13 feature branch but remains unpromoted to `main`, and no review submissions were recorded. This evidence does not replace independent review under issue #14 or issue #25.
 
 ## Security boundaries
 
