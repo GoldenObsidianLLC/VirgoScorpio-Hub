@@ -4,6 +4,8 @@ const { defineConfig } = require("@playwright/test");
 
 module.exports = defineConfig({
   testDir: "./test/e2e",
+  // PostgreSQL/Redis multi-node qualification runs only from its dedicated integration config.
+  testIgnore: ["**/collaboration-postgres-multinode.spec.js"],
   fullyParallel: false,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 2 : 0,
