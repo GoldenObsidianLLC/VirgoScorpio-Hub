@@ -50,7 +50,7 @@
       <section class="builder-area">
         <div class="document-toolbar">
           <div class="document-title-wrap"><input id="document-title" class="title-input" value="Untitled page" maxlength="180" aria-label="Page title"><div class="slug-row"><span>/</span><input id="page-slug" placeholder="page-slug" maxlength="180" aria-label="Page URL slug"><span id="version-label" class="version-label">New draft</span></div></div>
-          <div class="toolbar-actions"><button id="undo" class="quiet" disabled>↶ Undo</button><button id="redo" class="quiet" disabled>↷ Redo</button><button id="preview-button" class="secondary">Preview</button><button id="save-button" class="secondary">Save draft</button><button id="workflow-button" class="primary">Submit for review</button><button id="publish-button" class="primary hidden">Publish</button><button id="more-button" class="quiet">⋯</button></div>
+          <div class="toolbar-actions"><button id="undo" class="quiet" disabled>↶ Undo</button><button id="redo" class="quiet" disabled>↷ Redo</button><button id="preview-button" class="secondary">Preview</button><button id="save-button" class="secondary">Save draft</button><button id="collaboration-button" class="secondary" type="button" disabled>Collaborate</button><span id="collaboration-status" class="collaboration-status" role="status" aria-live="polite">Draft collaboration</span><button id="workflow-button" class="primary">Submit for review</button><button id="publish-button" class="primary hidden">Publish</button><button id="more-button" class="quiet">⋯</button></div>
         </div>
         <div id="more-menu" class="more-menu hidden"><button id="approve-button">Approve for publication</button><button id="schedule-button">Schedule publication</button><button id="unpublish-button">Unpublish</button><button id="archive-button" class="danger-text">Archive page</button><button id="revisions-button">Revision history</button><button id="json-button">Edit document JSON</button></div>
         <div class="canvas-toolbar"><div><span class="live-dot"></span><span id="canvas-status">Draft editor</span><span id="dirty-status" class="dirty-status">Unsaved changes</span></div><div class="viewport-switch" role="group" aria-label="Canvas viewport"><button data-viewport="desktop" class="active">Desktop</button><button data-viewport="tablet">Tablet</button><button data-viewport="mobile">Mobile</button></div></div>
@@ -70,6 +70,7 @@
   <dialog id="json-dialog" class="modal"><div class="modal-head"><h2>Document JSON</h2><button data-close="json-dialog" class="icon-button" aria-label="Close JSON">×</button></div><textarea id="json-editor" class="json-editor" spellcheck="false"></textarea><div class="modal-actions"><button data-close="json-dialog" class="secondary">Cancel</button><button id="apply-json" class="primary">Validate and apply</button></div></dialog>
   <dialog id="revisions-dialog" class="modal"><div class="modal-head"><h2>Revision history</h2><button data-close="revisions-dialog" class="icon-button" aria-label="Close revisions">×</button></div><div id="revision-list" class="revision-list"></div></dialog>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="/assets/studio-collaboration.js" defer></script>
   <script src="/assets/studio.js" defer></script>
 </body>
 </html>

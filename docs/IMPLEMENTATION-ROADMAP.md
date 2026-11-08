@@ -47,3 +47,11 @@
 ## Release policy
 
 The CI workflow is a test definition, not evidence that a job passed. Each milestone needs retained acceptance logs/results. Capability files, UI surfaces and database tables alone do not imply user-facing parity. VirgoScorpio Hub must not claim production certification until all release-gate requirements are satisfied.
+
+## Addendum — 7 November 2026
+
+This dated addendum records engineering progress after the historical 1 November 2026 roadmap snapshot; it does not rewrite or supersede the evidence frozen above. The provider-neutral Public Asset Delivery Deployment Contract, implementation plan, source-bound validator, evidence template and tests are already applied and merged to `main` through PR #100. The validator remains an evidence-structure check and does not configure or certify a cloud provider.
+
+F1.12 adds a limited Studio browser client over the existing F1.9–F1.11 draft-only semantic-OT service. The client sends supported typed operations, applies contiguous server-accepted changes and recovers through the existing REST sync endpoint. Whole-document save and editorial workflow actions are blocked during an active session. Studio client tests passed 6/6; semantic-OT unit tests passed 12/12; the Studio editor Playwright smoke passed 2/2; and `npm run check` passed with 565 tests (562 pass, 0 fail, 3 platform skips), 230 required artifact paths and 235 JavaScript syntax checks. The verifier includes the pinned EnginEx submodule. The two-session collaboration Playwright acceptance spec passed 1/1 using an isolated config and an in-memory collaboration store. It covers remote delivery, lost-ack replay/idempotency, concurrent property convergence and canonical reload but is not a PostgreSQL integration. Cross-instance/multi-node browser coverage and clean hosted CI remain outstanding. Shared undo/redo, cursors/roster, comments, offline-first editing and complete production qualification remain roadmap work.
+
+No SemVer increment, release tag, package publication or deployment is authorized by this addendum. Production remains NO-GO until the complete release and deployment gates are satisfied.

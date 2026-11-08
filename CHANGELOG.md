@@ -10,7 +10,11 @@ All notable project-level changes should be recorded here. This changelog does n
 
 ### Public asset deployment evidence contract
 
-- Add a provider-neutral, source-bound manifest and fail-closed validator covering private object origins, the `/media/` and `/library/public/` cache-bypass contract, non-cacheable `private, no-store` success and revocation probes, and legacy direct-CDN URL disposition. The validator checks manifest structure, typed evidence references, freshness, and candidate SHA only; it does not query or configure providers or certify production. This is an unreleased 0.6.2 candidate change with no dependency, runtime delivery, database, or SemVer change.
+- Add a provider-neutral, source-bound manifest and fail-closed validator covering private object origins, the `/media/` and `/library/public/` cache-bypass contract, non-cacheable `private, no-store` success and revocation probes, and legacy direct-CDN URL disposition. The validator checks manifest structure, typed evidence references, freshness, and candidate SHA only; it does not query or configure providers or certify production. This is an unreleased 0.6.2 candidate change with no dependency, runtime delivery, database, or SemVer change. The contract, template, validator, tests and documentation were merged through PR #100.
+
+### Studio collaborative editing client
+
+- Connect Studio to the existing F1.9–F1.11 server-authoritative, draft-only semantic-OT protocol. The opt-in client maps supported title, node, property/style and bounded text edits to typed operations, applies contiguous server-accepted operations, and recovers from gaps through canonical REST sync. Whole-document save, revision restore, JSON replacement, page/site switching and editorial workflow actions are blocked during a live session. This remains limited developer-preview scope; shared undo/redo, cursors/roster, comments, offline-first behavior, full browser/accessibility validation and production gates remain open. No new database migration, dependency, route, SemVer increment, release or deployment is included.
 
 ### EnginEx repository linkage
 
