@@ -2,7 +2,7 @@
 
 **Date:** 8 November 2026
 
-**Status:** Test implementation and local validation complete; hosted CI and independent review pending.
+**Status:** Test implementation and local validation complete; [PR #109](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/109) is open against `main`. Hosted PR CI run #467 (`42529727055`) passed all six jobs for head `3da310665c761fede1d29d6ecda23a319e0b1139`; no formal review submissions or review threads are recorded.
 
 **Branch:** `feat/f1-18-idle-socket-reauth-after-pubsub-loss-2026-11-08`
 
@@ -29,9 +29,10 @@ Close the remaining test-coverage gap from F1.17: prove an idle, already-connect
 - [x] Regenerate the tenant-isolation inventory and verify its source anchors.
 - [x] Reconcile the F1.17 merge state across architecture, foundation, roadmap, and F1.17 design/plan documentation.
 - [x] Rerun syntax, integration, full checks, inventory freshness, and diff validation after final documentation/test naming edits.
-- [ ] Push the feature branch and open a pull request against `main`.
-- [ ] Obtain independent review; maintainer-authored tests do not satisfy issues #14 or #25.
-- [ ] Reconcile hosted CI evidence and final PR state in all relevant Markdown files.
+- [x] Push the feature branch and open [PR #109](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/109) against `main`.
+- [x] Verify hosted PR CI run #467 (`42529727055`) passed all six jobs for head `3da310665c761fede1d29d6ecda23a319e0b1139`.
+- [x] Reconcile hosted CI evidence and PR #109 state in the architecture, foundation, roadmap, design, and plan Markdown files.
+- [ ] Obtain independent review; maintainer-authored tests do not satisfy issues #14 or #25. PR #109 currently has no formal review submissions or review threads.
 
 ## Validation detail
 

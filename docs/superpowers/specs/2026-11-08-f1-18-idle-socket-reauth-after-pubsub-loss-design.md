@@ -2,7 +2,7 @@
 
 **Date:** 8 November 2026
 
-**Status:** Implemented in the feature worktree; the PostgreSQL/Redis multi-node browser spec passed **3/3** locally (F1.16 plus the F1.17 command-time and F1.18 idle-socket scenarios), the focused authorization/tenant/WebSocket/Redis suite passed **40/40**, and `npm run check` passed (**566 tests, 563 passed, 0 failed, 3 platform skips**). Hosted CI and independent review are pending for the F1.18 pull request.
+**Status:** Implemented and pushed in [PR #109](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/109), which remains open against `main`; the PostgreSQL/Redis multi-node browser spec passed **3/3** locally (F1.16 plus the F1.17 command-time and F1.18 idle-socket scenarios), the focused authorization/tenant/WebSocket/Redis suite passed **40/40**, and `npm run check` passed (**566 tests, 563 passed, 0 failed, 3 platform skips**). Hosted PR CI run #467 (`42529727055`) passed all six jobs for head `3da310665c761fede1d29d6ecda23a319e0b1139`. No formal review submissions or review threads are recorded; independent-review issues #14/#25 remain open.
 
 ## Context
 
