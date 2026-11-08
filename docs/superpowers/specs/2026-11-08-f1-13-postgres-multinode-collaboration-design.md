@@ -1,7 +1,7 @@
 # F1.13 PostgreSQL-backed multi-node collaboration qualification — design
 
 **Date:** 2026-11-08
-**Status:** Implemented and locally validated (1/1 PostgreSQL-backed real-browser test); hosted CI pending. This is not production qualification.
+**Status:** Implemented and locally validated (1/1 PostgreSQL-backed real-browser test); hosted PR CI run #435 (`42494704337`) passed all jobs on PR #104, which remains open pending review/merge. This is not production qualification.
 **Dependency:** F1.12, ADR-019, durable semantic-OT persistence and Redis cross-instance reconciliation.
 
 ## Problem
@@ -47,4 +47,4 @@ The test must fail closed in CI when the explicit PostgreSQL flag, loopback test
 
 ## Local validation record (8 November 2026)
 
-The dedicated Playwright spec passed **1/1 locally** using system Chrome, the loopback `TEST_DATABASE_URL` and credential-free loopback Redis. It exercised two API nodes with independent PostgreSQL pools/stores, cross-node delivery, durable replay, dropped-hint heartbeat repair, node-A shutdown and node-B replay/write, and document/site isolation. `npm run check` passed with 565 tests (562 passed, zero failed, three platform skips), 230 required artifact paths and 237 JavaScript files syntax-checked. Hosted CI remains pending; this local correctness run is not production qualification.
+The dedicated Playwright spec passed **1/1 locally** using system Chrome, the loopback `TEST_DATABASE_URL` and credential-free loopback Redis. It exercised two API nodes with independent PostgreSQL pools/stores, cross-node delivery, durable replay, dropped-hint heartbeat repair, node-A shutdown and node-B replay/write, and document/site isolation. `npm run check` passed with 565 tests (562 passed, zero failed, three platform skips), 230 required artifact paths and 237 JavaScript files syntax-checked. Hosted PR CI run #435 (`42494704337`) passed all jobs on PR #104; #104 remains open pending review/merge. This local/hosted correctness evidence is not production qualification.
