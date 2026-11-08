@@ -2,7 +2,7 @@
 
 **Date:** 8 November 2026
 
-**Status:** Implemented and pushed in [PR #109](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/109), which remains open against `main`; the PostgreSQL/Redis multi-node browser spec passed **3/3** locally (F1.16 plus the F1.17 command-time and F1.18 idle-socket scenarios), the focused authorization/tenant/WebSocket/Redis suite passed **40/40**, and `npm run check` passed (**566 tests, 563 passed, 0 failed, 3 platform skips**). Hosted PR CI run #467 (`42529727055`) passed all six jobs for head `3da310665c761fede1d29d6ecda23a319e0b1139`. No formal review submissions or review threads are recorded; independent-review issues #14/#25 remain open.
+**Status:** Implemented and pushed in [PR #109](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/109), which remains open against `main`; the PostgreSQL/Redis multi-node browser spec passed **3/3** locally (F1.16 plus the F1.17 command-time and F1.18 idle-socket scenarios), the focused authorization/tenant/WebSocket/Redis suite passed **40/40**, and `npm run check` passed (**566 tests, 563 passed, 0 failed, 3 platform skips**). Hosted PR CI run #467 (`42529727055`) passed all six jobs for head `3da310665c761fede1d29d6ecda23a319e0b1139`; final hosted PR CI run #469 (`42532101361`) passed all six jobs for the F1.18 implementation head `6caccd1bf01ec4935e37aa2384ad9c9e14d0f714`. No formal review submissions or review threads are recorded; independent-review issues #14/#25 remain open.
 
 ## Context
 
@@ -29,7 +29,7 @@ The close listener is installed before membership changes so the test cannot mis
 - The 5-second heartbeat is a test-only fixture setting. It is not a production default, latency commitment, or revocation SLA.
 - This proves eventual reauthorization at the next configured heartbeat after one deliberately lost Pub/Sub hint. It does not prove instantaneous revocation, a bounded production revocation interval, Pub/Sub durability/retry, Redis service outage/partition/Cluster/failover behavior, or multi-region recovery.
 - The test suppresses one authorization callback on node B; it does not simulate Redis being unavailable to either publisher or subscriber.
-- The test remains maintainer-authored regression evidence. It does not satisfy independent tenant/site-isolation review (#14), independent security assessment (#25), or the broader load/soak/fault-injection/backup-restore evidence (#24).
+- The test remains maintainer-authored regression evidence. It does not satisfy independent tenant/site-isolation review (#14), independent security assessment (#25), or the broader load/soak/fault-injection/backup-restore evidence (#24). No assessor work is authorized without issue #32's transaction-specific funding approval, a funded statement of work, cleared funds, and written rules of engagement.
 - PR #108 merged to `main` at `aaab380978edab446516fe92da99257e798a6200` without formal review submissions or review threads. That merge does not close the independent-review gates.
 
 ## Local validation record

@@ -2,7 +2,7 @@
 
 **Date:** 8 November 2026
 
-**Status:** Test implementation and local validation complete; [PR #109](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/109) is open against `main`. Hosted PR CI run #467 (`42529727055`) passed all six jobs for head `3da310665c761fede1d29d6ecda23a319e0b1139`; no formal review submissions or review threads are recorded.
+**Status:** Test implementation and local validation complete; [PR #109](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/109) is open against `main`. Hosted PR CI run #467 (`42529727055`) passed all six jobs for head `3da310665c761fede1d29d6ecda23a319e0b1139`; final hosted PR CI run #469 (`42532101361`) passed all six jobs for the F1.18 implementation head `6caccd1bf01ec4935e37aa2384ad9c9e14d0f714`; no formal review submissions or review threads are recorded.
 
 **Branch:** `feat/f1-18-idle-socket-reauth-after-pubsub-loss-2026-11-08`
 
@@ -30,9 +30,10 @@ Close the remaining test-coverage gap from F1.17: prove an idle, already-connect
 - [x] Reconcile the F1.17 merge state across architecture, foundation, roadmap, and F1.17 design/plan documentation.
 - [x] Rerun syntax, integration, full checks, inventory freshness, and diff validation after final documentation/test naming edits.
 - [x] Push the feature branch and open [PR #109](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/109) against `main`.
-- [x] Verify hosted PR CI run #467 (`42529727055`) passed all six jobs for head `3da310665c761fede1d29d6ecda23a319e0b1139`.
+- [x] Verify hosted PR CI run #467 (`42529727055`) passed all six jobs for initial implementation head `3da310665c761fede1d29d6ecda23a319e0b1139`.
+- [x] Verify final hosted PR CI run #469 (`42532101361`) passed all six jobs for the F1.18 implementation head `6caccd1bf01ec4935e37aa2384ad9c9e14d0f714`.
 - [x] Reconcile hosted CI evidence and PR #109 state in the architecture, foundation, roadmap, design, and plan Markdown files.
-- [ ] Obtain independent review; maintainer-authored tests do not satisfy issues #14 or #25. PR #109 currently has no formal review submissions or review threads.
+- [ ] Fund and authorize independent review for issues #14/#25 only after issue #32's transaction-specific funding approval, a funded statement of work, cleared funds, and written rules of engagement; no unpaid review or testing is requested or authorized.
 
 ## Validation detail
 
