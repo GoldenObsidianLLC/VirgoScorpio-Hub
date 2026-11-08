@@ -26,9 +26,9 @@ Qualify the existing site/principal-scoped Redis authorization invalidation path
 - [x] Run `npm run security:tenant-inventory`: 27 families, 78 route patterns, 19 source files, 41 test files.
 - [x] Run `npm run check`: passed after final inventory regeneration; 566 tests (563 passed, 0 failed, 3 platform skips), 230 required artifact paths and 236 JavaScript files syntax-checked.
 - [x] Run `node --check test/e2e/collaboration-postgres-multinode.spec.js` and `git diff --check` after final edits; both passed.
-- [ ] Hosted CI for the final F1.15 head.
-- [ ] Independent reviewer assessment and approval.
-- [ ] Reconcile the promotion branch to `main` after review; do not merge without explicit authorization.
+- [x] Hosted CI: combined PR #106 run #452 (`42509378221`) passed all six jobs on the PR head.
+- [ ] Independent reviewer assessment and approval; no review submissions were recorded.
+- [x] F1.14/F1.15 promotion merged to `main` in PR #106 at `66f7b10059e96d4cf4345ac75edbb03f0f5c3f4a` (merged by repository actor; no assistant merge action).
 
 ## Validation detail
 
@@ -42,7 +42,7 @@ The full repository check initially detected the expected stale source-anchored 
 - F1.14 PR #105 is merged to the temporary F1.13 feature branch at `41d04124376b9475e870407e7a04529082602b69`, not to `main`.
 - PR #105 hosted run #441 (`42496533962`) completed successfully across all six jobs. No review submissions were present.
 - The combined F1.14/F1.15 branch is pushed and tracks `origin/feat/f1-15-cross-node-auth-revocation-2026-11-08`.
-- The GitHub integration connector returned HTTP 403 (`Resource not accessible by integration`) on PR creation. The authenticated GitHub CLI then opened [PR #106](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/106) against `main`; it is open, not merged. Hosted CI is running for the current PR head and must pass before merge. No review submissions are present.
+- The GitHub integration connector returned HTTP 403 (`Resource not accessible by integration`) on PR creation; the authenticated GitHub CLI opened [PR #106](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/106) against `main`. PR #106 merged at `66f7b10059e96d4cf4345ac75edbb03f0f5c3f4a`; hosted CI run #452 passed all six jobs. No review submissions were present.
 - Do not merge or retarget PRs without explicit authorization.
 
 ## Boundaries and release
