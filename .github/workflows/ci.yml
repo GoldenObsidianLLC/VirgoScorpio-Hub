@@ -165,6 +165,13 @@ jobs:
         run: npm run test:migrations:fresh
       - name: Test PostgreSQL/Memgraph/community/commerce integration workflows (zero skips required)
         run: npm run test:integration:live
+      - name: Install Chromium for PostgreSQL-backed collaboration browser qualification
+        run: npx playwright install --with-deps chromium
+      - name: Verify PostgreSQL-backed multi-node collaboration through real browsers
+        env:
+          VIRGOSCORPIO_HUB_RUN_POSTGRES_INTEGRATION: "true"
+          VIRGOSCORPIO_HUB_TEST_REDIS_URL: redis://127.0.0.1:6379
+        run: npm run test:e2e:collaboration:postgres
       - name: Exercise real Memgraph outage and outbox recovery
         shell: bash
         run: |
