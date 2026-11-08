@@ -22,7 +22,7 @@ Prove the existing collaboration contract across real browser clients, two indep
 - [x] Add the Playwright install and test step to the existing PostgreSQL/Memgraph/Redis CI job after live database integration succeeds.
 - [x] Record the focused local test evidence; update the real-time foundation, architecture and roadmap only after the test passed locally. No new ADR was needed because F1.13 verifies existing ADR-019 contracts without changing the architecture.
 - [x] Run JavaScript syntax/artifact checks, the focused PostgreSQL-backed browser test, the full `npm run check`, `git diff --check`, review the complete diff and keep unrelated user changes unstaged.
-- [ ] Push this feature branch and open a PR targeting documentation PR #102's branch; wait for hosted CI and review. No merge, release, tag or deployment is part of this plan.
+- [x] Pushed the feature branch and opened [PR #103](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/103) targeting documentation PR #102's branch. The first hosted run (#429) exposed that the default browser smoke config also discovered this integration-only spec; `playwright.config.js` now excludes it while the dedicated PostgreSQL config continues to select it. The corrected branch will receive a fresh CI run; review remains pending. Do not merge before the base dependency is resolved. No release, tag or deployment is part of this plan.
 
 ## Local validation record (8 November 2026)
 
