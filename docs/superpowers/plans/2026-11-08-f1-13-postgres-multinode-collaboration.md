@@ -1,7 +1,7 @@
 # F1.13 PostgreSQL-backed multi-node collaboration qualification — implementation plan
 
 **Date:** 2026-11-08
-**Status:** Implementation and local validation complete; hosted CI pending. The F1.13 branch is stacked on open documentation PR #102.
+**Status:** Implementation, local validation and hosted CI run #431 complete. PR #103 was merged into the temporary documentation branch used as its base, not directly into `main`; after PR #102 merged, the feature branch is being promoted through PR #104 directly to `main`.
 **Design:** [F1.13 PostgreSQL-backed multi-node collaboration qualification](../specs/2026-11-08-f1-13-postgres-multinode-collaboration-design.md)
 **Dependency:** Stacked on documentation PR #102; do not merge this increment ahead of its base without reconciling the branch history.
 
@@ -22,7 +22,7 @@ Prove the existing collaboration contract across real browser clients, two indep
 - [x] Add the Playwright install and test step to the existing PostgreSQL/Memgraph/Redis CI job after live database integration succeeds.
 - [x] Record the focused local test evidence; update the real-time foundation, architecture and roadmap only after the test passed locally. No new ADR was needed because F1.13 verifies existing ADR-019 contracts without changing the architecture.
 - [x] Run JavaScript syntax/artifact checks, the focused PostgreSQL-backed browser test, the full `npm run check`, `git diff --check`, review the complete diff and keep unrelated user changes unstaged.
-- [x] Pushed the feature branch and opened [PR #103](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/103) targeting documentation PR #102's branch. The first hosted run (#429) exposed that the default browser smoke config also discovered this integration-only spec; `playwright.config.js` now excludes it while the dedicated PostgreSQL config continues to select it. The corrected branch will receive a fresh CI run; review remains pending. Do not merge before the base dependency is resolved. No release, tag or deployment is part of this plan.
+- [x] Pushed the feature branch and opened [PR #103](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/103) against the temporary documentation branch for stacking. The first hosted run (#429) exposed that the default browser smoke config also discovered this integration-only spec; `playwright.config.js` now excludes it while the dedicated PostgreSQL config continues to select it. Corrected hosted run #431 passed all CI jobs. PR #103 merged to the temporary documentation branch after PR #102 had already merged to `main`; the local commit graph confirmed its merge commit was not reachable from `main`. A new PR #104 therefore promotes the same two feature commits directly to `main`. No release, tag or deployment is part of this plan.
 
 ## Local validation record (8 November 2026)
 
