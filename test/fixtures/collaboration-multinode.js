@@ -265,6 +265,7 @@ async function createRedisApiInstance({
   channelPrefix,
   siteIds,
   store,
+  pool = null,
   identityService,
   heartbeatMs = 5_000
 }) {
@@ -308,6 +309,7 @@ async function createRedisApiInstance({
       RATE_LIMIT_MAX_REQUESTS: '1000'
     },
     contentStore: store,
+    pool,
     identityService,
     realtimeBridge: bridge,
     realtimeHeartbeatMs: heartbeatMs,

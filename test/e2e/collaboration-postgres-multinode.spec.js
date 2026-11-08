@@ -6,6 +6,7 @@ const path = require('node:path');
 const { Pool } = require('pg');
 const { loadEnvFile } = require('../../scripts/load-env');
 const { createPostgresStore } = require('../../packages/db/src/postgres-store');
+const { hashPassword } = require('../../packages/auth/src/service');
 const { createRedisApiInstance, initialDocument } = require('../fixtures/collaboration-multinode');
 const {
   connectCollaborationClient,
@@ -187,7 +188,7 @@ async function createDraft(store, { siteId, authorId, title }) {
   });
 }
 
-test('two browser clients on independent API nodes converge from shared PostgreSQL history', async ({ browser }) => {
+test('independent API nodes converge PostgreSQL collaboration and propagate real identity membership revocation', async ({ browser }) => {
   test.skip(!integrationEnabled, 'Requires the explicit dedicated PostgreSQL and loopback Redis integration environment.');
   test.setTimeout(90_000);
 
@@ -206,6 +207,11 @@ test('two browser clients on independent API nodes converge from shared PostgreS
     max: 4,
     connectionTimeoutMillis: 4_000
   });
+  const authPool = new Pool({
+    connectionString: databaseUrl,
+    max: 3,
+    connectionTimeoutMillis: 4_000
+  });
   const storeA = createPostgresStore({ pool: poolA });
   const storeB = createPostgresStore({ pool: poolB });
 
@@ -214,6 +220,7 @@ test('two browser clients on independent API nodes converge from shared PostgreS
   const userIds = [];
   let nodeA;
   let nodeB;
+  let identityNode;
   let poolAClosed = false;
   const clients = [];
 
@@ -228,6 +235,8 @@ test('two browser clients on independent API nodes converge from shared PostgreS
     userIds.push(editorOtherDocument.id);
     const editorOtherSite = await createUser(fixturePool, 'editor-other-site');
     userIds.push(editorOtherSite.id);
+    const identityOwner = await createUser(fixturePool, 'f1-16-identity-owner');
+    userIds.push(identityOwner.id);
 
     const primaryDraft = await createDraft(storeA, {
       siteId: siteA,
@@ -398,19 +407,67 @@ test('two browser clients on independent API nodes converge from shared PostgreS
     );
     expect(persistedRows.rows[0]).toEqual({ count: 2, min: 1, max: 2 });
 
-    // Reuse the existing Site A / other-document client as the revocation probe
-    // so the integration keeps its established four-browser-context footprint.
+    // Drive the real identity-service membership-removal path on a separate API
+    // node. The node B collaboration identity deliberately remains stale, so the
+    // remote socket can close only when createApiServer's identity callback
+    // publishes the committed membership change through its Redis bridge.
     const revocationProbe = isolatedDocumentClient;
+    const identityRoles = await authPool.query(
+      "SELECT id,slug FROM roles WHERE slug IN ('site-owner','editor')"
+    );
+    const roleIds = new Map(identityRoles.rows.map(row => [row.slug, row.id]));
+    expect(roleIds.has('site-owner')).toBe(true);
+    expect(roleIds.has('editor')).toBe(true);
+    const ownerPassword = 'F1-16-Identity-Owner-Password-2026';
+    await authPool.query(
+      'UPDATE users SET password_hash=$1 WHERE id=$2',
+      [await hashPassword(ownerPassword), identityOwner.id]
+    );
+    await authPool.query(
+      'INSERT INTO site_memberships(site_id,user_id,role_id) VALUES($1,$2,$3),($1,$4,$5)',
+      [siteA, identityOwner.id, roleIds.get('site-owner'), editorOtherDocument.id, roleIds.get('editor')]
+    );
 
-    // Simulate a committed Site A membership removal on node A while node B still
-    // holds its prior authorization snapshot. Redis invalidation must close only
-    // the matching remote Site A connection; fresh authorization alone cannot
-    // make this assertion pass because node B's fixture intentionally remains stale.
-    sessionsForNodeA.find(session => session.userId === editorOtherDocument.id).siteIds = [];
-    await nodeA.bridge.invalidateAuthorization({
-      siteId: siteA,
-      principalId: editorOtherDocument.id
+    identityNode = await createRedisApiInstance({
+      redisUrl,
+      channelPrefix,
+      siteIds: [siteA, siteB],
+      store: storeA,
+      pool: authPool,
+      heartbeatMs: 5_000
     });
+    const loginResponse = await fetch(identityNode.baseUrl + '/api/v1/auth/login', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: identityOwner.email, password: ownerPassword })
+    });
+    expect(loginResponse.status).toBe(200);
+    const setCookieValues = loginResponse.headers.getSetCookie?.()
+      || [loginResponse.headers.get('set-cookie') || ''];
+    const sessionCookie = setCookieValues.find(value => value.startsWith('vsh_session='))
+      || setCookieValues.find(value => value.includes('vsh_session='));
+    expect(sessionCookie).toBeTruthy();
+    const sessionCookieOffset = sessionCookie.indexOf('vsh_session=');
+    const ownerSessionToken = decodeURIComponent(
+      sessionCookie.slice(sessionCookieOffset + 'vsh_session='.length).split(';', 1)[0].split(',', 1)[0]
+    );
+
+    const membershipRemoval = await fetch(
+      identityNode.baseUrl + '/api/v1/sites/' + siteA + '/members/' + editorOtherDocument.id,
+      {
+        method: 'DELETE',
+        headers: { authorization: 'Bearer ' + ownerSessionToken }
+      }
+    );
+    expect(membershipRemoval.status).toBe(200);
+    expect((await membershipRemoval.json()).removed).toBe(true);
+    expect(sessionsForNodeB.find(session => session.userId === editorOtherDocument.id).siteIds)
+      .toContain(siteA);
+    const removedMembership = await authPool.query(
+      'SELECT 1 FROM site_memberships WHERE site_id=$1 AND user_id=$2',
+      [siteA, editorOtherDocument.id]
+    );
+    expect(removedMembership.rowCount).toBe(0);
     await revocationProbe.page.waitForFunction(() => {
       const socket = window.__virgoscorpio_hubCollaboration?.socket;
       return socket?.readyState === WebSocket.CLOSED;
@@ -511,9 +568,11 @@ test('two browser clients on independent API nodes converge from shared PostgreS
     await closeClients(clients);
     await nodeA?.close().catch(() => {});
     await nodeB?.close().catch(() => {});
+    await identityNode?.close().catch(() => {});
     await Promise.all([
       poolAClosed ? Promise.resolve() : poolA.end().catch(() => {}),
-      poolB.end().catch(() => {})
+      poolB.end().catch(() => {}),
+      authPool.end().catch(() => {})
     ]);
     if (siteA || siteB) {
       await fixturePool.query(
@@ -522,6 +581,7 @@ test('two browser clients on independent API nodes converge from shared PostgreS
       ).catch(() => {});
     }
     if (userIds.length) {
+      await fixturePool.query('DELETE FROM auth_sessions WHERE user_id=ANY($1::uuid[])', [userIds]).catch(() => {});
       await fixturePool.query('DELETE FROM users WHERE id=ANY($1::uuid[])', [userIds]).catch(() => {});
     }
     await fixturePool.end();
