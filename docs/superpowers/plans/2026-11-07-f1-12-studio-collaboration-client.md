@@ -1,7 +1,7 @@
 # F1.12 Studio collaborative editing client — implementation plan
 
 **Date:** 2026-11-07
-**Status:** Local implementation, verification, staged diff review and cross-instance/multi-node browser qualification complete. Focused unit tests, the full repository check, Studio editor browser smoke, two-session collaboration proof and the four-test multi-node suite pass locally. Clean hosted CI remains open before PR preparation.
+**Status:** Merged through PR #101 on 2026-11-08 at merge commit `5339de89e4c1d86d78291f348d03bfb4876b13a5`. Hosted push CI run #42480014817 and PR CI run #42480292203 both passed. The implementation and browser smoke are merged; full manual accessibility acceptance and production qualification remain open.
 **Design:** [F1.12 Studio collaborative editing client design](../specs/2026-11-07-f1-12-studio-collaboration-client-design.md)
 
 ## Scope guard
@@ -24,9 +24,9 @@ Integrate the existing F1.9/F1.10/F1.11 server-authoritative draft protocol into
 - [x] Run the full repository check: `npm run check` passed locally.
 - The repository-wide Playwright config timed out waiting for its global API webServer when this in-process spec was first invoked. Rerunning it with a temporary isolated config (omitting the redundant global webServer) passed 1/1; the temporary config was removed after the run.
 - [x] Run cross-instance/multi-node browser coverage on the candidate branch: `test/e2e/collaboration-multinode.spec.js` passed **4/4** locally across two API instances with loopback Redis and an in-memory collaboration store.
-- [ ] Obtain clean hosted CI for the candidate branch before PR preparation.
+- [x] Obtain clean hosted CI: push run #42480014817 and PR run #42480292203 both passed.
 - [x] Review the complete staged diff, including generated/required-artifact consistency; keep unrelated pre-existing local changes unstaged.
-- [ ] Push the feature branch and open a PR only after the above checks and diff review pass. No release/tag/deploy is part of this plan.
+- [x] Push the feature branch and open PR #101 after checks and diff review; PR #101 merged to `main` on 2026-11-08 at `5339de89e4c1d86d78291f348d03bfb4876b13a5`. No release/tag/deploy is part of this plan.
 
 ## Current validation record
 
@@ -48,4 +48,4 @@ The provider-neutral Public Asset Delivery Deployment Contract, its implementati
 
 ## Exit criteria
 
-This implementation slice is ready for PR review only after the full multi-editor/browser validation and clean hosted CI pass, the required-artifact and full applicable checks remain green, and the complete diff is inspected. A green local test result is not production certification. ADR-019 remains the active collaboration decision; offline-first/CRDT work, shared undo/redo, cursors, comments and full collaborative UX remain deferred.
+This implementation slice passed its required local validation and hosted CI, and PR #101 was merged to `main` on 2026-11-08. A green CI result is not production certification: the multi-node browser suite still uses in-memory document persistence, full manual accessibility acceptance remains open, and the production gates are not satisfied. ADR-019 remains the active collaboration decision; offline-first/CRDT work, shared undo/redo, cursors, comments and full collaborative UX remain deferred.
