@@ -1,7 +1,7 @@
 # F1.14 Collaboration tenant and live-authorization regression — implementation plan
 
 **Date:** 2026-11-08
-**Status:** Implementation and local/hosted CI validation complete; PR #105 merged into the F1.13 feature branch, not `main`. Mainline promotion remains outstanding; no review submissions were recorded.
+**Status:** Implementation and local/hosted CI validation complete; PR #105 merged into the F1.13 feature branch, not `main`. The combined mainline promotion is open as PR #106 with F1.15; no review submissions were recorded.
 **Design:** [F1.14 collaboration authorization regression](../specs/2026-11-08-f1-14-collaboration-authorization-regressions-design.md)
 **Base:** PR #105 was based on F1.13 head `59ffa0d` and merged at `41d04124376b9475e870407e7a04529082602b69`. F1.13 PR #104 is now on `main` at merge commit `c97a9273629bc55be42a4b9bf5239f4313a7e448`; F1.14 still needs a separate mainline promotion.
 
