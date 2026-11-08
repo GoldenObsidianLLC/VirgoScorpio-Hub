@@ -1,7 +1,7 @@
 # F1.12 Studio collaborative editing client — implementation plan
 
 **Date:** 2026-11-07
-**Status:** Local implementation, verification and staged diff review complete. Focused unit tests, the full repository check, Studio editor browser smoke and two-session collaboration proof pass. Clean hosted CI and cross-instance/multi-node browser coverage remain open before PR preparation.
+**Status:** Local implementation, verification, staged diff review and cross-instance/multi-node browser qualification complete. Focused unit tests, the full repository check, Studio editor browser smoke, two-session collaboration proof and the four-test multi-node suite pass locally. Clean hosted CI remains open before PR preparation.
 **Design:** [F1.12 Studio collaborative editing client design](../specs/2026-11-07-f1-12-studio-collaboration-client-design.md)
 
 ## Scope guard
@@ -23,7 +23,8 @@ Integrate the existing F1.9/F1.10/F1.11 server-authoritative draft protocol into
 - [x] Run `test/e2e/collaboration.spec.js`: **1/1** real-browser two-session test passed using an isolated config (the spec starts its own in-process API server). It covers remote operation delivery, lost-ack reconnect/replay, idempotent retry, concurrent property edits and canonical reload. The fixture uses in-memory persistence, not PostgreSQL.
 - [x] Run the full repository check: `npm run check` passed locally.
 - The repository-wide Playwright config timed out waiting for its global API webServer when this in-process spec was first invoked. Rerunning it with a temporary isolated config (omitting the redundant global webServer) passed 1/1; the temporary config was removed after the run.
-- [ ] Run cross-instance/multi-node browser coverage on the candidate branch and clean hosted CI.
+- [x] Run cross-instance/multi-node browser coverage on the candidate branch: `test/e2e/collaboration-multinode.spec.js` passed **4/4** locally across two API instances with loopback Redis and an in-memory collaboration store.
+- [ ] Obtain clean hosted CI for the candidate branch before PR preparation.
 - [x] Review the complete staged diff, including generated/required-artifact consistency; keep unrelated pre-existing local changes unstaged.
 - [ ] Push the feature branch and open a PR only after the above checks and diff review pass. No release/tag/deploy is part of this plan.
 
@@ -36,6 +37,7 @@ Integrate the existing F1.9/F1.10/F1.11 server-authoritative draft protocol into
 - `npm run check`: PASS on Node.js 26.12.1. Artifact verification passed **230 required paths** and syntax-checked **235 JavaScript files**. Full test summary: **565 tests, 562 passed, 0 failed, 3 skipped** (platform-dependent skips).
 - The repository check explicitly does not validate database migrations, Memgraph Cypher, live provider calls or production security.
 - The two-session real-browser `test/e2e/collaboration.spec.js` passed **1/1** using an isolated config because the spec provisions its API server in-process. It covers remote delivery, lost-ack replay/idempotency, concurrent property convergence and canonical reload with an in-memory store; it is not a PostgreSQL or cross-instance/multi-node test.
+- The cross-instance/multi-node Playwright suite `test/e2e/collaboration-multinode.spec.js` passed **4/4** locally across two API instances with loopback Redis and an in-memory collaboration store. It covers document-scoped fan-out and heartbeat repair after a dropped hint; reordered/duplicate notifications and reconnect after node loss; the 2/5/10-editor matrix; and a ten-editor reconnect storm after loss of both nodes. The 2/5/10 matrix recorded 153 peer-delivery samples (p50 **1,329 ms**, p95 **2,548 ms**, p99 **2,577 ms**); dropped-hint recovery completed in **3,788 ms**, and the ten-editor survivor-node storm recovered in **420 ms** with 240 replay deliveries. These are local harness observations, not production benchmarks or SLOs. The fixture uses an in-memory document store and does not prove PostgreSQL reconciliation; production Redis Cluster/failover, sustained load, soak and orchestrator gates remain open.
 - The pinned EnginEx submodule is initialized at `d99e021f55664f006b5e65b4a58202f9c7bc4f4b`. The checkout's pre-existing `vendor/enginex` placeholder contained empty directories only; they were preserved at `vendor/enginex.empty-preinit-backup` before initialization.
 - Runtime Node.js 26.12.1 satisfies the repository's declared minimum `>=22.23.4`.
 - No dependency, migration, product version, SemVer, release tag, package publication or deployment changed.
