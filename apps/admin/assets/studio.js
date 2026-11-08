@@ -5,7 +5,8 @@
   const state = {
     user: null, sites: [], siteId: '', pages: [], document: null, contentId: null, version: null, status: 'draft',
     selectedNodeId: null, dirty: false, undo: [], redo: [], dragComponent: null, dragNodeId: null, breakpoint: 'desktop',
-    slugTouched: false, toastTimer: null, lastSavedDocument: null
+    slugTouched: false, toastTimer: null, lastSavedDocument: null,
+    collaborationClient: null, collaborationBusy: false, collaborationState: 'closed'
   };
   const styleFields = [
     ['backgroundColor', 'Background color', 'text', '#ffffff'], ['color', 'Text color', 'text', '#202b3a'],
@@ -72,6 +73,7 @@
     return new Set(site?.capabilities || []);
   }
   function may(capability) { const caps = currentSiteCapabilities(); return caps.has('*') || caps.has('site:manage') || caps.has(capability); }
+  function mayEditContent() { return may('content:edit') || may('content:edit:own'); }
 
   async function loadPages() {
     if (!state.siteId) return;
@@ -146,7 +148,42 @@
     state.dirty = true; setStatus('Changes not saved', true); saveRecovery(); updateUndoButtons();
   }
   function snapshot() { if (state.document) state.undo.push(structuredClone(state.document)); if (state.undo.length > 60) state.undo.shift(); state.redo.length = 0; }
-  function mutate(operation) { snapshot(); operation(); markDirty(); renderAll(); }
+  function mutate(operation, collaborationOperation = null) {
+    if (state.collaborationClient) {
+      if (!collaborationOperation) {
+        notify('This action is not available during a live collaboration session. Leave collaboration before using document-wide tools.', true);
+        return;
+      }
+      if (state.collaborationBusy || !state.collaborationClient.connected) {
+        notify('Wait until the collaborative draft is synchronized before making another edit.', true);
+        return;
+      }
+      state.collaborationBusy = true;
+      updateCollaborationControls();
+      setStatus('Committing collaborative change…', false);
+      void state.collaborationClient.submit(collaborationOperation).then(result => {
+        if (Number.isSafeInteger(result.version) && result.version > 0) state.version = result.version;
+        state.dirty = false;
+        state.undo.length = 0;
+        state.redo.length = 0;
+        state.lastSavedDocument = JSON.stringify(state.document);
+        try { sessionStorage.removeItem(recoveryKey()); } catch { /* Recovery cleanup is best-effort. */ }
+        state.collaborationBusy = false;
+        renderAll();
+        setStatus(`Live draft · sequence ${result.sequence}`, false);
+      }).catch(error => {
+        state.collaborationBusy = false;
+        renderAll();
+        setStatus(error.message, false);
+        notify(error.message, true);
+      });
+      return;
+    }
+    snapshot();
+    operation();
+    markDirty();
+    renderAll();
+  }
   function updateUndoButtons() { $('undo').disabled = state.undo.length === 0; $('redo').disabled = state.redo.length === 0; }
   function undo() {
     if (!state.undo.length) return; state.redo.push(structuredClone(state.document)); state.document = state.undo.pop(); state.dirty = true; markDirty(); renderAll();
@@ -163,11 +200,14 @@
   }
   function addComponent(type, targetId = null) {
     if (!state.document) state.document = makeInitialDocument();
+    const node = newNode(type);
+    const target = targetId ? findNode(targetId) : null;
+    const list = target && containerTypes.has(target.type) ? target.children : state.document.children;
+    const parentId = target && containerTypes.has(target.type) ? target.id : null;
+    const afterNodeId = list.length ? list[list.length - 1].id : null;
     mutate(() => {
-      const node = newNode(type); const target = targetId ? findNode(targetId) : null;
-      const list = target && containerTypes.has(target.type) ? target.children : state.document.children;
       list.push(node); state.selectedNodeId = node.id;
-    });
+    }, { type: 'node.insert', payload: { node, parentId, afterNodeId } });
   }
   function moveNode(id, targetId = null) {
     if (!id || id === targetId) return;
@@ -178,21 +218,41 @@
     if (target && containerTypes.has(source.node.type)) {
       let contains = false; walkNodes(source.node.children, node => { if (node.id === target.id) contains = true; }); if (contains) return;
     }
-    mutate(() => { source.list.splice(source.index, 1); const destination = target ? target.children : state.document.children; destination.push(source.node); state.selectedNodeId = source.node.id; });
+    const destination = target ? target.children : state.document.children;
+    const afterNodeId = destination.filter(node => node.id !== id).slice(-1)[0]?.id || null;
+    state.selectedNodeId = source.node.id;
+    mutate(() => {
+      source.list.splice(source.index, 1);
+      destination.push(source.node);
+      state.selectedNodeId = source.node.id;
+    }, { type: 'node.move', payload: { nodeId: id, parentId: target?.id || null, afterNodeId } });
   }
   function duplicateNode(id) {
     const item = findNodeContainer(id); if (!item) return;
     const clone = structuredClone(item.node);
     walkNodes([clone], node => { node.id = (globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`).replace(/[^A-Za-z0-9_-]/g,'').slice(0,80); });
-    mutate(() => { item.list.splice(item.index + 1, 0, clone); state.selectedNodeId = clone.id; });
+    state.selectedNodeId = clone.id;
+    mutate(() => {
+      item.list.splice(item.index + 1, 0, clone);
+      state.selectedNodeId = clone.id;
+    }, { type: 'node.insert', payload: { node: clone, parentId: item.parent?.id || null, afterNodeId: item.node.id } });
   }
   function removeNode(id) {
     const item = findNodeContainer(id); if (!item) return;
-    mutate(() => { item.list.splice(item.index, 1); state.selectedNodeId = item.list[Math.max(0, item.index - 1)]?.id || null; });
+    state.selectedNodeId = item.list[Math.max(0, item.index - 1)]?.id || null;
+    mutate(() => {
+      item.list.splice(item.index, 1);
+      state.selectedNodeId = item.list[Math.max(0, item.index - 1)]?.id || null;
+    }, { type: 'node.delete', payload: { nodeId: id } });
   }
   function shiftNode(id, direction) {
-    const item = findNodeContainer(id); if (!item) return; const next = item.index + direction; if (next < 0 || next >= item.list.length) return;
-    mutate(() => { [item.list[item.index], item.list[next]] = [item.list[next], item.list[item.index]]; });
+    const item = findNodeContainer(id); if (!item) return;
+    const next = item.index + direction; if (next < 0 || next >= item.list.length) return;
+    const remaining = item.list.filter(node => node.id !== id);
+    const afterNodeId = remaining.slice(0, next).slice(-1)[0]?.id || null;
+    mutate(() => {
+      [item.list[item.index], item.list[next]] = [item.list[next], item.list[item.index]];
+    }, { type: 'node.move', payload: { nodeId: id, parentId: item.parent?.id || null, afterNodeId } });
   }
   function applySafeStyles(element, styles) {
     const safe = styles && typeof styles === 'object' ? styles : {};
@@ -321,9 +381,45 @@
     control.value = value ?? ''; control.disabled = Boolean(options.disabled); if (options.placeholder) control.placeholder = options.placeholder; control.autocomplete = 'off';
     control.addEventListener('change', () => { if (options.onChange) options.onChange(control.value); }); wrapper.append(control); host.append(wrapper);
   }
-  function setProp(nodeId, key, value) { mutate(() => { const node = findNode(nodeId); if (node) node.props[key] = value; }); }
+  function collaborativePropertyOperation(nodeId, key, value) {
+    const node = findNode(nodeId);
+    const previous = node?.props?.[key];
+    if ((key === 'text' || key === 'cite') && typeof previous === 'string' && typeof value === 'string') {
+      const before = Array.from(previous);
+      const after = Array.from(value);
+      let prefix = 0;
+      while (prefix < before.length && prefix < after.length && before[prefix] === after[prefix]) prefix += 1;
+      let suffix = 0;
+      while (suffix < before.length - prefix && suffix < after.length - prefix &&
+          before[before.length - 1 - suffix] === after[after.length - 1 - suffix]) suffix += 1;
+      const deletedLength = before.length - prefix - suffix;
+      const insertedText = after.slice(prefix, after.length - suffix).join('');
+      if (deletedLength > 0 && !insertedText) {
+        return { type: 'text.delete', payload: { nodeId, key, offset: prefix, length: deletedLength } };
+      }
+      if (insertedText && deletedLength === 0) {
+        return { type: 'text.insert', payload: { nodeId, key, offset: prefix, text: insertedText } };
+      }
+    }
+    return { type: 'node.set_prop', payload: { nodeId, key, value } };
+  }
+  function setProp(nodeId, key, value) {
+    const node = findNode(nodeId);
+    if (!node || JSON.stringify(node.props[key]) === JSON.stringify(value)) return;
+    mutate(() => { const current = findNode(nodeId); if (current) current.props[key] = value; },
+      collaborativePropertyOperation(nodeId, key, value));
+  }
   function setStyle(nodeId, key, value) {
-    mutate(() => { const node = findNode(nodeId); if (!node) return; const styles = state.breakpoint === 'desktop' ? (node.props.styles ||= {}) : (((node.props.responsiveStyles ||= {})[state.breakpoint]) ||= {}); if (!value.trim()) delete styles[key]; else styles[key] = value.trim(); });
+    const node = findNode(nodeId); if (!node) return;
+    const propertyKey = state.breakpoint === 'desktop' ? 'styles' : 'responsiveStyles';
+    const nextStyles = structuredClone(node.props[propertyKey] || {});
+    const targetStyles = propertyKey === 'styles' ? nextStyles : ((nextStyles[state.breakpoint] ||= {}));
+    if (!value.trim()) delete targetStyles[key]; else targetStyles[key] = value.trim();
+    mutate(() => {
+      const current = findNode(nodeId); if (!current) return;
+      const styles = state.breakpoint === 'desktop' ? (current.props.styles ||= {}) : (((current.props.responsiveStyles ||= {})[state.breakpoint]) ||= {});
+      if (!value.trim()) delete styles[key]; else styles[key] = value.trim();
+    }, { type: 'node.set_prop', payload: { nodeId, key: propertyKey, value: nextStyles } });
   }
   function updateWorkflowControls() {
     const draft = ['draft','archived'].includes(state.status); $('workflow-button').classList.toggle('hidden', !draft);
@@ -335,12 +431,163 @@
     $('archive-button').classList.toggle('hidden', !may('content:archive'));
     $('save-button').disabled = !state.dirty && Boolean(state.contentId);
     $('save-button').textContent = state.contentId ? 'Save draft' : 'Save draft';
+    updateCollaborationControls();
+  }
+  function updateCollaborationControls() {
+    const active = Boolean(state.collaborationClient);
+    const connected = Boolean(active && state.collaborationClient.connected);
+    const locked = Boolean(active && (!connected || state.collaborationBusy));
+    const readyToStart = Boolean(state.contentId && state.status === 'draft' && !state.dirty && mayEditContent());
+    const button = $('collaboration-button');
+    button.disabled = state.collaborationBusy || (!active && !readyToStart);
+    button.textContent = active ? (state.collaborationBusy ? 'Committing…' : 'Leave collaboration') : 'Collaborate';
+    const status = $('collaboration-status');
+    status.dataset.state = active ? state.collaborationState : (readyToStart ? 'ready' : 'unavailable');
+    if (!active) status.textContent = readyToStart ? 'Ready for live draft editing' : 'Saved drafts only';
+    else if (state.collaborationState === 'connected') status.textContent = `Live · sequence ${state.collaborationClient.sequence}`;
+    else if (state.collaborationState === 'syncing') status.textContent = 'Synchronizing draft…';
+    else if (state.collaborationState === 'reconnecting') status.textContent = 'Reconnecting…';
+    else if (state.collaborationState === 'connecting') status.textContent = 'Connecting…';
+    else status.textContent = 'Collaboration unavailable';
+
+    $('site-select').disabled = active;
+    $('new-page').disabled = active;
+    $('page-search').disabled = active;
+    $('page-slug').disabled = active;
+    $('save-button').disabled = active || (!state.dirty && Boolean(state.contentId));
+    for (const id of ['workflow-button', 'publish-button', 'approve-button', 'schedule-button', 'unpublish-button', 'archive-button']) {
+      $(id).disabled = active || state.collaborationBusy;
+    }
+    $('undo').disabled = active || state.undo.length === 0;
+    $('redo').disabled = active || state.redo.length === 0;
+    for (const id of ['json-button', 'revisions-button', 'show-revisions', 'reload-document', 'apply-json']) {
+      $(id).disabled = active || state.collaborationBusy;
+    }
+    $('document-title').disabled = locked;
+    $('canvas-root').inert = locked;
+    $('component-palette').inert = locked;
+    $('inspector-settings').inert = locked;
+    $('inspector-styles').inert = locked;
+    for (const item of $('page-list').querySelectorAll('button.page-item')) item.disabled = active;
+  }
+  function renderAfterCollaborativeOperation() {
+    const active = document.activeElement;
+    const preserveEditorValue = active && (active.id === 'document-title' || active.closest('#settings-fields') || active.closest('#style-fields'));
+    if (preserveEditorValue) {
+      renderCanvas();
+      renderPageList();
+      updateVersionLabel();
+      updateUndoButtons();
+      updateWorkflowControls();
+      $('dirty-status').textContent = state.dirty ? 'Unsaved changes' : 'All changes saved';
+      $('dirty-status').style.color = state.dirty ? '#e4bd7c' : '#72dba7';
+      return;
+    }
+    renderAll();
+  }
+  async function startCollaboration() {
+    if (!state.contentId || state.status !== 'draft') {
+      notify('Save and load a draft before starting collaboration.', true);
+      return;
+    }
+    if (state.dirty) {
+      notify('Save or discard local unsaved changes before starting collaboration.', true);
+      return;
+    }
+    if (!mayEditContent()) {
+      notify('Your current site role does not allow collaborative editing.', true);
+      return;
+    }
+    const collaboration = window.VSHStudioCollaboration;
+    if (!collaboration?.createStudioCollaborationClient || !collaboration?.applyCollaborationOperation) {
+      notify('The Studio collaboration client failed to load. Refresh the editor and try again.', true);
+      return;
+    }
+    const client = collaboration.createStudioCollaborationClient({
+      siteId: state.siteId,
+      contentId: state.contentId,
+      onOperation: (operation, metadata) => {
+        state.document = collaboration.applyCollaborationOperation(state.document, operation);
+        if (metadata.local && operation.type === 'node.insert') state.selectedNodeId = operation.payload.node.id;
+        if (metadata.local && operation.type === 'node.move') state.selectedNodeId = operation.payload.nodeId;
+        if (metadata.local && operation.type === 'node.delete' && state.selectedNodeId === operation.payload.nodeId) state.selectedNodeId = null;
+        if (Number.isSafeInteger(metadata.version) && metadata.version > 0) state.version = metadata.version;
+        state.dirty = false;
+        state.undo.length = 0;
+        state.redo.length = 0;
+        state.lastSavedDocument = JSON.stringify(state.document);
+        try { sessionStorage.removeItem(recoveryKey()); } catch { /* Recovery cleanup is best-effort. */ }
+        renderAfterCollaborativeOperation();
+        setStatus(`Live draft · sequence ${metadata.sequence}`, false);
+      },
+      onReload: (canonicalDocument, metadata) => {
+        state.document = structuredClone(canonicalDocument);
+        if (Number.isSafeInteger(metadata.version) && metadata.version > 0) state.version = metadata.version;
+        state.dirty = false;
+        state.undo.length = 0;
+        state.redo.length = 0;
+        state.selectedNodeId = null;
+        state.lastSavedDocument = JSON.stringify(state.document);
+        $('document-title').value = state.document.title;
+        try { sessionStorage.removeItem(recoveryKey()); } catch { /* Recovery cleanup is best-effort. */ }
+        renderAll();
+        notify('The canonical draft was reloaded. Retry the edit that could not be replayed.', true);
+      },
+      onStatus: statusValue => {
+        state.collaborationState = statusValue;
+        updateCollaborationControls();
+        if (statusValue === 'connected') $('canvas-status').textContent = 'Live collaborative draft';
+      },
+      onError: error => notify(error.message || 'The collaboration connection reported an error.', true)
+    });
+    state.collaborationClient = client;
+    state.collaborationState = 'connecting';
+    updateCollaborationControls();
+    try {
+      await client.start();
+      notify('Live collaboration connected. Accepted edits are committed to the draft as they happen.');
+    } catch (error) {
+      if (state.collaborationClient === client) {
+        client.close();
+        state.collaborationClient = null;
+        state.collaborationState = 'closed';
+        updateCollaborationControls();
+        updateVersionLabel();
+      }
+      notify(error.message || 'Could not start the collaboration session.', true);
+    }
+  }
+  async function leaveCollaboration() {
+    const client = state.collaborationClient;
+    if (!client) return;
+    if (state.collaborationBusy || client.busy) {
+      notify('Wait for the current collaborative edit to finish before leaving.', true);
+      return;
+    }
+    const contentId = state.contentId;
+    if (!client.close()) {
+      notify('The collaboration session still has an edit in progress.', true);
+      return;
+    }
+    state.collaborationClient = null;
+    state.collaborationState = 'closed';
+    updateCollaborationControls();
+    if (contentId) await loadPage(contentId);
+    notify('Collaboration ended. The latest saved draft has been reloaded.');
+  }
+  async function toggleCollaboration() {
+    if (state.collaborationClient) await leaveCollaboration();
+    else await startCollaboration();
   }
   function activateInspector(tab) {
     for (const button of document.querySelectorAll('.inspector-tabs button')) button.classList.toggle('active', button.dataset.tab === tab);
     for (const panel of ['settings','styles','document']) $(`inspector-${panel}`).classList.toggle('hidden', panel !== tab);
   }
   async function saveDraft() {
+    if (state.collaborationClient) {
+      notify('Live collaboration commits each accepted edit immediately. Leave the session before using whole-document save.', true);
+      return;
+    }
     if (!state.document) state.document = makeInitialDocument();
     state.document.title = $('document-title').value.trim() || 'Untitled page';
     let slug = slugify($('page-slug').value || state.document.title); if (!slug) slug = 'untitled';
@@ -355,6 +602,10 @@
     finally { updateWorkflowControls(); }
   }
   async function workflow(action, extra = {}) {
+    if (state.collaborationClient) {
+      notify('Leave live collaboration before starting editorial workflow actions.', true);
+      return;
+    }
     if (state.dirty) {
       const priorStatus = state.status; await saveDraft(); if (state.dirty) return;
       if (!['draft','archived'].includes(priorStatus) && action !== 'submit-review') { notify('Your changes were saved as a new draft. Submit it for review and approval before publishing again.', true); return; }
@@ -368,6 +619,7 @@
     } catch (error) { notify(error.message, true); }
   }
   async function openRevisions() {
+    if (state.collaborationClient) return notify('Leave live collaboration before restoring or comparing editorial revisions.', true);
     if (!state.contentId) return notify('Save the page first.', true);
     try {
       const result = await api(`/api/v1/pages/${state.contentId}/revisions?siteId=${encodeURIComponent(state.siteId)}`);
@@ -435,7 +687,19 @@
     try { const result = await api('/api/v1/auth/password-reset/request', { method: 'POST', body: JSON.stringify({ email }) }); $('login-status').textContent = result.message || 'If an active account matches that address, reset instructions will be sent.'; }
     catch (error) { $('login-status').textContent = error.message; }
   });
-  $('logout').addEventListener('click', async () => { try { await api('/api/v1/auth/logout', { method: 'POST', body: '{}' }); } catch {} sessionStorage.clear(); state.user = null; showLogin('You are signed out.'); });
+  $('logout').addEventListener('click', async () => {
+    if (state.collaborationClient) {
+      if (state.collaborationBusy) {
+        notify('Wait for the collaborative edit to finish before signing out.', true);
+        return;
+      }
+      await leaveCollaboration();
+    }
+    try { await api('/api/v1/auth/logout', { method: 'POST', body: '{}' }); } catch {}
+    sessionStorage.clear();
+    state.user = null;
+    showLogin('You are signed out.');
+  });
   $('security-button').addEventListener('click', () => { $('security-dialog').showModal(); $('security-status').textContent = ''; $('mfa-enroll-panel').classList.add('hidden'); $('mfa-recovery-panel').classList.add('hidden'); $('mfa-disable-panel').classList.add('hidden'); });
   $('security-sessions').addEventListener('click', async () => {
     try {
@@ -465,9 +729,22 @@
   });
   $('site-select').addEventListener('change', async () => { if (state.dirty && !window.confirm('Switch site and discard local unsaved changes?')) { $('site-select').value = state.siteId; return; } state.siteId = $('site-select').value; sessionStorage.setItem('vsh-site-id', state.siteId); state.contentId = null; state.document = null; state.dirty = false; await loadPages(); createNewPage(); });
   $('new-page').addEventListener('click', createNewPage); $('page-search').addEventListener('input', renderPageList);
-  $('document-title').addEventListener('change', () => { if (!state.document) return; snapshot(); state.document.title = $('document-title').value; if (!state.slugTouched) $('page-slug').value = slugify(state.document.title); markDirty(); renderAll(); });
+  $('document-title').addEventListener('change', () => {
+    if (!state.document) return;
+    const title = $('document-title').value.trim() || 'Untitled page';
+    if (state.collaborationClient) {
+      mutate(() => { state.document.title = title; }, { type: 'document.set_title', payload: { title } });
+      return;
+    }
+    snapshot();
+    state.document.title = title;
+    if (!state.slugTouched) $('page-slug').value = slugify(state.document.title);
+    markDirty();
+    renderAll();
+  });
   $('page-slug').addEventListener('input', () => { state.slugTouched = true; markDirty(); });
   $('undo').addEventListener('click', undo); $('redo').addEventListener('click', redo); $('save-button').addEventListener('click', () => void saveDraft());
+  $('collaboration-button').addEventListener('click', () => void toggleCollaboration());
   $('preview-button').addEventListener('click', () => void preview()); $('workflow-button').addEventListener('click', () => void workflow('submit-review'));
   $('publish-button').addEventListener('click', () => void workflow('publish')); $('approve-button').addEventListener('click', () => void workflow('approve'));
   $('schedule-button').addEventListener('click', () => { const local = window.prompt('Enter publication date and time in ISO format (for example 2027-01-15T10:00:00-06:00):'); if (local) void workflow('schedule', { scheduledAt: local }); });

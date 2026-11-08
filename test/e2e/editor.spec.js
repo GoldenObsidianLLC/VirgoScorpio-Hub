@@ -48,4 +48,6 @@ test('editor saves a draft and displays the returned revision', async ({ page })
   await expect(page.locator('#version-label')).toContainText('v1');
   await expect(page.locator('#page-list')).toContainText('A Playwright Page');
   await expect(page.locator('#dirty-status')).toContainText('All changes saved');
+  await expect(page.locator('#collaboration-button')).toBeEnabled();
+  await expect(page.locator('#collaboration-status')).toContainText('Ready for live draft editing');
 });

@@ -230,19 +230,20 @@ A collaborative session should support:
 
 ### 5.2 CRDT versus operational transformation
 
-F1.7 completed the codebase-specific CRDT/OT assessment. The provisional direction for the first online CMS collaboration release is server-authoritative, document-specific semantic OT: operations target stable node IDs, parent IDs and sibling anchors, and a PostgreSQL sequencer transforms stale operations before schema validation and commit. This is a recommendation only; no collaboration engine, persistence migration, CRDT library or bidirectional transport is implemented. See [Collaborative Editing Spike](COLLABORATIVE-EDITING-SPIKE.md) and ADR-019.
+F1.7 completed the codebase-specific CRDT/OT assessment. The provisional direction for the first online CMS collaboration release is server-authoritative, document-specific semantic OT: operations target stable node IDs, parent IDs and sibling anchors, and a PostgreSQL sequencer transforms stale operations before schema validation and commit. F1.9 implements the PostgreSQL-backed semantic-OT engine, durable sequence/history, validated REST and document-scoped WebSocket operations. F1.10/F1.11 add cross-instance notification/recovery and local resilience qualification. F1.12 adds a limited Studio browser client over those existing contracts; it does not add persistence, a new transport or a CRDT. The current implementation remains a developer preview and is not a complete collaborative Studio experience or production certification. See [Collaborative Editing Spike](COLLABORATIVE-EDITING-SPIKE.md), ADR-019 and [Real-Time Foundation 1](REALTIME-FOUNDATION-F1.md).
 
-### Follow-on implementation proof
+### Implemented proof and remaining product work
 
-The follow-on prototype must verify:
+F1.9/F1.10/F1.11 provide the server-side semantic operations, concurrent edit transformation, materialized page-tree validation, PostgreSQL transaction/revision/outbox integration, bounded operation replay, canonical reload, authenticated authorization checks, idempotency and cross-instance notification recovery. The page-document v1 JSON tree remains the canonical representation; plain-string widget properties are not a rich-text AST.
 
-- Nested JSON page documents, component properties and reorder operations; the current page schema uses plain strings rather than a rich-text AST.
-- Concurrent edits to the same property and to independent document regions.
-- Schema validation and invalid intermediate states.
-- Snapshot size, update volume, compaction and long-running sessions.
-- Undo/redo semantics, cursor mapping, offline edits and reconnect behavior.
-- Server authority, malicious client operations and resource-exhaustion resistance.
-- Migration and compatibility across document schema versions.
+F1.12 adds the limited Studio client integration. The browser maps supported title, node, property/style and bounded text edits to the existing typed operations; validates incoming envelopes and page-tree structure; applies contiguous accepted server operations; and recovers sequence gaps through the canonical REST sync route. It blocks whole-document save, revision restore, JSON replacement, site/page switching and editorial workflow actions during a live session so they cannot bypass the sequenced write path. Local verification passed: client unit tests 6/6, semantic-OT tests 12/12, Studio editor Playwright smoke 2/2, and `npm run check` with 565 tests (562 passed, zero failures, three platform skips). Clean hosted CI and the multi-editor browser matrix remain outstanding.
+
+Still deferred or requiring further qualification:
+
+- Shared undo/redo, collaborator roster, cursor/selection mapping, comments and review threads.
+- Offline-first edits, multi-master behavior and a richer collaborative text model.
+- Full concurrent editor UX validation, accessibility/browser matrix and clean hosted-CI coverage.
+- Representative sustained/peak load, long-running sessions, deployment-specific recovery/failover and independent security review.
 
 Persist accepted document state through the existing transactional/versioning model. Transient collaboration operations must not silently bypass schema validation, capability checks, content review or publication workflows.
 
@@ -491,7 +492,7 @@ Each step requires an architecture decision record where a technology or consist
 - [Release readiness](RELEASE_READINESS.md)
 - [Research and collaboration](../RESEARCH_COLLABORATION.md)
 
-## Implementation status: F1.8 presence transport, F1.9 collaborative CMS and F1.10 cross-instance preview
+## Implementation status: F1.8–F1.12 real-time, semantic collaboration and Studio client
 
 F1.8 adds a site-scoped presence WebSocket route and keeps the authenticated SSE route as a fallback. The WebSocket gateway accepts ping, presence heartbeat and presence leave commands, with identity derived from the authenticated context. Same-origin validation, site capability checks, periodic reauthorization, message/frame limits and bounded outbound buffering are applied before and during the connection.
 
@@ -505,4 +506,8 @@ F1.10 verification uses live loopback Redis with two independent bridge clients/
 
 The local 2/5/10 editor harness recorded 153 peer-delivery samples (p50 1,347 ms; p95 2,575 ms; p99 2,620 ms); dropped-hint heartbeat recovery completed in about 3.57 seconds at a 5-second heartbeat setting. These are test-harness measurements, not a production benchmark or SLO. The focused real-time/collaboration suite passed 63/63 with no skips, the full repository check passed 206/206, and the three multi-instance browser scenarios passed. No migration, dependency change, primary-database operation or production Redis operation was performed for F1.10.
 
-Cross-instance live document hints and recovery are now proven in a two-process local harness, but neither F1.8–F1.10 is production certification. Redis Cluster slot/failover and partition tests, sustained/peak load beyond the 2/5/10 correctness matrix, rolling-deploy/process-crash rehearsal in the intended orchestrator, browser/proxy reconnect soak, independent security/accessibility review, backup/retention runbooks and operational alert/ownership remain open release gates. Production remains NO-GO.
+Cross-instance live document hints and recovery are now proven in a two-process local harness, but F1.8–F1.11 are not production certification. Redis Cluster slot/failover and partition tests, sustained/peak load beyond the 2/5/10 correctness matrix, rolling-deploy/process-crash rehearsal in the intended orchestrator, browser/proxy reconnect soak, independent security/accessibility review, backup/retention runbooks and operational alert/ownership remain open release gates.
+
+F1.12 adds a limited Studio browser client over the existing draft-only semantic-OT service. The browser session is opt-in for saved drafts with edit authority; supported edits are sent as typed operations, applied from contiguous server sequence notifications, and recovered from the authenticated REST sync endpoint. Whole-document save, editorial workflow actions, revision restore and JSON replacement are blocked during the live session to prevent bypassing the sequenced write path. Local verification passed: Studio client tests 6/6, semantic-OT tests 12/12, Studio editor Playwright smoke 2/2, and `npm run check` (565 tests, 562 pass, 0 fail, 3 platform skips; artifact verification covered 230 paths and syntax-checked 235 JavaScript files). The check does not validate migrations, Memgraph Cypher, live provider calls or production security. The two-session collaboration browser acceptance spec passed 1/1 using an isolated config and in-memory collaboration store. It covers remote delivery, lost-ack replay/idempotency, concurrent property convergence and canonical reload, but does not use PostgreSQL. The cross-instance/multi-node Playwright suite passed **4/4** locally using two API instances, loopback Redis and an in-memory document store. The 2/5/10-editor matrix recorded 153 peer-delivery samples (p50 **1,329 ms**, p95 **2,548 ms**, p99 **2,577 ms**); dropped-hint heartbeat recovery completed in **3,788 ms**, and the ten-editor survivor-node storm recovered in **420 ms**. These local harness measurements are not production benchmarks or SLOs, and the fixture does not prove PostgreSQL reconciliation. Clean hosted CI remains outstanding. Shared undo/redo, collaborator roster/cursors, comments, offline-first behavior and a full rich-text collaboration UX remain deferred.
+
+F1.12 remains developer-preview scope and does not close production gates. Production remains NO-GO.
