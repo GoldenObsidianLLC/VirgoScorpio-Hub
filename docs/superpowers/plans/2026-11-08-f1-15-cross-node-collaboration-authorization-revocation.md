@@ -41,7 +41,8 @@ The full repository check initially detected the expected stale source-anchored 
 - F1.13 PR #104 is merged to `main` at merge commit `c97a9273629bc55be42a4b9bf5239f4313a7e448`.
 - F1.14 PR #105 is merged to the temporary F1.13 feature branch at `41d04124376b9475e870407e7a04529082602b69`, not to `main`.
 - PR #105 hosted run #441 (`42496533962`) completed successfully across all six jobs. No review submissions were present.
-- F1.14 therefore still needs promotion to `main`. The first GitHub connector attempt to create that promotion PR returned HTTP 403; no promotion PR was created. The F1.15 branch is stacked on the F1.13/F1.14 feature branch and must be opened against `main` (or separately promoted) so the complete unmerged F1.14/F1.15 diff is reviewed together.
+- F1.14 therefore still needs promotion to `main`. The combined F1.14/F1.15 branch is pushed at `19975a6e` (`test(security): qualify cross-node collaboration auth revocation`) and tracks `origin/feat/f1-15-cross-node-auth-revocation-2026-11-08`.
+- A GitHub integration attempt to create the combined F1.14/F1.15 promotion PR against `main` returned HTTP 403 (`Resource not accessible by integration`); no promotion PR was created. The pushed branch is ready for PR creation through an authorized GitHub path. No PR number has been allocated and no hosted CI has run for the F1.15 head yet.
 - Do not merge or retarget PRs without explicit authorization.
 
 ## Boundaries and release
