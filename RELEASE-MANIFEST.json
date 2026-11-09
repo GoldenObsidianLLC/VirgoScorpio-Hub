@@ -431,44 +431,40 @@
     }
   },
   "candidateValidation": {
-    "reviewedAt": "2026-11-05",
-    "baselineCommit": "489325585d57fe95f961c36a597faa7065848c7f",
-    "branch": "refactor/api-library-routes-2026-11",
+    "reviewedAt": "2026-11-09",
+    "baselineCommit": "36220abf4ebcc629fa616961879f5a2ffe1f847d",
+    "branch": "main",
     "semver": {
       "previousVersion": "0.6.1",
       "candidateVersion": "0.6.2",
       "changeType": "patch",
       "released": false,
-      "reason": "Compatible internal library/media API route-family extraction with no intended HTTP contract or database schema change."
+      "reason": "The 0.6.2 patch candidate retains the compatible internal library/media API route-family extraction rationale. Subsequent F1.12–F1.18 work adds scoped collaboration and authorization regression coverage without changing the package SemVer, public HTTP contract, or database schema. The current release-scope reconciliation is documentation/evidence metadata only."
     },
     "includedChanges": [
-      "Extract site-scoped library/media HTTP handling into apps/api/src/library-routes.js.",
-      "Keep API authentication, selected-site resolution, capability checks and central error handling in the composition pipeline.",
-      "Add route-family and platform-composition regression tests; require the new source/test in scripts/verify.js.",
-      "Update architecture, roadmap, release evidence, changelog and repository report links."
+      "Internal library/media API route-family extraction remains within the 0.6.2 patch candidate; API authentication, site resolution, authorization and error handling remain in the shared composition path.",
+      "F1.12–F1.18 add limited developer-preview collaborative editing and maintainer-authored authorization regressions; F1.18 qualifies heartbeat reauthorization after a lost Redis authorization notification. No production runtime, public API, dependency, schema or migration change was introduced by these increments.",
+      "0.6.2 scope, sample defaults, optional provider exclusions, 14-gate evidence environments and proposed accountable roles are reconciled; named release-owner and provider owner assignments remain pending."
     ],
     "localValidation": {
-      "status": "PASS",
+      "status": "PASS_WITH_PLATFORM_SKIPS",
+      "reviewedAt": "2026-11-09",
       "runtime": {
         "node": "26.12.1",
         "platform": "win32",
-        "arch": "x64"
-      },
-      "cleanNpmCi": {
-        "status": "PASS",
-        "command": "npm ci --no-audit --no-fund",
-        "result": "180 packages installed; postinstall generated KaTeX assets."
+        "arch": "x64",
+        "supportStatus": "Local development runtime only; not the declared support matrix."
       },
       "artifactCheck": {
         "status": "PASS",
-        "requiredPaths": 206,
-        "javascriptFilesSyntaxChecked": 213
+        "requiredPaths": 230,
+        "javascriptFilesSyntaxChecked": 236
       },
       "unitTests": {
-        "status": "PASS",
+        "status": "PASS_WITH_PLATFORM_SKIPS",
         "command": "npm run check",
-        "tests": 476,
-        "passed": 473,
+        "tests": 566,
+        "passed": 563,
         "failed": 0,
         "skipped": 3,
         "skipNotes": [
@@ -476,65 +472,35 @@
           "O_NOFOLLOW is not exposed on this platform."
         ]
       },
-      "focusedTests": {
+      "tenantIsolationInventory": {
         "status": "PASS",
-        "tests": 49,
-        "passed": 49,
-        "failed": 0,
-        "skipped": 0,
-        "suites": [
-          "test/library-routes.test.js",
-          "test/commerce-routes.test.js",
-          "test/request-validation.test.js",
-          "test/platform-features.test.js",
-          "test/api.test.js"
-        ]
+        "flowFamilies": 27,
+        "declaredRoutePatterns": 78,
+        "implementationSourceFiles": 19,
+        "referencedTestFiles": 41
       },
-      "enginexTests": {
-        "status": "PASS_WITH_PLATFORM_SKIPS",
-        "tests": 94,
-        "passed": 91,
-        "failed": 0,
-        "skipped": 3
-      },
-      "npmAuditHigh": {
-        "status": "PASS",
-        "command": "npm audit --audit-level=high",
-        "vulnerabilities": 0,
-        "date": "2026-11-05"
+      "markdownAndDiffCheck": {
+        "brokenInRepositoryLinks": 0,
+        "diffCheck": "PASS"
       }
     },
-    "hostedCi": "PASS on both PR #68 run #270 and push run #269 for final source 8db6c66f07c6ea89745fe2a0c8dd7f5f4f6440b3; all six jobs succeeded in each. PR #68 remains OPEN and UNMERGED pending review/merge.",
+    "hostedCi": "PASS on mainline workflow #472 for exact source 36220abf4ebcc629fa616961879f5a2ffe1f847d; all six jobs succeeded.",
     "productionCertified": false,
-    "localValidationSummary": "PASS: fresh npm ci; 206 required paths; 213 JavaScript files syntax-checked; 476 root tests (473 passed, 0 failed, 3 Windows/platform-specific skips); focused API/library/commerce/platform/request-validation suite 49/49; EnginEx 94 (91 passed, 0 failed, 3 platform-specific skips); high-severity npm audit reports zero vulnerabilities.",
+    "localValidationSummary": "PASS_WITH_PLATFORM_SKIPS: Windows Node 26.12.1; 566 Hub tests (563 passed, 0 failed, 3 platform-specific skips); 230 required artifact paths; 236 JavaScript files syntax-checked; tenant inventory 27 families, 78 route patterns, 19 source files and 41 test files.",
     "hostedCiEvidence": {
-      "pullRequest": {
-        "number": 68,
-        "url": "https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/68",
-        "state": "open",
-        "merged": false,
-        "head": "31dd63908fbf8a9fb0340323d92ffd6cdd4d89b9",
-        "mergeRef": "16d9852126da4aa5c3e15d42460375a2e0ad0cd7"
+      "mainline": {
+        "runNumber": 472,
+        "runId": 42535903899,
+        "commit": "36220abf4ebcc629fa616961879f5a2ffe1f847d",
+        "event": "push",
+        "conclusion": "success",
+        "completedJobs": 6,
+        "successfulJobs": 6
       },
-      "runs": [
-        {
-          "event": "pull_request",
-          "runNumber": 260,
-          "runId": 41976111045,
-          "conclusion": "success"
-        },
-        {
-          "event": "push",
-          "runNumber": 259,
-          "runId": 41976023520,
-          "conclusion": "success"
-        }
-      ],
-      "completedJobsPerRun": 6,
       "node22": {
         "version": "22.23.4",
         "hubTests": {
-          "passed": 469,
+          "passed": 566,
           "failed": 0,
           "skipped": 0
         },
@@ -543,14 +509,14 @@
           "failed": 0,
           "skipped": 0
         },
-        "requiredPaths": 205,
-        "javascriptSyntaxChecked": 213,
+        "requiredPaths": 230,
+        "javascriptSyntaxChecked": 236,
         "npmAuditVulnerabilities": 0
       },
       "node24": {
         "version": "24.22.1",
         "hubTests": {
-          "passed": 469,
+          "passed": 566,
           "failed": 0,
           "skipped": 0
         },
@@ -559,53 +525,69 @@
           "failed": 0,
           "skipped": 0
         },
-        "requiredPaths": 205,
-        "javascriptSyntaxChecked": 213,
+        "requiredPaths": 230,
+        "javascriptSyntaxChecked": 236,
         "npmAuditVulnerabilities": 0
       },
-      "liveIntegration": {
-        "tests": 65,
-        "passed": 65,
+      "livePostgresMemgraph": {
+        "tests": 79,
+        "passed": 79,
         "failed": 0,
         "skipped": 0,
+        "todo": 0,
         "migrationsApplied": 18,
-        "migrationsSkippedOnSecondPass": 18,
-        "disposableDatabaseDropped": true
+        "idempotentSecondPass": 18,
+        "disposableDatabaseDropped": true,
+        "supportedUpgrade": "v0008-to-latest PASS",
+        "memgraphOutageReplay": "PASS",
+        "canonicalGraphRebuild": "PASS"
       },
       "browserSmoke": {
         "passed": 9,
         "failed": 0,
         "skipped": 0
       },
-      "codeqlWorkflow": "success",
-      "evidenceAggregation": "success"
+      "serviceLessIntegration": {
+        "skippedPerRuntime": 33,
+        "status": "PARTIAL",
+        "countedAsLivePass": false
+      },
+      "sbom": {
+        "format": "CycloneDX 1.5",
+        "componentsPerRuntime": 177,
+        "dependenciesPerRuntime": 178,
+        "npm": "11.19.1",
+        "lockfileSha256": "f404ce5862bffa60daa2cb9cd471e6ac7893b048b2e877e623ddf43c1a15e7ce",
+        "normalizedRuntimeParity": "PASS",
+        "humanLicenseAndProvenanceReview": "OPEN"
+      },
+      "codeql": "PASS; not an independent application-security assessment."
     },
     "formalReadiness": {
-      "sourceRevision": "16d9852126da4aa5c3e15d42460375a2e0ad0cd7",
+      "sourceRevision": "36220abf4ebcc629fa616961879f5a2ffe1f847d",
       "releaseClassification": "NOT_PRODUCTION_CERTIFIED",
       "readyForProduction": false,
-      "pass": 8,
+      "pass": 7,
       "partial": 2,
-      "blocked": 0,
+      "blocked": 1,
       "missingEvidence": 14,
       "notRun": 0,
       "productionCertification": "BLOCKED"
     },
     "supplementalEvidenceDiscrepancy": {
-      "status": "STALE_EVIDENCE_IDENTIFIED",
-      "summary": "The local retained fresh-migrations.json was a tracked historical 0.5.1 artifact for 14 migrations; it was not current 0.6.2 evidence. The dedicated live integration producer independently emitted a run-bound PASS artifact proving 18/18 applied, 18/18 idempotent skips, and disposable database cleanup.",
-      "action": "Bind formal and supplemental evidence to schemaVersion, product, package version and exact Git sourceRevision. This is implemented in the 0.6.2 follow-up and passed hosted PR run #264; the formal PostgreSQL/Memgraph evidence remains separately blocked until an exact-source evidence record is supplied. Do not alter migration execution checks or reuse historical JSON."
+      "status": "STALE_LOCAL_SUPPLEMENTAL_EVIDENCE",
+      "summary": "The local release:readiness snapshot has a separate fresh-migration artifact BLOCKED by its exact-source contract; hosted run #472 independently produced exact-revision PASS PostgreSQL/Memgraph evidence. Do not transplant run-bound artifacts or alter their source SHA.",
+      "action": "Refresh local supplemental evidence from the exact candidate revision when needed; do not use historical or cross-commit evidence."
     },
     "pullRequest": {
-      "number": 68,
-      "url": "https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/68",
-      "state": "open",
-      "merged": false,
-      "head": "31dd63908fbf8a9fb0340323d92ffd6cdd4d89b9",
-      "base": "489325585d57fe95f961c36a597faa7065848c7f",
-      "mergeRef": "16d9852126da4aa5c3e15d42460375a2e0ad0cd7",
-      "reviewCount": 0,
-      "issueCommentCount": 0
+      "number": 109,
+      "url": "https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/109",
+      "state": "closed",
+      "merged": true,
+      "head": "a55c36fe18863b540c279d7f690c81ba3c4438c7",
+      "base": "aaab380978edab446516fe92da99257e798a6200",
+      "mergeRef": "36220abf4ebcc629fa616961879f5a2ffe1f847d",
+      "reviewCount": 0
     }
   },
   "postMergeCodeScanning": {
@@ -1467,6 +1449,184 @@
           ]
         }
       ]
+    }
+  },
+  "historicalCandidateValidationBefore2026Nov09": {
+    "reviewedAt": "2026-11-05",
+    "baselineCommit": "489325585d57fe95f961c36a597faa7065848c7f",
+    "branch": "refactor/api-library-routes-2026-11",
+    "semver": {
+      "previousVersion": "0.6.1",
+      "candidateVersion": "0.6.2",
+      "changeType": "patch",
+      "released": false,
+      "reason": "Compatible internal library/media API route-family extraction with no intended HTTP contract or database schema change."
+    },
+    "includedChanges": [
+      "Extract site-scoped library/media HTTP handling into apps/api/src/library-routes.js.",
+      "Keep API authentication, selected-site resolution, capability checks and central error handling in the composition pipeline.",
+      "Add route-family and platform-composition regression tests; require the new source/test in scripts/verify.js.",
+      "Update architecture, roadmap, release evidence, changelog and repository report links."
+    ],
+    "localValidation": {
+      "status": "PASS",
+      "runtime": {
+        "node": "26.12.1",
+        "platform": "win32",
+        "arch": "x64"
+      },
+      "cleanNpmCi": {
+        "status": "PASS",
+        "command": "npm ci --no-audit --no-fund",
+        "result": "180 packages installed; postinstall generated KaTeX assets."
+      },
+      "artifactCheck": {
+        "status": "PASS",
+        "requiredPaths": 206,
+        "javascriptFilesSyntaxChecked": 213
+      },
+      "unitTests": {
+        "status": "PASS",
+        "command": "npm run check",
+        "tests": 476,
+        "passed": 473,
+        "failed": 0,
+        "skipped": 3,
+        "skipNotes": [
+          "Open-file rename semantics differ on Windows.",
+          "O_NOFOLLOW is not exposed on this platform."
+        ]
+      },
+      "focusedTests": {
+        "status": "PASS",
+        "tests": 49,
+        "passed": 49,
+        "failed": 0,
+        "skipped": 0,
+        "suites": [
+          "test/library-routes.test.js",
+          "test/commerce-routes.test.js",
+          "test/request-validation.test.js",
+          "test/platform-features.test.js",
+          "test/api.test.js"
+        ]
+      },
+      "enginexTests": {
+        "status": "PASS_WITH_PLATFORM_SKIPS",
+        "tests": 94,
+        "passed": 91,
+        "failed": 0,
+        "skipped": 3
+      },
+      "npmAuditHigh": {
+        "status": "PASS",
+        "command": "npm audit --audit-level=high",
+        "vulnerabilities": 0,
+        "date": "2026-11-05"
+      }
+    },
+    "hostedCi": "PASS on both PR #68 run #270 and push run #269 for final source 8db6c66f07c6ea89745fe2a0c8dd7f5f4f6440b3; all six jobs succeeded in each. PR #68 remains OPEN and UNMERGED pending review/merge.",
+    "productionCertified": false,
+    "localValidationSummary": "PASS: fresh npm ci; 206 required paths; 213 JavaScript files syntax-checked; 476 root tests (473 passed, 0 failed, 3 Windows/platform-specific skips); focused API/library/commerce/platform/request-validation suite 49/49; EnginEx 94 (91 passed, 0 failed, 3 platform-specific skips); high-severity npm audit reports zero vulnerabilities.",
+    "hostedCiEvidence": {
+      "pullRequest": {
+        "number": 68,
+        "url": "https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/68",
+        "state": "open",
+        "merged": false,
+        "head": "31dd63908fbf8a9fb0340323d92ffd6cdd4d89b9",
+        "mergeRef": "16d9852126da4aa5c3e15d42460375a2e0ad0cd7"
+      },
+      "runs": [
+        {
+          "event": "pull_request",
+          "runNumber": 260,
+          "runId": 41976111045,
+          "conclusion": "success"
+        },
+        {
+          "event": "push",
+          "runNumber": 259,
+          "runId": 41976023520,
+          "conclusion": "success"
+        }
+      ],
+      "completedJobsPerRun": 6,
+      "node22": {
+        "version": "22.23.4",
+        "hubTests": {
+          "passed": 469,
+          "failed": 0,
+          "skipped": 0
+        },
+        "enginexTests": {
+          "passed": 94,
+          "failed": 0,
+          "skipped": 0
+        },
+        "requiredPaths": 205,
+        "javascriptSyntaxChecked": 213,
+        "npmAuditVulnerabilities": 0
+      },
+      "node24": {
+        "version": "24.22.1",
+        "hubTests": {
+          "passed": 469,
+          "failed": 0,
+          "skipped": 0
+        },
+        "enginexTests": {
+          "passed": 94,
+          "failed": 0,
+          "skipped": 0
+        },
+        "requiredPaths": 205,
+        "javascriptSyntaxChecked": 213,
+        "npmAuditVulnerabilities": 0
+      },
+      "liveIntegration": {
+        "tests": 65,
+        "passed": 65,
+        "failed": 0,
+        "skipped": 0,
+        "migrationsApplied": 18,
+        "migrationsSkippedOnSecondPass": 18,
+        "disposableDatabaseDropped": true
+      },
+      "browserSmoke": {
+        "passed": 9,
+        "failed": 0,
+        "skipped": 0
+      },
+      "codeqlWorkflow": "success",
+      "evidenceAggregation": "success"
+    },
+    "formalReadiness": {
+      "sourceRevision": "16d9852126da4aa5c3e15d42460375a2e0ad0cd7",
+      "releaseClassification": "NOT_PRODUCTION_CERTIFIED",
+      "readyForProduction": false,
+      "pass": 8,
+      "partial": 2,
+      "blocked": 0,
+      "missingEvidence": 14,
+      "notRun": 0,
+      "productionCertification": "BLOCKED"
+    },
+    "supplementalEvidenceDiscrepancy": {
+      "status": "STALE_EVIDENCE_IDENTIFIED",
+      "summary": "The local retained fresh-migrations.json was a tracked historical 0.5.1 artifact for 14 migrations; it was not current 0.6.2 evidence. The dedicated live integration producer independently emitted a run-bound PASS artifact proving 18/18 applied, 18/18 idempotent skips, and disposable database cleanup.",
+      "action": "Bind formal and supplemental evidence to schemaVersion, product, package version and exact Git sourceRevision. This is implemented in the 0.6.2 follow-up and passed hosted PR run #264; the formal PostgreSQL/Memgraph evidence remains separately blocked until an exact-source evidence record is supplied. Do not alter migration execution checks or reuse historical JSON."
+    },
+    "pullRequest": {
+      "number": 68,
+      "url": "https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/68",
+      "state": "open",
+      "merged": false,
+      "head": "31dd63908fbf8a9fb0340323d92ffd6cdd4d89b9",
+      "base": "489325585d57fe95f961c36a597faa7065848c7f",
+      "mergeRef": "16d9852126da4aa5c3e15d42460375a2e0ad0cd7",
+      "reviewCount": 0,
+      "issueCommentCount": 0
     }
   }
 }

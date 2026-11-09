@@ -32,6 +32,7 @@ The package remains at **0.6.2**. This scope/documentation reconciliation is not
 | CI services | PostgreSQL 18, Memgraph 3.13.1, Redis 7.4, Chromium |
 | Vendored renderer | EnginEx 7.0.0, pinned submodule commit `d99e021f55664f006b5e65b4a58202f9c7bc4f4b` |
 | Mainline workflow | Run [#472](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42535903899), exact main SHA above; six of six jobs succeeded |
+| Active manifest candidate validation | `candidateValidation.baselineCommit` matches the current mainline SHA; the earlier 5 November candidate snapshot is retained in `historicalCandidateValidationBefore2026Nov09` |
 | Release decision | NO-GO for production; named release-owner scope approval remains pending |
 
 The local Windows development host has also exercised Node.js 26.12.1. That is useful local engineering evidence; it does not expand the declared Node support floor or establish a Windows production-support matrix.
