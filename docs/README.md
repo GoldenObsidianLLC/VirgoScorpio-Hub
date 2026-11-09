@@ -12,7 +12,13 @@
 - [Repository coherence and continuity review — 1 November 2026](REPOSITORY-COHERENCE-AND-CONTINUITY-REVIEW-2026-11-01.md) — repository inventory, documentation drift, CI/readiness gaps, branch reconciliation, safe corrections and backlog.
 - [Local Docker resource migration report — 5 November 2026](reports/2026-11-05-LOCAL-DOCKER-RESOURCE-MIGRATION.md) — checksummed cold backups, isolated Compose restore, current 18-migration PostgreSQL schemas, live integration, Memgraph outage/replay and graph rebuild, and 9/9 local Playwright smoke; legacy-resource retirement remains pending.
 
-The current Hub 0.6.2 mainline is c6026f137bbdc48dca13faa17f9d8f9e02d3f037 after PR #92. The mega-menu A/B route suite now also exercises two concurrent optimistic updates using one expected version; one succeeds, one receives the established version conflict, and the losing write cannot alter Site B. PR workflow [run 42348356762](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42348356762) and post-merge mainline workflow [run 42348591975](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42348591975) passed all six hosted jobs. PRs #84-#92 are merged. The generated route inventory references 38 test files and remains maintainer preparation only, not independent assessment evidence. Issues #14 and #25 remain open; production remains NO-GO / NOT_PRODUCTION_CERTIFIED.
+## Current mainline status — 9 November 2026
+
+Current mainline is VirgoScorpio Hub **0.6.2** at `36220abf4ebcc629fa616961879f5a2ffe1f847d`, with F1.18 merged through PR #109. Hosted mainline [workflow run #472](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42535903899) passed all six jobs: Node 22.23.4 and 24.22.1 unit/security/dependency checks, dedicated PostgreSQL/Memgraph integration, browser/accessibility smoke, CodeQL and consolidated evidence. Each Node job passed 566/566 Hub tests and 94/94 EnginEx tests; the dedicated live database job passed 79/79, applied 18 migrations and skipped all 18 on the idempotent second pass, and passed the v0008 upgrade, Memgraph outage/replay and graph rebuild checks. Chromium smoke passed 9/9. Service-less integration sweeps retained 33 skips per runtime and remain PARTIAL.
+
+The current maintainer-generated tenant-isolation inventory covers 27 flow families, 78 declared route patterns, 19 implementation source files and 41 test files. It is a source-anchored review aid, not an independent tenant-isolation assessment. Issues #14 and #25 remain open; production remains **NO-GO / NOT_PRODUCTION_CERTIFIED**. Package 0.6.2 remains unreleased.
+
+**Historical snapshot — 7 November 2026 (PRs #84–#92):** The then-current mainline was `c6026f137bbdc48dca13faa17f9d8f9e02d3f037`. The mega-menu A/B route suite exercised two concurrent optimistic updates using one expected version; one succeeded, one received the established version conflict, and the losing write could not alter Site B. PR workflow [run 42348356762](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42348356762) and post-merge mainline workflow [run 42348591975](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42348591975) passed all six hosted jobs. The generated route inventory at that snapshot referenced 38 test files.
 
 This directory contains task-oriented documentation. The root [README](../README.md) is the project overview and quickest entry point; the pages below contain detail so that the README can stay scannable.
 
@@ -24,7 +30,7 @@ This directory contains task-oriented documentation. The root [README](../README
 | Make your first contribution from a fresh clone | [Contributor Quickstart](CONTRIBUTOR-QUICKSTART.md) |
 | Understand the platform layout, API composition, renderer boundary, authentication, and commerce route seams | [Architecture](ARCHITECTURE.md) |
 | Migrate templates from EnginEx 6.x to 7.0.0 after legacy JavaScript execution removal | [EnginEx 7.0.0 Migration Guide](ENGINEX-7-MIGRATION.md) |
-| Review exact-SHA mainline CI evidence, merged PRs and the current production disposition | [0.6.2 Mainline Status Report — 6 November 2026](reports/2026-11-06-VirgoScorpio-Hub-0.6.2-Mainline-Status.md) |
+| Review current exact-SHA CI evidence and production disposition | [Release Evidence](RELEASE-EVIDENCE.md) |
 | Review the previous mainline production release gate | [0.6.1 Release Gate Report — 4 November 2026](reports/2026-11-04-VirgoScorpio-Hub-0.6.1-Release-Gate-Report.md) |
 | Review repository-wide reuse patterns, refactoring changes, and optimization priorities | [Codebase Optimization Review — 4 November 2026](CODEBASE-OPTIMIZATION-REVIEW-2026-11-04.md) |
 | Understand the project mission and human-AI symbiosis vision | [VirgoScorpio Hub Manifesto](../VIRGOSCORPIO-HUB-MANIFESTO.md) |
@@ -46,6 +52,8 @@ This directory contains task-oriented documentation. The root [README](../README
 | Community behavior, reporting, and enforcement. | [Code of Conduct](../CODE_OF_CONDUCT.md) |
 | How project contributions and collaborators are credited. | [Contributor Recognition](../CONTRIBUTOR_RECOGNITION.md) |
 | Explore research topics or collaborate on technical investigations | [Research & Collaboration](../RESEARCH_COLLABORATION.md) |
+| Review the reconciled 0.6.2 preview defaults, provider boundaries and explicit exclusions | [0.6.2 Release Scope](RELEASE-SCOPE.md) |
+| Compare current, partial and future platform capabilities | [Feature Coverage Matrix](FEATURE-PARITY.md) |
 | Decide whether a release can ship | [Release readiness](RELEASE_READINESS.md) |
 | Plan work without making unsupported promises | [Roadmap](ROADMAP.md) |
 | Update docs consistently | [Documentation standards](DOCUMENTATION_STANDARDS.md) |

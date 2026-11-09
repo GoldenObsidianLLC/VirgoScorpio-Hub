@@ -2,6 +2,10 @@
 
 > This is a high-level architectural map based on the current repository layout and its tested code paths. It is not a production deployment blueprint or a guarantee that all integrations are configured in a particular environment.
 
+## Release scope and enablement
+
+This document maps architectural code seams; it does not establish which feature flags, provider credentials, or services are enabled in a particular deployment. For the 0.6.2 developer-preview default posture and capability boundaries, use [the reconciled release-scope matrix](RELEASE-SCOPE.md), [the platform feature overview](PLATFORM-FEATURES.md), and [the feature coverage matrix](FEATURE-PARITY.md). Provider adapters and route handlers do not imply enabled-by-default behavior or live-provider acceptance. PostgreSQL remains the authoritative transactional store; Memgraph is an optional derived projection. The preview sample defaults to local storage and mock-only AI, with email, SAML, realtime, Memgraph and plugin execution disabled and OIDC/Stripe/ClamAV credentials absent.
+
 ## Architectural shape
 
 ```mermaid

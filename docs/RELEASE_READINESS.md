@@ -1,4 +1,18 @@
-## Latest mainline and tenant-isolation regression snapshot - 7 November 2026 (PRs #84-#92 merged)
+## Current mainline snapshot — 9 November 2026 (0.6.2, PR #109 merged)
+
+Current mainline is VirgoScorpio Hub 0.6.2 at `36220abf4ebcc629fa616961879f5a2ffe1f847d`. F1.18 merged through PR #109. Mainline [workflow run #472](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42535903899) completed all six jobs successfully: Node.js 22.23.4 and 24.22.1 unit/security/dependency checks, dedicated PostgreSQL/Memgraph integration, Chromium browser/accessibility smoke, CodeQL, and consolidated run-bound evidence.
+
+- Each Node matrix job passed **566/566** Hub unit/security tests and **94/94** EnginEx tests; the syntax/artifact check covered **230 required paths** and **236 JavaScript files**. The service-less integration sweep recorded **33 skips** per runtime and remains PARTIAL, not a live integration pass.
+- The dedicated PostgreSQL/Memgraph job passed **79/79** integration tests with zero failure/skip/TODO, applied **18/18** migrations to a fresh disposable database and skipped **18/18** on its idempotent second pass, exercised the v0008 upgrade fixture, Memgraph outage/replay and canonical graph rebuild, and dropped the disposable database. The aggregator materialized exact-source `postgres-memgraph-live.json` PASS evidence for this SHA.
+- Chromium Playwright smoke passed **9/9**. This is not manual accessibility acceptance.
+- Both npm audit steps reported **0 vulnerabilities**. CycloneDX 1.5 SBOMs contained **177 components / 178 dependency records** each and the aggregator verified normalized dependency-graph parity under pinned npm 11.19.1. Human dependency/license review, provenance/attestation and LGPL-3.0-or-later notice review remain open.
+- CodeQL workflow completed successfully. No CodeQL run alone is an independent security assessment.
+
+The local `npm run release:readiness` report on the same source revision recorded **7 PASS, 2 PARTIAL, 1 BLOCKED, 14 MISSING_EVIDENCE**, `readyForProduction: false`. The local fresh-migration supplemental record was stale and remains BLOCKED by its exact-revision contract; this is distinct from the successful, checksum-bound hosted database producer/aggregator evidence. Do not copy hosted evidence into a different source revision or edit its SHA.
+
+The default preview remains local media/library storage, mock-only AI, external AI content disabled, email disabled, SAML/OIDC unconfigured, realtime/Memgraph/plugin execution disabled, Stripe credentials unset and ClamAV unset. Issues #15–#22 are deferred/not planned for this developer-preview scope; their live provider, manual accessibility, parity and plugin acceptance remain production readiness requirements and stay visible as MISSING_EVIDENCE. Issues #14/#24/#25/#26/#32 and named release-owner approval under #13 remain outstanding. Package version stays 0.6.2 and unreleased; production remains NO-GO.
+
+## Historical mainline snapshot — 7 November 2026 (PRs #84–#92 merged)
 
 Current mainline: VirgoScorpio Hub 0.6.2 at c6026f137bbdc48dca13faa17f9d8f9e02d3f037 after PR #92. Its PR workflow [run 42348356762](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42348356762) and post-merge mainline workflow [run 42348591975](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42348591975) passed all six hosted jobs: Node.js 22.23.4 and 24.22.1, PostgreSQL/Memgraph integration, browser/accessibility, CodeQL and consolidated evidence. PR #92 adds live PostgreSQL concurrency coverage for mega-menu optimistic updates. Two simultaneous updates using the same expected version must result in one successful update and one ERR_VIRGOSCORPIO_HUB_VERSION_CONFLICT; the final row increments once, matches the winner, and the other tenant remains unchanged.
 
@@ -182,4 +196,4 @@ VirgoScorpio Hub remains **NOT_PRODUCTION_CERTIFIED**. Do not mark it production
 
 ### Recommended developer-preview scope
 
-The [0.5.1 release-scope proposal](RELEASE-SCOPE.md) remains a historical proposal pending named release-owner approval. Reconcile its exclusions and limitations against the 0.6.0 candidate before preparing a release decision. It does not certify production or waive any evidence gate.
+The [0.6.2 recommended release-scope matrix](RELEASE-SCOPE.md) reconciles the manifest, sample environment, feature defaults and mainline evidence. It is a technical recommendation pending named authorized release-owner approval under issue #13. Its preview exclusions do not satisfy or waive the separate production evidence gates.

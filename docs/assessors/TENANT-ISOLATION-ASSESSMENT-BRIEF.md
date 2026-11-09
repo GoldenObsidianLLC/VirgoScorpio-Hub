@@ -20,7 +20,7 @@
 
 The SHA above is the application-source baseline before the assessor packet was added. The prior release-scope and assessor-packet changes were documentation-only, but the assessor must independently verify this by comparing application source on current `main` with the baseline above. For the actual assessment, check out a clean current `main`, run `git rev-parse HEAD`, and record that exact full SHA in the assessor's report. If application source differs from the baseline, include those changes in the review scope. The final report and machine-readable evidence must identify exactly the commit actually reviewed. The readiness validator rejects a passing evidence record when its `commit` differs from current Git HEAD, so populate that field from the final reviewed checkout rather than copying a stale SHA from this hand-off document.
 
-The 0.5.1 scope proposal remains pending named product/release-owner approval on issue #13. That product decision is separate from this technical review. Do not infer scope approval or production readiness from this packet.
+The reconciled 0.6.2 scope recommendation is documented in [RELEASE-SCOPE.md](../RELEASE-SCOPE.md) against mainline SHA `36220abf4ebcc629fa616961879f5a2ffe1f847d`. Named authorized product/release-owner approval remains pending in issue #13. That product decision is separate from this technical review. Do not infer scope approval or production readiness from this packet.
 
 ### In-scope security question
 
