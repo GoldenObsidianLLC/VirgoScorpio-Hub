@@ -12,6 +12,8 @@ const PRESENCE_PAYLOAD = Object.freeze({ kind: 'presence.refresh' });
 const DOCUMENT_ID_RE = SITE_ID_RE;
 const DEFAULT_DOCUMENT_MESSAGE_BYTES = 16_384;
 const DEFAULT_DOCUMENT_INBOUND_QUEUE = 1_024;
+const REDIS_RECONNECT_BASE_DELAY_MS = 100;
+const REDIS_RECONNECT_MAX_DELAY_MS = 5_000;
 
 function safeErrorCode(error) {
   return String(error?.code || 'ERR_REDIS_CONNECTION').slice(0, 100);
@@ -133,6 +135,7 @@ async function createRedisRealtimeBridge({
   onError = () => {},
   createClient: createClientOverride,
   now = Date.now,
+  random = Math.random,
   metrics = null
 } = {}) {
   if (typeof url !== 'string' || !url) {
@@ -160,8 +163,8 @@ async function createRedisRealtimeBridge({
   if (!Number.isInteger(maxDocumentInboundQueue) || maxDocumentInboundQueue < 1 || maxDocumentInboundQueue > 10_000) {
     throw new RangeError('maxDocumentInboundQueue must be between 1 and 10000.');
   }
-  if (typeof onError !== 'function' || typeof now !== 'function') {
-    throw new TypeError('onError and now must be functions.');
+  if (typeof onError !== 'function' || typeof now !== 'function' || typeof random !== 'function') {
+    throw new TypeError('onError, now, and random must be functions.');
   }
 
   const createClient = createClientOverride || require('redis').createClient;
@@ -170,9 +173,18 @@ async function createRedisRealtimeBridge({
     socket: {
       connectTimeout: 5_000,
       reconnectStrategy(retries) {
-        if (retries > 10) return new Error('Redis real-time reconnect limit reached.');
         incrementMetric('redis_reconnect_attempts_total');
-        return Math.min(100 * retries, 2_000);
+        const attempt = Number.isSafeInteger(retries) && retries > 0 ? retries : 0;
+        const exponentialDelay = Math.min(
+          REDIS_RECONNECT_MAX_DELAY_MS,
+          REDIS_RECONNECT_BASE_DELAY_MS * (2 ** Math.min(attempt, 16))
+        );
+        let sample = 0.5;
+        try {
+          const randomSample = random();
+          if (Number.isFinite(randomSample)) sample = Math.min(1, Math.max(0, randomSample));
+        } catch {}
+        return Math.floor(exponentialDelay * (0.5 + sample * 0.5));
       }
     }
   };
