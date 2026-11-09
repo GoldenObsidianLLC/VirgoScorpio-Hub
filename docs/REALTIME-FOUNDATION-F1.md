@@ -623,14 +623,14 @@ PR #108 merged to `main` at `aaab380978edab446516fe92da99257e798a6200` without f
 
 ## 20. Redis real-time reconnect after extended outages (F1.19)
 
-F1.19 removes the Redis bridge's former terminal reconnect cutoff after ten retries. The publisher and subscriber use the same node-redis reconnect strategy, based on exponential backoff with equal jitter. The retry window starts at 100 ms, doubles by retry attempt, and caps at 5 seconds; each delay is selected from 50–100% of the current window. The policy does not stop solely because the retry count is high. An injected random function makes the bounds deterministic in unit tests; production uses `Math.random`.
+F1.19 removes the Redis bridge's former terminal reconnect cutoff after ten retries. The publisher and subscriber use the same node-redis reconnect strategy, based on exponential backoff with equal jitter. The retry window starts at 100 ms, doubles by retry attempt, and caps at 5 seconds; each delay is selected from 50–100% of the current window. The policy does not stop solely because the retry count is high; it returns node-redis's terminal stop signal only after explicit bridge shutdown. An injected random function makes the bounds deterministic in unit tests; production uses `Math.random`.
 
 The existing `redis_reconnect_attempts_total` counter increments for every strategy invocation, including retries beyond the old cutoff. No new metric name, label, dependency, environment variable, protocol, route, migration or persistence model is introduced. The existing explicit shutdown path still quits or destroys both Redis clients.
 
 ### Validation and limits
 
-- `test/redis-realtime.test.js` passed **11/11** locally after adding deterministic low-/high-jitter assertions at retry counts 0, 1, 2, 5, 10, 11 and 64.
-- The test confirms that the publisher and subscriber share the same policy, delays stay within the equal-jitter/cap bounds, and the fixed-cardinality retry counter increments on every invocation.
+- `test/redis-realtime.test.js` passed **11/11** locally after adding deterministic low-/high-jitter assertions at retry counts 0, 1, 2, 5, 10, 11 and 64, plus explicit-close coverage.
+- The test confirms that the publisher and subscriber share the same policy, delays stay within the equal-jitter/cap bounds, the fixed-cardinality retry counter increments on every retry, both clients close, and the strategy returns its terminal stop signal after shutdown without counting another retry.
 - This is a fake-client unit contract for the reconnect policy. It does not simulate an actual prolonged Redis outage or verify Redis Cluster/failover, network partitions, synchronized fleet reconnect storms, or production recovery objectives.
 - A recovered connection does not replay lost Pub/Sub messages. Presence snapshots must be refetched, authorization relies on the existing local invalidation plus remote heartbeat reauthorization fallback, and collaborative document state is reconciled from PostgreSQL.
 - Production load/soak, Redis outage/partition/Cluster/failover drills, independent security/tenant review (#14/#25), and broader resilience/backup-restore evidence (#24) remain open. Package SemVer remains **0.6.2**; production remains **NO-GO**.
