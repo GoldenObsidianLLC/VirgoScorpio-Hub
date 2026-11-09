@@ -71,6 +71,60 @@ function waitForEvent(iterator, timeoutMs = 1_000) {
   ]);
 }
 
+test('Redis reconnect strategy applies bounded equal-jitter backoff beyond the former retry cutoff and stops after close', async t => {
+  const broker = new FakeRedisBroker();
+  const clientOptions = [];
+  const clients = [];
+  const metrics = createRealtimeMetrics();
+  let randomSample = 0;
+  const bridge = await createRedisRealtimeBridge({
+    url: REDIS_URL,
+    createClient: options => {
+      clientOptions.push(options);
+      const client = broker.createClient();
+      clients.push(client);
+      return client;
+    },
+    metrics,
+    random: () => randomSample
+  });
+  t.after(async () => bridge.close());
+
+  assert.equal(clientOptions.length, 2, 'publisher and subscriber each receive client options');
+  assert.equal(
+    clientOptions[0].socket.reconnectStrategy,
+    clientOptions[1].socket.reconnectStrategy,
+    'publisher and subscriber share the same reconnect policy'
+  );
+
+  const reconnectStrategy = clientOptions[0].socket.reconnectStrategy;
+  const attempts = [0, 1, 2, 5, 10, 11, 64];
+
+  assert.deepEqual(
+    attempts.map(reconnectStrategy),
+    [50, 100, 200, 1_600, 2_500, 2_500, 2_500],
+    'equal jitter uses half of the exponential window at the lower bound and caps at 5 seconds'
+  );
+
+  randomSample = 1;
+  assert.deepEqual(
+    attempts.map(reconnectStrategy),
+    [100, 200, 400, 3_200, 5_000, 5_000, 5_000],
+    'equal jitter never exceeds the capped exponential window'
+  );
+  const retriesBeforeClose = metrics.snapshot().counters.redis_reconnect_attempts_total;
+  assert.equal(retriesBeforeClose, attempts.length * 2);
+
+  await bridge.close();
+  assert.deepEqual(clients.map(client => client.isOpen), [false, false], 'close terminates publisher and subscriber');
+  assert.ok(reconnectStrategy(65) instanceof Error, 'only explicit bridge shutdown returns the terminal reconnect signal');
+  assert.equal(
+    metrics.snapshot().counters.redis_reconnect_attempts_total,
+    retriesBeforeClose,
+    'shutdown does not count or schedule another reconnect attempt'
+  );
+});
+
 test('Redis realtime bridge fans site-scoped presence invalidations across independent hubs', async t => {
   const broker = new FakeRedisBroker();
   const options = {
