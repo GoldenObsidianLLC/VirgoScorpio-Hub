@@ -22,7 +22,7 @@ const SESSION_A3 = 'ffffffff-ffff-4fff-8fff-ffffffffffff';
 const REDIS_URL = 'redis://127.0.0.1:6379';
 
 class FakeRedisBroker {
-  constructor() { this.clients = []; this.failPublishes = false; }
+  constructor() { this.clients = []; this.failPublishes = false; this.publishCalls = 0; }
 
   createClient() {
     const broker = this;
@@ -30,6 +30,7 @@ class FakeRedisBroker {
     const handlers = new Map();
     const client = {
       isOpen: false,
+      isReady: false,
       patterns,
       handlers,
       on(event, handler) {
@@ -38,11 +39,12 @@ class FakeRedisBroker {
         handlers.set(event, list);
         return this;
       },
-      async connect() { this.isOpen = true; },
+      async connect() { this.isOpen = true; this.isReady = true; },
       async pSubscribe(pattern, handler) {
         patterns.set(pattern, handler);
       },
       async publish(channel, message) {
+        broker.publishCalls += 1;
         if (broker.failPublishes) throw Object.assign(new Error('Redis connection interrupted.'), { code: 'ECONNRESET' });
         let delivered = 0;
         for (const target of broker.clients) {
@@ -56,8 +58,8 @@ class FakeRedisBroker {
         }
         return delivered;
       },
-      async quit() { this.isOpen = false; },
-      destroy() { this.isOpen = false; }
+      async quit() { this.isOpen = false; this.isReady = false; },
+      destroy() { this.isOpen = false; this.isReady = false; }
     };
     broker.clients.push(client);
     return client;
@@ -91,6 +93,7 @@ test('Redis reconnect strategy applies bounded equal-jitter backoff beyond the f
   t.after(async () => bridge.close());
 
   assert.equal(clientOptions.length, 2, 'publisher and subscriber each receive client options');
+  assert.deepEqual(clientOptions.map(options => options.disableOfflineQueue), [true, true], 'ephemeral realtime publishes are not queued while Redis is offline');
   assert.equal(
     clientOptions[0].socket.reconnectStrategy,
     clientOptions[1].socket.reconnectStrategy,
@@ -324,6 +327,45 @@ test('authorization invalidation remains effective locally when Redis relay is u
   assert.equal(metrics.snapshot().counters.fanout_failures_total, 1);
 });
 
+test('Redis bridge fails fast instead of queueing ephemeral Pub/Sub publishes while reconnecting', async t => {
+  const broker = new FakeRedisBroker();
+  const metrics = createRealtimeMetrics();
+  const bridge = await createRedisRealtimeBridge({
+    url: REDIS_URL,
+    createClient: () => broker.createClient(),
+    metrics
+  });
+  const hub = createRealtimeHub({ authorizeSubscribe: async () => true });
+  await bridge.attach(hub);
+  t.after(async () => { hub.close(); await bridge.close(); });
+
+  const subscription = await hub.subscribe({
+    principal: { id: 'user-a' },
+    siteId: SITE_A,
+    topic: 'presence'
+  });
+  const iterator = subscription.events[Symbol.asyncIterator]();
+
+  // node-redis keeps isOpen=true during reconnect; isReady is the transport
+  // boundary. The bridge must not place an ephemeral notification in an
+  // offline command queue that could publish it after Redis returns.
+  broker.clients[0].isReady = false;
+  const result = await bridge.publish({
+    siteId: SITE_A,
+    topic: 'presence',
+    payload: { kind: 'presence.refresh' }
+  });
+
+  assert.equal(result.delivered, 1, 'local-first delivery remains available');
+  assert.equal(result.relayPublished, false);
+  assert.equal(result.degraded, true);
+  assert.equal(broker.publishCalls, 0, 'no Redis publish command is queued or attempted');
+  const event = await waitForEvent(iterator);
+  assert.equal(event.value.payload.kind, 'presence.refresh');
+  assert.equal(metrics.snapshot().gauges.redis_bridge_degraded, 1);
+  assert.equal(metrics.snapshot().gauges.redis_bridge_ready, 0);
+  subscription.close();
+});
 
 const DOCUMENT_A = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
 const DOCUMENT_B = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';

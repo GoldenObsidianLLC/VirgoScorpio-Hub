@@ -129,6 +129,18 @@ test('Redis presence emits expiry notifications when a site index is swept', asy
   await adapter.close();
 });
 
+test('Redis presence fails fast instead of queueing stale lease commands while reconnecting', async () => {
+  const client = fakeClient({ replies: [[[], []]] });
+  client.isReady = false;
+  const adapter = createRedisPresenceAdapter({ client });
+  await assert.rejects(() => adapter.listBySite({ siteId: SITE_A }), {
+    code: 'ERR_VIRGOSCORPIO_HUB_PRESENCE_STORE_UNAVAILABLE',
+    statusCode: 503
+  });
+  assert.equal(client.calls.length, 0, 'a disconnected Redis command is not queued for later execution');
+  await adapter.close();
+});
+
 test('Redis presence maps per-site capacity rejection to a bounded service error', async () => {
   const client = fakeClient({ replies: [[-1, []]] });
   const adapter = createRedisPresenceAdapter({ client, maxEntriesPerSite: 1 });
@@ -160,11 +172,13 @@ test('Redis presence fails closed on store errors and invalid scopes', async () 
 test('Redis presence service factory connects, uses bounded reconnect policy, and closes its owned client', async () => {
   const client = fakeClient();
   const metrics = createRealtimeMetrics();
+  let randomSample = 0;
   client.on = (event, handler) => { client.errorHandler = handler; };
   client.connect = async () => { client.connected = true; };
   const service = await createRedisPresenceService({
     url: 'redis://127.0.0.1:6379',
     metrics,
+    random: () => randomSample,
     createClient(options) {
       client.options = options;
       return client;
@@ -172,12 +186,20 @@ test('Redis presence service factory connects, uses bounded reconnect policy, an
   });
   assert.equal(client.connected, true);
   assert.equal(client.options.socket.connectTimeout, 5000);
-  assert.equal(client.options.socket.reconnectStrategy(1), 100);
+  assert.equal(client.options.disableOfflineQueue, true, 'presence store commands fail closed rather than queueing stale leases during a Redis outage');
+  const retryCounts = [0, 1, 2, 5, 10, 11, 64];
+  const lowerBounds = [50, 100, 200, 1_600, 2_500, 2_500, 2_500];
+  assert.deepEqual(retryCounts.map(client.options.socket.reconnectStrategy), lowerBounds);
+  randomSample = 1;
+  const upperBounds = [100, 200, 400, 3_200, 5_000, 5_000, 5_000];
+  assert.deepEqual(retryCounts.map(client.options.socket.reconnectStrategy), upperBounds);
+  assert.equal(metrics.snapshot().counters.redis_reconnect_attempts_total, 14);
   client.errorHandler(Object.assign(new Error('test'), { code: 'ECONNRESET' }));
-  assert.equal(metrics.snapshot().counters.redis_reconnect_attempts_total, 1);
+  assert.equal(metrics.snapshot().counters.redis_reconnect_attempts_total, 14);
   assert.equal(metrics.snapshot().counters.redis_errors_total, 1);
-  assert.ok(client.options.socket.reconnectStrategy(99) instanceof Error);
   await service.close();
+  assert.ok(client.options.socket.reconnectStrategy(99) instanceof Error);
+  assert.equal(metrics.snapshot().counters.redis_reconnect_attempts_total, 14);
   assert.equal(client.isOpen, false);
 });
 
