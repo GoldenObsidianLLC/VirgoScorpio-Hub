@@ -9,6 +9,12 @@ const { createPostgresStore } = require('../../packages/db/src/postgres-store');
 const { hashPassword } = require('../../packages/auth/src/service');
 const { createRedisApiInstance, initialDocument } = require('../fixtures/collaboration-multinode');
 const {
+  validateRedisOutageTarget,
+  inspectRedisOutageTarget,
+  stopRedisOutageTarget,
+  startRedisOutageTarget
+} = require('../fixtures/redis-outage-container');
+const {
   connectCollaborationClient,
   sendCollaborationCommand,
   waitForCollaborationMessage,
@@ -51,6 +57,14 @@ const redisUrl = process.env.VIRGOSCORPIO_HUB_TEST_REDIS_URL || '';
 const integrationEnabled = process.env.VIRGOSCORPIO_HUB_RUN_POSTGRES_INTEGRATION === 'true'
   && isDedicatedLoopbackDatabaseUrl(databaseUrl)
   && isCredentialFreeLoopbackRedisUrl(redisUrl);
+const outageAuthorizationEnabled = process.env.CI === 'true' &&
+  process.env.VIRGOSCORPIO_HUB_RUN_REDIS_OUTAGE_AUTHORIZATION === 'true';
+const outageTarget = outageAuthorizationEnabled
+  ? validateRedisOutageTarget({
+    redisUrl,
+    containerId: process.env.VIRGOSCORPIO_HUB_TEST_REDIS_CONTAINER_ID
+  })
+  : null;
 
 if (process.env.CI === 'true' && !integrationEnabled) {
   throw new Error(
@@ -609,11 +623,12 @@ test('independent API nodes converge PostgreSQL collaboration and propagate real
 
 for (const scenario of [
   { name: 'before accepting a command', heartbeatMs: 30_000, triggerCommand: true },
-  { name: 'for an idle socket on the heartbeat', heartbeatMs: 5_000, triggerCommand: false }
+  { name: 'for an idle socket on the heartbeat during a real Redis outage', heartbeatMs: 5_000, triggerCommand: false, actualRedisOutage: true }
 ]) {
 test(`WebSocket reauthorizes against PostgreSQL ${scenario.name} when Redis authorization invalidation is lost`, async ({ browser }) => {
   test.skip(!integrationEnabled, 'Requires the explicit dedicated PostgreSQL and loopback Redis integration environment.');
-  test.setTimeout(90_000);
+  test.skip(scenario.actualRedisOutage && !outageAuthorizationEnabled, 'Real Redis outage authorization fallback runs only in the dedicated disposable-service CI job.');
+  test.setTimeout(scenario.actualRedisOutage ? 120_000 : 90_000);
 
   const fixturePool = new Pool({
     connectionString: databaseUrl,
@@ -638,16 +653,17 @@ test(`WebSocket reauthorizes against PostgreSQL ${scenario.name} when Redis auth
   const userIds = [];
   let nodeA;
   let nodeB;
+  let redisOutageStopped = false;
   const clients = [];
 
   try {
-    siteA = await createSite(fixturePool, 'f1-18-site-a');
-    siteB = await createSite(fixturePool, 'f1-18-site-b');
-    const owner = await createUser(fixturePool, 'f1-18-owner');
+    siteA = await createSite(fixturePool, 'f1-20-outage-site-a');
+    siteB = await createSite(fixturePool, 'f1-20-outage-site-b');
+    const owner = await createUser(fixturePool, 'f1-20-outage-owner');
     userIds.push(owner.id);
-    const revokedEditor = await createUser(fixturePool, 'f1-18-revoked-editor');
+    const revokedEditor = await createUser(fixturePool, 'f1-20-outage-revoked-editor');
     userIds.push(revokedEditor.id);
-    const unaffectedEditor = await createUser(fixturePool, 'f1-18-unaffected-editor');
+    const unaffectedEditor = await createUser(fixturePool, 'f1-20-outage-unaffected-editor');
     userIds.push(unaffectedEditor.id);
 
     const roleResult = await fixturePool.query(
@@ -760,10 +776,19 @@ test(`WebSocket reauthorizes against PostgreSQL ${scenario.name} when Redis auth
       }, { once: true });
     });
 
-    // Drop exactly the next authorization-pattern delivery on node B. The
-    // membership DELETE still commits on node A and its real identity callback
-    // still publishes the notification successfully from that node.
-    nodeB.dropNextAuthorizationInvalidation();
+    if (scenario.actualRedisOutage) {
+      // Stop only the exact full-ID Redis 7.4 service container approved by CI.
+      // The database-backed membership change and heartbeat fallback continue
+      // while cross-instance Pub/Sub is physically unavailable.
+      expect(inspectRedisOutageTarget(outageTarget).running).toBe(true);
+      redisOutageStopped = true;
+      stopRedisOutageTarget(outageTarget);
+      expect(inspectRedisOutageTarget(outageTarget).running).toBe(false);
+    } else {
+      // The companion scenario deterministically drops one authorization hint.
+      nodeB.dropNextAuthorizationInvalidation();
+    }
+
     const membershipRemoval = await fetch(
       nodeA.baseUrl + '/api/v1/sites/' + siteA + '/members/' + revokedEditor.id,
       {
@@ -773,7 +798,11 @@ test(`WebSocket reauthorizes against PostgreSQL ${scenario.name} when Redis auth
     );
     expect(membershipRemoval.status).toBe(200);
     expect((await membershipRemoval.json()).removed).toBe(true);
-    await expect.poll(() => nodeB.droppedAuthorizationInvalidations, { timeout: 5_000 }).toBe(1);
+    if (scenario.actualRedisOutage) {
+      expect(inspectRedisOutageTarget(outageTarget).running).toBe(false);
+    } else {
+      await expect.poll(() => nodeB.droppedAuthorizationInvalidations, { timeout: 5_000 }).toBe(1);
+    }
 
     const removedMembership = await fixturePool.query(
       'SELECT 1 FROM site_memberships WHERE site_id=$1 AND user_id=$2',
@@ -832,6 +861,15 @@ test(`WebSocket reauthorizes against PostgreSQL ${scenario.name} when Redis auth
     expect(unaffectedDocumentSync.sequence).toBe(0);
     expect(unaffectedDocumentSync.operations).toEqual([]);
   } finally {
+    let redisRestoreError;
+    if (redisOutageStopped) {
+      try {
+        startRedisOutageTarget(outageTarget);
+        redisOutageStopped = false;
+      } catch (error) {
+        redisRestoreError = error;
+      }
+    }
     await closeClients(clients);
     await nodeA?.close().catch(() => {});
     await nodeB?.close().catch(() => {});
@@ -847,6 +885,7 @@ test(`WebSocket reauthorizes against PostgreSQL ${scenario.name} when Redis auth
       await fixturePool.query('DELETE FROM users WHERE id=ANY($1::uuid[])', [userIds]).catch(() => {});
     }
     await fixturePool.end();
+    if (redisRestoreError) throw redisRestoreError;
   }
 });
 }

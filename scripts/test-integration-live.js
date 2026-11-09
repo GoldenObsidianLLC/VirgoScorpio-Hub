@@ -148,7 +148,13 @@ async function main() {
   }
 
   const integrationDir = path.join(root, 'test', 'integration');
-  const files = fs.readdirSync(integrationDir).filter(file => file.endsWith('.test.js')).sort().map(file => path.join('test', 'integration', file));
+  const runDisposableRedisOutageTest = process.env.CI === 'true' &&
+    process.env.VIRGOSCORPIO_HUB_RUN_REDIS_OUTAGE_INTEGRATION === 'true';
+  const files = fs.readdirSync(integrationDir)
+    .filter(file => file.endsWith('.test.js'))
+    .filter(file => file !== 'redis-outage-recovery.integration.test.js' || runDisposableRedisOutageTest)
+    .sort()
+    .map(file => path.join('test', 'integration', file));
   if (!files.length) throw new Error('No integration test files were found.');
   // These suites share the dedicated PostgreSQL test database and graph fixture.
   // Serial file execution prevents cross-suite inserts/cleanup from racing with
