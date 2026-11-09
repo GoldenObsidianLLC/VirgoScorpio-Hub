@@ -52,6 +52,42 @@ function isCredentialFreeLoopbackRedisUrl(raw) {
   }
 }
 
+async function waitForRestoredRedis(redisUrl, timeoutMs = 30_000) {
+  const { createClient } = require('redis');
+  const deadline = Date.now() + timeoutMs;
+  let lastError;
+
+  while (Date.now() < deadline) {
+    const probe = createClient({
+      url: redisUrl,
+      socket: {
+        connectTimeout: 2_000,
+        reconnectStrategy: false
+      }
+    });
+    probe.on('error', error => {
+      lastError = error;
+    });
+
+    try {
+      await probe.connect();
+      await probe.ping();
+      return;
+    } catch (error) {
+      lastError = error;
+    } finally {
+      if (probe.isOpen) probe.destroy();
+    }
+
+    await new Promise(resolve => setTimeout(resolve, 250));
+  }
+
+  throw new Error(
+    'Redis command service did not become ready after restoration'
+      + (lastError?.message ? ': ' + lastError.message : '')
+  );
+}
+
 const databaseUrl = process.env.TEST_DATABASE_URL || '';
 const redisUrl = process.env.VIRGOSCORPIO_HUB_TEST_REDIS_URL || '';
 const integrationEnabled = process.env.VIRGOSCORPIO_HUB_RUN_POSTGRES_INTEGRATION === 'true'
@@ -881,24 +917,12 @@ test(`WebSocket reauthorizes against PostgreSQL ${scenario.name} when Redis auth
     if (redisOutageStopped) {
       try {
         startRedisOutageTarget(outageTarget);
-        await waitFor('Redis command service readiness after restoration', async () => {
-          const { createClient } = require('redis');
-          const probe = createClient({ url: redisUrl, socket: { connectTimeout: 2_000, reconnectStrategy: false } });
-          try {
-            await probe.connect();
-            await probe.ping();
-            await probe.quit();
-            return true;
-          } catch {
-            probe.destroy();
-            return false;
-          }
-        }, 30_000);
+        await waitForRestoredRedis(redisUrl, 30_000);
         redisOutageStopped = false;
         console.log('[F1.20 auth] Redis service restored and accepts PING');
       } catch (error) {
         redisRestoreError = error;
-        console.log('[F1.20 auth] Redis restore failed: ' + (error?.code || error?.name || 'unknown'));
+        console.log('[F1.20 auth] Redis restore failed: ' + (error?.message || error?.code || error?.name || 'unknown'));
       }
     }
     await closeClients(clients);
