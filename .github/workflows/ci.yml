@@ -200,6 +200,13 @@ jobs:
           VIRGOSCORPIO_HUB_TEST_REDIS_URL: redis://127.0.0.1:6379
           VIRGOSCORPIO_HUB_RUN_REDIS_OUTAGE_AUTHORIZATION: "true"
         run: npm run test:e2e:collaboration:postgres
+      - name: Upload PostgreSQL collaboration Playwright diagnostics
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: virgoscorpio_hub-postgres-collaboration-playwright
+          path: test-results/
+          if-no-files-found: ignore
       - name: Restore disposable Redis service after outage qualification
         if: always() && env.VIRGOSCORPIO_HUB_TEST_REDIS_CONTAINER_ID != ''
         shell: bash
