@@ -167,12 +167,15 @@ async function createRedisRealtimeBridge({
     throw new TypeError('onError, now, and random must be functions.');
   }
 
+  let closed = false;
+
   const createClient = createClientOverride || require('redis').createClient;
   const clientOptions = {
     url,
     socket: {
       connectTimeout: 5_000,
       reconnectStrategy(retries) {
+        if (closed) return new Error('Redis real-time bridge is closed.');
         incrementMetric('redis_reconnect_attempts_total');
         const attempt = Number.isSafeInteger(retries) && retries > 0 ? retries : 0;
         const exponentialDelay = Math.min(
@@ -196,7 +199,6 @@ async function createRedisRealtimeBridge({
   const documentPattern = channelPrefix + ':*:document:*';
   let hub = null;
   let attached = false;
-  let closed = false;
   let draining = false;
   let drainingDocuments = false;
   const inbound = [];

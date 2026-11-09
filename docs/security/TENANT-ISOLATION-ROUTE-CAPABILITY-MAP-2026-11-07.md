@@ -8,8 +8,8 @@ Maintainer-prepared route, capability, data-access, and regression-test navigati
 
 - Status: MAINTAINER_PREPARED_NOT_INDEPENDENTLY_REVIEWED.
 - Generated from the current working-tree implementation anchors and the catalog at docs/security/tenant-isolation-route-inventory.catalog.json.
-- Implementation-source digest: 588947334711b4672f0760b4805dadb15bb07594a795a81e6cb459fc31186909 across 19 files.
-- Referenced-test digest: f959a86684a0722e707553d902e8d00ed0071ae1315ebcc351f911580de37740 across 41 files.
+- Implementation-source digest: 6091a0c08f7aa2cab589c7df63d600224e18b0754d66447d990c4d45025e1834 across 19 files.
+- Referenced-test digest: 6458d1c7099bee6196949eaedf940f15d036a48325089cad9cf62c18b20c8a7a across 41 files.
 - Inventory size: 27 route/flow families, 78 declared route patterns, 19 source files, and 41 test files.
 - Regenerate with npm run security:tenant-inventory; CI checks freshness with node scripts/generate-tenant-isolation-route-inventory.js --check.
 
@@ -421,7 +421,7 @@ Tests: test/content-type-routes.test.js, test/collaboration-api.test.js, test/re
 - Capabilities/controls: Redis service credentials and adapter configuration
 - Data-access boundary: Redis presence leases/indexes; Pub/Sub channels; site-scoped invalidation envelopes
 - Side effects: Cross-instance notification/fan-out; Lease expiry and invalidation
-- Source: packages/realtime/src/redis-realtime.js (lines 32, 33, 36, 39, 43, 57, 62, 63, 84, 104, 105, 115, 250, 251, 253, 254, 271, 276, 301, 312, 344, 345, 351, 366, 396, 399, 418, 432, 439, 454, 462, 482, 503, 515, 539, 543, 562); packages/realtime/src/redis-presence.js (lines 62, 63, 64, 66, 76, 79, 109, 111, 122, 126, 136, 139, 144, 178, 180, 196, 207, 211, 212)
+- Source: packages/realtime/src/redis-realtime.js (lines 32, 33, 36, 39, 43, 57, 62, 63, 84, 104, 105, 115, 252, 253, 255, 256, 273, 278, 303, 314, 346, 347, 353, 368, 398, 401, 420, 434, 441, 456, 464, 484, 505, 517, 541, 545, 564); packages/realtime/src/redis-presence.js (lines 62, 63, 64, 66, 76, 79, 109, 111, 122, 126, 136, 139, 144, 178, 180, 196, 207, 211, 212)
 - Test references: test/redis-realtime.test.js, test/realtime-tenant-isolation.test.js, test/integration/redis-presence.integration.test.js
 - Coverage characterization: **targeted-cross-instance**. Unit and integration tests cover selected site-scoped channels and invalidation. Production Redis ACL, failover and hostile service payload review remain open.
 
