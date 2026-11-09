@@ -4,6 +4,7 @@ const { instrumentRedisClient } = require('../../observability/src/tracing');
 const { createHash } = require('node:crypto');
 const { SITE_ID_RE, realtimeError } = require('./event-hub');
 const { createPresenceService, AVAILABILITY } = require('./presence');
+const { createRedisReconnectStrategy } = require('./redis-reconnect');
 
 const DEFAULT_KEY_PREFIX = 'virgoscorpio_hub:presence:v1';
 const PRINCIPAL_ID_RE = /^[A-Za-z0-9._:-]{1,128}$/;
@@ -154,6 +155,9 @@ function createRedisPresenceAdapter({
 
   async function evaluate(script, keys, args) {
     if (closed) throw realtimeError(503, 'ERR_VIRGOSCORPIO_HUB_PRESENCE_STORE_CLOSED', 'The shared presence store is closed.');
+    if (!(client.isReady ?? client.isOpen)) {
+      throw realtimeError(503, 'ERR_VIRGOSCORPIO_HUB_PRESENCE_STORE_UNAVAILABLE', 'The shared presence store is unavailable.');
+    }
     try {
       return await client.eval(script, { keys, arguments: args.map(value => String(value)) });
     } catch {
@@ -251,7 +255,8 @@ async function createRedisPresenceService({
   now = Date.now,
   onError = () => {},
   createClient: createClientOverride,
-  metrics = null
+  metrics = null,
+  random = Math.random
 } = {}) {
   if (typeof url !== 'string' || !url) {
     throw new Error('VIRGOSCORPIO_HUB_PRESENCE_REDIS_URL is required when the Redis presence store is selected.');
@@ -266,16 +271,20 @@ async function createRedisPresenceService({
   if (typeof onExpired !== 'function' || typeof onError !== 'function') {
     throw new TypeError('onExpired and onError must be functions.');
   }
+  let closed = false;
   const createClient = createClientOverride || require('redis').createClient;
+  const reconnectStrategy = createRedisReconnectStrategy({
+    isClosed: () => closed,
+    onAttempt: () => { try { metrics?.increment?.('redis_reconnect_attempts_total'); } catch {} },
+    random,
+    closedErrorMessage: 'Redis presence service is closed.'
+  });
   const client = instrumentRedisClient(createClient({
     url,
+    disableOfflineQueue: true,
     socket: {
       connectTimeout: 5_000,
-      reconnectStrategy(retries) {
-        if (retries > 10) return new Error('Redis presence reconnect limit reached.');
-        try { metrics?.increment?.('redis_reconnect_attempts_total'); } catch {}
-        return Math.min(100 * retries, 2_000);
-      }
+      reconnectStrategy
     }
   }));
   client.on?.('error', error => {
@@ -285,6 +294,7 @@ async function createRedisPresenceService({
   try {
     await client.connect();
   } catch (error) {
+    closed = true;
     client.destroy?.();
     throw new Error(`Could not connect to the configured Redis presence store (${String(error?.code || 'connection failed')}).`);
   }
@@ -299,8 +309,18 @@ async function createRedisPresenceService({
       closeClient: true,
       metrics
     });
-    return createPresenceService({ adapter, leaseMs, now, metrics });
+    const ownedAdapter = Object.freeze({
+      upsert: record => adapter.upsert(record),
+      remove: scope => adapter.remove(scope),
+      listBySite: scope => adapter.listBySite(scope),
+      async close() {
+        closed = true;
+        await adapter.close();
+      }
+    });
+    return createPresenceService({ adapter: ownedAdapter, leaseMs, now, metrics });
   } catch (error) {
+    closed = true;
     if (client.isOpen && typeof client.quit === 'function') await client.quit().catch(() => {});
     else client.destroy?.();
     throw error;

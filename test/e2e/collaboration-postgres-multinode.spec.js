@@ -9,6 +9,12 @@ const { createPostgresStore } = require('../../packages/db/src/postgres-store');
 const { hashPassword } = require('../../packages/auth/src/service');
 const { createRedisApiInstance, initialDocument } = require('../fixtures/collaboration-multinode');
 const {
+  validateRedisOutageTarget,
+  inspectRedisOutageTarget,
+  stopRedisOutageTarget,
+  startRedisOutageTarget
+} = require('../fixtures/redis-outage-container');
+const {
   connectCollaborationClient,
   sendCollaborationCommand,
   waitForCollaborationMessage,
@@ -46,11 +52,55 @@ function isCredentialFreeLoopbackRedisUrl(raw) {
   }
 }
 
+async function waitForRestoredRedis(redisUrl, timeoutMs = 30_000) {
+  const { createClient } = require('redis');
+  const deadline = Date.now() + timeoutMs;
+  let lastError;
+
+  while (Date.now() < deadline) {
+    const probe = createClient({
+      url: redisUrl,
+      socket: {
+        connectTimeout: 2_000,
+        reconnectStrategy: false
+      }
+    });
+    probe.on('error', error => {
+      lastError = error;
+    });
+
+    try {
+      await probe.connect();
+      await probe.ping();
+      return;
+    } catch (error) {
+      lastError = error;
+    } finally {
+      if (probe.isOpen) probe.destroy();
+    }
+
+    await new Promise(resolve => setTimeout(resolve, 250));
+  }
+
+  throw new Error(
+    'Redis command service did not become ready after restoration'
+      + (lastError?.message ? ': ' + lastError.message : '')
+  );
+}
+
 const databaseUrl = process.env.TEST_DATABASE_URL || '';
 const redisUrl = process.env.VIRGOSCORPIO_HUB_TEST_REDIS_URL || '';
 const integrationEnabled = process.env.VIRGOSCORPIO_HUB_RUN_POSTGRES_INTEGRATION === 'true'
   && isDedicatedLoopbackDatabaseUrl(databaseUrl)
   && isCredentialFreeLoopbackRedisUrl(redisUrl);
+const outageAuthorizationEnabled = process.env.CI === 'true' &&
+  process.env.VIRGOSCORPIO_HUB_RUN_REDIS_OUTAGE_AUTHORIZATION === 'true';
+const outageTarget = outageAuthorizationEnabled
+  ? validateRedisOutageTarget({
+    redisUrl,
+    containerId: process.env.VIRGOSCORPIO_HUB_TEST_REDIS_CONTAINER_ID
+  })
+  : null;
 
 if (process.env.CI === 'true' && !integrationEnabled) {
   throw new Error(
@@ -172,7 +222,8 @@ async function loginForSession(baseUrl, { email, password }) {
   const response = await fetch(baseUrl + '/api/v1/auth/login', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ email, password })
+    body: JSON.stringify({ email, password }),
+    signal: AbortSignal.timeout(15_000)
   });
   expect(response.status).toBe(200);
   const setCookieValues = response.headers.getSetCookie?.()
@@ -609,11 +660,13 @@ test('independent API nodes converge PostgreSQL collaboration and propagate real
 
 for (const scenario of [
   { name: 'before accepting a command', heartbeatMs: 30_000, triggerCommand: true },
-  { name: 'for an idle socket on the heartbeat', heartbeatMs: 5_000, triggerCommand: false }
+  { name: 'for an idle socket on the heartbeat during a real Redis outage', heartbeatMs: 5_000, triggerCommand: false, actualRedisOutage: true }
 ]) {
 test(`WebSocket reauthorizes against PostgreSQL ${scenario.name} when Redis authorization invalidation is lost`, async ({ browser }) => {
   test.skip(!integrationEnabled, 'Requires the explicit dedicated PostgreSQL and loopback Redis integration environment.');
-  test.setTimeout(90_000);
+  test.skip(scenario.actualRedisOutage && !outageAuthorizationEnabled, 'Real Redis outage authorization fallback runs only in the dedicated disposable-service CI job.');
+  test.setTimeout(scenario.actualRedisOutage ? 180_000 : 90_000);
+  console.log('[F1.20 auth] start ' + scenario.name);
 
   const fixturePool = new Pool({
     connectionString: databaseUrl,
@@ -638,16 +691,17 @@ test(`WebSocket reauthorizes against PostgreSQL ${scenario.name} when Redis auth
   const userIds = [];
   let nodeA;
   let nodeB;
+  let redisOutageStopped = false;
   const clients = [];
 
   try {
-    siteA = await createSite(fixturePool, 'f1-18-site-a');
-    siteB = await createSite(fixturePool, 'f1-18-site-b');
-    const owner = await createUser(fixturePool, 'f1-18-owner');
+    siteA = await createSite(fixturePool, 'f1-20-outage-site-a');
+    siteB = await createSite(fixturePool, 'f1-20-outage-site-b');
+    const owner = await createUser(fixturePool, 'f1-20-outage-owner');
     userIds.push(owner.id);
-    const revokedEditor = await createUser(fixturePool, 'f1-18-revoked-editor');
+    const revokedEditor = await createUser(fixturePool, 'f1-20-outage-revoked-editor');
     userIds.push(revokedEditor.id);
-    const unaffectedEditor = await createUser(fixturePool, 'f1-18-unaffected-editor');
+    const unaffectedEditor = await createUser(fixturePool, 'f1-20-outage-unaffected-editor');
     userIds.push(unaffectedEditor.id);
 
     const roleResult = await fixturePool.query(
@@ -711,6 +765,7 @@ test(`WebSocket reauthorizes against PostgreSQL ${scenario.name} when Redis auth
       pool: poolB,
       heartbeatMs: scenario.heartbeatMs
     });
+    console.log('[F1.20 auth] both API nodes ready');
 
     const ownerToken = await loginForSession(nodeA.baseUrl, {
       email: owner.email,
@@ -724,7 +779,9 @@ test(`WebSocket reauthorizes against PostgreSQL ${scenario.name} when Redis auth
       email: unaffectedEditor.email,
       password: unaffectedEditorPassword
     });
+    console.log('[F1.20 auth] all three database-backed logins completed');
 
+    console.log('[F1.20 auth] opening revoked editor WebSocket');
     const revokedClient = await openPostgresClient(browser, {
       baseUrl: nodeB.baseUrl,
       siteId: siteA,
@@ -735,6 +792,7 @@ test(`WebSocket reauthorizes against PostgreSQL ${scenario.name} when Redis auth
       sessionToken: revokedEditorToken
     });
     clients.push(revokedClient);
+    console.log('[F1.20 auth] revoked editor WebSocket joined');
     const unaffectedClient = await openPostgresClient(browser, {
       baseUrl: nodeB.baseUrl,
       siteId: siteB,
@@ -745,9 +803,11 @@ test(`WebSocket reauthorizes against PostgreSQL ${scenario.name} when Redis auth
       sessionToken: unaffectedEditorToken
     });
     clients.push(unaffectedClient);
+    console.log('[F1.20 auth] unaffected editor WebSocket joined');
 
     expect(revokedClient.joined.sequence).toBe(0);
     expect(unaffectedClient.joined.sequence).toBe(0);
+    console.log('[F1.20 auth] both browser WebSockets joined');
 
     // Capture close notifications before any membership state is changed so
     // the idle-socket case cannot miss a heartbeat close racing the DB checks.
@@ -759,27 +819,46 @@ test(`WebSocket reauthorizes against PostgreSQL ${scenario.name} when Redis auth
         window.__f118AuthorizationClose = { code: event.code, reason: event.reason };
       }, { once: true });
     });
+    console.log('[F1.20 auth] close-event observer attached');
 
-    // Drop exactly the next authorization-pattern delivery on node B. The
-    // membership DELETE still commits on node A and its real identity callback
-    // still publishes the notification successfully from that node.
-    nodeB.dropNextAuthorizationInvalidation();
+    if (scenario.actualRedisOutage) {
+      // Stop only the exact full-ID Redis 7.4 service container approved by CI.
+      // The database-backed membership change and heartbeat fallback continue
+      // while cross-instance Pub/Sub is physically unavailable.
+      expect(inspectRedisOutageTarget(outageTarget).running).toBe(true);
+      redisOutageStopped = true;
+      stopRedisOutageTarget(outageTarget);
+      expect(inspectRedisOutageTarget(outageTarget).running).toBe(false);
+      console.log('[F1.20 auth] Redis service stopped');
+    } else {
+      // The companion scenario deterministically drops one authorization hint.
+      nodeB.dropNextAuthorizationInvalidation();
+    }
+
+    console.log('[F1.20 auth] sending membership revocation');
     const membershipRemoval = await fetch(
       nodeA.baseUrl + '/api/v1/sites/' + siteA + '/members/' + revokedEditor.id,
       {
         method: 'DELETE',
-        headers: { authorization: 'Bearer ' + ownerToken }
+        headers: { authorization: 'Bearer ' + ownerToken },
+        signal: AbortSignal.timeout(15_000)
       }
     );
+    console.log('[F1.20 auth] membership revocation response ' + membershipRemoval.status);
     expect(membershipRemoval.status).toBe(200);
     expect((await membershipRemoval.json()).removed).toBe(true);
-    await expect.poll(() => nodeB.droppedAuthorizationInvalidations, { timeout: 5_000 }).toBe(1);
+    if (scenario.actualRedisOutage) {
+      expect(inspectRedisOutageTarget(outageTarget).running).toBe(false);
+    } else {
+      await expect.poll(() => nodeB.droppedAuthorizationInvalidations, { timeout: 5_000 }).toBe(1);
+    }
 
     const removedMembership = await fixturePool.query(
       'SELECT 1 FROM site_memberships WHERE site_id=$1 AND user_id=$2',
       [siteA, revokedEditor.id]
     );
     expect(removedMembership.rowCount).toBe(0);
+    console.log('[F1.20 auth] PostgreSQL confirms membership removed');
 
     if (scenario.triggerCommand) {
       await sendCollaborationCommand(revokedClient.page, {
@@ -802,6 +881,7 @@ test(`WebSocket reauthorizes against PostgreSQL ${scenario.name} when Redis auth
       ),
       { timeout: scenario.heartbeatMs * 2 + 2_000, intervals: [100, 250, 500] }
     ).toBe(3);
+    console.log('[F1.20 auth] idle WebSocket closed by heartbeat reauthorization');
     const closeEvent = await revokedClient.page.evaluate(() => window.__f118AuthorizationClose);
     expect(closeEvent.code).toBe(1008);
 
@@ -832,9 +912,24 @@ test(`WebSocket reauthorizes against PostgreSQL ${scenario.name} when Redis auth
     expect(unaffectedDocumentSync.sequence).toBe(0);
     expect(unaffectedDocumentSync.operations).toEqual([]);
   } finally {
+    console.log('[F1.20 auth] entering cleanup; restore required=' + redisOutageStopped);
+    let redisRestoreError;
+    if (redisOutageStopped) {
+      try {
+        startRedisOutageTarget(outageTarget);
+        await waitForRestoredRedis(redisUrl, 30_000);
+        redisOutageStopped = false;
+        console.log('[F1.20 auth] Redis service restored and accepts PING');
+      } catch (error) {
+        redisRestoreError = error;
+        console.log('[F1.20 auth] Redis restore failed: ' + (error?.message || error?.code || error?.name || 'unknown'));
+      }
+    }
     await closeClients(clients);
+    console.log('[F1.20 auth] browser clients closed');
     await nodeA?.close().catch(() => {});
     await nodeB?.close().catch(() => {});
+    console.log('[F1.20 auth] API nodes closed');
     await Promise.all([poolA.end().catch(() => {}), poolB.end().catch(() => {})]);
     if (siteA || siteB) {
       await fixturePool.query(
@@ -847,6 +942,7 @@ test(`WebSocket reauthorizes against PostgreSQL ${scenario.name} when Redis auth
       await fixturePool.query('DELETE FROM users WHERE id=ANY($1::uuid[])', [userIds]).catch(() => {});
     }
     await fixturePool.end();
+    if (redisRestoreError) throw redisRestoreError;
   }
 });
 }

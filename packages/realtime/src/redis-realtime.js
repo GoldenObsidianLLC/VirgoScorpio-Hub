@@ -5,6 +5,7 @@ const { randomUUID } = require('node:crypto');
 const { SITE_ID_RE, realtimeError } = require('./event-hub');
 const { UUID_RE: EVENT_ID_RE } = require('../../domain/src/identifiers');
 const { validateCollaborationOperation } = require('../../collaboration/src');
+const { createRedisReconnectStrategy } = require('./redis-reconnect');
 
 const DEFAULT_CHANNEL_PREFIX = 'virgoscorpio_hub:realtime:v1';
 const CHANNEL_PREFIX_RE = /^[A-Za-z0-9:_-]{1,96}$/;
@@ -12,8 +13,6 @@ const PRESENCE_PAYLOAD = Object.freeze({ kind: 'presence.refresh' });
 const DOCUMENT_ID_RE = SITE_ID_RE;
 const DEFAULT_DOCUMENT_MESSAGE_BYTES = 16_384;
 const DEFAULT_DOCUMENT_INBOUND_QUEUE = 1_024;
-const REDIS_RECONNECT_BASE_DELAY_MS = 100;
-const REDIS_RECONNECT_MAX_DELAY_MS = 5_000;
 
 function safeErrorCode(error) {
   return String(error?.code || 'ERR_REDIS_CONNECTION').slice(0, 100);
@@ -172,23 +171,15 @@ async function createRedisRealtimeBridge({
   const createClient = createClientOverride || require('redis').createClient;
   const clientOptions = {
     url,
+    disableOfflineQueue: true,
     socket: {
       connectTimeout: 5_000,
-      reconnectStrategy(retries) {
-        if (closed) return new Error('Redis real-time bridge is closed.');
-        incrementMetric('redis_reconnect_attempts_total');
-        const attempt = Number.isSafeInteger(retries) && retries > 0 ? retries : 0;
-        const exponentialDelay = Math.min(
-          REDIS_RECONNECT_MAX_DELAY_MS,
-          REDIS_RECONNECT_BASE_DELAY_MS * (2 ** Math.min(attempt, 16))
-        );
-        let sample = 0.5;
-        try {
-          const randomSample = random();
-          if (Number.isFinite(randomSample)) sample = Math.min(1, Math.max(0, randomSample));
-        } catch {}
-        return Math.floor(exponentialDelay * (0.5 + sample * 0.5));
-      }
+      reconnectStrategy: createRedisReconnectStrategy({
+        isClosed: () => closed,
+        onAttempt: () => incrementMetric('redis_reconnect_attempts_total'),
+        random,
+        closedErrorMessage: 'Redis real-time bridge is closed.'
+      })
     }
   };
   const publisher = instrumentRedisClient(createClient(clientOptions));
@@ -225,6 +216,15 @@ async function createRedisRealtimeBridge({
     incrementMetric('redis_errors_total');
     setRelayState(false);
     try { onError({ errorCode: safeErrorCode(error) }); } catch {}
+  }
+
+  async function publishRedisMessage(channel, serialized) {
+    if (!(publisher.isReady ?? publisher.isOpen)) {
+      const error = new Error('Redis publisher is not ready.');
+      error.code = 'ERR_REDIS_NOT_READY';
+      throw error;
+    }
+    return publisher.publish(channel, serialized);
   }
 
   setRelayState(false);
@@ -438,7 +438,7 @@ async function createRedisRealtimeBridge({
       occurredAt: envelope.occurredAt
     });
     try {
-      await publisher.publish(channelFor(envelope.siteId), serialized);
+      await publishRedisMessage(channelFor(envelope.siteId), serialized);
       incrementMetric('redis_pubsub_publishes_total');
       setRelayState(true);
       try { metrics?.observe?.('redis_publish_duration_milliseconds', Math.max(0, now() - startedAt)); } catch {}
@@ -514,7 +514,7 @@ async function createRedisRealtimeBridge({
     }
 
     try {
-      await publisher.publish(channelForDocument(envelope.siteId, envelope.contentId), serialized);
+      await publishRedisMessage(channelForDocument(envelope.siteId, envelope.contentId), serialized);
       incrementMetric('redis_document_pubsub_publishes_total');
       setRelayState(true);
       try { metrics?.observe?.('redis_publish_duration_milliseconds', Math.max(0, now() - startedAt)); } catch {}
@@ -564,7 +564,7 @@ async function createRedisRealtimeBridge({
     const local = hub.invalidateAuthorization({ siteId, principalId, sessionId });
     const relayStartedAt = now();
     try {
-      await publisher.publish(authorizationPattern, serialized);
+      await publishRedisMessage(authorizationPattern, serialized);
       incrementMetric('redis_pubsub_publishes_total');
       setRelayState(true);
       try { metrics?.observe?.('redis_publish_duration_milliseconds', Math.max(0, now() - relayStartedAt)); } catch {}

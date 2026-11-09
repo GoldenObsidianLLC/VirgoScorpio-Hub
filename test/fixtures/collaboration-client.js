@@ -126,8 +126,25 @@ async function connectCollaborationClient(page, { baseUrl, siteId, contentId, cl
     });
     await new Promise((resolve, reject) => {
       if (client.socket.readyState === WebSocket.OPEN) return resolve();
-      client.socket.addEventListener('open', resolve, { once: true });
-      client.socket.addEventListener('error', () => reject(new Error('Browser WebSocket failed to open')), { once: true });
+      let settled = false;
+      const finish = error => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        client.socket.removeEventListener('open', onOpen);
+        client.socket.removeEventListener('error', onError);
+        if (error) reject(error);
+        else resolve();
+      };
+      const onOpen = () => finish();
+      const onError = () => finish(new Error('Browser WebSocket failed to open'));
+      const timer = setTimeout(
+        () => finish(new Error('Timed out waiting for browser WebSocket to open')),
+        5_000
+      );
+      client.socket.addEventListener('open', onOpen, { once: true });
+      client.socket.addEventListener('error', onError, { once: true });
+      if (client.socket.readyState === WebSocket.OPEN) finish();
     });
     await client.waitFor('connection.ready');
     client.send({ type: 'document.join', contentId: config.contentId, afterSequence: config.afterSequence });

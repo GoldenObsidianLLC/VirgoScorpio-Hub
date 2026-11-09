@@ -161,17 +161,78 @@ jobs:
           fi
 
           echo "MEMGRAPH_TEST_CONTAINER_ID=${ids[0]}" >> "$GITHUB_ENV"
+      - name: Identify exact disposable Redis integration container
+        shell: bash
+        run: |
+          mapfile -t ids < <(
+            docker ps --no-trunc \
+              --filter 'ancestor=redis:7.4-alpine' \
+              --format '{{.ID}}'
+          )
+
+          if [ "${#ids[@]}" -ne 1 ]; then
+            echo "Expected exactly one Redis 7.4 test service container; found ${#ids[@]}." >&2
+            docker ps --format '{{.ID}} {{.Image}} {{.Names}}'
+            exit 1
+          fi
+
+          id="${ids[0]}"
+          metadata="$(docker inspect --format '{{.Id}}|{{.Config.Image}}|{{.State.Running}}' "$id")"
+          IFS='|' read -r full_id image running <<< "$metadata"
+
+          if [ "$full_id" != "$id" ] || [ "$image" != 'redis:7.4-alpine' ] || [ "$running" != 'true' ]; then
+            echo 'Redis service identity/image/state did not match the approved disposable test target.' >&2
+            exit 1
+          fi
+
+          echo "VIRGOSCORPIO_HUB_TEST_REDIS_CONTAINER_ID=$id" >> "$GITHUB_ENV"
       - name: Apply all migrations to a disposable fresh PostgreSQL database and verify idempotency
         run: npm run test:migrations:fresh
-      - name: Test PostgreSQL/Memgraph/community/commerce integration workflows (zero skips required)
+      - name: Test PostgreSQL/Memgraph/community/commerce and real Redis outage/recovery integration workflows (zero skips required)
+        env:
+          VIRGOSCORPIO_HUB_RUN_REDIS_OUTAGE_INTEGRATION: "true"
         run: npm run test:integration:live
       - name: Install Chromium for PostgreSQL-backed collaboration browser qualification
         run: npx playwright install --with-deps chromium
-      - name: Verify PostgreSQL-backed multi-node collaboration through real browsers
+      - name: Verify PostgreSQL-backed multi-node collaboration and real Redis-outage authorization fallback
         env:
           VIRGOSCORPIO_HUB_RUN_POSTGRES_INTEGRATION: "true"
           VIRGOSCORPIO_HUB_TEST_REDIS_URL: redis://127.0.0.1:6379
+          VIRGOSCORPIO_HUB_RUN_REDIS_OUTAGE_AUTHORIZATION: "true"
         run: npm run test:e2e:collaboration:postgres
+      - name: Upload PostgreSQL collaboration Playwright diagnostics
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: virgoscorpio_hub-postgres-collaboration-playwright
+          path: test-results/
+          if-no-files-found: ignore
+      - name: Restore disposable Redis service after outage qualification
+        if: always() && env.VIRGOSCORPIO_HUB_TEST_REDIS_CONTAINER_ID != ''
+        shell: bash
+        run: |
+          id="${VIRGOSCORPIO_HUB_TEST_REDIS_CONTAINER_ID:-}"
+          if [[ ! "$id" =~ ^[a-fA-F0-9]{64}$ ]]; then
+            echo 'Missing or invalid exact Redis test container ID; refusing any container-wide recovery action.' >&2
+            exit 1
+          fi
+
+          metadata="$(docker inspect --format '{{.Id}}|{{.Config.Image}}|{{.State.Running}}' "$id")"
+          IFS='|' read -r full_id image running <<< "$metadata"
+          if [[ "$full_id" != "$id" || "$image" != 'redis:7.4-alpine' ]]; then
+            echo 'Redis recovery target identity/image mismatch; refusing to start it.' >&2
+            exit 1
+          fi
+
+          if [[ "$running" != 'true' ]]; then
+            docker start "$id"
+          fi
+
+          final_state="$(docker inspect --format '{{.State.Running}}' "$id")"
+          if [[ "$final_state" != 'true' ]]; then
+            echo 'The approved Redis test service did not return to running state.' >&2
+            exit 1
+          fi
       - name: Exercise real Memgraph outage and outbox recovery
         shell: bash
         run: |
