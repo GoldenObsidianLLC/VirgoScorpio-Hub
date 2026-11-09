@@ -172,30 +172,30 @@ The reviewer should build a complete route-to-capability inventory from the curr
 
 ## Appendix B — GitHub execution tickets
 
-The open tickets below provide per-gate execution and evidence tracking. No reviewer or service owner has been assigned yet; ownership fields remain role-based until a qualified person is confirmed.
+The tickets below provide decision and evidence tracking. Issue #13 remains open for authorized scope approval and owner assignments; #14, #23–#26 remain open security, supply-chain and operations gates. Issues #15–#22 are closed as not planned for the 0.6.2 developer preview, not completed; their evidence remains missing for any future production candidate. Ownership fields remain role-based until qualified owners are confirmed.
 
 | Work item | GitHub issue |
 |---|---|
-| Freeze 0.5.1 release scope/provider matrix (prerequisite) | [#13](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/13) |
+| Approve reconciled 0.6.2 developer-preview scope/provider matrix (owner sign-off pending) | [#13](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/13) |
 | Independent tenant/site isolation review — first review task | [#14](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/14) |
-| Identity provider and MFA lifecycle evidence | [#15](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/15) |
-| Malware-scanning corpus and legacy-asset quarantine | [#16](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/16) |
-| Live object-storage provider validation | [#17](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/17) |
-| Stripe checkout/webhook/payment lifecycle | [#18](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/18) |
-| Browser and manual accessibility acceptance | [#19](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/19) |
-| Commerce acceptance | [#20](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/20) |
-| Community acceptance | [#21](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/21) |
-| Plugin pipeline and runtime isolation | [#22](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/22) |
+| Identity provider/MFA lifecycle — deferred from 0.6.2 preview; production evidence remains missing | [#15](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/15) (closed: not planned for preview) |
+| Malware-scanning corpus/legacy quarantine — deferred from 0.6.2 preview; production evidence remains missing | [#16](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/16) (closed: not planned for preview) |
+| Live object-storage providers — deferred from 0.6.2 preview; production evidence remains missing | [#17](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/17) (closed: not planned for preview) |
+| Stripe lifecycle — deferred from 0.6.2 preview; production evidence remains missing | [#18](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/18) (closed: not planned for preview) |
+| Manual accessibility acceptance — deferred from 0.6.2 preview; production evidence remains missing | [#19](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/19) (closed: not planned for preview) |
+| Commerce parity acceptance — deferred from 0.6.2 preview; production evidence remains missing | [#20](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/20) (closed: not planned for preview) |
+| Community parity/privacy acceptance — deferred from 0.6.2 preview; production evidence remains missing | [#21](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/21) (closed: not planned for preview) |
+| Plugin signing/runtime isolation — deferred from 0.6.2 preview; production evidence remains missing | [#22](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/22) (closed: not planned for preview) |
 | Lockfile, SBOM, provenance and CodeQL review | [#23](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/23) |
 | Load, fault-injection and backup/restore drills | [#24](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/24) |
 | Independent security assessment | [#25](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/25) |
 | Operations runbooks and release-owner approval | [#26](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/26) |
 
-Start with #13 to freeze the supported release scope, then #14 to commission the independent tenant/site review. Provider-specific work in #15–#18 should use only the resulting approved provider matrix. The 13 evidence gates remain open until their respective artifacts are accepted; opening an issue does not change the readiness status.
+Issue #13 has a reconciled 0.6.2 preview recommendation but remains open pending named release-owner approval. Issue #14 requires independent tenant/site review. Issues #15–#22 are not planned for the preview; their corresponding production evidence gates remain unaccepted and must be reopened/re-scoped if a future production scope selects those providers or capabilities. Issues #23–#26 remain active production evidence work. All production gates remain open until their exact-revision artifacts are independently accepted; issue state alone does not change manifest readiness.
 
 ## Appendix C — Recommended release scope
 
-The proposed baseline for VirgoScorpio Hub 0.5.1 is recorded in [RELEASE-SCOPE.md](RELEASE-SCOPE.md). It follows the current manifest and environment defaults, limits 0.5.1 to an isolated developer preview, identifies provider/feature exclusions, and requires named release-owner approval before becoming an official product decision. The production evidence gates remain open.
+The earlier 0.5.1 scope proposal is superseded. The current reconciled 0.6.2 recommendation is recorded in [RELEASE-SCOPE.md](RELEASE-SCOPE.md). It reconciles the current manifest and sample defaults, defines an isolated non-production developer preview, identifies optional/unqualified adapters and preview exclusions, and requires named authorized release-owner approval before becoming an official product decision. The production evidence gates remain open.
 
 ## Supplemental gate — public asset delivery and revocation (7 November 2026)
 

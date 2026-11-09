@@ -2,7 +2,7 @@
   "name": "VirgoScorpio Hub",
   "packageName": "virgoscorpio-hub",
   "version": "0.6.2",
-  "description": "AI-integrated headless CMS, visual builder, publishing runtime, libraries, commerce/community workflows and cloud-integrated services for Node.js; 0.6.2 internal library/media API modularity candidate, not production-certified.",
+  "description": "AI-integrated headless CMS, visual builder, publishing runtime, libraries, commerce/community workflows and cloud-integrated services for Node.js; 0.6.2 unreleased developer-preview candidate, not production-certified.",
   "releaseState": "EXPANDED_DEVELOPER_PREVIEW_NOT_PRODUCTION_CERTIFIED",
   "runtime": {
     "nodeMinimum": ">=22.23.4",
@@ -136,7 +136,34 @@
     "postRebaseFreshMigrations": "14/14 applied and 14/14 skipped on the second pass in a disposable local TEST_DATABASE_URL database; disposable DB dropped (2026-10-31).",
     "postRebasePlaywright": "9 Playwright Chromium tests passed on current main using one worker (2026-10-31); manual screen-reader/WCAG review remains open.",
     "gitleaks": "Gitleaks working-tree and all locally fetched Git refs scans both exited 0 with empty JSON findings on 2026-10-31; verify published remote refs before every release.",
-    "releaseReadinessRedisEnvironment": "Regression-tested: release:readiness now forwards only approved local Redis/Memurai endpoints to VIRGOSCORPIO_HUB_TEST_REDIS_URL and enables the Redis integration suites; remote, malformed, and absent endpoints leave live Redis tests disabled."
+    "releaseReadinessRedisEnvironment": "Regression-tested: release:readiness now forwards only approved local Redis/Memurai endpoints to VIRGOSCORPIO_HUB_TEST_REDIS_URL and enables the Redis integration suites; remote, malformed, and absent endpoints leave live Redis tests disabled.",
+    "mainlineEvidence": {
+      "sourceRevision": "36220abf4ebcc629fa616961879f5a2ffe1f847d",
+      "workflowRun": 472,
+      "workflowRunId": 42535903899,
+      "workflowConclusion": "success",
+      "completedJobs": 6,
+      "hubTestsPerRuntime": 566,
+      "enginexTestsPerRuntime": 94,
+      "requiredPaths": 230,
+      "javascriptFilesSyntaxChecked": 236,
+      "livePostgresMemgraph": 79,
+      "migrationsApplied": 18,
+      "idempotentSecondPass": 18,
+      "playwrightSmoke": 9,
+      "npmAuditVulnerabilities": 0,
+      "sbomComponentsPerRuntime": 177,
+      "sbomDependenciesPerRuntime": 178,
+      "serviceLessIntegrationSkippedPerRuntime": 33,
+      "serviceLessIntegrationStatus": "PARTIAL",
+      "readyForProduction": false,
+      "readiness": {
+        "pass": 7,
+        "partial": 2,
+        "blocked": 1,
+        "missingEvidence": 14
+      }
+    }
   },
   "aiPrivacy": {
     "externalProviderOptInRequired": true,
@@ -582,8 +609,8 @@
     }
   },
   "postMergeCodeScanning": {
-    "analyzedAt": "2026-11-04T21:18:28Z",
-    "commit": "dc4a82dafd7abe30da0c9e3b5ec87d9a21c467fd",
+    "analyzedAt": "2026-11-09",
+    "commit": "36220abf4ebcc629fa616961879f5a2ffe1f847d",
     "branch": "refs/heads/main",
     "alerts": {
       "fixed": [
@@ -612,18 +639,62 @@
           "dismissedAt": null
         }
       ],
-      "open": [
-        {
-          "number": 14,
-          "severity": "medium",
-          "rule": "js/unsafe-code-construction",
-          "path": "vendor/enginex/engine-legacy.js",
-          "line": 569
-        }
-      ]
+      "open": []
     },
     "manualDismissals": 0,
-    "note": "The four High data-flow alerts are fixed in the default-branch CodeQL analysis after auth route/cookie extraction. Session cookies still carry opaque bearer tokens; retain independent deployment/security review."
+    "note": "The four High data-flow alerts are fixed in the default-branch CodeQL analysis after auth route/cookie extraction. Session cookies still carry opaque bearer tokens; retain independent deployment/security review.",
+    "previousAnalysis": {
+      "analyzedAt": "2026-11-04T21:18:28Z",
+      "commit": "dc4a82dafd7abe30da0c9e3b5ec87d9a21c467fd",
+      "branch": "refs/heads/main",
+      "alerts": {
+        "fixed": [
+          {
+            "number": 30,
+            "severity": "high",
+            "rule": "js/clear-text-storage-of-sensitive-data",
+            "dismissedAt": null
+          },
+          {
+            "number": 31,
+            "severity": "high",
+            "rule": "js/clear-text-storage-of-sensitive-data",
+            "dismissedAt": null
+          },
+          {
+            "number": 32,
+            "severity": "high",
+            "rule": "js/clear-text-storage-of-sensitive-data",
+            "dismissedAt": null
+          },
+          {
+            "number": 33,
+            "severity": "high",
+            "rule": "js/clear-text-storage-of-sensitive-data",
+            "dismissedAt": null
+          }
+        ],
+        "open": [
+          {
+            "number": 14,
+            "severity": "medium",
+            "rule": "js/unsafe-code-construction",
+            "path": "vendor/enginex/engine-legacy.js",
+            "line": 569
+          }
+        ]
+      },
+      "manualDismissals": 0,
+      "note": "The four High data-flow alerts are fixed in the default-branch CodeQL analysis after auth route/cookie extraction. Session cookies still carry opaque bearer tokens; retain independent deployment/security review."
+    },
+    "workflowRun": 472,
+    "workflowRunId": 42535903899,
+    "currentObservation": {
+      "queriedAt": "2026-11-09",
+      "openGitHubCodeScanningAlerts": 0,
+      "codeqlWorkflow": "success",
+      "note": "Not an independent security assessment or penetration test."
+    }
   },
   "sessionServiceRefactor": {
     "reviewedAt": "2026-11-04",
@@ -884,30 +955,30 @@
     "localValidationSummary": "PASS: 202 required paths, 211 JavaScript files syntax-checked; 461 unit tests (458 passed, 0 failed, 3 Windows/platform-specific skips); focused AI route/API/context suites 45/45; package-lock audit 0 vulnerabilities."
   },
   "latestMainEvidence": {
-    "reviewedAt": "2026-11-04",
-    "version": "0.6.1",
-    "commit": "489325585d57fe95f961c36a597faa7065848c7f",
+    "reviewedAt": "2026-11-09",
+    "version": "0.6.2",
+    "commit": "36220abf4ebcc629fa616961879f5a2ffe1f847d",
     "pullRequest": {
-      "number": 67,
-      "url": "https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/67",
-      "mergedAt": "2026-11-05T01:37:02Z",
-      "mergeCommit": "489325585d57fe95f961c36a597faa7065848c7f"
+      "number": 109,
+      "url": "https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/109",
+      "mergedAt": "2026-11-08T23:35:24Z",
+      "mergeCommit": "36220abf4ebcc629fa616961879f5a2ffe1f847d"
     },
     "workflow": {
-      "runId": 41949722725,
-      "runNumber": 258,
-      "url": "https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/41949722725",
+      "runId": 42535903899,
+      "runNumber": 472,
+      "url": "https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42535903899",
       "completedChecks": 6,
       "successfulChecks": 6
     },
     "results": {
       "node22HubTests": {
-        "passed": 461,
+        "passed": 566,
         "failed": 0,
         "skipped": 0
       },
       "node24HubTests": {
-        "passed": 461,
+        "passed": 566,
         "failed": 0,
         "skipped": 0
       },
@@ -917,38 +988,53 @@
         "skipped": 0
       },
       "livePostgresMemgraph": {
-        "passed": 65,
+        "passed": 79,
         "failed": 0,
         "skipped": 0
       },
       "migrations": {
         "applied": 18,
-        "idempotentSecondPass": 18
+        "idempotentSecondPass": 18,
+        "disposableDatabaseDropped": true
       },
       "playwrightSmoke": {
         "passed": 9,
         "failed": 0,
         "skipped": 0
       },
-      "codeql": "workflow passed; PR #67 reports no open alerts on latest main analysis",
+      "codeql": "Workflow passed; current repository query returned zero open code-scanning alerts on 2026-11-09.",
       "dependencyAudit": {
         "highOrCriticalVulnerabilities": 0
       },
       "sbom": {
-        "node22Components": 179,
-        "node22Dependencies": 180,
+        "node22Components": 177,
+        "node22Dependencies": 178,
         "node24Components": 177,
         "node24Dependencies": 178,
-        "sameLockfileDifferentInventory": true,
-        "disposition": "Reconcile npm-major component differences and complete LGPL notice/distribution review."
+        "sameLockfile": true,
+        "lockfileSha256": "f404ce5862bffa60daa2cb9cd471e6ac7893b048b2e877e623ddf43c1a15e7ce",
+        "normalizedComponentAndDependencyGraphParity": "PASS",
+        "disposition": "Identical normalized inventory; human license/provenance review remains open."
+      },
+      "requiredPaths": 230,
+      "javascriptSyntaxChecked": 236,
+      "serviceLessIntegration": {
+        "skippedPerRuntime": 33,
+        "status": "PARTIAL",
+        "countedAsLivePass": false
+      },
+      "liveIntegrationDetails": {
+        "supportedUpgradeFixture": "v0008-to-latest PASS",
+        "memgraphOutageReplay": "PASS",
+        "canonicalGraphRebuild": "PASS"
       }
     },
     "readiness": {
       "classification": "NOT_PRODUCTION_CERTIFIED",
       "readyForProduction": false,
-      "pass": 8,
+      "pass": 7,
       "partial": 2,
-      "blocked": 0,
+      "blocked": 1,
       "missingEvidence": 14,
       "notRun": 0,
       "decision": "NO_GO"
@@ -1005,31 +1091,25 @@
     }
   },
   "latestCandidateEvidence": {
-    "reviewedAt": "2026-11-05",
+    "reviewedAt": "2026-11-09",
     "version": "0.6.2",
-    "branch": "refactor/api-library-routes-2026-11",
-    "headCommit": "8db6c66f07c6ea89745fe2a0c8dd7f5f4f6440b3",
-    "mergeRefCommit": "e39cd5c33f940762ed9fa88b27aad8f8d3070947",
+    "branch": "main",
+    "headCommit": "36220abf4ebcc629fa616961879f5a2ffe1f847d",
+    "mergeRefCommit": "36220abf4ebcc629fa616961879f5a2ffe1f847d",
     "pullRequest": {
-      "number": 68,
-      "url": "https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/68",
-      "state": "open",
-      "merged": false,
-      "head": "8db6c66f07c6ea89745fe2a0c8dd7f5f4f6440b3",
-      "base": "489325585d57fe95f961c36a597faa7065848c7f",
-      "mergeRef": "e39cd5c33f940762ed9fa88b27aad8f8d3070947",
+      "number": 109,
+      "url": "https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/109",
+      "state": "closed",
+      "merged": true,
+      "head": "a55c36fe18863b540c279d7f690c81ba3c4438c7",
+      "base": "aaab380978edab446516fe92da99257e798a6200",
+      "mergeRef": "36220abf4ebcc629fa616961879f5a2ffe1f847d",
       "reviewCount": 0
     },
     "ci": {
-      "pullRequestRun": {
-        "id": 42026945926,
-        "number": 270,
-        "event": "pull_request",
-        "conclusion": "success"
-      },
-      "pushRun": {
-        "id": 42026938931,
-        "number": 269,
+      "mainlineRun": {
+        "id": 42535903899,
+        "number": 472,
         "event": "push",
         "conclusion": "success"
       },
@@ -1039,12 +1119,12 @@
     },
     "tests": {
       "node22Hub": {
-        "passed": 476,
+        "passed": 566,
         "failed": 0,
         "skipped": 0
       },
       "node24Hub": {
-        "passed": 476,
+        "passed": 566,
         "failed": 0,
         "skipped": 0
       },
@@ -1054,7 +1134,7 @@
         "skipped": 0
       },
       "livePostgresMemgraph": {
-        "passed": 65,
+        "passed": 79,
         "failed": 0,
         "skipped": 0
       },
@@ -1063,7 +1143,7 @@
         "secondPassSkipped": 18,
         "disposableDatabaseDropped": true
       },
-      "supportedUpgradeFixture": "v0008-to-v0009 PASS",
+      "supportedUpgradeFixture": "v0008-to-latest PASS",
       "memgraphOutageReplay": "PASS",
       "canonicalGraphRebuild": "PASS",
       "playwrightSmoke": {
@@ -1071,9 +1151,13 @@
         "failed": 0,
         "skipped": 0
       },
-      "requiredPaths": 206,
-      "javascriptSyntaxChecked": 213,
-      "npmAuditVulnerabilities": 0
+      "requiredPaths": 230,
+      "javascriptSyntaxChecked": 236,
+      "npmAuditVulnerabilities": 0,
+      "serviceLessIntegration": {
+        "skippedPerRuntime": 33,
+        "status": "PARTIAL"
+      }
     },
     "sbom": {
       "cyclonedx": "1.5",
@@ -1081,15 +1165,12 @@
       "npm": "11.19.1",
       "node22Components": 177,
       "node22Dependencies": 178,
-      "node22SbomSha256": "42a5c2d974265888baeadecac8e6af3745edd1eb35c0b7131447aef89a309f17",
       "node24Components": 177,
       "node24Dependencies": 178,
-      "node24SbomSha256": "40259a3c0b6b772885e34d69c172d59a56627722ae6f1885d22d42101d126af0",
-      "normalizedComponentAndDependencyGraphParity": "PASS",
-      "disposition": "IDENTICAL_NORMALIZED_INVENTORY"
+      "normalizedComponentAndDependencyGraphParity": "PASS"
     },
     "formalReadiness": {
-      "sourceRevision": "e39cd5c33f940762ed9fa88b27aad8f8d3070947",
+      "sourceRevision": "36220abf4ebcc629fa616961879f5a2ffe1f847d",
       "releaseClassification": "NOT_PRODUCTION_CERTIFIED",
       "readyForProduction": false,
       "pass": 7,
@@ -1105,7 +1186,7 @@
       "disposition": "corrected",
       "summary": "The intermediate library-route compatibility patch returned the stale ERR_SYSTEMFABRIC_LIBRARY_NOT_FOUND code. The final candidate restores the canonical ERR_VIRGOSCORPIO_HUB_* namespace; run #270 passes live tenant-isolation tests."
     },
-    "status": "HOSTED_CI_PASS_PRODUCTION_NO_GO"
+    "status": "MAINLINE_CI_PASS_PRODUCTION_NO_GO"
   },
   "releaseEvidenceHardeningFollowUp": {
     "reviewedAt": "2026-11-05",
@@ -1171,6 +1252,88 @@
         "dependencies": 178,
         "sha256": "40259a3c0b6b772885e34d69c172d59a56627722ae6f1885d22d42101d126af0"
       }
+    }
+  },
+  "scopeReconciliation": {
+    "reviewedAt": "2026-11-09",
+    "sourceRevision": "36220abf4ebcc629fa616961879f5a2ffe1f847d",
+    "document": "docs/RELEASE-SCOPE.md",
+    "classification": "EXPANDED_DEVELOPER_PREVIEW_NOT_PRODUCTION_CERTIFIED",
+    "decisionStatus": "TECHNICAL_RECOMMENDATION_PENDING_AUTHORIZED_RELEASE_OWNER_APPROVAL",
+    "defaultPosture": {
+      "storage": "local",
+      "libraryStorage": "local",
+      "aiProvider": "mock",
+      "aiAllowedProviders": [
+        "mock"
+      ],
+      "externalAIContent": false,
+      "promptLogging": false,
+      "email": "disabled",
+      "oidc": "unconfigured",
+      "saml": false,
+      "realtime": false,
+      "memgraph": false,
+      "pluginExecution": false,
+      "stripeCredentials": false,
+      "clamavScanner": false
+    },
+    "optionalAdaptersNotCertified": [
+      "S3/S3-compatible",
+      "R2",
+      "MinIO",
+      "GCS",
+      "Azure Blob",
+      "OIDC",
+      "SAML",
+      "email provider",
+      "Stripe",
+      "external AI",
+      "ClamAV",
+      "Sharp",
+      "FFmpeg",
+      "plugin runner"
+    ],
+    "excludedIssueNumbers": [
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22
+    ],
+    "exclusionsAreNotPassed": true,
+    "productionGatesRetained": true,
+    "releaseOwnerApproval": "PENDING named authorized decision under issue #13",
+    "semver": {
+      "version": "0.6.2",
+      "released": false,
+      "changeType": "patch"
+    },
+    "productionReady": false,
+    "localValidation": {
+      "host": "Windows 10 x64",
+      "node": "26.12.1",
+      "command": "npm run check",
+      "tests": {
+        "total": 566,
+        "passed": 563,
+        "failed": 0,
+        "skipped": 3
+      },
+      "artifactCheck": {
+        "requiredPaths": 230,
+        "javascriptFilesSyntaxChecked": 236
+      },
+      "tenantInventory": {
+        "flowFamilies": 27,
+        "routePatterns": 78,
+        "sourceFiles": 19,
+        "testFiles": 41
+      },
+      "interpretation": "Three platform-specific skips; Node 26 local development only, not support-matrix evidence."
     }
   }
 }
