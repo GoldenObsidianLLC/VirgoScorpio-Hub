@@ -1,6 +1,6 @@
-# VirgoScorpio Hub Platform Features — 0.5.0
+# VirgoScorpio Hub Platform Features — 0.6.2
 
-VirgoScorpio Hub 0.4.0 originally expanded the developer preview with a media/document library, visual page widgets, commerce and membership foundations, community primitives, mega-menu presentation, firewall rule management, and cloud storage adapter configuration.
+VirgoScorpio Hub 0.6.2 is an unreleased internal library/media API modularity candidate and expanded developer preview. It builds on the CMS/editor, libraries/media, commerce and membership, site-scoped community, application firewall, AI adapters, cloud adapter and release-engineering foundations. Current default enablement and explicit exclusions are defined in [RELEASE-SCOPE.md](RELEASE-SCOPE.md).
 
 > **Maturity notice:** This is a developer preview, not a completed WordPress/WooCommerce/BuddyPress/Elementor replacement and not a production-certified security platform. A database-backed route is only functional after migrations are applied to a compatible PostgreSQL instance. Provider and cloud integration status is documented separately from configuration acceptance.
 
@@ -38,11 +38,11 @@ Public read endpoints:
 
 Authenticated management endpoints are defined in `docs/API-CONTRACTS.md` and `openapi.yaml`.
 
-This is **commerce functionality groundwork, not WooCommerce parity**. The current milestone does not provide the complete tax, shipping, regional pricing, coupon redemption, full variable-product/attribute matrix, refunds/returns, invoices, downloadable entitlements, subscription lifecycle console, fraud tooling, checkout extensibility, or accounting integrations expected from a mature store. Coupons have a storage schema but a full coupon lifecycle must be added and tested before claiming coupon support.
+This is **partial commerce functionality, not WooCommerce parity**. The current implementation includes product/order/cart foundations, integer minor-unit calculations, finite-stock reservations, Stripe Checkout/webhook foundations, provider-state reconciliation and tenant-scoped refund/subscription lifecycle code paths. The sample environment has no Stripe credentials and this candidate has no live Stripe test-mode evidence. Complete tax, shipping, regional pricing, coupon redemption, variable products, returns/chargebacks, invoices, downloadable entitlements, subscription management/dunning/proration, fraud tooling, checkout extensions and accounting integrations remain incomplete or unaccepted. Do not claim live payment or mature-store parity.
 
 ## Community
 
-The preview defines site-scoped profiles, privacy visibility, groups with privacy states, group memberships, friend requests, and an activity feed model. It is not BuddyPress parity: private messaging, notifications, moderation queue, forums, advanced group content, search/discovery, anti-abuse workflows, data export/deletion, and the complete community UX remain future work.
+The current site-scoped foundations include profiles and visibility, groups and memberships, friend requests/activity, direct conversations/messages, read markers and message notifications, blocking, report queue/status and moderator hide/restore actions. Message/report rate limits use transaction-scoped advisory locks. This remains **partial and not BuddyPress parity**: group conversations/privacy, forums, complete abuse/appeals, search/discovery, privacy export/deletion and full browser workflows remain incomplete or unaccepted.
 
 ## Mega menus
 
@@ -58,13 +58,17 @@ This is an **application-layer rule engine**, not a network firewall, managed WA
 
 Object storage adapters cover AWS S3 and S3-compatible endpoints (including deployments such as Cloudflare R2 or MinIO), Google Cloud Storage, and Azure Blob Storage. Configuration records store secret references, not secret values. Actual credentials come from the deployment environment or a supported secret/workload-identity mechanism.
 
-A cloud connection marked `configured` means its configuration passed validation. It does not mean that object-store permissions, bucket policy, network access, encryption, retention, lifecycle rules, or CDN delivery have been verified. Live compatibility tests are required for every provider/credential model in use.
+A cloud connection marked `configured` means its configuration passed validation only. It does not mean that object-store permissions, bucket policy, network access, encryption, retention, lifecycle rules, credential resolution, or CDN delivery have been verified. The 0.6.2 sample configuration defaults to local storage. No S3/S3-compatible, R2/MinIO, GCS or Azure provider has been accepted through live least-privilege operations, lifecycle or restore testing; these adapters must not be represented as certified support.
 
 ## AI integration
 
 AI can draft page documents, provide constrained content assistance, suggest SEO metadata, translate text, and help with preview/review workflows. AI output remains untrusted and is validated by VirgoScorpio Hub. Publication, billing, permissions, and plugin activation are not granted to AI tools by default. External provider use is disabled unless the operator opts in and configures the appropriate policy.
 
 
-## 0.5.0 release hardening
+## 0.6.2 preview posture and current evidence
 
-The current release adds optional ClamAV malware scanning and quarantine policy for library upload/replacement, a local-only object reconciler that defaults to dry-run, read-only live connectivity probes for S3/GCS/Azure storage adapters, expanded integration tests for outbox concurrency/poison events and Memgraph version ordering, and CI definitions for a supported-Node matrix, database integration services, Playwright checks and CodeQL. CI definitions have not been executed in this build environment and do not constitute passing evidence.
+The committed sample environment keeps local media/library storage, mock-only AI, external AI content off, email disabled, SAML/OIDC unconfigured, realtime and Memgraph disabled, plugin execution disabled, Stripe credentials blank, and ClamAV unset. Remote cloud, external AI, identity, mail, billing, malware-scanner and plugin adapters are not certified merely because they are present. Non-production unscanned assets remain quarantined/non-public; production uploads fail closed when required malware scanning is unavailable.
+
+Mainline [CI run #472](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42535903899) passed all six jobs on `36220abf4ebcc629fa616961879f5a2ffe1f847d`. The dedicated PostgreSQL/Memgraph job passed 79/79 with no skips, verified 18 migrations on fresh install and 18 idempotent skips, and exercised the v0008 upgrade fixture, Memgraph outage/replay and canonical graph rebuild. Browser Chromium smoke passed 9/9; Node 22/24 unit/security checks and EnginEx tests passed; SBOM runtime parity and CodeQL passed. The CI evidence is not full accessibility acceptance or production certification.
+
+See [RELEASE-SCOPE.md](RELEASE-SCOPE.md), [FEATURE-PARITY.md](FEATURE-PARITY.md) and [RELEASE_READINESS.md](RELEASE_READINESS.md) for the precise supported preview, excluded capabilities and remaining production gates.

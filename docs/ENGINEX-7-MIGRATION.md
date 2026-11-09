@@ -124,4 +124,4 @@ The restricted grammar is not a general-purpose JavaScript interpreter. Unsuppor
 
 EnginEx 7.0.0 removes the arbitrary-JavaScript template execution sink; it does not make every template or helper inherently safe. Static HTML can still contain dangerous markup, and application-provided helpers remain part of the trusted computing base. Continue to validate URLs, sanitize any deliberately supported rich HTML, keep helpers capability-limited, and preserve authorization checks in host services.
 
-The VirgoScorpio Hub 0.6.0 candidate remains **NOT_PRODUCTION_CERTIFIED**. This migration guide documents the renderer compatibility change; it is not a production approval.
+The VirgoScorpio Hub 0.6.2 candidate remains **NOT_PRODUCTION_CERTIFIED**. This migration guide documents the renderer compatibility change; it is not a production approval.

@@ -1,5 +1,26 @@
 # VirgoScorpio Hub Release Evidence Contract
 
+## Current mainline evidence snapshot — 9 November 2026 (0.6.2)
+
+Mainline source revision: `36220abf4ebcc629fa616961879f5a2ffe1f847d`. F1.18 merged through PR #109. Hosted [mainline workflow run #472](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42535903899) passed all six producer/aggregator jobs: Node.js 22.23.4, Node.js 24.22.1, dedicated PostgreSQL/Memgraph integration, browser/accessibility smoke, CodeQL and consolidated evidence.
+
+- Node.js 22.23.4 and 24.22.1 each passed **566/566** Hub unit/security tests and **94/94** EnginEx tests. The artifact/syntax check covered **230 required paths** and **236 JavaScript files** per matrix.
+- The service-less integration subset in each Node job recorded **33 skips** and remains PARTIAL. It is not a live integration PASS.
+- The dedicated PostgreSQL/Memgraph integration job passed **79/79** tests, zero failure/skips/TODOs. It applied **18/18** migrations to a fresh disposable PostgreSQL database and confirmed **18/18** idempotent skips on the second pass; it exercised the v0008 upgrade fixture, PostgreSQL transaction/outbox cases, Memgraph outage/replay and canonical graph rebuild; the disposable DB was dropped.
+- The aggregator materialized `artifacts/evidence/postgres-memgraph-live.json` as PASS for this exact source SHA. The checksum-bound supporting bundle is contained in the run #472 artifact `virgoscorpio_hub-release-readiness-ci`.
+- Chromium browser smoke passed **9/9**. This is not full manual accessibility acceptance.
+- Both npm audit jobs reported **0 vulnerabilities**. Both CycloneDX 1.5 SBOMs reported **177 components / 178 dependency records**, npm 11.19.1 and the same lockfile SHA-256 `f404ce5862bffa60daa2cb9cd471e6ac7893b048b2e877e623ddf43c1a15e7ce`; the aggregator verified normalized component/dependency parity. Human dependency and license review, LGPL-3.0-or-later notice review, and build provenance/attestation remain outstanding.
+- CodeQL completed successfully. CodeQL is static-analysis workflow evidence, not an independent application-security assessment.
+
+### Local developer validation (9 November 2026)
+
+On the Windows development host using Node.js 26.12.1, `npm run check` passed **563/566 tests, zero failures and three platform-specific skips**. The artifact/syntax check passed **230 required paths** and syntax-checked **236 JavaScript files**. The tenant inventory generator passed with **27 flow families, 78 declared route patterns, 19 implementation source files and 41 referenced test files**. Node 26.12.1 is a local validation environment only; the declared support floor remains Node.js >=22.23.4, and hosted acceptance is represented by the Node 22.23.4/24.22.1 run #472 above.
+
+The source-bound CI aggregator reported producer CI PASS and production-ready **NO**. The local `npm run release:readiness` report for this source revision recorded **7 PASS, 2 PARTIAL, 1 BLOCKED, 14 MISSING_EVIDENCE**, with `readyForProduction: false`. It marks the local supplemental fresh-migration artifact BLOCKED because the local file does not satisfy the exact-source evidence contract; that is distinct from the successful hosted run-bound database evidence above. Do not transplant or manually retag artifacts across commits.
+
+The 0.6.2 preview scope is documented in [RELEASE-SCOPE.md](RELEASE-SCOPE.md). Issues #15–#22 are deferred/not planned for the developer-preview claim; their production provider, manual accessibility, product parity and plugin acceptance remain future production gates. Independent security/tenant review (#14/#25), load/backup/restore (#24), operations/release approval (#26), zero-reserve governance (#32), dependency review and named scope approval (#13) remain outstanding. Package version remains 0.6.2 and unreleased. Production remains NOT_PRODUCTION_CERTIFIED / NO-GO.
+
+
 VirgoScorpio Hub separates source-level checks from production evidence. A passing unit suite or a checked-in workflow is not proof that a release gate passed.
 
 ## Historical mainline and application acceptance snapshot

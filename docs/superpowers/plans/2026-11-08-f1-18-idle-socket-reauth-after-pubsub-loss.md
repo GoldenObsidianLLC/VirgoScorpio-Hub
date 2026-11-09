@@ -2,7 +2,7 @@
 
 **Date:** 8 November 2026
 
-**Status:** Test implementation and local validation complete; [PR #109](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/109) is open against `main`. Hosted PR CI run #467 (`42529727055`) passed all six jobs for head `3da310665c761fede1d29d6ecda23a319e0b1139`; final hosted PR CI run #469 (`42532101361`) passed all six jobs for the F1.18 implementation head `6caccd1bf01ec4935e37aa2384ad9c9e14d0f714`; no formal review submissions or review threads are recorded.
+**Status:** Merged to `main` through [PR #109](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/109) at `36220abf4ebcc629fa616961879f5a2ffe1f847d`. Mainline CI run #472 (`42535903899`) passed all six jobs for the exact merge commit. PR #109 had no formal review submissions or review threads; the F1.18 regressions remain maintainer-authored, not independent security evidence.
 
 **Branch:** `feat/f1-18-idle-socket-reauth-after-pubsub-loss-2026-11-08`
 
