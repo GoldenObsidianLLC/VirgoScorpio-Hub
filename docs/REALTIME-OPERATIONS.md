@@ -23,6 +23,16 @@ A successful local test does not certify a deployment. The current F1.11 qualifi
 
 When realtime is enabled in production, the API requires an injected realtime hub with authorization invalidation, a presence service, and a distributed connection-quota adapter. A distributed document publisher is also required. Redis-backed mode additionally requires a connected Redis presence service, a cross-instance realtime bridge, and a distributed quota adapter. Do not interpret successful startup as proof of adapter correctness or production readiness.
 
+### Redis reconnect policy (F1.19)
+
+The Redis publisher and subscriber share one reconnect strategy. It uses exponential backoff with equal jitter: the retry window starts at **100 ms**, doubles by attempt, and is capped at **5 seconds**; each returned delay is between 50% and 100% of that window. There is no retry-count cutoff. The injected random source is only a deterministic test seam; production uses the runtime random source.
+
+`redis_reconnect_attempts_total` counts reconnect-strategy invocations. It does not count successful reconnections or prove that either client has recovered. The bridge readiness/degraded gauges continue to reflect whether both Redis clients are ready. Explicit bridge shutdown closes/destroys both clients and ends the reconnect lifecycle.
+
+This policy retries the Redis connections; it does **not** buffer or replay missed Pub/Sub messages. After connectivity returns, clients must fetch a fresh authorized presence snapshot, remote authorization subscriptions continue to rely on periodic server-side reauthorization when an invalidation was missed, and collaborative documents reconcile against canonical PostgreSQL history. Redis Pub/Sub remains best-effort ephemeral notification, not a durable queue or authorization source.
+
+The deterministic unit test covers retry calculations beyond the former cutoff and both jitter bounds. It does not simulate an extended real Redis outage, Redis Cluster/failover, network partition, reconnect storm, or production recovery SLO. Those remain separate operational evidence requirements.
+
 ## 2. Responsibilities and escalation
 
 The following operational roles must be assigned by the release owner before any production deployment. They are deliberately **UNASSIGNED** here; do not infer a person or team.

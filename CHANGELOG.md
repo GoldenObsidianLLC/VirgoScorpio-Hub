@@ -4,6 +4,10 @@ All notable project-level changes should be recorded here. This changelog does n
 
 ## 0.6.2 (unreleased patch candidate)
 
+### Redis real-time reconnect resilience (F1.19)
+
+- Keep the Redis publisher and subscriber reconnecting through extended outages with shared exponential equal-jitter backoff (100 ms base window, 5-second ceiling, 50–100% of the capped window) instead of stopping after ten retries. Count every reconnect-strategy invocation with the existing fixed-cardinality metric and cover the retry bounds beyond the former cutoff. Reconnect restores transport only; lost ephemeral Pub/Sub messages are not buffered or replayed. PostgreSQL remains the canonical collaboration source. This is unreleased developer-preview work and does not qualify Redis failover or production availability.
+
 ### Revocable public asset delivery
 
 - Public media, library assets, and variants now return Cache-Control: private, no-store and recheck current visibility before serving bytes. S3 media objects are stored with private/no-store metadata; direct public CDN URLs are disabled, and MEDIA_CDN_PUBLIC=true fails closed until a provider-backed invalidation contract and edge-revocation tests exist. Reverse-proxy/CDN cache overrides and provider-side purging of legacy direct-CDN URLs issued before this change remain deployment review gates. This is security hardening within the unreleased 0.6.2 candidate; no release or production certification is implied.
