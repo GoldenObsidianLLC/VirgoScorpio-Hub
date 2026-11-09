@@ -138,6 +138,29 @@ A production candidate requires a separate approved scope decision and deploymen
 
 Every selected provider and feature must be tested against dedicated non-production accounts/environments with evidence bound to the exact candidate revision. Unselected capabilities must remain disabled or unavailable and be excluded from release claims. A future scope approval does not itself satisfy the independent/provider/operations gates.
 
+### 6.1 Evidence environment and accountable-role mapping
+
+The rows below map the 14 ordered `productionGates` entries in `RELEASE-MANIFEST.json` to the evidence environment and proposed accountable role. These are role proposals, not assignments: **no named service/provider owners have been accepted yet**. Provider-specific test accounts and environments must be separately authorized and remain unprovisioned for this documentation task. No production credentials or customer data belong in these test environments.
+
+| Manifest gate | Evidence/capability | Required isolated test environment | Proposed accountable role | GitHub tracking |
+|---|---|---|---|---|
+| 1. Supported runtime, lockfile and repeatable install | Supported Node matrix, pinned npm, clean install, reviewed lockfile | Clean CI runners on Node 22.23.4 and 24.22.1; isolated npm cache; exact candidate SHA | Build and release engineering | #23, #26 |
+| 2. Fresh and upgrade migrations | Migrations 0001–0018, supported upgrade fixture, idempotent second pass | Disposable PostgreSQL 18 database; synthetic fixtures; drop database after verification | Database/platform operations | #24, #26 |
+| 3. Database, outbox and graph resilience | PostgreSQL concurrency/rollback/outbox replay; Memgraph projection outage/replay and rebuild | Ephemeral PostgreSQL 18, Memgraph 3.13.1 and Redis 7.4 services with isolated tenant fixtures | Data and realtime platform owner | #24 |
+| 4. Tenant isolation and authorization | Independent route/data-access/identity/realtime/worker authorization assessment | Clean assessor-controlled environment with synthetic multi-tenant identities and data; exact reviewed SHA | Security owner plus independently contracted assessor | #14, #25 |
+| 5. Identity federation, email and recovery | Live OIDC/SAML, email delivery, MFA recovery and session lifecycle | Dedicated non-production IdP tenants and email sandbox; synthetic accounts and recovery channels | Identity/SSO service owner | #15 (deferred for preview) |
+| 6. Malware scanner and legacy asset quarantine | Scanner lifecycle, safe/malicious test corpus, unavailable/timeout/failure, legacy rescan | Isolated ClamAV daemon/version and controlled safe signature corpus; private upload/quarantine store | File security/media owner | #16 (deferred for preview) |
+| 7. Local object reconciliation and crash recovery | Dry-run/apply safety, references, stale-object handling, interruption/restart | Disposable local filesystem and database snapshot populated with synthetic objects; dry-run before isolated apply | Storage operations owner | #24, #26 |
+| 8. Remote object-storage providers | Provider-specific credential resolution, least-privilege CRUD/multipart, encryption, retention and lifecycle | Dedicated non-production buckets/containers and restricted workload identity for each selected provider/region | Cloud storage service owner | #17 (deferred for preview) |
+| 9. Stripe payment lifecycle | Checkout, webhook replay, stock reservation, refund idempotency, subscription state reconciliation | Dedicated Stripe test-mode account, isolated webhook endpoint and synthetic catalog/orders; no live charges | Payments/billing service owner | #18 (deferred for preview) |
+| 10. Commerce/community acceptance | Explicit product subset, privacy/abuse flows and browser/API acceptance before parity claims | Product-owner-approved scenario matrix with synthetic products, members and tenant data in isolated staging | Product owner with commerce and community feature owners | #20, #21 (deferred for preview) |
+| 11. Plugin signing and runtime isolation | Signed artifact pipeline, provenance, pinned images, filesystem/network/secret/resource isolation and adversarial tests | Ephemeral isolated plugin runner with signed test fixtures, denied-by-default egress and no production secrets | Plugin security/runtime owner | #22 (deferred for preview) |
+| 12. Browser, accessibility and resilience | Browser/assistive-technology matrix, manual accessibility, fuzz/load/soak, fault injection and restore | Disposable staging topology; declared browser/AT matrix; synthetic load data; isolated backup/restore target | QA/accessibility owner with SRE/DR owner | #19, #24 |
+| 13. Supply chain, independent security and operations | Human SBOM/license/provenance review, independent security assessment, runbooks and owner approval | Offline SBOM/license review; assessor-controlled security environment; production-like but isolated operations rehearsal | Security/supply-chain owner and operations/release owner | #23, #25, #26; funding/authority constraint #32 |
+| 14. Formal release-readiness decision | Exact-source `release:readiness` report, retained artifacts, strict assertion and recorded release decision | Clean checkout of the exact candidate SHA with current evidence artifacts; no stale/cross-commit records | Authorized product/release owner | #13, #26 |
+
+An owner role does not equal an assigned person or an approval. Issue #13 remains open until the authorized release owner names accountable individuals, confirms their authority and environment ownership, and records acceptance/amendment with a date. Issues #15–#22 being not planned for the 0.6.2 preview does not remove their corresponding rows from a future production evidence plan. Issue #32 continues to prohibit spending or assessor engagement without transaction-specific authorization and approved funding. The matrix is planning metadata; it does not create external accounts, invoke providers, incur cost, or change feature flags.
+
 ## 7. Ownership and approval record
 
 | Field | Value |
@@ -146,6 +169,7 @@ Every selected provider and feature must be tested against dedicated non-product
 | Scope source | `RELEASE-MANIFEST.json`, `package.json`, `.env.example`, `.github/workflows/ci.yml`, `docs/FEATURE-PARITY.md`, `docs/PLATFORM-FEATURES.md`, mainline run #472 |
 | Source revision used for this reconciliation | `36220abf4ebcc629fa616961879f5a2ffe1f847d` |
 | Product version / SemVer | `0.6.2`, unreleased, unchanged |
+| Evidence/environment owner map | All 14 manifest production gates map to an isolated test environment and proposed accountable role in [Section 6.1](#61-evidence-environment-and-accountable-role-mapping); named assignments are pending. |
 | Decision owner | **Pending named authorized product/release owner** |
 | Approval status/date | **Pending; no approval is inferred from this document or CI** |
 | GitHub decision record | [Issue #13](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/13) |
