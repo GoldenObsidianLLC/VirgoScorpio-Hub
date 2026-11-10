@@ -1,0 +1,16 @@
+VirgoScorpio Hub CycloneDX SBOM generation evidence
+Generated at: 2026-11-10T21:49:51.019Z
+Command: npm sbom --sbom-format=cyclonedx --omit=dev
+Node.js: v26.12.1
+npm: 11.19.1
+npm user-agent: npm/11.19.1 node/v26.12.1 win32 x64 workspaces/false
+Host: win32/x64
+Package: virgoscorpio-hub@0.6.2
+Format: CycloneDX 1.5
+Components: 174
+Dependency records: 175
+package-lock.json SHA-256: bd81531382652ce4be00e6dd279bd126dc9140243ae1ee67dfb975bfd4234199
+virgoscorpio-hub.sbom.cdx.json SHA-256: c0d6ced39fbc25ef137daa179df70ecb2862aa8d84b16c2e959e850702b017ae
+License identifiers/expressions: 0BSD (1); Apache-2.0 (57); Apache-2.0 AND LGPL-3.0-or-later (1); BlueOak-1.0.0 (1); BSD-3-Clause (2); GPL-2.0-or-later (1); ISC (6); MIT (105)
+Components without an identified license: 0
+Components with LGPL license terms: @img/sharp-win32-x64@0.35.5 [Apache-2.0 AND LGPL-3.0-or-later]

@@ -4,8 +4,8 @@
 
 **Formal gate:** [Issue #14 — Independent tenant/site isolation and authorization review](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/14)
 **Candidate:** `0.6.2`, private/unreleased developer preview
-**Current main:** `eb156b7620929ae94421caf69b4ddb92ed679812`
-**Exact-mainline evidence:** [Workflow #517](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42855470069), six jobs passed; live PostgreSQL/Memgraph suite **81/81, zero failures, zero skips**
+**Current main:** `c7653bb433ae8b363925d13babf239e64b2b5125`
+**Exact-mainline evidence:** [Workflow #522](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42879875157), all six jobs passed on the current PR #118 merge SHA.
 **Companion:** [Release blocker triage](../reports/RELEASE-BLOCKER-TRIAGE-2026-11-10.md)
 **Formal evidence destination after independent completion:** `artifacts/evidence/tenant-isolation-review.json`
 
@@ -15,7 +15,7 @@ The generated [10 November route/capability inventory](TENANT-ISOLATION-ROUTE-CA
 
 PR #116 merged a focused two-site same-slug custom-content-type registry/record regression. Workflow #517 passed the live test. This is targeted maintainer regression evidence only. It does not satisfy independent review issue #14 or broader independent security issue #25.
 
-A separate maintainer branch, `security/cloud-connection-tenant-isolation-2026-11-10`, contains additional cloud-connection regression assertions. It is unmerged and not part of the current main SHA or workflow #517. Its focused PostgreSQL test passed **2/2**, and the full local PostgreSQL/Memgraph/Redis runner passed **81/81, zero failures, zero skips** on a disposable local environment; `npm run check` passed **583/586** with zero failures and three Windows-specific skips. These are maintainer-authored checks on a dirty worktree under Node.js 26.12.1, not independent findings. The pushed branch is open PR [#118](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/118) at exact head `3aa47fad5bfaa417e72e4be2b46d3a91895c1c84`; hosted [workflow #42875103949](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42875103949) passed all six jobs and the live integration step enforced zero skips. The reviewer must decide whether that unmerged maintainer branch is in scope and must independently design and execute any tests.
+PR [#118](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/118) has since merged the cloud-connection regression into current main SHA `c7653bb433ae8b363925d13babf239e64b2b5125`. It adds Site B-only `cloud:manage` checks, Site A/B list isolation, non-disclosing foreign Site A IDs for Site B `/test` and `/disable`, conflicting selector rejection and unchanged-row-state assertions. The focused PostgreSQL test passed **2/2**; the full local PostgreSQL/Memgraph/Redis runner passed **81/81, zero failures, zero skips** on a disposable local environment; `npm run check` at that pre-merge snapshot passed **583/586**, zero failures and three Windows-specific skips. Exact-mainline workflow [#522](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42879875157) passed all six required jobs on the merge SHA. These are maintainer-authored regression tests, not independent findings. The reviewer should assess the current clean mainline target and independently design and execute all additional discovery and adversarial tests.
 
 ## 2. Independence and safe execution
 

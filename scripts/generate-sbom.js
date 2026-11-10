@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { createHash } = require('node:crypto');
 const { spawnSync } = require('node:child_process');
+const { normalizeSbom } = require('./normalize-sbom');
 
 const ROOT = path.resolve(__dirname, '..');
 const ARTIFACTS = path.join(ROOT, 'artifacts');
@@ -60,6 +61,11 @@ function summarizeSbom(bom, packageManifest = null) {
     unidentified,
     lgplComponents
   };
+}
+
+function serializeSbom(bom, packageManifest) {
+  normalizeSbom(bom, packageManifest);
+  return Buffer.from(JSON.stringify(bom, null, 2) + '\n', 'utf8');
 }
 
 function renderGenerationLog(input) {
@@ -120,17 +126,18 @@ function generateSbom() {
     throw new Error('npm sbom failed with exit code ' + command.status + ': ' + (command.stderr || command.stdout || 'no diagnostic output'));
   }
 
-  const sbomBytes = Buffer.from(command.stdout || '', 'utf8');
+  const rawSbomBytes = Buffer.from(command.stdout || '', 'utf8');
   let bom;
-  try { bom = JSON.parse(sbomBytes.toString('utf8')); }
+  try { bom = JSON.parse(rawSbomBytes.toString('utf8')); }
   catch (cause) { throw new Error('npm sbom returned invalid JSON: ' + cause.message); }
 
   const packageManifest = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
   const expectedRootPurl = 'pkg:npm/' + packageManifest.name + '@' + packageManifest.version;
   const actualRootPurl = bom.metadata && bom.metadata.component && bom.metadata.component.purl;
-  if (actualRootPurl && actualRootPurl !== expectedRootPurl) {
-    throw new Error('SBOM package identity does not match package.json: ' + actualRootPurl);
+  if (actualRootPurl !== expectedRootPurl) {
+    throw new Error('SBOM package identity does not match package.json: ' + String(actualRootPurl));
   }
+  const sbomBytes = serializeSbom(bom, packageManifest);
   const summary = summarizeSbom(bom, packageManifest);
   const lockHash = sha256(fs.readFileSync(LOCK_PATH));
   const sbomHash = sha256(sbomBytes);
@@ -165,4 +172,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { generateSbom, summarizeSbom, renderGenerationLog };
+module.exports = { generateSbom, summarizeSbom, serializeSbom, renderGenerationLog };

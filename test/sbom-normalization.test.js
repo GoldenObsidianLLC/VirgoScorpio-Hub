@@ -3,6 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { normalizeSbom } = require('../scripts/normalize-sbom');
+const { serializeSbom } = require('../scripts/generate-sbom');
 
 test('CycloneDX root component identity is independent of checkout directory name', () => {
   const packageInfo = { name: 'virgoscorpio-hub', version: '0.5.1' };
@@ -25,6 +26,33 @@ test('CycloneDX root component identity is independent of checkout directory nam
   assert.equal(normalized.metadata.component.version, '0.5.1');
   assert.deepEqual(normalized.components, [{ name: 'dependency-a', version: '1.2.3' }]);
   assert.deepEqual(normalized.dependencies, [{ ref: 'virgoscorpio-hub@0.5.1', dependsOn: ['dependency-a@1.2.3'] }]);
+});
+
+test('SBOM serialization normalizes the root identity before its bytes are hashed', () => {
+  const packageInfo = { name: 'virgoscorpio-hub', version: '0.6.2' };
+  const sbom = {
+    bomFormat: 'CycloneDX',
+    specVersion: '1.5',
+    metadata: {
+      component: {
+        type: 'library',
+        name: 'dependency-supply-chain-review-2026-11-10',
+        version: '0.6.2',
+        'bom-ref': 'virgoscorpio-hub@0.6.2',
+        purl: 'pkg:npm/virgoscorpio-hub@0.6.2'
+      }
+    },
+    components: [{ name: 'dependency-a', version: '1.2.3' }],
+    dependencies: [{ ref: 'virgoscorpio-hub@0.6.2', dependsOn: ['dependency-a@1.2.3'] }]
+  };
+
+  const serialized = serializeSbom(sbom, packageInfo);
+  const normalized = JSON.parse(serialized.toString('utf8'));
+
+  assert.equal(normalized.metadata.component.name, 'virgoscorpio-hub');
+  assert.equal(normalized.metadata.component.version, '0.6.2');
+  assert.deepEqual(normalized.components, [{ name: 'dependency-a', version: '1.2.3' }]);
+  assert.deepEqual(normalized.dependencies, [{ ref: 'virgoscorpio-hub@0.6.2', dependsOn: ['dependency-a@1.2.3'] }]);
 });
 
 test('CycloneDX normalization rejects a mismatched root package identity', () => {
