@@ -4,6 +4,8 @@
 **Repository:** [GoldenObsidianLLC/VirgoScorpio-Hub](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub)
 **Candidate:** `0.6.2` — private, unreleased developer-preview candidate
 **Current main SHA:** `267380be1ba441f83408e2c63c042760ec662ac7`
+**Current PR #115 branch head:** `bac0813bcc82327790fb3fa1a4f347f56c42c093`
+**Latest PR workflow:** [run #503](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42766200232) — all six required jobs passed on exact PR head `bac0813bcc82327790fb3fa1a4f347f56c42c093`.
 **Current production decision:** **NO-GO — NOT_PRODUCTION_CERTIFIED**
 **Scope decision:** Technical recommendation only; authorized release-owner approval remains pending under [issue #13](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/13).
 
@@ -70,7 +72,7 @@ PR #115 is based on the current main SHA and has code head `47e130c61eb867266699
 
 The PR introduces one shared `closeRedisClient` lifecycle helper, reused by the real-time bridge, Redis presence adapter/service and Redis connection-quota adapter. Graceful `QUIT` is issued only when readiness is positively known (`isReady === true`, or explicit `isOpen === true` for compatibility clients without `isReady`). Open-but-reconnecting and unknown-readiness clients are destroyed without queuing `QUIT`. Graceful shutdown is bounded to one second before forced destruction; `destroy()` is preferred, with `disconnect()` fallback and safe asynchronous error reporting. Regression tests exercise ready, closed, unknown, reconnecting, rejected, timed-out and fallback paths.
 
-This is an internal lifecycle correction. It adds no runtime dependency, public route/API/protocol, migration/schema, quota-policy change or SemVer increment. The PR is open and mergeable, but formal review submissions and inline review threads are currently absent. Run #501 qualifies the PR code head only. This follow-up also makes the generated tenant-inventory freshness comparison line-ending agnostic for Windows checkouts; that additional source change and the report/index updates are not covered by run #501. A new hosted workflow must pass on the updated PR head.
+This is an internal lifecycle correction. It adds no runtime dependency, public route/API/protocol, migration/schema, quota-policy change or SemVer increment. The PR is open and mergeable, but formal review submissions and inline review threads are currently absent. Run #501 qualifies the PR code head only. This follow-up also makes the generated tenant-inventory freshness comparison line-ending agnostic for Windows checkouts; that additional source change and the report/index updates are not covered by run #501. The updated branch head is `bac0813bcc82327790fb3fa1a4f347f56c42c093`. Hosted [run #503](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42766200232) passed all all six jobs passed, including consolidated evidence aggregation. Run #503 is a completed PR-head pass on exact SHA `bac0813bcc82327790fb3fa1a4f347f56c42c093`, but it is not post-merge mainline evidence.
 
 ### 3.3 Local engineering validation
 
@@ -82,6 +84,8 @@ The following local results are kept separate from hosted evidence:
 | Main SHA `267380be`, `npm run release:readiness -- --skip-tests` | 4 PASS, 1 PARTIAL, 1 BLOCKED, 14 MISSING_EVIDENCE, 4 NOT_RUN | The command deliberately skipped tests, artifact verification and integration execution. It is a diagnostic snapshot, not a complete readiness run. |
 | Main SHA `267380be`, supplemental local evidence | Fresh isolated `npm ci`, prior configured Playwright Chromium smoke, Memgraph replay/rebuild and local object-reconciliation dry run passed | These checks do not replace exact-SHA hosted integration, external provider acceptance or independent review. |
 | PR #115 plus this report follow-up, Windows / Node 26.12.1 | `npm run check`: 586 total; 583 passed; 0 failed; 3 Windows-specific skips. Artifact verification passed 233 required paths and syntax-checked 243 JavaScript files. | `node scripts/generate-tenant-isolation-route-inventory.js --check` now passes (27 families). The generator normalizes CRLF to LF when comparing generated output, avoiding a false stale result under `core.autocrlf=true`; generated inventory data, source/test hashes and anchors were not rewritten. The upstream PR local Redis suite (33/33) and PostgreSQL-backed multi-node Playwright spec (3/3) remain separate local evidence, not hosted acceptance. |
+
+The exact-HEAD local npm run release:readiness snapshot at `bac0813bcc82327790fb3fa1a4f347f56c42c093` reported **7 PASS, 2 PARTIAL, 1 BLOCKED, 14 MISSING_EVIDENCE, and 0 NOT_RUN**. It verified a clean source tree, Node.js 26.12.1, 18 migration files, the required-artifact syntax gate, and the current unit suites. Hub tests were 583/586 with zero failures and three Windows-specific skips; EnginEx was 91/94 with zero failures and three platform skips. The service-less integration command skipped all 34 tests. The fresh/upgrade database evidence gate remains BLOCKED until a successful evidence bundle is bound to this exact source revision; the 14 missing evidence records remain independent/provider/operations gates. This local run is not the hosted Node 22/24 matrix or production acceptance.
 
 The mainline local inventory failure was caused by strict generated-file text comparison treating a Windows CRLF checkout as different from canonical LF output. The PR follow-up now normalizes CRLF-to-LF on comparison; the canonical source/test digests already normalize line endings, and the checked-in generated data and anchors remain unchanged. The existing tenant-inventory freshness test exercises this path. Do not manually edit generated JSON or anchors. Do not carry ignored local readiness reports into a commit or treat a `--skip-tests` result as release certification.
 
@@ -166,7 +170,7 @@ No compatibility-breaking public API, route, protocol, dependency, database sche
 - **F1.20 acceptance:** **PARTIAL** on current main; PR #115 has green exact-head hosted evidence but is not merged.
 - **Production readiness:** **NO-GO / NOT_PRODUCTION_CERTIFIED**.
 - **Release owner:** approval pending; operational roles unassigned.
-- **Next blocking action:** formal maintainer review of [PR #115](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/115), then a fully green post-merge mainline run and exact-source evidence review.
+- **Next blocking action:** obtain formal maintainer review of [PR #115](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/115), then merge normally and require a fully green post-merge mainline run plus exact-source evidence review. PR-head run #503 has passed all six jobs, but no post-merge mainline run has yet qualified F1.20.
 
 ## 9. References
 
