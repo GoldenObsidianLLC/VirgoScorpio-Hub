@@ -4,8 +4,8 @@
 **Repository:** [GoldenObsidianLLC/VirgoScorpio-Hub](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub)
 **Candidate:** `0.6.2` — private, unreleased developer-preview candidate
 **Current main SHA:** `267380be1ba441f83408e2c63c042760ec662ac7`
-**Current PR #115 branch head:** `bac0813bcc82327790fb3fa1a4f347f56c42c093`
-**Latest PR workflow:** [run #503](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42766200232) — all six required jobs passed on exact PR head `bac0813bcc82327790fb3fa1a4f347f56c42c093`.
+**Last fully qualified PR #115 revision:** `bac0813bcc82327790fb3fa1a4f347f56c42c093`
+**Latest completed six-job PR workflow:** [run #503](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42766200232) — all six required jobs passed on exact PR head `bac0813bcc82327790fb3fa1a4f347f56c42c093`.
 **Current production decision:** **NO-GO — NOT_PRODUCTION_CERTIFIED**
 **Scope decision:** Technical recommendation only; authorized release-owner approval remains pending under [issue #13](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/13).
 
@@ -62,7 +62,7 @@ Run #495 therefore has **4/6 jobs passing**. The successful individual subtests 
 
 ### 3.2 Bounded Redis shutdown follow-up — PR #115
 
-PR #115 is based on the current main SHA and has code head `47e130c61eb867266699f6d76c39efe75dfde348`. Its exact-head hosted [run #501](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42756901512) passed **all six required jobs**:
+PR #115 is based on the current main SHA and has original lifecycle-fix revision `47e130c61eb867266699f6d76c39efe75dfde348`. Its original hosted [run #501](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42756901512) passed **all six required jobs**:
 
 - Node.js 22.23.4 and 24.22.1 each passed **586/586 Hub tests** and **94/94 EnginEx tests**; npm audit reported zero vulnerabilities.
 - The dedicated PostgreSQL/Memgraph suite passed **80/80** with zero skips; all **18/18 migrations** applied fresh and **18/18** were skipped on the idempotent second pass.
@@ -72,7 +72,7 @@ PR #115 is based on the current main SHA and has code head `47e130c61eb867266699
 
 The PR introduces one shared `closeRedisClient` lifecycle helper, reused by the real-time bridge, Redis presence adapter/service and Redis connection-quota adapter. Graceful `QUIT` is issued only when readiness is positively known (`isReady === true`, or explicit `isOpen === true` for compatibility clients without `isReady`). Open-but-reconnecting and unknown-readiness clients are destroyed without queuing `QUIT`. Graceful shutdown is bounded to one second before forced destruction; `destroy()` is preferred, with `disconnect()` fallback and safe asynchronous error reporting. Regression tests exercise ready, closed, unknown, reconnecting, rejected, timed-out and fallback paths.
 
-This is an internal lifecycle correction. It adds no runtime dependency, public route/API/protocol, migration/schema, quota-policy change or SemVer increment. The PR is open and mergeable, but formal review submissions and inline review threads are currently absent. Run #501 qualifies the PR code head only. This follow-up also makes the generated tenant-inventory freshness comparison line-ending agnostic for Windows checkouts; that additional source change and the report/index updates are not covered by run #501. The updated branch head is `bac0813bcc82327790fb3fa1a4f347f56c42c093`. Hosted [run #503](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42766200232) passed all all six jobs passed, including consolidated evidence aggregation. Run #503 is a completed PR-head pass on exact SHA `bac0813bcc82327790fb3fa1a4f347f56c42c093`, but it is not post-merge mainline evidence.
+This is an internal lifecycle correction. It adds no runtime dependency, public route/API/protocol, migration/schema, quota-policy change or SemVer increment. The PR is open and mergeable, but formal review submissions and inline review threads are currently absent. Run #501 qualifies the PR code head only. This follow-up also makes the generated tenant-inventory freshness comparison line-ending agnostic for Windows checkouts; that additional source change and the report/index updates are not covered by run #501. The updated branch head is `bac0813bcc82327790fb3fa1a4f347f56c42c093`. Hosted [run #503](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42766200232) passed all six required jobs, including consolidated evidence aggregation, on exact PR revision `bac0813bcc82327790fb3fa1a4f347f56c42c093`. This is PR evidence, not post-merge mainline evidence. A later report/status-only documentation synchronization commit followed run #503; it does not change runtime source, but it is not covered by #503 and must receive the normal PR checks before merge.
 
 ### 3.3 Local engineering validation
 
