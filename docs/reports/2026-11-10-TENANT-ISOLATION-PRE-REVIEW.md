@@ -2,8 +2,9 @@
 
 **Repository:** [GoldenObsidianLLC/VirgoScorpio-Hub](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub)
 **Candidate:** `0.6.2` — private, unreleased developer preview
-**Assessment branch:** `security/tenant-isolation-pre-review-2026-11-10`
-**Base main SHA:** `df1bf2b90d6eba96ec571a1ccab96f8d4354353f`
+**Merged assessment branch:** `security/tenant-isolation-pre-review-2026-11-10` (PR #116)
+**Branch base main SHA:** `df1bf2b90d6eba96ec571a1ccab96f8d4354353f`
+**Current main after PR #116:** `eb156b7620929ae94421caf69b4ddb92ed679812` — exact-mainline workflow [#517](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42855470069) passed 6/6 jobs, including 81/81 live PostgreSQL/Memgraph tests, zero failures and zero skips.
 **Production decision:** **NO-GO — NOT_PRODUCTION_CERTIFIED**
 
 ## 1. Executive summary
@@ -12,7 +13,7 @@ The F1.20 bounded Redis shutdown correction has merged through PR [#115](https:/
 
 That six-job PR result was followed by exact post-merge push workflow [#42771040503](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42771040503) on main SHA `df1bf2b90d6eba96ec571a1ccab96f8d4354353f`. It passed all six required jobs with source-bound evidence, including 80/80 live PostgreSQL/Memgraph tests, zero skips, migration idempotency, Redis-outage authorization Playwright and Memgraph recovery. F1.20 issue #113 is CLOSED / ACCEPTED for the developer-preview reliability scope.
 
-This continuation takes the next P0 development slice for issue [#14](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/14): add focused two-site, same-slug custom content-type registry and record isolation coverage, and extend the maintainer route/data-access inventory to expose relevant schema and database-query anchors. The result is review preparation, not independent security acceptance.
+The custom content-type isolation work described in this report is now merged through PR #116 at `eb156b7620929ae94421caf69b4ddb92ed679812`; exact-mainline workflow #517 passed all six jobs and 81/81 live PostgreSQL/Memgraph tests with zero failures and zero skips. This remains targeted maintainer regression evidence, not independent security acceptance. The next local development slice is cloud-connection A/B isolation under a `cloud:manage`-only actor; it is on an unmerged branch. Its focused live PostgreSQL parent passed **2/2**, and the full local PostgreSQL/Memgraph/Redis integration runner passed **81/81, zero failures, zero skips and zero TODOs** against a dedicated `virgoscorpio_hub_cloud_test` database, loopback Memgraph and temporary loopback-only Redis. The Redis container was stopped after testing. `npm run check` passed **583/586**, zero failures and three Windows-specific skips. These local dirty-worktree results ran on Node.js 26.12.1 and are not hosted exact-SHA evidence.
 
 ## 2. Development completed
 
@@ -61,6 +62,10 @@ The inventory remains curated maintainer metadata. It is not automatic route dis
 The local shell had no dedicated `DATABASE_URL` and did not set `VIRGOSCORPIO_HUB_RUN_POSTGRES_INTEGRATION=true`. The integration harness intentionally skips without its explicit disposable PostgreSQL/Memgraph setup; it refuses to infer a destructive test target from an application database. Hosted PR-head workflow [#42775446603](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42775446603) ran this scenario against CI-owned disposable PostgreSQL/Memgraph services; the dedicated suite passed 81/81 tests with zero failures or skips, including the new same-slug A/B test. A docs-only follow-up advanced the PR to exact head `492bd4e7b14228a12b7f8ad818370ad1e1dec6b8`; exact-head workflow [#42781938171](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42781938171) passed all six jobs, re-ran the 81/81 live suite and completed Redis-outage browser qualification, Memgraph recovery, CodeQL and consolidated evidence aggregation.
 
 The full repository `npm run check` subsequently passed on this worktree: artifact verification passed **235 required paths** and syntax-checked **243 JavaScript files**; the unit suite reported **586 total, 583 passed, 0 failed and 3 Windows-specific platform skips**. This command does not run the live PostgreSQL/Memgraph integration suite; hosted PR-head workflow [#42775446603](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42775446603) executed the new A/B live scenario against disposable services and passed the dedicated suite **81/81 with zero skips**. A docs-only follow-up advanced current PR head to `492bd4e7b14228a12b7f8ad818370ad1e1dec6b8`; exact-head workflow [#42781938171](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42781938171) then passed all six required jobs, including live integration and source-bound evidence aggregation. Final staged/diff review remains required before merge.
+
+### Cloud-connection regression — local validation on 10 November 2026
+
+The separate unmerged branch `security/cloud-connection-tenant-isolation-2026-11-10` adds a live A/B test for list isolation, foreign Site A IDs supplied to Site B `/test` and `/disable`, header/query/body/duplicate-query selector rejection, unchanged connection row state, and positive Site B controls with a role granting only `cloud:manage`. The focused PostgreSQL integration file passed **2/2, zero skips**. The complete local PostgreSQL/Memgraph/Redis integration runner passed **81/81, zero failures, zero skips and zero TODOs** against dedicated `virgoscorpio_hub_cloud_test`, Memgraph on loopback and a temporary loopback Redis container; the Redis container was stopped after the run. The local `npm run check` passed **583/586**, zero failures and three Windows-specific skips. All local validation ran on Node.js 26.12.1 against the uncommitted worktree, not a clean exact-SHA commit or hosted Node 22/24 CI. The fixture uses unresolved `vault://` references and makes no external provider calls.
 
 ## 4. Architecture and security boundaries preserved
 

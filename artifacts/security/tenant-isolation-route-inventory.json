@@ -35,7 +35,7 @@
   },
   "testTree": {
     "fileCount": 41,
-    "sha256": "8229627fc4faff74768c7211f4a1d06ec3bb469726086eba0c0281a11feab893",
+    "sha256": "7c9180b63d1bf3ea4a472fdd3928a1e3c4609e4ebd4d8bd2c605812ecd5f4e3e",
     "files": [
       "test/ai-queue-worker.test.js",
       "test/ai-task-queue.test.js",
@@ -1625,11 +1625,12 @@
       "tests": [
         "test/release-hardening.test.js",
         "test/security-boundaries.test.js",
-        "test/tenant-route-capabilities.test.js"
+        "test/tenant-route-capabilities.test.js",
+        "test/integration/tenant-isolation.integration.test.js"
       ],
       "coverage": {
         "level": "targeted",
-        "limits": "Unit tests constrain credentials and probes; site A/B connection IDOR, live least-privilege provider lifecycle and SSRF/egress controls remain open."
+        "limits": "Live PostgreSQL coverage verifies Site A/B listing isolation, non-disclosing 404s for foreign test/disable IDs, selector mismatch rejection with unchanged row state, and Site B positive controls using deliberately unresolved vault:// references so no provider calls occur. Real provider lifecycle, least-privilege provider IAM, egress/SSRF and live secret-manager behavior remain unverified."
       },
       "methods": [
         "GET",
