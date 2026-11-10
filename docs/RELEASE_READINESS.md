@@ -1,4 +1,12 @@
-## Current mainline snapshot — 9 November 2026 (0.6.2, PR #114 merged)
+## Current mainline snapshot — 10 November 2026 (0.6.2, PR #115 merged)
+
+Current `main` includes PR #115 at merge commit `df1bf2b90d6eba96ec571a1ccab96f8d4354353f`. Hosted [workflow run #509](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42767917251) passed all six required jobs on pre-merge PR head `44b087a7265c013cd75768f08c6828f6991d9113` (Node.js 22/24, PostgreSQL/Memgraph integration, browser smoke, CodeQL and consolidated evidence). This is successful PR-head CI, not a post-merge workflow for the exact main merge SHA. A separate exact-main run and source-bound evidence bundle for `df1bf2b...` have not yet been verified; F1.20 issue #113 remains OPEN until they are accepted.
+
+The P0 tenant-isolation pre-review added a two-site same-slug custom content-type registry/record scenario and expanded the maintainer inventory to 27 flow families, 78 declared route patterns, 21 implementation files and 41 test references. The local `npm run check` passed on the development branch: 235 required artifacts, 243 JavaScript files syntax-checked, 586 Hub tests (583 pass, 0 fail, 3 Windows-specific skips). The dedicated live PostgreSQL/Memgraph integration parent was skipped locally because no approved disposable test database was configured. The new A/B live scenario still requires hosted CI execution and does not close independent tenant-isolation issue #14.
+
+Current readiness remains **NOT_PRODUCTION_CERTIFIED / NO-GO**. The full automated check does not replace live provider acceptance, exact-main release evidence, independent tenant/security assessment (#14/#25), supply-chain review (#23), load/restore drills (#24), operations/rollback approval (#26), authorized release-scope approval (#13), or governance controls (#32). Package 0.6.2 remains private and unreleased; no SemVer bump, tag, publication or deployment is authorized.
+
+## Historical mainline snapshot — 9 November 2026 (0.6.2, PR #114 merged)
 
 Current `main` is VirgoScorpio Hub 0.6.2 at `267380be1ba441f83408e2c63c042760ec662ac7`, the merge commit for PR #114/F1.20. Hosted [mainline workflow run #495](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42700441554) completed with **4/6 required jobs successful**: Node.js 22.23.4 and 24.22.1, browser editor/accessibility smoke, and CodeQL passed; PostgreSQL/Memgraph integration and consolidated candidate evidence failed.
 

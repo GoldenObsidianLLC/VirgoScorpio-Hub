@@ -3,7 +3,7 @@
   "product": "VirgoScorpio Hub 0.6.2 (unreleased developer-preview candidate)",
   "purpose": "Maintainer-prepared route, capability, data-access, and regression-test navigation inventory for independent tenant/site-isolation review issue #14.",
   "status": "MAINTAINER_PREPARED_NOT_INDEPENDENTLY_REVIEWED",
-  "scopeNote": "The catalog is a curated route-family inventory. Source anchors are checked against the current files and line numbers are generated. Route patterns, capability descriptions, data-access notes, and test limitations remain maintainer-authored metadata; they are not inferred proofs of runtime behavior.",
+  "scopeNote": "The catalog is a curated route-family inventory. Source anchors are checked against the current files and line numbers are generated. Route patterns, capability descriptions, data-access notes, and test limitations remain maintainer-authored metadata; they are not inferred proofs of runtime behavior. Updated 10 November 2026 with targeted two-site custom content-type registry/record coverage; independent review remains outstanding.",
   "commonControls": [
     {
       "name": "Authentication and developer-token boundary",
@@ -374,16 +374,31 @@
             "const recordsMatch",
             "const recordMatch"
           ]
+        },
+        {
+          "file": "packages/db/src/postgres-store.js",
+          "anchors": [
+            "async getById({ siteId, id })",
+            "async getByIdForOwner({ siteId, id, actorId })",
+            "async listContent({ siteId, status = null, contentType = null, limit = 50, offset = 0, actorId = null })"
+          ]
+        },
+        {
+          "file": "database/migrations/0001_initial.sql",
+          "anchors": [
+            "CREATE TABLE IF NOT EXISTS content_type_definitions ("
+          ]
         }
       ],
       "tests": [
         "test/content-type-routes.test.js",
         "test/content-owner-store.test.js",
-        "test/api.test.js"
+        "test/api.test.js",
+        "test/integration/tenant-content-object-isolation.integration.test.js"
       ],
       "coverage": {
-        "level": "targeted",
-        "limits": "Unit and composition tests exercise authorization ordering and own-only storage lookups. Two-site same-slug, foreign record IDs, search/count leakage and all mutation paths require reviewer expansion."
+        "level": "targeted-two-site-same-slug-registry-and-record-isolation",
+        "limits": "Live PostgreSQL A/B coverage now creates same-slug admin definitions in two sites, creates the Site B definition and record through the API, proves the Site B registry/list/detail responses use only Site B definitions and records, hides a foreign Site A record ID as 404 without content disclosure, and rejects conflicting query/body site selectors before mutation. Unit tests also verify content:read:own list/detail owner filters at the storage boundary. Independent review must still enumerate every method and test definition update/deactivation, concurrent versioning, role/owner combinations, search/count behavior, and all mutation/side-effect paths."
       },
       "methods": [
         "GET",
