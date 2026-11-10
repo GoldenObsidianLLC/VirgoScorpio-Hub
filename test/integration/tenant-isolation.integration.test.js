@@ -23,6 +23,7 @@ test(
     const siteIds = [];
     const userIds = [];
     let roleId = null;
+    let cloudRoleId = null;
     let server = null;
 
     const env = {
@@ -54,6 +55,9 @@ test(
       }
       if (roleId) {
         await pool.query('DELETE FROM roles WHERE id = $1', [roleId]).catch(() => {});
+      }
+      if (cloudRoleId) {
+        await pool.query('DELETE FROM roles WHERE id = $1', [cloudRoleId]).catch(() => {});
       }
       await pool.end();
     });
@@ -309,5 +313,174 @@ test(
       assert.equal(payload.code, 'ERR_VIRGOSCORPIO_HUB_SITE_CONTEXT_MISMATCH');
     }
     assert.deepEqual(await configurationSnapshot(), configurationBefore, 'selector mismatches must not create or mutate tenant configuration records');
+
+    await t.test('cloud connection IDs and selector conflicts remain tenant-scoped for a least-privilege cloud manager', async () => {
+      const cloudRoleResult = await pool.query(
+        'INSERT INTO roles(slug, label, capabilities) VALUES($1, $2, $3::jsonb) RETURNING id',
+        [`tenant-cloud-${randomUUID().slice(0, 10)}`, 'Tenant Cloud Manager', JSON.stringify(['cloud:manage'])]
+      );
+      cloudRoleId = cloudRoleResult.rows[0].id;
+
+      const cloudActorResult = await pool.query(
+        `INSERT INTO users(email, display_name, password_hash, status)
+         VALUES($1, $2, $3, 'active') RETURNING id, email`,
+        [`tenant-cloud-actor-${randomUUID()}@example.test`, 'Site B Cloud Manager', await hashPassword(password)]
+      );
+      const cloudActor = cloudActorResult.rows[0];
+      userIds.push(cloudActor.id);
+      await pool.query(
+        'INSERT INTO site_memberships(site_id, user_id, role_id) VALUES($1, $2, $3)',
+        [siteB, cloudActor.id, cloudRoleId]
+      );
+
+      const cloudSession = await identity.login({
+        email: cloudActor.email,
+        password,
+        ip: '127.0.0.1',
+        userAgent: 'tenant-cloud-connection-isolation-test',
+      });
+      assert.equal(cloudSession.mfaRequired, false);
+
+      const seedConnection = async ({ siteId, name, status, lastHealthCheckAt }) => {
+        const result = await pool.query(
+          `INSERT INTO cloud_connections(
+             site_id, provider, name, config, credential_reference, status,
+             last_health_check_at, created_at, updated_at
+           )
+           VALUES($1, 's3-compatible', $2, $3::jsonb, $4, $5, $6, $7, $7)
+           RETURNING id`,
+          [
+            siteId,
+            name,
+            JSON.stringify({ bucket: name.toLowerCase().replace(/[^a-z0-9-]/g, '-') }),
+            `vault://unresolved-test-reference/${siteId}`,
+            status,
+            lastHealthCheckAt,
+            new Date('2026-11-09T12:30:00.000Z'),
+          ]
+        );
+        return result.rows[0].id;
+      };
+
+      // Deliberately unresolved references ensure this regression test never
+      // contacts an external provider, even for the positive Site B control.
+      const siteAConnectionId = await seedConnection({
+        siteId: siteA,
+        name: 'Site A Private Cloud Connection',
+        status: 'healthy',
+        lastHealthCheckAt: new Date('2026-11-09T12:00:00.000Z'),
+      });
+      const siteBConnectionId = await seedConnection({
+        siteId: siteB,
+        name: 'Site B Own Cloud Connection',
+        status: 'configured',
+        lastHealthCheckAt: null,
+      });
+
+      const cloudHeaders = { authorization: `Bearer ${cloudSession.token}` };
+      const snapshot = async (siteId, connectionId) => {
+        const result = await pool.query(
+          `SELECT id, site_id, provider, name, config, credential_reference,
+                  status, last_health_check_at, created_at, updated_at
+             FROM cloud_connections
+            WHERE site_id = $1 AND id = $2`,
+          [siteId, connectionId]
+        );
+        return result.rows[0] || null;
+      };
+      const siteABefore = await snapshot(siteA, siteAConnectionId);
+      const siteBBefore = await snapshot(siteB, siteBConnectionId);
+      assert.ok(siteABefore, 'Site A connection must exist before adversarial requests');
+      assert.ok(siteBBefore, 'Site B positive-control connection must exist');
+
+      const listing = await fetch(`${base}/api/v1/sites/${siteB}/cloud/connections`, {
+        headers: cloudHeaders,
+      });
+      assert.equal(listing.status, 200);
+      const listedConnections = (await listing.json()).connections;
+      assert.deepEqual(listedConnections.map(connection => connection.id), [siteBConnectionId]);
+      assert.equal(JSON.stringify(listedConnections).includes(siteABefore.name), false);
+      assert.equal(JSON.stringify(listedConnections).includes(siteABefore.credential_reference), false);
+
+      for (const action of ['test', 'disable']) {
+        const response = await fetch(
+          `${base}/api/v1/sites/${siteB}/cloud/connections/${siteAConnectionId}/${action}`,
+          { method: 'POST', headers: cloudHeaders, body: '{}' }
+        );
+        const payload = await response.json();
+        assert.equal(response.status, 404, `Site B must not ${action} a Site A connection ID`);
+        assert.equal(payload.code, 'ERR_VIRGOSCORPIO_HUB_CLOUD_CONNECTION_NOT_FOUND');
+        assert.doesNotMatch(JSON.stringify(payload), /Site A Private Cloud Connection|vault:\/\//);
+        assert.deepEqual(await snapshot(siteA, siteAConnectionId), siteABefore);
+      }
+
+      const selectorCases = [
+        {
+          name: 'header selector',
+          url: `${base}/api/v1/sites/${siteB}/cloud/connections/${siteBConnectionId}/test`,
+          headers: { 'x-virgoscorpio-hub-site-id': siteA },
+          body: {},
+        },
+        {
+          name: 'query selector',
+          url: `${base}/api/v1/sites/${siteB}/cloud/connections/${siteBConnectionId}/test?siteId=${siteA}`,
+          headers: {},
+          body: {},
+        },
+        {
+          name: 'body selector',
+          url: `${base}/api/v1/sites/${siteB}/cloud/connections/${siteBConnectionId}/test`,
+          headers: {},
+          body: { siteId: siteA },
+        },
+        {
+          name: 'duplicate query selectors',
+          url: `${base}/api/v1/sites/${siteB}/cloud/connections/${siteBConnectionId}/test?siteId=${siteB}&siteId=${siteB}`,
+          headers: {},
+          body: {},
+        },
+      ];
+
+      for (const scenario of selectorCases) {
+        const response = await fetch(scenario.url, {
+          method: 'POST',
+          headers: {
+            ...cloudHeaders,
+            ...scenario.headers,
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify(scenario.body),
+        });
+        const payload = await response.json();
+        assert.equal(response.status, 400, `${scenario.name} must be rejected before connection actions`);
+        assert.equal(payload.code, 'ERR_VIRGOSCORPIO_HUB_SITE_CONTEXT_MISMATCH');
+        assert.deepEqual(await snapshot(siteA, siteAConnectionId), siteABefore);
+        assert.deepEqual(await snapshot(siteB, siteBConnectionId), siteBBefore);
+      }
+
+      const ownTest = await fetch(
+        `${base}/api/v1/sites/${siteB}/cloud/connections/${siteBConnectionId}/test`,
+        { method: 'POST', headers: cloudHeaders, body: '{}' }
+      );
+      assert.equal(ownTest.status, 200, 'Site B can test its own connection');
+      const ownTestPayload = await ownTest.json();
+      assert.equal(ownTestPayload.test.credentialReferenceConfigured, false);
+      assert.equal(ownTestPayload.test.credentialReferenceMode, 'unsupported');
+      assert.equal(ownTestPayload.test.liveProbeAttempted, false);
+      assert.equal(ownTestPayload.test.liveObjectStoreOperationPerformed, false);
+
+      const siteBAfterTest = await snapshot(siteB, siteBConnectionId);
+      assert.equal(siteBAfterTest.status, 'unhealthy');
+      assert.ok(siteBAfterTest.last_health_check_at, 'a legitimate own-site test updates its health timestamp');
+
+      const ownDisable = await fetch(
+        `${base}/api/v1/sites/${siteB}/cloud/connections/${siteBConnectionId}/disable`,
+        { method: 'POST', headers: cloudHeaders, body: '{}' }
+      );
+      assert.equal(ownDisable.status, 200, 'Site B can disable its own connection');
+      assert.equal((await ownDisable.json()).connection.status, 'disabled');
+      assert.equal((await snapshot(siteB, siteBConnectionId)).status, 'disabled');
+      assert.deepEqual(await snapshot(siteA, siteAConnectionId), siteABefore);
+    });
   }
 );

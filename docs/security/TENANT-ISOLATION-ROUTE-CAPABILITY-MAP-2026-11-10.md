@@ -9,7 +9,7 @@ Maintainer-prepared route, capability, data-access, and regression-test navigati
 - Status: MAINTAINER_PREPARED_NOT_INDEPENDENTLY_REVIEWED.
 - Generated from the current working-tree implementation anchors and the catalog at docs/security/tenant-isolation-route-inventory.catalog.json.
 - Implementation-source digest: 764475f6561a4a613c10dd133130f0fb91cb950cc9cec8ac3eb0a7c915e33bd4 across 21 files.
-- Referenced-test digest: 8229627fc4faff74768c7211f4a1d06ec3bb469726086eba0c0281a11feab893 across 41 files.
+- Referenced-test digest: 7c9180b63d1bf3ea4a472fdd3928a1e3c4609e4ebd4d8bd2c605812ecd5f4e3e across 41 files.
 - Inventory size: 27 route/flow families, 78 declared route patterns, 21 source files, and 41 test files.
 - Regenerate with npm run security:tenant-inventory; CI checks freshness with node scripts/generate-tenant-isolation-route-inventory.js --check.
 
@@ -338,8 +338,8 @@ Tests: test/content-type-routes.test.js, test/collaboration-api.test.js, test/re
 - Data-access boundary: cloud_connections; secret-manager credential references; object-storage provider adapters
 - Side effects: Configuration writes; Read-only provider probe; Connection status/health timestamp update
 - Source: apps/api/src/platform-routes.js (lines 78)
-- Test references: test/release-hardening.test.js, test/security-boundaries.test.js, test/tenant-route-capabilities.test.js
-- Coverage characterization: **targeted**. Unit tests constrain credentials and probes; site A/B connection IDOR, live least-privilege provider lifecycle and SSRF/egress controls remain open.
+- Test references: test/release-hardening.test.js, test/security-boundaries.test.js, test/tenant-route-capabilities.test.js, test/integration/tenant-isolation.integration.test.js
+- Coverage characterization: **targeted**. Live PostgreSQL coverage verifies Site A/B listing isolation, non-disclosing 404s for foreign test/disable IDs, selector mismatch rejection with unchanged row state, and Site B positive controls using deliberately unresolved vault:// references so no provider calls occur. Real provider lifecycle, least-privilege provider IAM, egress/SSRF and live secret-manager behavior remain unverified.
 
 ### 21. Mega-menu configuration
 
