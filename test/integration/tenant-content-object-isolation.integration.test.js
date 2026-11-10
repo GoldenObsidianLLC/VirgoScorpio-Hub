@@ -357,6 +357,113 @@ test(
         { event_type: 'taxonomy.delete', aggregate_version: updated.version + 1, site_id: siteB, actor_id: actor.id, classification: 'site-private', payload_site_id: siteB, payload_status: 'deleted', hasCorrelation: true },
       ]);
     });
+    await t.test('custom content type registry and records remain isolated between sites with the same slug', async () => {
+      const slug = 'tenant-portfolio-' + randomUUID().slice(0, 8);
+      const siteALabel = 'Site A Private Portfolio Definition';
+      const siteBLabel = 'Site B Portfolio Definition';
+      const definition = label => ({
+        apiVersion: 1,
+        name: slug,
+        label,
+        version: 1,
+        source: 'admin',
+        fields: [{ name: 'title', type: 'string', required: true, maxLength: 180 }],
+        capabilities: ['read', 'create', 'edit'],
+        publicationPolicy: 'review-required',
+      });
+
+      // Site A owns an admin definition with the same slug used by Site B.
+      // The Site B actor must never learn its label or schema through Site B routes.
+      const siteADefinition = definition(siteALabel);
+      await pool.query(
+        `INSERT INTO content_type_definitions(site_id,slug,label,version,source,active,definition)
+         VALUES($1,$2,$3,1,'admin',true,$4::jsonb)`,
+        [siteA, slug, siteALabel, JSON.stringify(siteADefinition)]
+      );
+
+      const createdDefinition = await fetch(base + '/api/v1/content-types', {
+        method: 'POST',
+        headers: { ...headers, 'content-type': 'application/json' },
+        body: JSON.stringify({ definition: definition(siteBLabel) }),
+      });
+      assert.equal(createdDefinition.status, 201, 'the Site B administrator can create its own same-slug definition');
+      const createdDefinitionBody = await createdDefinition.json();
+      assert.equal(createdDefinitionBody.definition.name, slug);
+      assert.equal(createdDefinitionBody.definition.label, siteBLabel);
+
+      const registryResponse = await fetch(base + '/api/v1/content-types', { headers });
+      assert.equal(registryResponse.status, 200);
+      const registry = await registryResponse.json();
+      const visibleDefinition = registry.definitions.find(item => item.name === slug);
+      assert.equal(visibleDefinition?.label, siteBLabel);
+      assert.equal(JSON.stringify(registry).includes(siteALabel), false, 'registry reads must not disclose another site definition');
+      assert.equal(registry.conflicts.includes(slug), false, 'a same-slug definition in another site is not a conflict');
+
+      const foreignTitle = 'Site A Private Custom Record ' + randomUUID();
+      const foreignRecord = await store.saveDraft({
+        siteId: siteA,
+        title: foreignTitle,
+        slug: 'site-a-portfolio-' + randomUUID().slice(0, 8),
+        locale: 'en',
+        contentType: slug,
+        document: {
+          schemaVersion: 1,
+          documentType: 'custom:' + slug,
+          fields: { title: foreignTitle },
+        },
+        authorId,
+        note: 'tenant custom content type isolation fixture',
+      });
+
+      const ownTitle = 'Site B Portfolio Record ' + randomUUID();
+      const createdRecordResponse = await fetch(base + '/api/v1/content-types/' + slug + '/records', {
+        method: 'POST',
+        headers: { ...headers, 'content-type': 'application/json' },
+        body: JSON.stringify({ title: ownTitle, values: { title: ownTitle } }),
+      });
+      assert.equal(createdRecordResponse.status, 201);
+      const createdRecord = (await createdRecordResponse.json()).record;
+      assert.ok(createdRecord?.id);
+      assert.equal(createdRecord.site_id, siteB);
+
+      const listResponse = await fetch(base + '/api/v1/content-types/' + slug + '/records?limit=100', { headers });
+      assert.equal(listResponse.status, 200);
+      const listed = (await listResponse.json()).items;
+      assert.ok(listed.some(item => item.id === createdRecord.id), 'Site B record must remain visible to its owner');
+      assert.equal(listed.some(item => item.id === foreignRecord.id), false, 'Site B list must exclude Site A records even when the type slug matches');
+      assert.equal(JSON.stringify(listed).includes(foreignTitle), false, 'list responses must not disclose Site A record content');
+
+      const foreignRead = await fetch(base + '/api/v1/content-types/' + slug + '/records/' + foreignRecord.id, { headers });
+      assert.equal(foreignRead.status, 404, 'foreign record IDs must be indistinguishable from absent records in Site B');
+      const foreignPayload = await foreignRead.json();
+      assert.equal(JSON.stringify(foreignPayload).includes(foreignTitle), false);
+      assert.equal(JSON.stringify(foreignPayload).includes(siteALabel), false);
+
+      const ownRead = await fetch(base + '/api/v1/content-types/' + slug + '/records/' + createdRecord.id, { headers });
+      assert.equal(ownRead.status, 200, 'Site B record detail remains available');
+      const ownPayload = await ownRead.json();
+      assert.equal(ownPayload.record.id, createdRecord.id);
+      assert.equal(ownPayload.record.site_id, siteB);
+      assert.equal(ownPayload.definition.label, siteBLabel);
+
+      const conflictingRegistryRead = await fetch(base + '/api/v1/content-types?siteId=' + siteA, { headers });
+      assert.equal(conflictingRegistryRead.status, 400, 'registry reads must reject a conflicting site selector');
+      assert.equal((await conflictingRegistryRead.json()).code, 'ERR_VIRGOSCORPIO_HUB_SITE_CONTEXT_MISMATCH');
+
+      const rejectedTitle = 'Must Not Persist ' + randomUUID();
+      const conflictingRecordWrite = await fetch(base + '/api/v1/content-types/' + slug + '/records', {
+        method: 'POST',
+        headers: { ...headers, 'content-type': 'application/json' },
+        body: JSON.stringify({ siteId: siteA, title: rejectedTitle, values: { title: rejectedTitle } }),
+      });
+      assert.equal(conflictingRecordWrite.status, 400, 'record writes must reject a conflicting body site selector');
+      assert.equal((await conflictingRecordWrite.json()).code, 'ERR_VIRGOSCORPIO_HUB_SITE_CONTEXT_MISMATCH');
+      const rejectedWrite = await pool.query(
+        'SELECT id FROM content_items WHERE site_id=$1 AND content_type=$2 AND title=$3 AND deleted_at IS NULL',
+        [siteB, slug, rejectedTitle]
+      );
+      assert.equal(rejectedWrite.rowCount, 0, 'rejected cross-site writes must not persist content');
+    });
     const cases = [
       {
         name: 'page read',
