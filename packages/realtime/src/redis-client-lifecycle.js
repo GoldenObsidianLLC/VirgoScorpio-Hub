@@ -28,8 +28,10 @@ function destroyRedisClient(client, onError) {
  * Close an owned Redis client without allowing reconnect-time QUIT to stall
  * application shutdown indefinitely. `isReady`, not merely `isOpen`, is the
  * graceful-QUIT boundary for node-redis clients that remain open while
- * reconnecting. Older/compatibility clients without `isReady` fall back to
- * `isOpen`. The forced path uses destroy()/disconnect() and never queues QUIT.
+ * reconnecting. Older/compatibility clients without `isReady` use an
+ * explicitly true `isOpen` flag as the fallback readiness signal; unknown
+ * readiness fails closed to destruction. The forced path uses
+ * destroy()/disconnect() and never queues QUIT.
  *
  * @returns {Promise<'noop' | 'quit' | 'destroyed'>}
  */
@@ -45,10 +47,11 @@ async function closeRedisClient(client, {
   }
   if (!client || (typeof client !== 'object' && typeof client !== 'function')) return 'noop';
 
-  const isOpen = typeof client.isOpen === 'boolean' ? client.isOpen : true;
-  if (!isOpen) return 'noop';
+  if (client.isOpen === false) return 'noop';
 
-  const isReady = typeof client.isReady === 'boolean' ? client.isReady : isOpen;
+  const isReady = typeof client.isReady === 'boolean'
+    ? client.isReady
+    : client.isOpen === true;
   if (!isReady || typeof client.quit !== 'function') {
     destroyRedisClient(client, onError);
     return 'destroyed';

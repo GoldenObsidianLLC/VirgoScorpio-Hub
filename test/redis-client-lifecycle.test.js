@@ -92,6 +92,21 @@ test('Redis shutdown is a no-op for an already closed client', async () => {
   assert.equal(client.destroyCalls, 0);
 });
 
+test('Redis shutdown destroys clients when neither readiness flag provides a safe signal', async () => {
+  const client = {
+    quitCalls: 0,
+    destroyCalls: 0,
+    async quit() { this.quitCalls += 1; },
+    destroy() { this.destroyCalls += 1; }
+  };
+
+  const result = await closeRedisClient(client);
+
+  assert.equal(result, 'destroyed');
+  assert.equal(client.quitCalls, 0);
+  assert.equal(client.destroyCalls, 1);
+});
+
 test('Redis shutdown preserves compatibility with clients that expose isOpen but not isReady', async () => {
   const client = {
     isOpen: true,
@@ -103,6 +118,27 @@ test('Redis shutdown preserves compatibility with clients that expose isOpen but
 
   assert.equal(result, 'quit');
   assert.equal(client.quitCalls, 1);
+});
+
+test('Redis shutdown reports a rejected disconnect fallback without rejecting close', async () => {
+  const failure = Object.assign(new Error('disconnect failed'), { code: 'ECONNRESET' });
+  const client = {
+    isOpen: true,
+    isReady: false,
+    disconnectCalls: 0,
+    disconnect() {
+      this.disconnectCalls += 1;
+      return Promise.reject(failure);
+    }
+  };
+  const reported = [];
+
+  const result = await closeRedisClient(client, { onError: error => reported.push(error) });
+  await new Promise(resolve => setImmediate(resolve));
+
+  assert.equal(result, 'destroyed');
+  assert.equal(client.disconnectCalls, 1);
+  assert.deepEqual(reported, [failure]);
 });
 
 test('Redis shutdown validates its timeout and error callback', async () => {
