@@ -10,7 +10,7 @@
 
 The F1.20 bounded Redis shutdown correction has merged through PR [#115](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/115) at main commit `df1bf2b90d6eba96ec571a1ccab96f8d4354353f`. Hosted PR-head [workflow run #509](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42767917251) passed all six required jobs on pre-merge head `44b087a7265c013cd75768f08c6828f6991d9113` (Node.js 22/24, PostgreSQL/Memgraph integration, browser smoke, CodeQL and consolidated evidence).
 
-That six-job result is PR-head evidence. A separate passing workflow and accepted exact-source evidence bundle for the resulting main merge SHA have not yet been confirmed in this assessment. Keep F1.20 issue [#113](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/113) OPEN until that post-merge evidence is verified.
+That six-job PR result was followed by exact post-merge push workflow [#42771040503](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42771040503) on main SHA `df1bf2b90d6eba96ec571a1ccab96f8d4354353f`. It passed all six required jobs with source-bound evidence, including 80/80 live PostgreSQL/Memgraph tests, zero skips, migration idempotency, Redis-outage authorization Playwright and Memgraph recovery. F1.20 issue #113 is CLOSED / ACCEPTED for the developer-preview reliability scope.
 
 This continuation takes the next P0 development slice for issue [#14](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/14): add focused two-site, same-slug custom content-type registry and record isolation coverage, and extend the maintainer route/data-access inventory to expose relevant schema and database-query anchors. The result is review preparation, not independent security acceptance.
 
@@ -58,9 +58,9 @@ The inventory remains curated maintainer metadata. It is not automatic route dis
 | `node --check test/integration/tenant-content-object-isolation.integration.test.js` | **PASS** | Syntax only. |
 | `node --test test/content-type-routes.test.js test/integration/tenant-content-object-isolation.integration.test.js` | **19 passed, 0 failed, 1 skipped** | The skipped result is the parent live PostgreSQL integration test. The new A/B live scenario did not execute locally. |
 
-The local shell had no dedicated `DATABASE_URL` and did not set `VIRGOSCORPIO_HUB_RUN_POSTGRES_INTEGRATION=true`. The integration harness intentionally skips without its explicit disposable PostgreSQL/Memgraph setup; it refuses to infer a destructive test target from an application database. Therefore the new live A/B scenario still requires the hosted `npm run test:integration:live` path against CI-owned disposable services.
+The local shell had no dedicated `DATABASE_URL` and did not set `VIRGOSCORPIO_HUB_RUN_POSTGRES_INTEGRATION=true`. The integration harness intentionally skips without its explicit disposable PostgreSQL/Memgraph setup; it refuses to infer a destructive test target from an application database. Hosted PR-head workflow [#42775446603](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42775446603) has since run this scenario against CI-owned disposable PostgreSQL/Memgraph services; the dedicated suite passed 81/81 tests with zero failures or skips, explicitly including the new same-slug A/B test.
 
-The full repository `npm run check` subsequently passed on this worktree: artifact verification passed **235 required paths** and syntax-checked **243 JavaScript files**; the unit suite reported **586 total, 583 passed, 0 failed and 3 Windows-specific platform skips**. This command does not run the live PostgreSQL/Memgraph integration suite, so the new two-site A/B live scenario still requires CI execution against disposable services. Final staged/diff review remains required before merge.
+The full repository `npm run check` subsequently passed on this worktree: artifact verification passed **235 required paths** and syntax-checked **243 JavaScript files**; the unit suite reported **586 total, 583 passed, 0 failed and 3 Windows-specific platform skips**. This command does not run the live PostgreSQL/Memgraph integration suite; hosted PR-head workflow [#42775446603](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42775446603) has since executed the new A/B live scenario against disposable services and passed the dedicated suite **81/81 with zero skips**. Final staged/diff review remains required before merge.
 
 ## 4. Architecture and security boundaries preserved
 
@@ -82,7 +82,7 @@ Issue #14 remains **OPEN / NOT PERFORMED**. The new scenario covers a useful gap
 
 Do not write `artifacts/evidence/tenant-isolation-review.json` from maintainer tests or this inventory. That evidence belongs to a completed independent review.
 
-Other production blockers remain open: #13 (authorized preview scope), #23 (human dependency/SBOM/provenance review), #24 (load/soak/fault injection/backup-restore), #25 (independent security assessment), #26 (operations/rollback/ownership) and #32 (governance and capital controls). F1.20 #113 also remains open pending exact-mainline qualification after the #115 merge.
+Other production blockers remain open: #13 (authorized preview scope), #23 (human dependency/SBOM/provenance review), #24 (load/soak/fault injection/backup-restore), #25 (independent security assessment), #26 (operations/rollback/ownership) and #32 (governance and capital controls). F1.20 #113 is CLOSED / ACCEPTED following exact-mainline source-bound workflow #42771040503.
 
 ## 6. Release and SemVer disposition
 

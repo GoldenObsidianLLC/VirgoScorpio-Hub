@@ -1,4 +1,4 @@
-# VirgoScorpio Hub 0.5.1 — Independent Tenant-Isolation Assessment Brief
+# VirgoScorpio Hub — Independent Tenant-Isolation Assessment Brief
 
 **Purpose:** commission and guide the independent application-security review tracked by [GitHub issue #14](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/14).
 
@@ -9,8 +9,11 @@
 | Field | Value |
 |---|---|
 | Repository | `GoldenObsidianLLC/VirgoScorpio-Hub` |
-| Product version | `0.5.1` |
-| Pre-packet application-source baseline | `ab55892dc33b87d8be4165e13931cd6888f358a1` |
+| Product version | `0.6.2` (private, unreleased developer-preview candidate) |
+| Historical pre-packet application-source baseline (0.5.1) | `ab55892dc33b87d8be4165e13931cd6888f358a1` |
+| Current main baseline for the 0.6.2 review hand-off | `df1bf2b90d6eba96ec571a1ccab96f8d4354353f` |
+| Current targeted review PR | [#116](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/116), head `2bf838a0c28f1debd57eca8565b8f27d6c7b91e7` |
+| Hosted targeted A/B evidence | [workflow #42775446603](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42775446603), 81/81 live PostgreSQL/Memgraph tests, zero skips |
 | Candidate branch | `main` |
 | Formal gate | `tenant-isolation-review` |
 | Evidence destination after completion | `artifacts/evidence/tenant-isolation-review.json` |
@@ -18,7 +21,7 @@
 | Technical plan | [docs/PRODUCTION-CERTIFICATION-PLAN.md](../PRODUCTION-CERTIFICATION-PLAN.md) |
 | Scope proposal | [docs/RELEASE-SCOPE.md](../RELEASE-SCOPE.md) |
 
-The SHA above is the application-source baseline before the assessor packet was added. The prior release-scope and assessor-packet changes were documentation-only, but the assessor must independently verify this by comparing application source on current `main` with the baseline above. For the actual assessment, check out a clean current `main`, run `git rev-parse HEAD`, and record that exact full SHA in the assessor's report. If application source differs from the baseline, include those changes in the review scope. The final report and machine-readable evidence must identify exactly the commit actually reviewed. The readiness validator rejects a passing evidence record when its `commit` differs from current Git HEAD, so populate that field from the final reviewed checkout rather than copying a stale SHA from this hand-off document.
+The original `ab55892...` SHA is retained solely as the historical 0.5.1 pre-packet baseline. The current 0.6.2 main baseline is `df1bf2b90d6eba96ec571a1ccab96f8d4354353f`; PR #116 is a maintainer-authored targeted regression branch based on that SHA, not the final review baseline. For the actual independent assessment, check out the current intended review target, run `git rev-parse HEAD`, and record that exact full SHA in the assessor's report. Include all changes since the prior baseline in scope. The final report and machine-readable evidence must identify exactly the commit actually reviewed. The readiness validator rejects a passing evidence record when its `commit` differs from current Git HEAD, so populate that field from the final reviewed checkout rather than copying a stale SHA from this hand-off document.
 
 The reconciled 0.6.2 scope recommendation is documented in [RELEASE-SCOPE.md](../RELEASE-SCOPE.md) against mainline SHA `36220abf4ebcc629fa616961879f5a2ffe1f847d`. Named authorized product/release-owner approval remains pending in issue #13. That product decision is separate from this technical review. Do not infer scope approval or production readiness from this packet.
 
@@ -232,16 +235,16 @@ Do not set `status` to `passed` while findings, retests, coverage, independence,
 - [ ] Signed report and sanitized retained artifacts stored.
 - [ ] Evidence JSON accepted and gate re-evaluated on the exact clean candidate revision.
 
-**Current handoff state:** no independent reviewer is assigned and no independent review result exists. Issue #14 remains open. VirgoScorpio Hub 0.5.1 remains `NOT_PRODUCTION_CERTIFIED` / NO-GO.
-## 9. Current 0.6.2 maintainer inventory supplement - 7 November 2026
+**Current handoff state — 10 November 2026:** no independent reviewer is assigned and no independent review result exists. Issue #14 remains OPEN / NOT PERFORMED. The current candidate is VirgoScorpio Hub 0.6.2 (private, unreleased developer preview), and production remains `NOT_PRODUCTION_CERTIFIED` / NO-GO. The current main and PR #116 review baselines are recorded in section 14 below.
+## 9. Historical 0.6.2 maintainer inventory snapshot — 7 November 2026
 
-The earlier 0.5.1 source map and historical review notes above are retained as historical records. For current 0.6.2 review preparation, use the generated [Tenant-Isolation Route and Data-Access Inventory](../security/TENANT-ISOLATION-ROUTE-CAPABILITY-MAP-2026-11-07.md) and machine-readable [inventory JSON](../../artifacts/security/tenant-isolation-route-inventory.json). The generator validates source anchors, refreshes line numbers, records implementation/test file digests, and fails CI when the generated files become stale.
+The earlier 0.5.1 source map and 7 November 2026 inventory are historical records. At that snapshot, the generated [7 November Tenant-Isolation Route and Data-Access Inventory](../security/TENANT-ISOLATION-ROUTE-CAPABILITY-MAP-2026-11-07.md) and machine-readable [inventory JSON](../../artifacts/security/tenant-isolation-route-inventory.json) served as maintainer review-preparation aids. For current 0.6.2 scope, use the 10 November hand-off in section 14 and current generated map `../security/TENANT-ISOLATION-ROUTE-CAPABILITY-MAP-2026-11-10.md`. The generator validates source anchors, refreshes line numbers, records implementation/test file digests, and fails CI when the generated files become stale.
 
 The current inventory is a curated maintainer navigation aid. It is not an independent route enumeration, runtime security proof, reviewer report, pass, or the formal evidence record. It deliberately identifies direct path-site capability routes separately from siteIdFor-based routes and records asynchronous, public, provider-callback, storage and realtime boundaries. The reviewer must independently enumerate the deployed routes and handlers, trace each data/side-effect path, execute the issue #14 adversarial matrix, and record the exact full commit SHA and environment.
 
 Mainline at inventory preparation: f601a8c124b9c2b266cb847dcb7b3b0daab30952. The application-source digest and test-source digest are in the generated JSON; the reviewer must still run git rev-parse HEAD on their own clean assessment checkout. The inventory's CI freshness test confirms only that the source anchors and referenced test files exist, not that all route behavior is safe or that the referenced tests passed.
 
-**Current gate disposition remains OPEN / NOT PERFORMED.** No independent reviewer is assigned, no passing artifacts/evidence/tenant-isolation-review.json exists, and the broader independent security issue #25 remains open. This supplement does not change production status: NO-GO / NOT_PRODUCTION_CERTIFIED.
+**Gate disposition at the 7 November snapshot: OPEN / NOT PERFORMED.** No independent reviewer was assigned at that snapshot and no passing `artifacts/evidence/tenant-isolation-review.json` existed. The current 10 November review hand-off and gate disposition are maintained in section 14; issue #14 remains OPEN / NOT PERFORMED, and broader independent security issue #25 remains open. Production remains NO-GO / NOT_PRODUCTION_CERTIFIED.
 
 
 ## 10. Membership route selector-consistency follow-up - PR #88 merged, 7 November 2026
@@ -270,3 +273,17 @@ Targeted tests exercise header/query mismatch across presence/SSE/WebSocket and 
 The PR #91 candidate based on mainline 58b6b9707f9d63a08f55b15b0f0ee2489bdf3ef5 adds a live PostgreSQL A/B route test for mega-menu collection/item operations. It seeds the same slug in two sites, verifies a Site A owner cannot list/update/delete the Site B record, checks path/header/query/body selector mismatches, and compares navigation_menus snapshots before and after rejected calls. Positive Site A controls exercise create, optimistic version update and delete while proving the Site B row remains unchanged.
 
 This adds targeted route regression coverage only. Concurrent stale-update behavior, cache/consumer invalidation and other presentation variants remain separate review items. Issues #14 and #25 remain open, no formal security evidence is created, and production remains NO-GO / NOT_PRODUCTION_CERTIFIED.
+
+## 14. Current 0.6.2 independent-review hand-off — 10 November 2026
+
+**Candidate:** 0.6.2, private and unreleased developer preview. **Production status:** NO-GO / NOT_PRODUCTION_CERTIFIED.
+
+**Current main baseline:** `df1bf2b90d6eba96ec571a1ccab96f8d4354353f`. PR #115 merged the bounded Redis-client shutdown correction. Exact post-merge workflow [#42771040503](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42771040503) passed all six required jobs on that exact main SHA with source-bound live PostgreSQL/Memgraph evidence. F1.20 issue #113 is closed and accepted for the developer-preview reliability boundary.
+
+**Current targeted tenant-isolation change:** open [PR #116](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/116), based on the main SHA above, head `2bf838a0c28f1debd57eca8565b8f27d6c7b91e7`. Hosted PR-head [workflow #42775446603](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42775446603) passed all six required jobs. The dedicated PostgreSQL/Memgraph suite passed **81/81, zero failures, zero skips** and explicitly passed the two-site same-slug custom-content-type registry/record test. That test verifies per-site definition selection, list/detail separation, non-disclosing foreign-record 404, selector mismatch rejection and no persistence after denied writes.
+
+**Independent-review status:** issue #14 remains **OPEN / NOT PERFORMED**. PR #116 and the 10 November maintainer-generated route inventory are targeted regression and review-preparation evidence only; they are not independent assessment. The independent reviewer must select and state the exact full SHA actually reviewed (prefer a clean current-main checkout, or explicitly state whether reviewing PR #116's head), enumerate methods/routes and background entry points independently, cover role/owner and mutation matrices, examine database/outbox/graph/cache/realtime/object-storage/provider side effects, record severity-ranked findings, and independently retest fixes. Do not create or populate `artifacts/evidence/tenant-isolation-review.json` from maintainer-authored tests or route maps.
+
+Current generated inventory: 27 route/flow families, 78 declared route patterns, 21 implementation/source files and 41 referenced test files. Its catalog is curated maintainer metadata and should be challenged and supplemented by the reviewer, not treated as a completeness proof.
+
+Other outstanding production gates remain #13 (authorized release-scope approval), #23 (dependency/SBOM/provenance review), #24 (load/soak/fault injection and backup/restore), #25 (independent security assessment), #26 (operations/rollback/ownership) and #32 (governance/capital controls). Package SemVer remains 0.6.2; no release tag, publication or production deployment is authorized.
