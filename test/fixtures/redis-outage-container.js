@@ -13,12 +13,16 @@ function validateRedisOutageTarget({ redisUrl, containerId } = {}) {
   try { parsed = new URL(redisUrl); } catch {
     throw new Error('The Redis outage test URL is invalid.');
   }
+  const hostname = parsed.hostname.toLowerCase().replace(/^\[|\]$/g, '');
   if (!['redis:', 'rediss:'].includes(parsed.protocol) ||
-      !LOOPBACK_HOSTS.has(parsed.hostname.toLowerCase()) ||
+      !LOOPBACK_HOSTS.has(hostname) ||
       parsed.username || parsed.password || parsed.search || parsed.hash ||
-      (parsed.port && parsed.port !== '6379') ||
       (parsed.pathname && !/^\/(?:0|[1-9]\d*)$/.test(parsed.pathname))) {
-    throw new Error('Redis outage tests require a credential-free loopback URL on port 6379.');
+    throw new Error('Redis outage tests require a credential-free loopback URL on a valid port.');
+  }
+  const port = parsed.port ? Number(parsed.port) : 6379;
+  if (!Number.isInteger(port) || port < 1 || port > 65_535) {
+    throw new Error('Redis outage tests require a valid TCP port.');
   }
   if (typeof containerId !== 'string' || !/^[a-f0-9]{64}$/i.test(containerId)) {
     throw new Error('Redis outage tests require the exact full 64-character disposable container ID.');

@@ -8,8 +8,8 @@ Maintainer-prepared route, capability, data-access, and regression-test navigati
 
 - Status: MAINTAINER_PREPARED_NOT_INDEPENDENTLY_REVIEWED.
 - Generated from the current working-tree implementation anchors and the catalog at docs/security/tenant-isolation-route-inventory.catalog.json.
-- Implementation-source digest: 9db57f519a048be94fd1d394f7c92e450d1ca1bbea7adec438e9751ae5e9c7ff across 19 files.
-- Referenced-test digest: 7478a7d12997997c119209c65042e5e0151a41a1ea5619107224036ea8f0bf13 across 41 files.
+- Implementation-source digest: e831540f779dc4d645bf7861553f33782e34622a23443a3f76c7450405196ee2 across 19 files.
+- Referenced-test digest: 5bcbc87771fd1ab9834da4e71dc76fd617059d319222622dc54f4bf0f1991aff across 41 files.
 - Inventory size: 27 route/flow families, 78 declared route patterns, 19 source files, and 41 test files.
 - Regenerate with npm run security:tenant-inventory; CI checks freshness with node scripts/generate-tenant-isolation-route-inventory.js --check.
 
@@ -379,7 +379,7 @@ Tests: test/content-type-routes.test.js, test/collaboration-api.test.js, test/re
 - Capabilities/controls: Realtime capability policy, content:edit/content:edit:own for document collaboration
 - Data-access boundary: presence leases; SSE/WebSocket subscriptions; Redis channels/keys; connection quotas; document operations
 - Side effects: Presence lease create/renew/release; Stream fan-out; Authorization invalidation; Quota lease acquire/release
-- Source: apps/api/src/server.js (lines 1231, 1235, 1237, 1955); packages/realtime/src/redis-presence.js (lines 63, 64, 65, 67, 77, 80, 110, 112, 123, 127, 137, 140, 145, 182, 184, 200, 211, 215, 216)
+- Source: apps/api/src/server.js (lines 1231, 1235, 1237, 1955); packages/realtime/src/redis-presence.js (lines 64, 65, 66, 68, 78, 81, 111, 113, 124, 128, 138, 141, 146, 183, 185, 201, 212, 216, 217)
 - Test references: test/realtime-tenant-isolation.test.js, test/realtime-websocket.test.js, test/redis-realtime.test.js, test/integration/redis-presence.integration.test.js
 - Coverage characterization: **path-header-query-and-heartbeat-body-selector-reconciliation**. Realtime tenant-isolation tests exercise conflicting header/query selectors for presence, SSE and WebSocket upgrades plus heartbeat body mismatch. Tests assert rejected upgrades create no subscriptions and rejected heartbeat mismatch leaves the existing presence lease unchanged. Existing session, capability, per-command/document, Redis and reconnect tests remain relevant; independent deployment review and production distributed quota assessment remain required.
 
@@ -421,7 +421,7 @@ Tests: test/content-type-routes.test.js, test/collaboration-api.test.js, test/re
 - Capabilities/controls: Redis service credentials and adapter configuration
 - Data-access boundary: Redis presence leases/indexes; Pub/Sub channels; site-scoped invalidation envelopes
 - Side effects: Cross-instance notification/fan-out; Lease expiry and invalidation
-- Source: packages/realtime/src/redis-realtime.js (lines 31, 32, 35, 38, 42, 56, 61, 62, 83, 103, 104, 114, 252, 253, 255, 256, 273, 278, 303, 314, 346, 347, 353, 368, 398, 401, 420, 434, 441, 456, 464, 484, 505, 517, 541, 545, 564); packages/realtime/src/redis-presence.js (lines 63, 64, 65, 67, 77, 80, 110, 112, 123, 127, 137, 140, 145, 182, 184, 200, 211, 215, 216)
+- Source: packages/realtime/src/redis-realtime.js (lines 32, 33, 36, 39, 43, 57, 62, 63, 84, 104, 105, 115, 248, 249, 251, 252, 269, 274, 299, 310, 342, 343, 349, 364, 394, 397, 416, 430, 437, 452, 460, 480, 501, 513, 537, 541, 560); packages/realtime/src/redis-presence.js (lines 64, 65, 66, 68, 78, 81, 111, 113, 124, 128, 138, 141, 146, 183, 185, 201, 212, 216, 217)
 - Test references: test/redis-realtime.test.js, test/realtime-tenant-isolation.test.js, test/integration/redis-presence.integration.test.js
 - Coverage characterization: **targeted-cross-instance**. Unit and integration tests cover selected site-scoped channels and invalidation. Production Redis ACL, failover and hostile service payload review remain open.
 

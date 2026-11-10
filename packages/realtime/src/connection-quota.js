@@ -3,6 +3,7 @@
 const { instrumentRedisClient } = require('../../observability/src/tracing');
 const { createHash, randomUUID } = require('node:crypto');
 const { SITE_ID_RE, realtimeError } = require('./event-hub');
+const { closeRedisClient } = require('./redis-client-lifecycle');
 
 const DEFAULT_LIMITS = Object.freeze({
   maxGlobal: 10_000,
@@ -231,10 +232,7 @@ async function createRedisRealtimeConnectionLimiter({
   try {
     await client.connect();
   } catch {
-    try {
-      if (client.isOpen && typeof client.quit === 'function') await client.quit();
-      else client.destroy?.();
-    } catch { client.destroy?.(); }
+    await closeRedisClient(client);
     incrementMetric(metrics, 'connection_quota_store_errors_total');
     throw realtimeError(503, 'ERR_VIRGOSCORPIO_HUB_REALTIME_QUOTA_UNAVAILABLE', 'The distributed real-time connection quota store is unavailable.');
   }
@@ -310,10 +308,7 @@ async function createRedisRealtimeConnectionLimiter({
   async function close() {
     if (closed) return;
     closed = true;
-    try {
-      if (client.isOpen && typeof client.quit === 'function') await client.quit();
-      else client.destroy?.();
-    } catch { client.destroy?.(); }
+    await closeRedisClient(client);
   }
 
   return Object.freeze({
