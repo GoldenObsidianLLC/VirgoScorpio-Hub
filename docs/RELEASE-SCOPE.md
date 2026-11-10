@@ -23,7 +23,7 @@ The package remains at **0.6.2**. This scope/documentation reconciliation is not
 | Repository | `GoldenObsidianLLC/VirgoScorpio-Hub` |
 | Version | `0.6.2` |
 | Package state | Unreleased candidate; `private: true` in package metadata |
-| Source baseline | `36220abf4ebcc629fa616961879f5a2ffe1f847d` |
+| Source baseline | `267380be1ba441f83408e2c63c042760ec662ac7` |
 | Manifest release state | `EXPANDED_DEVELOPER_PREVIEW_NOT_PRODUCTION_CERTIFIED` |
 | Semantic version change | None; remains 0.6.2 |
 | Runtime minimum | Node.js `>=22.23.4` |
@@ -31,8 +31,8 @@ The package remains at **0.6.2**. This scope/documentation reconciliation is not
 | CI runtime matrix | Node.js 22.23.4 and 24.22.1 on Ubuntu 24.04 |
 | CI services | PostgreSQL 18, Memgraph 3.13.1, Redis 7.4, Chromium |
 | Vendored renderer | EnginEx 7.0.0, pinned submodule commit `d99e021f55664f006b5e65b4a58202f9c7bc4f4b` |
-| Mainline workflow | Run [#472](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42535903899), exact main SHA above; six of six jobs succeeded |
-| Active manifest candidate validation | `candidateValidation.baselineCommit` matches the current mainline SHA; the earlier 5 November candidate snapshot is retained in `historicalCandidateValidationBefore2026Nov09` |
+| Mainline workflow | Run [#495](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42700441554), exact main SHA above; four of six required jobs succeeded, while PostgreSQL/Memgraph integration and consolidated evidence failed |
+| Active manifest candidate validation | `RELEASE-MANIFEST.json` still records `candidateValidation.baselineCommit` as `36220abf4ebcc629fa616961879f5a2ffe1f847d`; it does **not** match current `main`. Do not treat run #472 as current or transplant its evidence. Refresh the source-bound candidate metadata only after a new exact-SHA verification and release-owner review. |
 | Release decision | NO-GO for production; named release-owner scope approval remains pending |
 
 The local Windows development host has also exercised Node.js 26.12.1. That is useful local engineering evidence; it does not expand the declared Node support floor or establish a Windows production-support matrix.

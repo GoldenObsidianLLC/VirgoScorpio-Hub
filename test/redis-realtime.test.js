@@ -128,6 +128,47 @@ test('Redis reconnect strategy applies bounded equal-jitter backoff beyond the f
   );
 });
 
+test('Redis bridge close destroys reconnecting open clients instead of awaiting QUIT', async () => {
+  const broker = new FakeRedisBroker();
+  const clients = [];
+  const bridge = await createRedisRealtimeBridge({
+    url: REDIS_URL,
+    createClient: () => {
+      const client = broker.createClient();
+      clients.push(client);
+      return client;
+    }
+  });
+
+  for (const client of clients) {
+    client.isReady = false;
+    client.quitCalls = 0;
+    client.destroyed = false;
+    client.quit = () => {
+      client.quitCalls += 1;
+      return new Promise(() => {});
+    };
+    const destroy = client.destroy.bind(client);
+    client.destroy = () => {
+      client.destroyed = true;
+      destroy();
+    };
+  }
+
+  let timeout;
+  try {
+    await Promise.race([
+      bridge.close(),
+      new Promise((_, reject) => { timeout = setTimeout(() => reject(new Error('Bridge close exceeded 250 ms.')), 250); })
+    ]);
+  } finally {
+    clearTimeout(timeout);
+  }
+
+  assert.deepEqual(clients.map(client => client.quitCalls), [0, 0]);
+  assert.deepEqual(clients.map(client => client.destroyed), [true, true]);
+});
+
 test('Redis realtime bridge fans site-scoped presence invalidations across independent hubs', async t => {
   const broker = new FakeRedisBroker();
   const options = {

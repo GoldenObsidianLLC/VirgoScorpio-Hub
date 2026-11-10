@@ -6,6 +6,7 @@ const { SITE_ID_RE, realtimeError } = require('./event-hub');
 const { UUID_RE: EVENT_ID_RE } = require('../../domain/src/identifiers');
 const { validateCollaborationOperation } = require('../../collaboration/src');
 const { createRedisReconnectStrategy } = require('./redis-reconnect');
+const { closeRedisClient } = require('./redis-client-lifecycle');
 
 const DEFAULT_CHANNEL_PREFIX = 'virgoscorpio_hub:realtime:v1';
 const CHANNEL_PREFIX_RE = /^[A-Za-z0-9:_-]{1,96}$/;
@@ -240,12 +241,7 @@ async function createRedisRealtimeBridge({
     await Promise.all([publisher.connect(), subscriber.connect()]);
     setRelayState(true);
   } catch (error) {
-    for (const client of [publisher, subscriber]) {
-      try {
-        if (client.isOpen && typeof client.quit === 'function') await client.quit();
-        else client.destroy?.();
-      } catch { client.destroy?.(); }
-    }
+    await Promise.all([publisher, subscriber].map(client => closeRedisClient(client)));
     throw new Error('Could not connect to the configured Redis real-time bridge (' + safeErrorCode(error) + ').');
   }
 
@@ -586,15 +582,9 @@ async function createRedisRealtimeBridge({
     documentInbound.length = 0;
     setQueueGauge();
     setDocumentQueueGauge();
-    const results = await Promise.allSettled([publisher, subscriber].map(async client => {
-      try {
-        if (client.isOpen && typeof client.quit === 'function') await client.quit();
-        else client.destroy?.();
-      } catch (error) {
-        client.destroy?.();
-        throw error;
-      }
-    }));
+    const results = await Promise.allSettled([publisher, subscriber].map(client =>
+      closeRedisClient(client, { onError: reportError })
+    ));
     for (const result of results) if (result.status === 'rejected') reportError(result.reason);
     hub = null;
   }

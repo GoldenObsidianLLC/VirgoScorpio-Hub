@@ -5,6 +5,7 @@ const { createHash } = require('node:crypto');
 const { SITE_ID_RE, realtimeError } = require('./event-hub');
 const { createPresenceService, AVAILABILITY } = require('./presence');
 const { createRedisReconnectStrategy } = require('./redis-reconnect');
+const { closeRedisClient } = require('./redis-client-lifecycle');
 
 const DEFAULT_KEY_PREFIX = 'virgoscorpio_hub:presence:v1';
 const PRINCIPAL_ID_RE = /^[A-Za-z0-9._:-]{1,128}$/;
@@ -234,12 +235,7 @@ function createRedisPresenceAdapter({
       if (closed) return;
       closed = true;
       if (closeClient) {
-        try {
-          if (client.isOpen && typeof client.quit === 'function') await client.quit();
-          else client.destroy?.();
-        } catch {
-          client.destroy?.();
-        }
+        await closeRedisClient(client);
       }
     }
   });
@@ -321,8 +317,7 @@ async function createRedisPresenceService({
     return createPresenceService({ adapter: ownedAdapter, leaseMs, now, metrics });
   } catch (error) {
     closed = true;
-    if (client.isOpen && typeof client.quit === 'function') await client.quit().catch(() => {});
-    else client.destroy?.();
+    await closeRedisClient(client);
     throw error;
   }
 }

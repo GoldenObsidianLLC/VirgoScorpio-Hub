@@ -1,6 +1,19 @@
 # VirgoScorpio Hub Release Evidence Contract
 
-## Current mainline evidence snapshot — 9 November 2026 (0.6.2)
+## Current mainline evidence snapshot — 9 November 2026 (0.6.2, PR #114 merged)
+
+Mainline source revision: `267380be1ba441f83408e2c63c042760ec662ac7`. F1.20 PR #114 is merged. Hosted [mainline workflow run #495](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42700441554) is bound to that exact SHA and failed: the two Node matrix jobs, browser smoke, and CodeQL succeeded; the PostgreSQL/Memgraph producer and consolidated evidence jobs failed.
+
+- Node.js 22.23.4 and 24.22.1 each passed **576/576** Hub tests and **94/94** EnginEx tests with zero npm-audit vulnerabilities. Each service-less integration subset recorded **34 skips** and remains PARTIAL.
+- The live PostgreSQL/Memgraph integration command itself passed **80/80** with zero failures/skips/TODOs; the exact revision-bound fresh-migration record shows **18/18** migrations applied, **18/18** idempotently skipped, and the disposable database dropped. The physical disposable Redis stop/start proof exceeded the previous reconnect cutoff, retained no-replay semantics, restored the exact service, and accepted PING.
+- The PostgreSQL-backed Playwright heartbeat-authorization assertions passed while Redis was stopped, including PostgreSQL membership revocation, idle socket closure, and Redis restoration/PING. The test then stalled during API-node teardown and exceeded its **180-second** timeout. The integration job failed and skipped its later Memgraph outage/rebuild steps; the aggregate evidence job failed due to the failed producer and missing Memgraph outage/rebuild artifacts.
+- The CI aggregator reports **BLOCKED**. The exact-source local release-readiness snapshot records **7 PASS, 2 PARTIAL, 1 BLOCKED, 14 MISSING_EVIDENCE**, with `readyForProduction: false`. The workflow and its component evidence do not authorize production certification, tagging, publication, or deployment.
+
+### Shutdown follow-up PR #115 local validation — 9 November 2026
+
+Draft PR [#115](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/115) is based on main SHA `267380be1ba441f83408e2c63c042760ec662ac7` and adds the shared bounded Redis-client shutdown helper. The complete PostgreSQL multi-node Playwright spec passed **3/3** locally, including physical Redis interruption/restoration, idle WebSocket revocation through PostgreSQL heartbeat reauthorization, browser-client closure, and clean closure of both API nodes. The focused Redis/helper unit suite passed **33/33**. Full `npm run check` passed **583/586 tests** with zero failures and three Windows-specific skips; artifact verification covered **232 required paths** and **243 JavaScript files**. Validation ran on Windows with Node.js 26.12.1 and newly created loopback-only disposable Redis/PostgreSQL containers, which were removed after testing. This is supplemental local engineering evidence only: PR #115 remains draft and has not run through hosted Node.js 22/24 CI, does not qualify Memgraph outage/rebuild or evidence aggregation, and does not supersede the failed mainline run #495. F1.20 remains **PARTIAL / NOT ACCEPTED** until review and a new exact-main-SHA hosted run passes all six required jobs and consolidated evidence. Package version remains **0.6.2**; production remains **NOT_PRODUCTION_CERTIFIED / NO-GO**.
+
+## Historical mainline evidence snapshot — 9 November 2026 (0.6.2, PR #109)
 
 Mainline source revision: `36220abf4ebcc629fa616961879f5a2ffe1f847d`. F1.18 merged through PR #109. Hosted [mainline workflow run #472](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42535903899) passed all six producer/aggregator jobs: Node.js 22.23.4, Node.js 24.22.1, dedicated PostgreSQL/Memgraph integration, browser/accessibility smoke, CodeQL and consolidated evidence.
 
