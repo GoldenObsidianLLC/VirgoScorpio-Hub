@@ -4,6 +4,14 @@ This roadmap is evidence-oriented rather than a promise of dates. Items should m
 
 Priorities: **P0** = critical reliability/security/release work; **P1** = foundational next capabilities; **P2** = major product capabilities; **P3** = strategic advanced capabilities. These labels indicate sequencing, not delivery dates or guarantees.
 
+## Current 0.6.2 continuity — 9 November 2026
+
+For the current release decision and exact revision evidence, use the [9 November 2026 0.6.2 release-gate report](reports/2026-11-09-VirgoScorpio-Hub-0.6.2-Release-Gate-Report.md), [Implementation Roadmap](IMPLEMENTATION-ROADMAP.md), [Release Scope](RELEASE-SCOPE.md), and [Release Readiness](RELEASE_READINESS.md). This strategic roadmap retains earlier milestone notes as historical implementation context; its checkboxes are not a substitute for the current source-SHA evidence ledger.
+
+Current main is `267380be1ba441f83408e2c63c042760ec662ac7`; exact-main workflow #495 passed 4/6 jobs and failed PostgreSQL/Memgraph integration plus evidence aggregation after a 180-second API-node teardown timeout. Open PR #115 has green exact-head workflow #501 on `47e130c61eb867266699f6d76c39efe75dfde348`, but it is not merged and has no recorded formal review submissions/threads. F1.20 / issue #113 remains PARTIAL until review, merge and a green post-merge mainline run. Package 0.6.2 remains private/unreleased; production remains NO-GO / NOT_PRODUCTION_CERTIFIED.
+
+The next implementation priority is bounded Redis-client lifecycle acceptance and exact-main evidence, followed by P0 independent tenant/security, supply-chain, load/restore and operations gates. Do not start new P1 product expansion until these blockers are cleared.
+
 ## Human-AI agency — cross-cutting product and engineering gate
 
 The [VirgoScorpio Hub Manifesto](../VIRGOSCORPIO-HUB-MANIFESTO.md) is the project's north star for human-AI collaboration. It frames the goal as amplifying human capability, preserving creative dignity and productive relevance, and resisting designs that treat human obsolescence or concentrated control as inevitable. This roadmap translates those values into engineering work; it does not claim that software alone can guarantee employment, income or broader economic outcomes.

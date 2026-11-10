@@ -223,7 +223,10 @@ function main() {
   if (process.argv.includes('--check')) {
     const mismatches = [];
     for (const [file, expected] of [[JSON_OUTPUT, jsonText], [MARKDOWN_OUTPUT, markdownText]]) {
-      if (!fs.existsSync(file) || fs.readFileSync(file, 'utf8') !== expected) mismatches.push(path.relative(ROOT, file));
+      const actual = fs.existsSync(file)
+        ? fs.readFileSync(file, 'utf8').replaceAll(String.fromCharCode(13) + String.fromCharCode(10), String.fromCharCode(10))
+        : null;
+      if (actual !== expected) mismatches.push(path.relative(ROOT, file));
     }
     if (mismatches.length) {
       console.error('Tenant-isolation inventory is stale. Run npm run security:tenant-inventory. Files: ' + mismatches.join(', '));
