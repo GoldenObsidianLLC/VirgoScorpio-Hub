@@ -38,7 +38,7 @@ That evidence materially improves confidence in the tested source and CI paths. 
 
 PR #122 merged at 253ef3a as a documentation-only reconciliation. It did not change application code, dependency manifests or lockfile, API contracts, schemas, migrations, provider contracts, architecture or package version. No submitted human review was recorded for PR #122; its merge is not an independent review or product-owner approval.
 
-PR #123 updates the two pinned actions/download-artifact references in CI to the Node.js 24-compatible v7.0.0 action. Its current head is 8669c291e331e40cbe3017d6eb5b15c368b20e5f; the branch-push and pull-request workflows passed. PR #123 remains open and unmerged, with no submitted review recorded. The change affects CI action runtime only, not the product's Node.js support floor, package dependencies, application behavior, APIs, schemas or migrations.
+PR #123 updates the two pinned actions/download-artifact references in CI to the Node.js 24-compatible v7.0.0 action. The pre-report validation head 8669c291e331e40cbe3017d6eb5b15c368b20e5f passed its branch-push and pull-request workflows (details in section 6). This full report is added as documentation-only commit 274d5090df9bf914a0f6acd70e07cbaa8f135e86 on the same PR branch; the workflows for that report-inclusive head were queued at the time of this report update and are not counted as passing evidence here. PR #123 remains open and unmerged, with no submitted review recorded. The change affects CI action runtime only, not the product's Node.js support floor, package dependencies, application behavior, APIs, schemas or migrations.
 
 ## 3. Exact-main workflow #541
 
@@ -114,9 +114,11 @@ A qualified reviewer must map supported install targets and actual distribution 
 
 Workflow #541 exposed a Node.js 20 action-runtime warning from the pinned artifact downloader. PR [#123](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/123) updates both actions/download-artifact references to v7.0.0, pinned to verified commit 37930b1c2abaa49bbe596cd826c3c89aef350131, whose action manifest declares runs.using: node24.
 
-The current PR head 8669c291e331e40cbe3017d6eb5b15c368b20e5f passed both:
+The pre-report PR head 8669c291e331e40cbe3017d6eb5b15c368b20e5f passed both:
 - [Branch-push workflow](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43086558620).
 - [Pull-request workflow](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43086573303).
+
+The full release-gate report was then added in documentation-only commit 274d5090df9bf914a0f6acd70e07cbaa8f135e86. The branch-push and pull-request workflows for that exact report-inclusive commit were queued at the time of this report update: [run 43095064923](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43095064923) and [run 43095074803](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43095074803). Their results must be checked before describing the current PR head as fully validated.
 
 All six non-attestation jobs passed on each run. Both Node matrices passed 590/590 Hub and 94/94 EnginEx tests, npm audit scopes reported zero vulnerabilities, live integration passed 82/82, browser/accessibility smoke passed 9/9, CodeQL completed, and evidence aggregation reported CI EVIDENCE: PASS. Each aggregate job downloaded five revision-bound evidence artifacts and verified their checksums. The main-only attestation job was skipped as designed on branch/PR events.
 
@@ -203,7 +205,7 @@ No version bump, release tag, GitHub Release, npm publication, production deploy
 
 ## 12. Prioritized next steps
 
-1. **Complete human review of PR #123.** The current head is CI-green, but the PR remains open with no submitted review. Preserve the pinned action SHA and evidence checks; do not merge without the required review/approval.
+1. **Complete human review of PR #123.** The action change and pre-report branch head passed their CI workflows; the current report-inclusive head 274d509 is subject to its own branch-push and PR workflows (queued at report update). The PR remains open with no submitted review. Preserve the pinned action SHA and evidence checks; do not merge without the required review/approval.
 2. **Resolve scope and governance first.** Obtain the authorized decisions and owner assignments required by #13 and #32. These decisions determine which providers, environments and services can legitimately be tested and who is accountable.
 3. **Complete issue #23 human acceptance.** Review exact-main #541 bundles/digests, dependency maintenance and advisories, GPL/LGPL obligations, local EnginEx distribution relationship and exact-SHA CodeQL results. Record a qualified reviewer, date, findings and formal risk disposition.
 4. **Commission independent assurance.** Arrange properly authorized, independent reviews for #14 and #25 with a defined scope and rules of engagement. Do not substitute maintainer-authored inventories or tests for assessor work.
@@ -215,7 +217,7 @@ No unrelated product feature expansion is recommended ahead of these P0/P1 relea
 ## 13. Evidence index and limitations
 
 - Current mainline CI and exact-main provenance: [workflow #541](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43076849834).
-- Current CI action-runtime follow-up: [PR #123](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/123), [branch-push run](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43086558620), [PR run](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43086573303).
+- CI action-runtime follow-up: [PR #123](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/123); pre-report validated revision runs [43086558620](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43086558620) and [43086573303](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43086573303); report-inclusive revision checks at report-update time [43095064923](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43095064923) and [43095074803](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43095074803) were queued.
 - Mainline license, attestation and CI detail: [post-PR #122 mainline and license inventory](2026-11-11-POST-PR122-MAINLINE-AND-LICENSE-INVENTORY.md).
 - Supply-chain remediation history: [supply-chain attestation remediation](2026-11-11-SUPPLY-CHAIN-ATTESTATION-REMEDIATION.md).
 - Scope and gate definitions: [release scope](../RELEASE-SCOPE.md), [release readiness](../RELEASE_READINESS.md), [release evidence](../RELEASE-EVIDENCE.md), [implementation roadmap](../IMPLEMENTATION-ROADMAP.md), and [roadmap](../ROADMAP.md).
