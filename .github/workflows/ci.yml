@@ -193,7 +193,9 @@ jobs:
           VIRGOSCORPIO_HUB_RUN_REDIS_OUTAGE_INTEGRATION: "true"
         run: npm run test:integration:live
       - name: Install Chromium for PostgreSQL-backed collaboration browser qualification
-        run: npx playwright install --with-deps chromium
+        # Download the browser binary without invoking Playwright's apt-based OS dependency installer.
+        # The --with-deps path failed when Ubuntu mirror DNS was unavailable; the following tests verify browser startup.
+        run: npx playwright install chromium
       - name: Verify PostgreSQL-backed multi-node collaboration and real Redis-outage authorization fallback
         env:
           VIRGOSCORPIO_HUB_RUN_POSTGRES_INTEGRATION: "true"
@@ -303,7 +305,9 @@ jobs:
       - name: Materialize optional local assets
         run: npm run postinstall
       - name: Install Chromium
-        run: npx playwright install --with-deps chromium
+        # Download the browser binary without invoking Playwright's apt-based OS dependency installer.
+        # The --with-deps path failed when Ubuntu mirror DNS was unavailable; the following tests verify browser startup.
+        run: npx playwright install chromium
       - name: Exercise visual editor and accessibility smoke tests
         shell: bash
         run: |

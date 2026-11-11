@@ -4,8 +4,8 @@
 
 **Formal gate:** [Issue #14 — Independent tenant/site isolation and authorization review](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/14)
 **Candidate:** `0.6.2`, private/unreleased developer preview
-**Current main (11 November 2026):** 97f11434a211f982b539ef11effd5b7432b5e4a9
-**Latest exact-mainline evidence:** [Workflow #527](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42964407873): Node 22/24, live PostgreSQL/Memgraph/Redis, browser and CodeQL jobs passed; main-only attestation verification failed and requires remediation.
+**Current main (11 November 2026):** `85ca5ea531ba5f71278f725dac096ee628053d63` (PR #120 merge)
+**Latest exact-mainline evidence:** [Workflow #533](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43044726474): main-only signed provenance/SBOM verification and CodeQL succeeded on exact main SHA; alert #38 is fixed. The overall run failed closed on an Ubuntu apt-mirror DNS error during Playwright setup, so browser and downstream DB/graph-recovery steps remain incomplete.
 **Companion:** [Release blocker triage](../reports/RELEASE-BLOCKER-TRIAGE-2026-11-10.md)
 **Formal evidence destination after independent completion:** `artifacts/evidence/tenant-isolation-review.json`
 
@@ -17,7 +17,7 @@ PR #116 merged a focused two-site same-slug custom-content-type registry/record 
 
 Historical 10 November PR #118 coverage: the cloud-connection regression merged at main SHA c7653bb433ae8b363925d13babf239e64b2b5125. Workflow #522 passed all six jobs on that historical merge. Targeted tenant maintainer regressions remain test evidence, not independent findings.
 
-The latest current-main baseline is PR #119 merge SHA 97f11434a211f982b539ef11effd5b7432b5e4a9. The initial post-merge workflow #527 exposed an attestation verification flag conflict and CodeQL alert #38 in SBOM command construction. The tracked correction is in security/supply-chain-attestation-codeql-2026-11-11; it does not change tenant-isolation implementation. Issue #14 remains OPEN / NOT PERFORMED and issue #25 remains open. Any independent reviewer must use the authorized exact current-main SHA and independently discover coverage beyond this maintainer matrix.
+The latest current-main baseline is PR #120 merge SHA `85ca5ea531ba5f71278f725dac096ee628053d63`. PR #120 corrected the attestation verification flag conflict and CodeQL alert #38 in SBOM command construction; mainline workflow #533 subsequently verified the signed provenance and SBOM attestation, and alert #38 is fixed. The separate hosted-runner CI follow-up addresses the Ubuntu apt-mirror DNS failure that prevented browser and downstream DB/graph-recovery steps from completing; it does not change tenant-isolation implementation. Issue #14 remains OPEN / NOT PERFORMED and issue #25 remains open. Any independent reviewer must use the authorized exact current-main SHA and independently discover coverage beyond this maintainer matrix.
 
 ## 2. Independence and safe execution
 

@@ -1,14 +1,32 @@
 # VirgoScorpio Hub 0.6.2 — Supply-Chain Attestation and CodeQL Remediation
 
-> **Status: REMEDIATION IN REVIEW.** This report records the first exact-mainline execution of the main-only attestation controls after PR #119 merged, the concrete verification and CodeQL failures, and the focused corrective patch. It is not human dependency/license acceptance, a legal opinion, an independent security assessment, or production approval.
+> **Status: POST-MERGE ATTESTATION VERIFIED; HOSTED CI FOLLOW-UP OPEN.** PR #120 is merged. Mainline workflows #532/#533 successfully completed the signer job and run #533 verified the exact-main lockfile/SBOM provenance and signed CycloneDX attestation. CodeQL alert #38 is fixed. The full workflows remain failed closed because the Ubuntu package-mirror DNS outage interrupted Playwright's apt-based `--with-deps` installation; browser and downstream DB/browser/graph-recovery qualifications remain incomplete. This report is not qualified human dependency/license acceptance, a legal opinion, an independent security assessment, or production approval.
 
 - **Snapshot:** 11 November 2026 (America/Chicago)
 - **Package:** virgoscorpio-hub 0.6.2, private and unreleased
-- **Main baseline:** 97f11434a211f982b539ef11effd5b7432b5e4a9 (PR #119 merge)
-- **Post-merge CI:** [workflow #527](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42964407873)
+- **Current main baseline:** `85ca5ea531ba5f71278f725dac096ee628053d63` (PR #120 merge)
+- **Mainline CI:** [workflow #532](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43041957209) (push) and [workflow #533](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43044726474) (workflow dispatch)
 - **Issue:** [#23 — dependency, SBOM, provenance and CodeQL review](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/23)
-- **Corrective branch:** security/supply-chain-attestation-codeql-2026-11-11
+- **Merged remediation:** [PR #120](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/120)
+- **Hosted-runner follow-up branch:** `ci/playwright-hosted-runner-deps-2026-11-11`
 - **Production disposition:** **NO-GO / NOT_PRODUCTION_CERTIFIED**
+
+## Post-merge attestation verification — workflow #533
+
+The main-only signer job for workflow #533 (run 43044726474, attempt 1) completed successfully on exact main SHA `85ca5ea531ba5f71278f725dac096ee628053d63` with source ref `refs/heads/main`. The job generated SLSA provenance for the package lockfile and CycloneDX SBOM, created the signed SBOM attestation, verified the bundles with the exact repository/workflow certificate identity, checked the source SHA and hosted-runner restriction, matched both provenance subject digests, confirmed predicate type `https://cyclonedx.org/bom`, and verified that the signed predicate equals the generated SBOM document.
+
+The retained `virgoscorpio_hub-supply-chain-attestations` artifact is ID `13866578378`, run-bound to #533 and SHA `85ca5ea531ba5f71278f725dac096ee628053d63`. Archive digest: `sha256:d5d36adfff4d11a6c71bda0ea1cd30e2f9045dde716c5e9a06888f7f76cff95d`; expiration: 9 February 2027. The downloaded verification summary records:
+
+| Evidence field | Exact value |
+|---|---|
+| Lockfile SHA-256 | `8f3786bcfcd03d0b63761c7107e4d757ae5b45171ba2f6c086ff38c027c8b086` |
+| CycloneDX SBOM SHA-256 | `60d1dbc76e4ea3a7d8f661280b9ae1ec4bb159304ded39e49018df1272b0fdd8` |
+| SBOM predicate type | `https://cyclonedx.org/bom` |
+| Predicate equals generated SBOM | `true` |
+
+GitHub reports CodeQL alert #38 as `fixed` (not dismissed) on main as of 11 November 2026, and the open-alert query for `refs/heads/main` returns an empty set. Issue #23 remains OPEN / PARTIAL because qualified human dependency/license/distribution review and formal reviewer acceptance are still outstanding.
+
+The full workflows #532 and #533 did not pass: `npx playwright install --with-deps chromium` attempted to install OS packages through Ubuntu mirrors and failed with temporary DNS resolution errors for `azure.archive.ubuntu.com`. The base live database/migration integration step completed, but the Chromium failure skipped PostgreSQL-backed collaboration browser qualification and later Memgraph outage/recovery and graph-rebuild steps. The evidence aggregator correctly failed closed. This is a hosted-runner setup/network failure, not a reason to waive downstream qualification. A focused CI follow-up removes the apt-dependent `--with-deps` option from the two hosted runner browser-install steps and must be validated on PR before merge.
 
 ## 1. What the first mainline run established
 
