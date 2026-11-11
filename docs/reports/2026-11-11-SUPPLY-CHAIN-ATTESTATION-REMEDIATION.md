@@ -1,17 +1,38 @@
 # VirgoScorpio Hub 0.6.2 — Supply-Chain Attestation and CodeQL Remediation
 
-> **Status: POST-MERGE ATTESTATION VERIFIED; HOSTED-RUNNER FIX VALIDATED IN PR #121.** PR #120 is merged. Mainline workflows #532/#533 successfully completed the signer job and run #533 verified the exact-main lockfile/SBOM provenance and signed CycloneDX attestation. CodeQL alert #38 is fixed. The pre-fix mainline workflows remain failed closed because the Ubuntu package-mirror DNS outage interrupted Playwright's apt-based `--with-deps` installation; the replacement passed both branch push and PR CI workflows. PR #121 is open and unmerged pending review. This report is not qualified human dependency/license acceptance, a legal opinion, an independent security assessment, or production approval.
+> **Status: PR #121 MERGED; EXACT-MAIN ATTESTATION AND FULL CI PASSED IN #538.** Current main is `6f661a9cf76dfa5c377ed5c65995a7e1554d3f4d`. Workflow #538 passed all seven jobs, including exact-main SLSA provenance and signed CycloneDX SBOM verification, both Node matrices, live PostgreSQL/Memgraph/Redis and browser qualification, CodeQL and evidence aggregation. CodeQL alert #38 is fixed and no open main alerts remain. The earlier #532/#533 Ubuntu apt/mirror DNS failures are historical pre-fix results; PR #121 removed that Playwright setup dependency and is merged. This report is not qualified human dependency/license acceptance, a legal opinion, an independent security assessment, or production approval.
 
 - **Snapshot:** 11 November 2026 (America/Chicago)
 - **Package:** virgoscorpio-hub 0.6.2, private and unreleased
-- **Current main baseline:** `85ca5ea531ba5f71278f725dac096ee628053d63` (PR #120 merge)
-- **Mainline CI:** [workflow #532](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43041957209) (push) and [workflow #533](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43044726474) (workflow dispatch)
+- **Current main baseline:** `6f661a9cf76dfa5c377ed5c65995a7e1554d3f4d` (PR #121 merge)
+- **Final mainline CI:** [workflow #538](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43068232804) (push on exact main SHA; all seven jobs passed)
 - **Issue:** [#23 — dependency, SBOM, provenance and CodeQL review](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/23)
 - **Merged remediation:** [PR #120](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/120)
-- **Hosted-runner follow-up:** [PR #121](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/121), branch `ci/playwright-hosted-runner-deps-2026-11-11`, commit `85b39b2388ea65e397ef4502eb961c486ff8e823`
+- **Merged hosted-runner follow-up:** [PR #121](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/121), branch head `fc2fb4241b8704223ce63e94650e79031b723762`, merge commit `6f661a9cf76dfa5c377ed5c65995a7e1554d3f4d`
 - **Production disposition:** **NO-GO / NOT_PRODUCTION_CERTIFIED**
 
-## Post-merge attestation verification — workflow #533
+## Final mainline verification — workflow #538
+
+Mainline push workflow [#538](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43068232804) completed successfully on exact main SHA `6f661a9cf76dfa5c377ed5c65995a7e1554d3f4d`; all seven jobs passed. The main-only signer generated and verified SLSA provenance for the exact `package-lock.json` and CycloneDX SBOM bytes, the signed SBOM attestation, exact repository/workflow certificate identity, `refs/heads/main`, the full source SHA and both subject digests. It checked predicate type `https://cyclonedx.org/bom` and confirmed the signed predicate equals the generated SBOM document.
+
+| Exact mainline evidence | Value |
+|---|---|
+| Lockfile SHA-256 | `8f3786bcfcd03d0b63761c7107e4d757ae5b45171ba2f6c086ff38c027c8b086` |
+| Signed CycloneDX SBOM SHA-256 | `7a8883f03fd4c350986a6ed9ec8d8b8c4a1a7fa1f31e03cb3381950cd8be0ba2` |
+| SBOM format / component inventory | CycloneDX 1.5; 200 components; 201 dependency records |
+| SBOM predicate type / equality | `https://cyclonedx.org/bom`; exact predicate equals generated SBOM (`true`) |
+| Attestation artifact | ID `13875954614`, archive digest `sha256:099cca5a896e6695adbecd678167235b93a9287bc6cb0275761337277e8b7872`; expires 9 February 2027 |
+| Source ref / revision | `refs/heads/main`; `6f661a9cf76dfa5c377ed5c65995a7e1554d3f4d` |
+
+Both Node matrices passed 590/590 Hub tests and 94/94 EnginEx tests; full and production-only npm audits each reported zero vulnerabilities on both runtimes. PostgreSQL/Memgraph/Redis live integration passed 82/82 with zero failures/skips; fresh migrations passed and the idempotent second pass skipped all 18; PostgreSQL collaboration Playwright passed 3/3; browser/accessibility smoke passed 9/9. Real Memgraph outage/outbox replay and canonical graph rebuild passed. CodeQL passed, alert #38 is fixed and the open main-alert query returned an empty set. The evidence aggregator verified revision-bound artifacts/checksums and reported `CI EVIDENCE: PASS`.
+
+PR [#121](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/121) merged at this SHA. Its final branch head `fc2fb4241b8704223ce63e94650e79031b723762` also passed push workflow [#43065225829](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43065225829) and pull-request workflow [#43065234386](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43065234386), each with all six non-attestation jobs and evidence aggregation successful. The signer skip on those non-main events was expected; the exact-main signer then ran and passed in #538.
+
+The original workflows #532/#533 on main SHA `85ca5ea531ba5f71278f725dac096ee628053d63` remain a historical pre-fix failure record: they successfully signed/verified the main attestation but full CI failed closed when Playwright's apt-based `--with-deps` setup hit Ubuntu mirror DNS failure. PR #121 removes the apt-based dependency installation while leaving the browser and all downstream tests enabled. This infrastructure correction is merged and verified on main.
+
+**Human acceptance remains open:** issue #23 stays OPEN / PARTIAL until a qualified reviewer completes dependency maintenance and GPL/LGPL license/distribution analysis, reviews the exact-main retained attestation and CodeQL evidence, records exact-SHA findings/dispositions, and formally accepts the evidence. Do not populate `artifacts/evidence/dependency-sbom-codeql.json` or close issue #23 from maintainer CI alone.
+
+## Historical post-merge attestation verification — workflow #533 (PR #120 main SHA)
 
 The main-only signer job for workflow #533 (run 43044726474, attempt 1) completed successfully on exact main SHA `85ca5ea531ba5f71278f725dac096ee628053d63` with source ref `refs/heads/main`. The job generated SLSA provenance for the package lockfile and CycloneDX SBOM, created the signed SBOM attestation, verified the bundles with the exact repository/workflow certificate identity, checked the source SHA and hosted-runner restriction, matched both provenance subject digests, confirmed predicate type `https://cyclonedx.org/bom`, and verified that the signed predicate equals the generated SBOM document.
 
@@ -28,7 +49,7 @@ GitHub reports CodeQL alert #38 as `fixed` (not dismissed) on main as of 11 Nove
 
 The full mainline workflows #532 and #533 did not pass on their pre-fix main SHA: `npx playwright install --with-deps chromium` attempted to install OS packages through Ubuntu mirrors and failed with temporary DNS resolution errors for `azure.archive.ubuntu.com`. The Chromium failure skipped browser and downstream DB/graph-recovery steps; the evidence aggregator correctly failed closed. This is retained as the historical failure that motivated the correction, not a reason to waive qualification.
 
-The correction is on branch commit `85b39b2388ea65e397ef4502eb961c486ff8e823` and proposed in [PR #121](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/121). The two hosted Chromium steps now run `npx playwright install chromium`, while browser startup and all downstream tests remain enabled. Branch push workflow [#43062643567](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43062643567) and PR workflow [#535](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43063552026) passed all six non-attestation jobs and the evidence aggregator. Validation included 590/590 Hub and 94/94 EnginEx tests on each Node 22.23.4/24.22.1 matrix, zero npm audit vulnerabilities in both scopes on both runtimes, CycloneDX 1.5 (200 components / 201 dependency records), 82/82 live integration tests with zero failures/skips, PostgreSQL collaboration Playwright 3/3, browser/accessibility smoke 9/9, real Memgraph outage/outbox replay, deterministic graph rebuild, CodeQL and consolidated revision/checksum evidence. The signer was skipped by design on these branch/PR events; exact-main signing was verified separately in #533. PR #121 remains OPEN / UNMERGED pending human review.
+The merged correction in [PR #121](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/121) now runs `npx playwright install chromium` in both hosted Chromium steps, while browser startup and all downstream tests remain enabled. The initial correction commit `85b39b2388ea65e397ef4502eb961c486ff8e823` passed branch push workflow [#43062643567](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43062643567); the final PR head `fc2fb4241b8704223ce63e94650e79031b723762` passed push [#43065225829](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43065225829) and PR [#43065234386](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43065234386), each with all six non-attestation jobs and evidence aggregation. Validation included 590/590 Hub and 94/94 EnginEx tests on each Node 22.23.4/24.22.1 matrix, zero npm audit vulnerabilities in both scopes on both runtimes, CycloneDX 1.5 (200 components / 201 dependency records), 82/82 live integration tests with zero failures/skips, PostgreSQL collaboration Playwright 3/3, browser/accessibility smoke 9/9, real Memgraph outage/outbox replay, deterministic graph rebuild, CodeQL and consolidated revision/checksum evidence. The signer was skipped by design on these branch/PR events; exact-main signing was verified separately in #533. PR #121 is merged at main SHA `6f661a9cf76dfa5c377ed5c65995a7e1554d3f4d`; the remaining issue #23 human supply-chain acceptance gate remains open.
 
 ## Hosted-runner follow-up validation — PR #121
 
@@ -48,7 +69,7 @@ The branch push [workflow #43062643567](https://github.com/GoldenObsidianLLC/Vir
 | CodeQL | PASS |
 | Consolidated CI evidence | PASS; exact revision and evidence checksums verified |
 
-The corrected push run retained 10 non-expired run-bound CI artifacts (including Node 22/24 test and dependency evidence, browser/accessibility evidence, live integration, CodeQL, release readiness and consolidated evidence); they expire 9 February 2027. The main-only signer was skipped as designed on the branch/PR events; signed exact-main provenance/SBOM remains verified separately in workflow #533. The PR workflow #535 also passed against the pull request merge ref. PR #121 remains OPEN / UNMERGED pending human review; this validation resolves the hosted-runner CI setup issue but does not close the human supply-chain/release gate.
+The corrected push run retained 10 non-expired run-bound CI artifacts (including Node 22/24 test and dependency evidence, browser/accessibility evidence, live integration, CodeQL, release readiness and consolidated evidence); they expire 9 February 2027. The main-only signer was skipped as designed on the branch/PR events; signed exact-main provenance/SBOM remains verified separately in workflow #533. The PR workflow #535 also passed against the pull request merge ref. PR #121 is merged and exact-main workflow #538 passed; this resolves the hosted-runner CI setup issue but does not close the human supply-chain/release gate.
 
 ## 1. What the first mainline run established
 
