@@ -2,6 +2,8 @@
 
 ## Current status and repository assurance
 
+- [Full 0.6.2 release-gate report — 10 November 2026](reports/2026-11-10-VirgoScorpio-Hub-0.6.2-Release-Gate-Report.md) — current main baseline, latest pre-merge issue #23 candidate CI (#524), advisory remediation, SBOM digests, formal readiness, open issues and next actions. Production remains NO-GO.
+
 - [Tenant-isolation route and data-access inventory — 10 November 2026](security/TENANT-ISOLATION-ROUTE-CAPABILITY-MAP-2026-11-10.md) — current maintainer-generated route-family, capability, data-boundary, source-anchor and test-reference catalog; 27 families, 78 route patterns, 21 implementation files and 41 test files. Review preparation only, not independent assessment evidence.
 
 - [Tenant isolation internal pre-review — 6 November 2026](reports/2026-11-06-TENANT-ISOLATION-PRE-REVIEW.md) — relationship-route site-context validation, bidirectional cross-site endpoint tests, site-private relationship outbox envelopes, outage/replay results, coverage inventory and independent-review gaps. This is not an independent assessment or release approval.
@@ -12,7 +14,7 @@
 - [Repository coherence and continuity review — 1 November 2026](REPOSITORY-COHERENCE-AND-CONTINUITY-REVIEW-2026-11-01.md) — repository inventory, documentation drift, CI/readiness gaps, branch reconciliation, safe corrections and backlog.
 - [Local Docker resource migration report — 5 November 2026](reports/2026-11-05-LOCAL-DOCKER-RESOURCE-MIGRATION.md) — checksummed cold backups, isolated Compose restore, current 18-migration PostgreSQL schemas, live integration, Memgraph outage/replay and graph rebuild, and 9/9 local Playwright smoke; legacy-resource retirement remains pending.
 
-- [Maintainer supply-chain review — 10 November 2026](reports/2026-11-10-SUPPLY-CHAIN-REVIEW.md) — lockfile/clean-install inventory, CycloneDX/license metadata, npm advisory results, CodeQL CI and the branch-only mainline signed-attestation implementation (not yet executed on main). Partial maintainer review only; legal clearance and formal gate acceptance remain open.
+- [Maintainer supply-chain review — 10 November 2026](reports/2026-11-10-SUPPLY-CHAIN-REVIEW.md) — lockfile/clean-install inventory, CycloneDX/license metadata, npm advisory remediation and main-only signed-attestation workflow. Candidate workflow #524 passed; the signer job remains unexecuted on main. Partial maintainer review only; legal clearance and formal gate acceptance remain open.
 
 ## Current mainline status — 10 November 2026 (after PR #118)
 
