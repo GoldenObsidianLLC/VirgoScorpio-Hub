@@ -1,26 +1,29 @@
-# VirgoScorpio Hub 0.6.2 — Maintainer Supply-Chain Review
+# VirgoScorpio Hub 0.6.2 Ã¢â‚¬â€ Maintainer Supply-Chain Review
+> **11 November 2026 continuation:** PR #119 merged at main 97f11434a211f982b539ef11effd5b7432b5e4a9; workflow #527 generated/uploaded attestations but verification failed on mutually exclusive signer flags, and CodeQL identified medium alert #38. Corrective PR #120 at d2245d127a42eb054eca68d012cce005986c3ec5 addresses both. Push workflow #42983499337 and PR workflow #42983649410 passed the six non-attestation jobs, including CodeQL and evidence consolidation; main-only signing remains skipped until authorized merge to main. No open alerts were returned on the PR merge ref; default-main alert #38 still needs the post-merge rescan. The exact post-merge attestation verification and human license/dependency acceptance remain pending.
 
-> **STATUS: PARTIAL MAINTAINER REVIEW — NOT A COMPLETED RELEASE GATE, LEGAL OPINION, OR PRODUCTION APPROVAL.** This report records reproducible maintainer checks, a newly disclosed low-severity dependency advisory and its lockfile remediation, and outstanding human review. It does not substitute for qualified legal review or independent security assessment.
+
+
+> **STATUS: PARTIAL MAINTAINER REVIEW Ã¢â‚¬â€ NOT A COMPLETED RELEASE GATE, LEGAL OPINION, OR PRODUCTION APPROVAL.** This report records reproducible maintainer checks, a newly disclosed low-severity dependency advisory and its lockfile remediation, and outstanding human review. It does not substitute for qualified legal review or independent security assessment.
 
 - **Snapshot date:** 10 November 2026
 - **Repository:** `GoldenObsidianLLC/VirgoScorpio-Hub`
-- **Package:** `virgoscorpio-hub@0.6.2` — private, unreleased developer-preview candidate
+- **Package:** `virgoscorpio-hub@0.6.2` Ã¢â‚¬â€ private, unreleased developer-preview candidate
 - **Node engine floor:** `>=22.23.4`
 - **Pinned package manager:** `npm@11.19.1`
-- **Current main baseline:** `c7653bb433ae8b363925d13babf239e64b2b5125` (PR #118 merge)
-- **Exact-mainline CI:** [workflow #522](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42879875157) — all six jobs passed before this follow-up branch
-- **Formal gate:** [Issue #23 — Review lockfile, SBOM, provenance, dependency scan and CodeQL evidence](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/23)
+- **Historical main baseline (10 November):** c7653bb433ae8b363925d13babf239e64b2b5125 (PR #118 merge)
+- **Historical baseline CI:** [workflow #522](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42879875157) Ã¢â‚¬â€ all six jobs passed on the 10 November PR #118 merge, before PR #119
+- **Formal gate:** [Issue #23 Ã¢â‚¬â€ Review lockfile, SBOM, provenance, dependency scan and CodeQL evidence](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/23)
 - **Production disposition:** **NO-GO / NOT_PRODUCTION_CERTIFIED**
 
 **Current branch validation:** Windows x64, Node.js 26.12.1 and npm 11.19.1. A fresh `npm ci --ignore-scripts --no-audit --no-fund` completed successfully (178 packages added), followed by the repository-owned `npm run postinstall`, `npm run sbom`, both npm audit scopes, and `npm run check`. The unit/artifact check passed **586/589** tests (0 failures, 3 Windows-specific skips), checked 235 required artifacts and syntax-checked 243 JavaScript files. Full-tree and production-only `npm audit` each report **0 vulnerabilities after the lockfile remediation**. These are local maintainer results on Node.js 26.12.1, not the declared Node.js 22/24 support-matrix evidence or production certification.
 
-**Latest hosted candidate validation — workflow #524:** Exact code/lockfile SHA `17ba575114e1ee9576e49c7ae456a1af0280b6fc` passed all six non-attestation jobs. Node.js 22 passed **589/589** Hub tests and **94/94** EnginEx tests; both supported Node jobs completed clean installs, zero-vulnerability full/production npm audits and CycloneDX generation. Live PostgreSQL/Memgraph/Redis integration passed **82/82**, fresh migrations **18/18 applied plus 18/18 idempotent skips**, and PostgreSQL-backed collaboration Playwright **3/3**; browser smoke, CodeQL and evidence aggregation also passed (`CI EVIDENCE: PASS`). The main-only attestation job was skipped by design on this feature branch. The [full release-gate report](2026-11-10-VirgoScorpio-Hub-0.6.2-Release-Gate-Report.md) records exact lockfile and per-runtime SBOM hashes. Candidate CI is maintainer evidence; mainline attestations and human acceptance remain outstanding.
+**Latest hosted candidate validation Ã¢â‚¬â€ workflow #524:** Exact code/lockfile SHA `17ba575114e1ee9576e49c7ae456a1af0280b6fc` passed all six non-attestation jobs. Node.js 22 passed **589/589** Hub tests and **94/94** EnginEx tests; both supported Node jobs completed clean installs, zero-vulnerability full/production npm audits and CycloneDX generation. Live PostgreSQL/Memgraph/Redis integration passed **82/82**, fresh migrations **18/18 applied plus 18/18 idempotent skips**, and PostgreSQL-backed collaboration Playwright **3/3**; browser smoke, CodeQL and evidence aggregation also passed (`CI EVIDENCE: PASS`). The main-only attestation job was skipped by design on this feature branch. The [full release-gate report](2026-11-10-VirgoScorpio-Hub-0.6.2-Release-Gate-Report.md) records exact lockfile and per-runtime SBOM hashes. Candidate CI is maintainer evidence; mainline attestations and human acceptance remain outstanding.
 
 ## 1. Scope and evidence boundary
 
 This review covers the package manifest and lockfile, the generated CycloneDX inventory, npm advisory results, install-script and package-resolution metadata, vendored EnginEx licensing metadata, and the existing hosted Node.js 22/24 dependency/CodeQL workflow.
 
-The current-main workflow #522 completed both Node.js dependency/unit/security jobs, PostgreSQL/Memgraph integration, browser/accessibility smoke, CodeQL and evidence consolidation. It is bound to the current main source revision and lockfile that existed before this follow-up branch. It did not execute the new main-only attestation job added by this branch; that job still requires PR review and a successful post-merge mainline run.
+The 10 November baseline workflow #522 completed both Node.js dependency/unit/security jobs, PostgreSQL/Memgraph integration, browser/accessibility smoke, CodeQL and evidence consolidation. It is bound to the 10 November main source revision and lockfile that existed before this follow-up branch. It did not execute the new main-only attestation job added by this branch; that job still requires PR review and a successful post-merge mainline run.
 
 No package manifest, runtime API, database schema, migration, or product version change is included. The committed lockfile is deliberately updated below to remediate a newly reported transitive dependency advisory. No registry publication, release, tag, or deployment was performed.
 
@@ -95,7 +98,7 @@ The first full-tree and production-only audit of this branch's original lockfile
 
 | Advisory | Affected locked version | Fixed version | Severity |
 |---|---|---|---|
-| [GHSA-474x-hrwr-fgx4](https://github.com/advisories/GHSA-474x-hrwr-fgx4) / CVE-2026-126066 | `fast-xml-parser@5.11.2` | `5.12.0` | CVSS 3.1 3.7 — Low |
+| [GHSA-474x-hrwr-fgx4](https://github.com/advisories/GHSA-474x-hrwr-fgx4) / CVE-2026-126066 | `fast-xml-parser@5.11.2` | `5.12.0` | CVSS 3.1 3.7 Ã¢â‚¬â€ Low |
 
 The advisory describes quadratic CPU consumption in the parser's stop-node parsing path when the non-default `stopNodes` option is enabled and malformed unterminated tag fragments are supplied. The reported impact is availability-only. The advisory labels its analysis static and unbenchmarked; its proof-of-concept confidence is 0.5. The condition requires use of that non-default parser option. A search of this repository's `apps`, `packages`, `scripts` and `test` source trees found no explicit `stopNodes` configuration, but that source search is not a proof of runtime reachability in every optional SDK or deployment.
 
@@ -114,7 +117,7 @@ The retained JSON outputs correspond to the post-remediation lockfile:
 
 - `artifacts/evidence/supply-chain-review-2026-11-10/npm-audit-all.json`
 - `artifacts/evidence/supply-chain-review-2026-11-10/npm-audit-production.json`
-- `artifacts/evidence/supply-chain-review-2026-11-10/npm-audit-summary.json` — binds both audit exit codes, vulnerability/dependency counts and raw report digests to the package-lock SHA-256.
+- `artifacts/evidence/supply-chain-review-2026-11-10/npm-audit-summary.json` Ã¢â‚¬â€ binds both audit exit codes, vulnerability/dependency counts and raw report digests to the package-lock SHA-256.
 
 These results mean npm reported no advisories for this lockfile at the time of the post-update checks. They do not prove every package is secure, maintained, non-malicious, correctly configured or free from vulnerabilities not represented in npm's advisory database.
 

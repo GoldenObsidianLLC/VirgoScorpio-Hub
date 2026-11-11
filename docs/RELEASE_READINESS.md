@@ -1,29 +1,33 @@
-## Current mainline snapshot — 10 November 2026 (0.6.2, PR #118 merged)
+## Current mainline snapshot Ã¢â‚¬â€ 11 November 2026 (0.6.2, PR #119 merged)
 
-Current `main` is `c7653bb433ae8b363925d13babf239e64b2b5125`, the merge commit for cloud-connection tenant-isolation PR [#118](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/118). Exact-mainline [workflow #522](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42879875157) passed all six jobs on that SHA: Node.js 22.23.4/24.22.1 dependency/unit/security checks, live PostgreSQL/Memgraph integration, browser/accessibility smoke, CodeQL and evidence consolidation. PR #118 closes issue #117; its tenant regression remains maintainer evidence only. Independent reviews #14/#25 and human supply-chain review #23 remain open. F1.20 issue #113 remains CLOSED / ACCEPTED for the restricted developer-preview reliability scope.
+Current main is 97f11434a211f982b539ef11effd5b7432b5e4a9. Workflow #527 exposed conflicting signer CLI options and CodeQL alert #38; its aggregator failed closed. Corrective PR #120 at d2245d127a42eb054eca68d012cce005986c3ec5 resolves both. Push workflow #42983499337 and PR workflow #42983649410 passed the six non-attestation jobs: Node 22/24 dependency/unit/security, live PostgreSQL/Memgraph/Redis, browser smoke, CodeQL and evidence consolidation. Main-only signer skipped as designed on branch/PR events. The PR merge-ref alert query returned no open CodeQL alerts; default-main alert #38 remains open pending merge/rescan. Successful post-merge exact-SHA attestation verification is still required. Issue #23 remains OPEN / PARTIAL; do not populate formal evidence or claim production readiness.
 
-The unmerged issue #23 candidate is maintained on branch `security/dependency-supply-chain-review-2026-11-10` at code/lockfile SHA `17ba575114e1ee9576e49c7ae456a1af0280b6fc`. Exact candidate [workflow #524](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42950578389) passed the six non-attestation jobs: Node.js 22.23.4 and 24.22.1 dependency/unit/security checks, live PostgreSQL/Memgraph integration, browser/accessibility smoke, CodeQL, and consolidated evidence. The Node 22 run passed Hub tests **589/589** and EnginEx tests **94/94**; both Node jobs reported zero npm audit vulnerabilities and CycloneDX 1.5 with 200 components / 201 dependency records. The live database job passed **82/82** tests, applied 18/18 fresh migrations and verified 18/18 idempotent skips, with PostgreSQL-backed browser coverage **3/3** plus Redis/Memgraph recovery. The aggregator reported `CI EVIDENCE: PASS`. The main-only attestation job was skipped as expected on this feature branch; it must run after an authorized merge to main. The lockfile SHA-256 is `8f3786bcfcd03d0b63761c7107e4d757ae5b45171ba2f6c086ff38c027c8b086`; Node 22/24 SBOM file hashes are recorded in the [current release-gate report](reports/2026-11-10-VirgoScorpio-Hub-0.6.2-Release-Gate-Report.md). Formal issue #23 review remains OPEN / PARTIAL: qualified human dependency/license/distribution review, exact-SHA CodeQL alert disposition, and signed mainline attestations are not accepted. This is pre-merge maintainer evidence, not mainline or production certification.
+## Historical mainline snapshot Ã¢â‚¬â€ 10 November 2026 (0.6.2, PR #118 merged)
 
-## Historical mainline snapshot — 10 November 2026 (0.6.2, PR #116 merged)
+Historical 10 November main was c7653bb433ae8b363925d13babf239e64b2b5125, the merge commit for cloud-connection tenant-isolation PR #118. Exact-mainline workflow #522 passed all six jobs on that historical SHA. PR #118 closes issue #117; its tenant regression remains maintainer evidence only. Independent reviews #14/#25 and human supply-chain review #23 remain open. F1.20 issue #113 remains CLOSED / ACCEPTED for the restricted developer-preview reliability scope.
+
+The historical pre-merge issue #23 candidate was maintained on branch security/dependency-supply-chain-review-2026-11-10 at code/lockfile SHA 17ba575114e1ee9576e49c7ae456a1af0280b6fc. Workflow #524 passed its six non-attestation jobs on both Node runtimes, live integration (82/82), fresh migration idempotency (18/18 applied plus 18/18 skipped), collaboration Playwright (3/3), browser smoke, CodeQL and evidence aggregation. The main-only signer was skipped on that feature branch. This is historical pre-merge maintainer evidence only; qualified human dependency/license/distribution review, exact-SHA CodeQL disposition and mainline signer verification remain open.
+
+## Historical mainline snapshot Ã¢â‚¬â€ 10 November 2026 (0.6.2, PR #116 merged)
 
 Current `main` includes PR #116 at exact merge commit `eb156b7620929ae94421caf69b4ddb92ed679812`. Exact-mainline [workflow #517](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42855470069) passed all six required jobs on that SHA: Node.js 22.23.4, Node.js 24.22.1, PostgreSQL/Memgraph integration, browser/accessibility smoke, CodeQL and consolidated evidence. The source-bound live database/graph suite passed **81/81, zero failures, zero skips**, including the PR #116 same-slug two-site custom-content-type registry/record regression. F1.20 issue #113 remains CLOSED / ACCEPTED for the restricted developer-preview reliability scope.
 
 The current maintainer-generated tenant inventory declares 27 flow families, 78 route patterns, 21 implementation/source files and 41 referenced test files. PR #116 merged the schema/query anchors and targeted live custom-content-type A/B regression. These artifacts are review-preparation and drift-detection aids; they are not proof of complete route discovery or independent security acceptance.
 
-The cloud-connection maintainer regression added Site A/B listing isolation, foreign-ID `test`/`disable` denial, selector-conflict rejection and unchanged-row checks. It was merged through PR [#118](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/118) at current main SHA `c7653bb433ae8b363925d13babf239e64b2b5125`, closing issue #117. Exact PR-head workflow #42878000787 and exact post-merge mainline workflow [#522](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42879875157) passed all six required jobs. The focused local PostgreSQL test passed **2/2** and the full local PostgreSQL/Memgraph/Redis runner passed **81/81, zero failures and zero skips**. These are targeted maintainer regressions only; issue #14 remains OPEN / NOT PERFORMED and issue #25 remains open.
+The cloud-connection maintainer regression added Site A/B listing isolation, foreign-ID test/disable denial, selector-conflict rejection and unchanged-row checks. It was merged through PR #118 at the 10 November main SHA c7653bb433ae8b363925d13babf239e64b2b5125, closing issue #117. Exact PR-head workflow #42878000787 and exact post-merge workflow #522 passed all six required jobs on that historical revision. The focused local PostgreSQL test passed 2/2 and the full local PostgreSQL/Memgraph/Redis runner passed 81/81, zero failures and zero skips. These are targeted maintainer regressions only; issue #14 remains OPEN / NOT PERFORMED and issue #25 remains open.
 
 Current readiness remains **NOT_PRODUCTION_CERTIFIED / NO-GO**. Green CI and maintainer regressions do not replace live provider acceptance, independent tenant/security assessment (#14/#25), human supply-chain review (#23), load/restore drills (#24), operations/rollback approval (#26), authorized release-scope approval (#13), or governance controls (#32). Package 0.6.2 remains private and unreleased; no SemVer bump, tag, publication or deployment is authorized.
 
-## Historical mainline snapshot — 9 November 2026 (0.6.2, PR #114 merged)
+## Historical mainline snapshot Ã¢â‚¬â€ 9 November 2026 (0.6.2, PR #114 merged)
 
 Current `main` is VirgoScorpio Hub 0.6.2 at `267380be1ba441f83408e2c63c042760ec662ac7`, the merge commit for PR #114/F1.20. Hosted [mainline workflow run #495](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42700441554) completed with **4/6 required jobs successful**: Node.js 22.23.4 and 24.22.1, browser editor/accessibility smoke, and CodeQL passed; PostgreSQL/Memgraph integration and consolidated candidate evidence failed.
 
 - Each Node matrix job passed **576/576** Hub tests and **94/94** EnginEx tests; `npm audit` reported zero vulnerabilities. The service-less integration subset had **34 skips per runtime** and remains PARTIAL, not a live integration pass.
-- The PostgreSQL/Memgraph job's dedicated live integration command passed **80/80** tests with zero failure/skip/TODO. A fresh disposable PostgreSQL database applied **18/18** migrations and skipped **18/18** on its idempotent second pass. The physical Redis outage test observed 11–12 bridge reconnect attempts and 11 presence reconnect attempts, did not replay outage-time Pub/Sub, restored the exact disposable Redis service, and verified PING.
+- The PostgreSQL/Memgraph job's dedicated live integration command passed **80/80** tests with zero failure/skip/TODO. A fresh disposable PostgreSQL database applied **18/18** migrations and skipped **18/18** on its idempotent second pass. The physical Redis outage test observed 11Ã¢â‚¬â€œ12 bridge reconnect attempts and 11 presence reconnect attempts, did not replay outage-time Pub/Sub, restored the exact disposable Redis service, and verified PING.
 - The PostgreSQL-backed Playwright assertions on main verified membership removal in PostgreSQL and idle-WebSocket heartbeat reauthorization during the physical Redis outage. Redis restore/PING and browser-client closure completed, but API-node teardown did not finish before the **180-second** Playwright timeout. The integration job therefore failed; later Memgraph outage/replay and graph-rebuild steps were skipped. The aggregator failed because the producer job failed and the required Memgraph evidence files were not produced. Draft PR [#115](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/115), based on this exact main SHA, adds a shared bounded Redis-client shutdown helper; its complete PostgreSQL multi-node Playwright spec passed **3/3**, including the real Redis outage case, with both API nodes closing cleanly. Local `npm run check` passed **583/586** tests (zero failures, three Windows-specific platform skips), with 232 required paths and 243 JavaScript files syntax-checked on Node.js 26.12.1. This is local follow-up evidence only: it does not replace the failed hosted run, qualify Memgraph outage/rebuild, or close F1.20.
 - The exact-source local release-readiness report remains **7 PASS, 2 PARTIAL, 1 BLOCKED, 14 MISSING_EVIDENCE**, with `readyForProduction: false`. CI evidence is BLOCKED and production certification remains NO. This run is not a production release or a completed F1.20 acceptance.
 
-## Historical mainline snapshot — 9 November 2026 (0.6.2, PR #109 merged)
+## Historical mainline snapshot Ã¢â‚¬â€ 9 November 2026 (0.6.2, PR #109 merged)
 
 Current mainline is VirgoScorpio Hub 0.6.2 at `36220abf4ebcc629fa616961879f5a2ffe1f847d`. F1.18 merged through PR #109. Mainline [workflow run #472](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42535903899) completed all six jobs successfully: Node.js 22.23.4 and 24.22.1 unit/security/dependency checks, dedicated PostgreSQL/Memgraph integration, Chromium browser/accessibility smoke, CodeQL, and consolidated run-bound evidence.
 
@@ -35,9 +39,9 @@ Current mainline is VirgoScorpio Hub 0.6.2 at `36220abf4ebcc629fa616961879f5a2ff
 
 The local `npm run release:readiness` report on the same source revision recorded **7 PASS, 2 PARTIAL, 1 BLOCKED, 14 MISSING_EVIDENCE**, `readyForProduction: false`. The local fresh-migration supplemental record was stale and remains BLOCKED by its exact-revision contract; this is distinct from the successful, checksum-bound hosted database producer/aggregator evidence. Do not copy hosted evidence into a different source revision or edit its SHA.
 
-The default preview remains local media/library storage, mock-only AI, external AI content disabled, email disabled, SAML/OIDC unconfigured, realtime/Memgraph/plugin execution disabled, Stripe credentials unset and ClamAV unset. Issues #15–#22 are deferred/not planned for this developer-preview scope; their live provider, manual accessibility, parity and plugin acceptance remain production readiness requirements and stay visible as MISSING_EVIDENCE. Issues #14/#24/#25/#26/#32 and named release-owner approval under #13 remain outstanding. Package version stays 0.6.2 and unreleased; production remains NO-GO.
+The default preview remains local media/library storage, mock-only AI, external AI content disabled, email disabled, SAML/OIDC unconfigured, realtime/Memgraph/plugin execution disabled, Stripe credentials unset and ClamAV unset. Issues #15Ã¢â‚¬â€œ#22 are deferred/not planned for this developer-preview scope; their live provider, manual accessibility, parity and plugin acceptance remain production readiness requirements and stay visible as MISSING_EVIDENCE. Issues #14/#24/#25/#26/#32 and named release-owner approval under #13 remain outstanding. Package version stays 0.6.2 and unreleased; production remains NO-GO.
 
-## Historical mainline snapshot — 7 November 2026 (PRs #84–#92 merged)
+## Historical mainline snapshot Ã¢â‚¬â€ 7 November 2026 (PRs #84Ã¢â‚¬â€œ#92 merged)
 
 Current mainline: VirgoScorpio Hub 0.6.2 at c6026f137bbdc48dca13faa17f9d8f9e02d3f037 after PR #92. Its PR workflow [run 42348356762](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42348356762) and post-merge mainline workflow [run 42348591975](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42348591975) passed all six hosted jobs: Node.js 22.23.4 and 24.22.1, PostgreSQL/Memgraph integration, browser/accessibility, CodeQL and consolidated evidence. PR #92 adds live PostgreSQL concurrency coverage for mega-menu optimistic updates. Two simultaneous updates using the same expected version must result in one successful update and one ERR_VIRGOSCORPIO_HUB_VERSION_CONFLICT; the final row increments once, matches the winner, and the other tenant remains unchanged.
 
@@ -57,9 +61,9 @@ This is targeted regression coverage only. It does not satisfy independent tenan
 
 > **Current status: NOT_PRODUCTION_CERTIFIED.** The readiness report is an engineering evidence snapshot, not production approval.
 
-## Historical verified mainline snapshot — 7 November 2026 (PRs #76–#83 merged)
+## Historical verified mainline snapshot Ã¢â‚¬â€ 7 November 2026 (PRs #76Ã¢â‚¬â€œ#83 merged)
 
-Current mainline source: VirgoScorpio Hub 0.6.2 at `109c05b001003e68dfaa5584353ab683a41d9075`. PRs #76–#83 are merged. PR #83 adds read-only recursive pinned-submodule verification to development bootstrap and dev:doctor, with actionable fail-closed diagnostics and no automatic worktree mutation. PR CI and post-merge mainline push [run #353](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42321203517) passed all six hosted jobs. Node.js 22.23.4 and 24.22.1, PostgreSQL/Memgraph integration, browser/accessibility, CodeQL and evidence consolidation are green. The focused development change adds no dependency, schema, or public HTTP contract change.
+Current mainline source: VirgoScorpio Hub 0.6.2 at `109c05b001003e68dfaa5584353ab683a41d9075`. PRs #76Ã¢â‚¬â€œ#83 are merged. PR #83 adds read-only recursive pinned-submodule verification to development bootstrap and dev:doctor, with actionable fail-closed diagnostics and no automatic worktree mutation. PR CI and post-merge mainline push [run #353](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42321203517) passed all six hosted jobs. Node.js 22.23.4 and 24.22.1, PostgreSQL/Memgraph integration, browser/accessibility, CodeQL and evidence consolidation are green. The focused development change adds no dependency, schema, or public HTTP contract change.
 
 Formal database evidence remains anchored to product-code baseline 29a3e03997da429a1bb05964f46c22cf975a8c2e (run #341), not the current mainline SHA. That exact-source artifact reports ciStatus: PASS and 67/67 live integration tests with zero failures, skips or TODOs; 18/18 migrations applied fresh and 18/18 skipped on the idempotent second pass; disposable database dropped; Memgraph outage/replay and graph rebuild passed. Producer manifest SHA-256: 27d70d6ed481e55ec2bd2d07b70f8aeda20602f8d2ae947c2384196ec2c6201c. Run #353 also passed its dedicated PostgreSQL/Memgraph job on current SHA, but this snapshot does not claim a newly retained formal release-evidence contract for that revision.
 
@@ -68,9 +72,9 @@ PR #80 makes formal CI evidence materialization safe for both the tracked histor
 This is an engineering CI result, not production certification. The Node matrix keeps its service-less integration subset PARTIAL (29 skipped tests per runtime), not a live-database pass. Human dependency/lockfile review remains open, and 14 independent/provider/product/security/supply-chain/operations evidence gates remain missing. The CI report explicitly keeps readyForProduction: false / NOT_PRODUCTION_CERTIFIED. Hub 0.6.2 remains unreleased; no tag, GitHub Release, package publication or production deployment is authorized.
 
 A fresh isolated Windows checkout initialized EnginEx at pinned gitlink d99e021f55664f006b5e65b4a58202f9c7bc4f4b and completed npm ci on Node.js 26.12.1; the original linked worktree and developer data were left untouched. After PR #83, the exact-SHA diagnostic at 109c05b001003e68dfaa5584353ab683a41d9075 reported 5 PASS, 2 PARTIAL, 3 BLOCKED and 14 MISSING_EVIDENCE. The local artifact/syntax check hit a native Windows VirtualAlloc allocation failure; the unit runner also reported native Zone allocation failure while running test files (including auth-security and realtime), rather than assertion failures. This was a resource-limited local diagnostic, not a hosted-CI regression: PR #83 and mainline run #353 passed all six hosted jobs on the pinned Node 22/24 matrix. The local environment did not provide dedicated PostgreSQL/Memgraph TEST_DATABASE_URL endpoints, so its 29-test integration subset was skipped. Do not use this Node 26 workstation diagnostic as a substitute for exact-source hosted evidence or external acceptance.
-### Local developer-checkout bootstrap safeguards — PR #83
+### Local developer-checkout bootstrap safeguards Ã¢â‚¬â€ PR #83
 
-The shared submodule preflight runs `git submodule status --recursive` read-only. It blocks on uninitialized, mismatched, conflicted, malformed, or unverifiable submodule state and never runs update, checkout, reset, or clean. The isolated checkout verified the EnginEx gitlink and nested worktree at the pinned commit. The original linked worktree’s shared `.git/config` permission restriction was not modified.
+The shared submodule preflight runs `git submodule status --recursive` read-only. It blocks on uninitialized, mismatched, conflicted, malformed, or unverifiable submodule state and never runs update, checkout, reset, or clean. The isolated checkout verified the EnginEx gitlink and nested worktree at the pinned commit. The original linked worktreeÃ¢â‚¬â„¢s shared `.git/config` permission restriction was not modified.
 
 ### Superseded run #278 attempt history
 
@@ -84,7 +88,7 @@ The fourteen missing evidence gates remain: independent tenant-isolation review;
 
 The full current assessment, producer metrics, formal blocker, and next actions are in the [5 November 2026 0.6.2 Release Gate Report](reports/2026-11-05-VirgoScorpio-Hub-0.6.2-Release-Gate-Report.md).
 
-## Historical PR #68 candidate follow-up snapshot — 5 November 2026
+## Historical PR #68 candidate follow-up snapshot Ã¢â‚¬â€ 5 November 2026
 
 The latest PR candidate source commit is `8db6c66f07c6ea89745fe2a0c8dd7f5f4f6440b3`; hosted pull-request workflow [run #270](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42026945926) and push run [#269](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42026938931) both completed successfully on merge ref `e39cd5c33f940762ed9fa88b27aad8f8d3070947`. All six jobs passed in each run: Node.js 22.23.4, Node.js 24.22.1, dedicated PostgreSQL/Memgraph integration, browser/editor smoke, CodeQL, and consolidated revision-bound evidence.
 
@@ -96,7 +100,7 @@ The final live-library regression also caught and corrected a stale `ERR_SYSTEMF
 
 At the time of this pre-merge candidate snapshot, PR #68 was open and had no submitted human reviews. That state was superseded when PR #68 merged as `be1441e216c20358e8506389915a676209808e37`; PR #69 then merged to main as `d50e56801ea77a811ec809be1574e769917fff78`. No release tag, GitHub Release or production deployment is authorized.
 
-## Previous hosted candidate snapshot — 5 November 2026
+## Previous hosted candidate snapshot Ã¢â‚¬â€ 5 November 2026
 
 Hub 0.6.2 is proposed in PR [#68](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/68), head commit `31dd63908fbf8a9fb0340323d92ffd6cdd4d89b9`. PR CI run [#260](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/41976111045) and push run [#259](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/41976023520) passed all six checks. The revision-bound PR merge-ref is `16d9852126da4aa5c3e15d42460375a2e0ad0cd7`; its Node.js 22.23.4 and 24.22.1 jobs each passed 469/469 Hub tests, 94/94 EnginEx tests, 205 required artifact checks and 213 JavaScript syntax checks. Dedicated live PostgreSQL/Memgraph passed 65/65 tests, applied 18/18 migrations with an idempotent second pass, and browser smoke passed 9/9. Dependency audit reported zero vulnerabilities; CodeQL workflow and consolidated evidence passed.
 
@@ -104,7 +108,7 @@ The formal evaluator on both runtime jobs reports `NOT_PRODUCTION_CERTIFIED`, `r
 
 The complete earlier exact-revision assessment and original SBOM variance are in the [0.6.2 Release Gate Report](reports/2026-11-05-VirgoScorpio-Hub-0.6.2-Release-Gate-Report.md). The follow-up is now committed in PR #68 and passed hosted pull-request run [#264](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42015046006). It binds formal/supplemental evidence to schema, product, version and exact Git SHA; the migration harness emits its source revision. It pins npm 11.19.1 and validates identical normalized CycloneDX component/dependency graphs across Node.js 22/24. The latest readiness is 7 PASS, 2 PARTIAL, 1 BLOCKED and 14 MISSING_EVIDENCE. The blocked formal PostgreSQL/Memgraph evidence remains intentionally blocked until an exact-revision evidence record is supplied; the dedicated CI run-bound live integration result passed. The 4 November report below is retained as the prior 0.6.1 mainline snapshot.
 
-## Historical mainline snapshot — 4 November 2026
+## Historical mainline snapshot Ã¢â‚¬â€ 4 November 2026
 
 The current default branch was reviewed at commit `489325585d57fe95f961c36a597faa7065848c7f` (`refactor(api): extract AI task route family`, PR #67). Hosted CI run [#258 / 41949722725](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/41949722725) completed all six checks successfully: Node.js 22.23.4, Node.js 24.22.1, dedicated PostgreSQL/Memgraph integration, browser/accessibility smoke, CodeQL, and consolidated revision-bound evidence. Both runtime jobs passed 461/461 Hub tests and 94/94 EnginEx tests; the live database job passed 65/65 tests and applied all 18 migrations with an idempotent second pass; browser smoke passed 9/9.
 
@@ -112,15 +116,15 @@ The formal readiness evaluator on this revision remains **NO-GO**: 8 PASS, 2 PAR
 
 The complete revision-bound assessment is in the [4 November 2026 VirgoScorpio Hub 0.6.1 Release Gate Report](reports/2026-11-04-VirgoScorpio-Hub-0.6.1-Release-Gate-Report.md). The report preserves the distinction between the 0.6.1 mainline candidate and the follow-on 0.6.2 local development branch. No release tag or GitHub Release was published at review time.
 
-## Historical pre-PR #65 assessment — 4 November 2026 (superseded)
+## Historical pre-PR #65 assessment Ã¢â‚¬â€ 4 November 2026 (superseded)
 
 PR [#59](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/59) completed the identity cutover. PR #61 added the encrypted durable AI queue foundation; PR #62 centralized transaction/version infrastructure; PR #63 extracted browser auth routes/cookie handling; and PR #64 separated session persistence/lifecycle from identity orchestration. These PRs are merged to `main` at the latest pre-candidate commit `aa361ab` (4 November 2026). They are code changes, not release-certification events. The detailed candidate evidence below was generated on 1 November and is historical, not current-commit evidence.
 
-The post-PR #63 CodeQL analysis on `dc4a82d` marked High auth-cookie alerts #30–#33 fixed without manual dismissal. Medium alert #14 (`js/unsafe-code-construction`) remains open on the `aa361ab` baseline, at the now-removed vendor legacy renderer. PR #65 is the 0.6.0 / EnginEx 7.0.0 compatibility/security candidate that removes that legacy execution adapter; its CodeQL and other hosted checks must pass before the alert can be recorded as fixed. No finding is manually dismissed or suppressed.
+The post-PR #63 CodeQL analysis on `dc4a82d` marked High auth-cookie alerts #30Ã¢â‚¬â€œ#33 fixed without manual dismissal. Medium alert #14 (`js/unsafe-code-construction`) remains open on the `aa361ab` baseline, at the now-removed vendor legacy renderer. PR #65 is the 0.6.0 / EnginEx 7.0.0 compatibility/security candidate that removes that legacy execution adapter; its CodeQL and other hosted checks must pass before the alert can be recorded as fixed. No finding is manually dismissed or suppressed.
 
 **Historical disposition for the pre-PR #65 snapshot:** NOT_PRODUCTION_CERTIFIED / NO-GO. This section records the then-current 0.6.0 candidate and is retained for audit continuity; use the current mainline snapshot above and the linked 4 November report for the latest evidence.
 
-## Historical candidate snapshot — 1 November 2026
+## Historical candidate snapshot Ã¢â‚¬â€ 1 November 2026
 
 The latest reviewed engineering evidence is recorded in the [1 November 2026 project status report](reports/2026-11-01-VirgoScorpio-Hub-0.5.1-Project-Status-Report.md). It covers candidate PR #36 at `f9d463ef9ca82d15c9220e15cf50df2ba6367a11` (based on `main` `1a903b8eab4304dd61b2489381b091d34f1ea546`). The candidate's latest hosted workflow completed all five jobs successfully, including the dedicated PostgreSQL/Memgraph job (22/22 tests, zero skips), fresh migrations (14/14 applied, 14/14 idempotently skipped), Chromium smoke (9/9), and CodeQL analysis execution.
 
@@ -132,8 +136,8 @@ The candidate still has five open CodeQL results (four High and one Medium), no 
 
 The authoritative recorded snapshot is generated by `npm run release:readiness` and retained in:
 
-- `artifacts/release-readiness.md` — human-readable summary.
-- `artifacts/release-readiness.json` — machine-readable source of truth.
+- `artifacts/release-readiness.md` Ã¢â‚¬â€ human-readable summary.
+- `artifacts/release-readiness.json` Ã¢â‚¬â€ machine-readable source of truth.
 
 The latest retained snapshot reports:
 
@@ -171,7 +175,7 @@ These are development/test results only. They do not prove production deployment
 
 ### Build and test integrity
 
-- [x] Fresh database install and migrations 0001–0014 pass on a disposable PostgreSQL database.
+- [x] Fresh database install and migrations 0001Ã¢â‚¬â€œ0014 pass on a disposable PostgreSQL database.
 - [x] Supported v0008 upgrade fixture is exercised through the current migration set by the integration runner.
 - [x] Live PostgreSQL/Memgraph integration passes with zero skipped tests on the current application baseline.
 - [x] Hosted CI passes on the release-tooling correction across the supported Node.js matrix and all configured jobs. See the PR and post-merge workflow runs above.

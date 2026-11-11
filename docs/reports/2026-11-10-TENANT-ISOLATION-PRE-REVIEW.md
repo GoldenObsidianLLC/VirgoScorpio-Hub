@@ -1,11 +1,14 @@
 # Tenant-Isolation and Release Continuation — 10 November 2026
+**Latest main after PR #119 (11 November 2026):** 97f11434a211f982b539ef11effd5b7432b5e4a9. Workflow #527 passed Node dependency/unit/security, live PostgreSQL/Memgraph/Redis, browser and CodeQL jobs, but main-only attestation verification and dependent evidence aggregation failed. CodeQL reported medium alert #38. Corrective PR #120 passed the six non-attestation CI jobs on both push and PR events; main-only signing remains post-merge. This supply-chain-only change does not replace the independent tenant review. See the 11 November remediation report. Any new independent tenant-isolation engagement must start from a clean latest-main checkout (or explicitly authorized exact SHA) and record the actual reviewed revision. Issue #14 remains OPEN / NOT PERFORMED; issue #25 remains open.
+
+
 
 **Repository:** [GoldenObsidianLLC/VirgoScorpio-Hub](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub)
 **Candidate:** `0.6.2` — private, unreleased developer preview
 **Merged assessment branch:** `security/tenant-isolation-pre-review-2026-11-10` (PR #116)
 **Branch base main SHA:** `df1bf2b90d6eba96ec571a1ccab96f8d4354353f`
 **Historical main after PR #116 (pre-PR #118):** `eb156b7620929ae94421caf69b4ddb92ed679812` — exact-mainline workflow [#517](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42855470069) passed 6/6 jobs, including 81/81 live PostgreSQL/Memgraph tests, zero failures and zero skips.
-**Current main after PR #118:** `c7653bb433ae8b363925d13babf239e64b2b5125` — exact-mainline workflow [#522](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42879875157) passed all six required jobs. PR #118 closed issue #117; its cloud-connection tests are maintainer regressions only. Independent review #14 and broader review #25 remain open.
+**Historical main after PR #118:** `c7653bb433ae8b363925d13babf239e64b2b5125` — exact-mainline workflow [#522](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42879875157) passed all six required jobs. PR #118 closed issue #117; its cloud-connection tests are maintainer regressions only. Independent review #14 and broader review #25 remain open.
 
 **Production decision:** **NO-GO — NOT_PRODUCTION_CERTIFIED**
 

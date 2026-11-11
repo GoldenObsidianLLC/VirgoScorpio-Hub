@@ -105,24 +105,10 @@ function renderGenerationLog(input) {
   return lines.join('\n') + '\n';
 }
 
-function buildSbomCommand(
-  npmCli = process.env.npm_execpath,
-  nodeExecutable = process.execPath,
-  platform = process.platform,
-  commandProcessor = process.env.ComSpec || 'cmd.exe'
-) {
-  const npmCliPath = typeof npmCli === 'string' ? npmCli.trim() : '';
-  if (npmCliPath) {
-    return {
-      command: nodeExecutable,
-      args: [npmCliPath, ...SBOM_ARGS],
-      shell: false
-    };
-  }
-
+function buildSbomCommand(platform = process.platform) {
   if (platform === 'win32') {
     return {
-      command: commandProcessor,
+      command: 'cmd.exe',
       args: ['/d', '/s', '/c', ['npm', ...SBOM_ARGS].join(' ')],
       shell: false
     };
@@ -135,9 +121,8 @@ function buildSbomCommand(
   };
 }
 
-function formatSpawnError(invocation, error, npmCli = process.env.npm_execpath) {
+function formatSpawnError(invocation, error) {
   return 'Unable to launch npm SBOM command (command=' + String(invocation.command) +
-    ', npm_execpath=' + String(npmCli || 'unavailable') +
     ', code=' + String(error.code) + ', errno=' + String(error.errno) +
     ', syscall=' + String(error.syscall) + '): ' + error.message;
 }
