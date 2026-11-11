@@ -24,6 +24,7 @@ test('identity service emits scoped authorization invalidations after membership
   const siteId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
   const sessionId = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
   const changes = [];
+  const lockedSites = [];
   const pool = {
     async query(sql) {
       if (sql.includes('UPDATE auth_sessions')) return { rowCount: 1, rows: [{ id: sessionId, user_id: userId }] };
@@ -37,6 +38,10 @@ test('identity service emits scoped authorization invalidations after membership
       return {
         async query(sql) {
           if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') return { rowCount: 0, rows: [] };
+          if (sql.includes('SELECT id FROM sites WHERE id=$1 FOR UPDATE')) {
+            lockedSites.push(siteId);
+            return { rowCount: 1, rows: [{ id: siteId }] };
+          }
           if (sql.includes("r.slug='site-owner'")) return { rowCount: 0, rows: [] };
           if (sql.includes('DELETE FROM site_memberships')) return { rowCount: 1, rows: [{ user_id: userId }] };
           throw new Error(`Unexpected transaction query: ${sql}`);
@@ -51,6 +56,7 @@ test('identity service emits scoped authorization invalidations after membership
   assert.deepEqual(await identity.logout('opaque-session-token'), { revoked: true });
   await identity.addMember({ siteId, email: 'member@example.test', roleSlug: 'editor' });
   await identity.removeMember({ siteId, userId });
+  assert.deepEqual(lockedSites, [siteId], 'membership removal serializes against changes for the same site');
   assert.deepEqual(changes, [
     { principalId: userId, sessionId },
     { principalId: userId, sessionId },

@@ -124,13 +124,14 @@ test(
     }
 
     const actorA = await createUser('Site A Owner', true);
+    const coOwnerA = await createUser('Site A Co-Owner', true);
     const actorB = await createUser('Site B Owner', true);
     const targetB = await createUser('Site B Existing Member');
     const targetA = await createUser('Site A Provisioning Target');
 
     await pool.query(
-      'INSERT INTO site_memberships(site_id,user_id,role_id) VALUES($1,$2,$3),($4,$5,$3),($4,$6,$7)',
-      [siteA, actorA.id, roleIds.get('site-owner'), siteB, actorB.id, targetB.id, roleIds.get('editor')]
+      'INSERT INTO site_memberships(site_id,user_id,role_id) VALUES($1,$2,$3),($1,$4,$3),($5,$6,$3),($5,$7,$8)',
+      [siteA, actorA.id, roleIds.get('site-owner'), coOwnerA.id, siteB, actorB.id, targetB.id, roleIds.get('editor')]
     );
 
     const sessionA = await identity.login({
@@ -140,6 +141,13 @@ test(
       userAgent: 'tenant-membership-isolation-test',
     });
     assert.equal(sessionA.mfaRequired, false);
+    const coOwnerSessionA = await identity.login({
+      email: coOwnerA.email,
+      password: 'Isolation-Password-2026',
+      ip: '127.0.0.1',
+      userAgent: 'tenant-membership-isolation-test',
+    });
+    assert.equal(coOwnerSessionA.mfaRequired, false);
 
     server = createApiServer({
       env,
@@ -327,6 +335,71 @@ test(
       assert.equal(audit.rows[0].actor_id, actorA.id);
       assert.equal(audit.rows[0].target_type, 'invitation');
       assert.deepEqual(await membershipSideEffects(pool, siteB, attemptedInviteEmail), before);
+    });
+
+    await t.test('concurrent owner removals serialize and preserve one active site owner', async () => {
+      const lockClient = await pool.connect();
+      let removalResultsPromise = Promise.resolve([]);
+      let lockWaiterCount = 0;
+
+      try {
+        await lockClient.query('BEGIN');
+        await lockClient.query('SELECT id FROM sites WHERE id=$1 FOR UPDATE', [siteA]);
+
+        const removals = [
+          { actorId: actorA.id, token: sessionA.token, targetId: coOwnerA.id },
+          { actorId: coOwnerA.id, token: coOwnerSessionA.token, targetId: actorA.id },
+        ];
+        removalResultsPromise = Promise.all(removals.map(async removal => {
+          const response = await fetch(`${base}/api/v1/sites/${siteA}/members/${removal.targetId}`, {
+            method: 'DELETE',
+            headers: { authorization: `Bearer ${removal.token}` },
+          });
+          return { ...removal, status: response.status, payload: await response.json() };
+        }));
+
+        const deadline = Date.now() + 5_000;
+        while (Date.now() < deadline) {
+          const waiting = await pool.query(
+            `SELECT count(*)::integer AS count
+               FROM pg_stat_activity
+              WHERE datname=current_database()
+                AND wait_event_type='Lock'
+                AND query LIKE 'SELECT id FROM sites WHERE id%FOR UPDATE%'`
+          );
+          lockWaiterCount = waiting.rows[0].count;
+          if (lockWaiterCount >= 2) break;
+          await new Promise(resolve => setTimeout(resolve, 25));
+        }
+      } finally {
+        await lockClient.query('ROLLBACK').catch(() => {});
+        lockClient.release();
+      }
+
+      const results = await removalResultsPromise;
+      assert.equal(lockWaiterCount, 2, 'both requests must serialize on the same site row');
+      assert.equal(results.filter(result => result.status === 200).length, 1);
+      assert.equal(results.filter(result => result.status === 409).length, 1);
+      const successfulRemoval = results.find(result => result.status === 200);
+      const rejectedRemoval = results.find(result => result.status === 409);
+      assert.equal(rejectedRemoval.payload.code, 'ERR_VIRGOSCORPIO_HUB_LAST_OWNER');
+
+      const owners = await pool.query(
+        `SELECT m.user_id
+           FROM site_memberships m
+           JOIN roles r ON r.id=m.role_id
+           JOIN users u ON u.id=m.user_id
+          WHERE m.site_id=$1 AND r.slug='site-owner' AND u.status='active'`,
+        [siteA]
+      );
+      assert.deepEqual(owners.rows.map(row => row.user_id), [successfulRemoval.actorId]);
+
+      const removalAudits = await pool.query(
+        `SELECT target_id FROM audit_events
+          WHERE site_id=$1 AND action='site.member_removed' AND target_id=ANY($2::uuid[])`,
+        [siteA, [actorA.id, coOwnerA.id]]
+      );
+      assert.deepEqual(removalAudits.rows.map(row => row.target_id), [successfulRemoval.targetId]);
     });
 
     const siteBMembership = await pool.query(

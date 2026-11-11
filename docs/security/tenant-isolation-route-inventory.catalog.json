@@ -262,7 +262,7 @@
       ],
       "coverage": {
         "level": "targeted-selector-reconciliation-and-two-site-side-effects",
-        "limits": "Unit tests assert resolver-before-capability ordering. The live A/B integration scenario rejects path/header, path/query and path/body conflicts for member listing, member creation and invitation creation, then compares membership, invitation, mail-outbox and audit snapshots for both sites. Foreign-user membership and invitation controls remain covered. Last-owner concurrency, broader role combinations and revocation of active streams remain independent-review work."
+        "limits": "Unit tests assert resolver-before-capability ordering. The live A/B integration scenario rejects path/header, path/query and path/body conflicts for member listing, member creation and invitation creation, then compares membership, invitation, mail-outbox and audit snapshots for both sites. Foreign-user membership and invitation controls remain covered. A maintainer-authored live PostgreSQL regression now serializes concurrent removals of two active Site A owners, verifies exactly one removal succeeds, the other receives ERR_VIRGOSCORPIO_HUB_LAST_OWNER, one active owner remains, and exactly one removal audit is written. This targeted test is not independent review. Broader role combinations, full owner-transfer lifecycle and revocation of active streams still require additional maintainer coverage; independent route discovery and security acceptance remain separate production gates."
       },
       "methods": [
         "GET",
