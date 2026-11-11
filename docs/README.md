@@ -2,7 +2,9 @@
 
 ## Current status and repository assurance
 
-- [Full 0.6.2 release-gate report — 10 November 2026](reports/2026-11-10-VirgoScorpio-Hub-0.6.2-Release-Gate-Report.md) — current main baseline, latest pre-merge issue #23 candidate CI (#524), advisory remediation, SBOM digests, formal readiness, open issues and next actions. Production remains NO-GO.
+- [11 November supply-chain attestation and CodeQL remediation](reports/2026-11-11-SUPPLY-CHAIN-ATTESTATION-REMEDIATION.md) — workflow #527 failure analysis, GitHub CLI flag correction, CodeQL alert #38 remediation, local validation and remaining acceptance boundaries. Corrective branch awaits hosted PR CI; issue #23 remains OPEN / PARTIAL.
+
+- [Full 0.6.2 release-gate report — 10 November 2026](reports/2026-11-10-VirgoScorpio-Hub-0.6.2-Release-Gate-Report.md) — historical 10 November main/candidate evidence, advisory remediation, SBOM digests and the release-gate decision. Current mainline follow-up is recorded in the 11 November remediation report and current status section below. Production remains NO-GO.
 
 - [Tenant-isolation route and data-access inventory — 10 November 2026](security/TENANT-ISOLATION-ROUTE-CAPABILITY-MAP-2026-11-10.md) — current maintainer-generated route-family, capability, data-boundary, source-anchor and test-reference catalog; 27 families, 78 route patterns, 21 implementation files and 41 test files. Review preparation only, not independent assessment evidence.
 
@@ -16,7 +18,11 @@
 
 - [Maintainer supply-chain review — 10 November 2026](reports/2026-11-10-SUPPLY-CHAIN-REVIEW.md) — lockfile/clean-install inventory, CycloneDX/license metadata, npm advisory remediation and main-only signed-attestation workflow. Candidate workflow #524 passed; the signer job remains unexecuted on main. Partial maintainer review only; legal clearance and formal gate acceptance remain open.
 
-## Current mainline status — 10 November 2026 (after PR #118)
+## Current mainline status — 11 November 2026 (after PR #119)
+
+Current main is 97f11434a211f982b539ef11effd5b7432b5e4a9, merge commit for PR #119. Exact-mainline workflow #527 (https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42964407873) passed Node dependency/unit/security, PostgreSQL/Memgraph/Redis integration, browser and CodeQL jobs, but attestation verification failed before invocation because mutually exclusive signer-workflow and cert-identity options were combined. The evidence aggregator failed closed. CodeQL identified medium alert #38 in SBOM command construction. Corrective branch security/supply-chain-attestation-codeql-2026-11-11 removes both issues; local SBOM tests and npm run check pass, while hosted PR validation and post-merge signer verification remain outstanding. Issue #23 remains OPEN / PARTIAL; production remains NO-GO.
+
+## Historical mainline status — 10 November 2026 (after PR #118)
 
 Current `main` is `c7653bb433ae8b363925d13babf239e64b2b5125`. Exact-mainline [workflow #522](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42879875157) passed all six jobs on that merge SHA. PR #118 closes issue #117 and adds targeted Site A/B cloud-connection isolation coverage. This does not close the independent tenant-isolation review #14 or broader security review #25.
 

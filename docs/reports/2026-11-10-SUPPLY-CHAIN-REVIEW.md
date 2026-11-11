@@ -1,4 +1,7 @@
 # VirgoScorpio Hub 0.6.2 — Maintainer Supply-Chain Review
+> **11 November 2026 continuation:** PR #119 merged at main 97f11434a211f982b539ef11effd5b7432b5e4a9; workflow #527 created/uploaded attestations but verification failed because mutually exclusive signer-workflow and cert-identity options were combined. The same run reported medium CodeQL alert #38 for environment-derived SBOM executable paths, and the evidence aggregator failed closed. Corrective branch security/supply-chain-attestation-codeql-2026-11-11 addresses both findings; local focused tests, full check, SBOM generation and audits pass, but hosted PR CI and post-merge attestation verification remain pending. Read the 11 November remediation report. Issue #23 remains OPEN / PARTIAL; this update is not legal clearance or human acceptance.
+
+
 
 > **STATUS: PARTIAL MAINTAINER REVIEW — NOT A COMPLETED RELEASE GATE, LEGAL OPINION, OR PRODUCTION APPROVAL.** This report records reproducible maintainer checks, a newly disclosed low-severity dependency advisory and its lockfile remediation, and outstanding human review. It does not substitute for qualified legal review or independent security assessment.
 
@@ -7,8 +10,8 @@
 - **Package:** `virgoscorpio-hub@0.6.2` — private, unreleased developer-preview candidate
 - **Node engine floor:** `>=22.23.4`
 - **Pinned package manager:** `npm@11.19.1`
-- **Current main baseline:** `c7653bb433ae8b363925d13babf239e64b2b5125` (PR #118 merge)
-- **Exact-mainline CI:** [workflow #522](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42879875157) — all six jobs passed before this follow-up branch
+- **Historical main baseline (10 November):** c7653bb433ae8b363925d13babf239e64b2b5125 (PR #118 merge)
+- **Historical baseline CI:** [workflow #522](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42879875157) — all six jobs passed on the 10 November PR #118 merge, before PR #119
 - **Formal gate:** [Issue #23 — Review lockfile, SBOM, provenance, dependency scan and CodeQL evidence](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/23)
 - **Production disposition:** **NO-GO / NOT_PRODUCTION_CERTIFIED**
 
@@ -20,7 +23,7 @@
 
 This review covers the package manifest and lockfile, the generated CycloneDX inventory, npm advisory results, install-script and package-resolution metadata, vendored EnginEx licensing metadata, and the existing hosted Node.js 22/24 dependency/CodeQL workflow.
 
-The current-main workflow #522 completed both Node.js dependency/unit/security jobs, PostgreSQL/Memgraph integration, browser/accessibility smoke, CodeQL and evidence consolidation. It is bound to the current main source revision and lockfile that existed before this follow-up branch. It did not execute the new main-only attestation job added by this branch; that job still requires PR review and a successful post-merge mainline run.
+The 10 November baseline workflow #522 completed both Node.js dependency/unit/security jobs, PostgreSQL/Memgraph integration, browser/accessibility smoke, CodeQL and evidence consolidation. It is bound to the 10 November main source revision and lockfile that existed before this follow-up branch. It did not execute the new main-only attestation job added by this branch; that job still requires PR review and a successful post-merge mainline run.
 
 No package manifest, runtime API, database schema, migration, or product version change is included. The committed lockfile is deliberately updated below to remediate a newly reported transitive dependency advisory. No registry publication, release, tag, or deployment was performed.
 

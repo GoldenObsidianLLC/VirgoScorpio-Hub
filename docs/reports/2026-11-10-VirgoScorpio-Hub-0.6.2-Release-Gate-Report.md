@@ -1,4 +1,7 @@
 # VirgoScorpio Hub 0.6.2 — Release Gate Report
+> **Latest status — 11 November 2026:** PR #119 merged at main SHA 97f11434a211f982b539ef11effd5b7432b5e4a9. Workflow #527 passed core runtime/integration/browser/CodeQL jobs but failed attestation verification due mutually exclusive GitHub CLI options; the evidence aggregator failed closed. CodeQL identified medium alert #38 in SBOM process invocation. The corrective patch is tracked on security/supply-chain-attestation-codeql-2026-11-11; see the 11 November supply-chain remediation report. Issue #23 remains OPEN / PARTIAL, independent release gates remain incomplete, and production remains NO-GO. The detailed body below remains the 10 November historical snapshot.
+
+
 
 > **DECISION: NO-GO FOR PRODUCTION.** VirgoScorpio Hub 0.6.2 remains a private, unreleased, isolated self-hosted developer preview. The current candidate has strong hosted maintainer CI evidence and a remediated LOW dependency advisory, but independent security, qualified legal/license, provider, operations, governance, formal supply-chain acceptance, and release-owner gates remain incomplete. This report is an engineering evidence snapshot, not production authorization, legal advice, or an independent security assessment.
 
@@ -7,10 +10,10 @@
 - **Package:** `virgoscorpio-hub@0.6.2` — `private: true`, unreleased
 - **Runtime floor:** Node.js `>=22.23.4`
 - **Pinned package manager:** npm `11.19.1`
-- **Current main:** `c7653bb433ae8b363925d13babf239e64b2b5125` (PR #118 merge)
+- **Historical main baseline (10 November):** c7653bb433ae8b363925d13babf239e64b2b5125 (PR #118 merge)
 - **Issue #23 candidate branch:** `security/dependency-supply-chain-review-2026-11-10`
 - **Candidate code/lockfile SHA validated by CI:** `17ba575114e1ee9576e49c7ae456a1af0280b6fc`
-- **Current-main baseline CI:** [workflow #522](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42879875157)
+- **Historical baseline CI:** [workflow #522](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42879875157)
 - **Candidate CI:** [workflow #524](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42950578389)
 - **Primary open gate:** [Issue #23 — Review lockfile, SBOM, provenance, dependency scan and CodeQL evidence](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/23)
 
@@ -30,7 +33,7 @@ The formal release-readiness snapshot remains **7 PASS, 2 PARTIAL, 1 BLOCKED, 14
 
 | Reference | Revision / state | Meaning |
 |---|---|---|
-| `main` | `c7653bb433ae8b363925d13babf239e64b2b5125` | Current merged product baseline; includes PR #118 |
+| `main` | `c7653bb433ae8b363925d13babf239e64b2b5125` | Historical 10 November merged product baseline; includes PR #118 |
 | Issue #23 branch | `17ba575114e1ee9576e49c7ae456a1af0280b6fc` | Two commits ahead of main at the CI evidence snapshot; no intended runtime/API/schema change |
 | Workflow #522 | Run 42879875157 | Exact-mainline validation for current main; predates the candidate's lockfile and CI changes |
 | Workflow #524 | Run 42950578389 | Exact candidate validation; feature-branch attestation job skipped |
@@ -207,7 +210,7 @@ Do not advance unrelated P1 product features while critical independent-security
 ## 12. Evidence and limitations
 
 - [Candidate workflow #524](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42950578389) — exact code/lockfile SHA `17ba575114e1ee9576e49c7ae456a1af0280b6fc`.
-- [Current-main workflow #522](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42879875157) — current main SHA `c7653bb433ae8b363925d13babf239e64b2b5125`.
+- [Historical mainline workflow #522](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42879875157) — current main SHA `c7653bb433ae8b363925d13babf239e64b2b5125`.
 - [Issue #23](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/23); [Release Blocker Triage](RELEASE-BLOCKER-TRIAGE-2026-11-10.md); [Maintainer Supply-Chain Review](2026-11-10-SUPPLY-CHAIN-REVIEW.md).
 - [Release Scope](../RELEASE-SCOPE.md), [Release Readiness](../RELEASE_READINESS.md), [Release Evidence Contract](../RELEASE-EVIDENCE.md), [Roadmap](../ROADMAP.md), and [Implementation Roadmap](../IMPLEMENTATION-ROADMAP.md).
 - The [GitHub CLI attestation verification manual](https://cli.github.com/manual/gh_attestation_verify) documents verification controls for signer/workflow identity, predicate type, source ref/digest and hosted-runner constraints.

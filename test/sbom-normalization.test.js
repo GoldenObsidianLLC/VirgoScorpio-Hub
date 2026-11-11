@@ -5,43 +5,61 @@ const assert = require('node:assert/strict');
 const { normalizeSbom } = require('../scripts/normalize-sbom');
 const { SBOM_ARGS, buildSbomCommand, formatSpawnError, serializeSbom } = require('../scripts/generate-sbom');
 
-test('SBOM command paths use the same lockfile-only dependency inventory', () => {
-  const windowsFallback = buildSbomCommand(null, 'C:\\node\\node.exe', 'win32', 'C:\\Windows\\System32\\cmd.exe');
-  const windowsCommand = ['npm', ...SBOM_ARGS].join(' ');
-  const npmCli = buildSbomCommand('C:\\npm\\node_modules\\npm\\bin\\npm-cli.js', 'C:\\node\\node.exe');
-  const fallback = buildSbomCommand(null, 'C:\\node\\node.exe');
+test('SBOM command paths use fixed commands and the shared lockfile-only inventory', () => {
+  const windowsCommand = buildSbomCommand('win32');
+  const posixCommand = buildSbomCommand('linux');
 
-  assert.deepEqual(npmCli, {
-    command: 'C:\\node\\node.exe',
-    args: ['C:\\npm\\node_modules\\npm\\bin\\npm-cli.js', ...SBOM_ARGS],
+  assert.deepEqual(windowsCommand, {
+    command: 'cmd.exe',
+    args: ['/d', '/s', '/c', ['npm', ...SBOM_ARGS].join(' ')],
     shell: false
   });
-  assert.deepEqual(fallback, {
-    command: process.platform === 'win32' ? process.env.ComSpec || 'cmd.exe' : 'npm',
-    args: process.platform === 'win32' ? ['/d', '/s', '/c', windowsCommand] : [...SBOM_ARGS],
-    shell: false
-  });
-  assert.deepEqual(npmCli.args.slice(1), SBOM_ARGS);
-  assert.deepEqual(windowsFallback, {
-    command: 'C:\\Windows\\System32\\cmd.exe',
-    args: ['/d', '/s', '/c', windowsCommand],
+  assert.deepEqual(posixCommand, {
+    command: 'npm',
+    args: [...SBOM_ARGS],
     shell: false
   });
   assert.ok(SBOM_ARGS.includes('--package-lock-only'));
   assert.ok(Object.isFrozen(SBOM_ARGS));
 });
 
+test('untrusted npm and command-processor environment values cannot override SBOM commands', () => {
+  const previousNpmExecPath = process.env.npm_execpath;
+  const previousComSpec = process.env.ComSpec;
+
+  try {
+    process.env.npm_execpath = 'C:\\attacker\\controlled\\npm-cli.js';
+    process.env.ComSpec = 'C:\\attacker\\controlled\\cmd.exe';
+
+    assert.deepEqual(buildSbomCommand('win32'), {
+      command: 'cmd.exe',
+      args: ['/d', '/s', '/c', ['npm', ...SBOM_ARGS].join(' ')],
+      shell: false
+    });
+    assert.deepEqual(buildSbomCommand('linux'), {
+      command: 'npm',
+      args: [...SBOM_ARGS],
+      shell: false
+    });
+  } finally {
+    if (previousNpmExecPath === undefined) delete process.env.npm_execpath;
+    else process.env.npm_execpath = previousNpmExecPath;
+    if (previousComSpec === undefined) delete process.env.ComSpec;
+    else process.env.ComSpec = previousComSpec;
+  }
+});
+
 test('SBOM command launch failures preserve the original spawn diagnostic', () => {
-  const invocation = buildSbomCommand(null, 'C:\\node\\node.exe');
+  const invocation = buildSbomCommand('win32');
   const error = Object.assign(new Error('executable missing'), {
     code: 'ENOENT',
     errno: -4058,
-    syscall: 'spawnSync npm'
+    syscall: 'spawnSync cmd.exe'
   });
 
   assert.equal(
-    formatSpawnError(invocation, error, null),
-    `Unable to launch npm SBOM command (command=${invocation.command}, npm_execpath=unavailable, code=ENOENT, errno=-4058, syscall=spawnSync npm): executable missing`
+    formatSpawnError(invocation, error),
+    'Unable to launch npm SBOM command (command=' + invocation.command + ', code=ENOENT, errno=-4058, syscall=spawnSync cmd.exe): executable missing'
   );
 });
 

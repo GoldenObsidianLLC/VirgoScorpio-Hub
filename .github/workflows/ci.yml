@@ -494,7 +494,6 @@ jobs:
           gh attestation verify "$LOCKFILE" \
             --repo "$GITHUB_REPOSITORY" \
             --bundle "$PROVENANCE_BUNDLE" \
-            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/ci.yml" \
             --cert-identity "https://github.com/${GITHUB_REPOSITORY}/.github/workflows/ci.yml@refs/heads/main" \
             --deny-self-hosted-runners \
             --source-ref refs/heads/main \
@@ -504,7 +503,6 @@ jobs:
           gh attestation verify "$SBOM_FILE" \
             --repo "$GITHUB_REPOSITORY" \
             --bundle "$PROVENANCE_BUNDLE" \
-            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/ci.yml" \
             --cert-identity "https://github.com/${GITHUB_REPOSITORY}/.github/workflows/ci.yml@refs/heads/main" \
             --deny-self-hosted-runners \
             --source-ref refs/heads/main \
@@ -514,7 +512,6 @@ jobs:
           gh attestation verify "$LOCKFILE" \
             --repo "$GITHUB_REPOSITORY" \
             --bundle "$SBOM_BUNDLE" \
-            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/ci.yml" \
             --cert-identity "https://github.com/${GITHUB_REPOSITORY}/.github/workflows/ci.yml@refs/heads/main" \
             --deny-self-hosted-runners \
             --source-ref refs/heads/main \

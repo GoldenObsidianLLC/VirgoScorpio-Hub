@@ -4,11 +4,15 @@ This roadmap is evidence-oriented rather than a promise of dates. Items should m
 
 Priorities: **P0** = critical reliability/security/release work; **P1** = foundational next capabilities; **P2** = major product capabilities; **P3** = strategic advanced capabilities. These labels indicate sequencing, not delivery dates or guarantees.
 
-## Current 0.6.2 continuity — 10 November 2026
+## Current 0.6.2 continuity — 11 November 2026
 
-For the current release decision, use the [10 November tenant-isolation and release continuation report](reports/2026-11-10-TENANT-ISOLATION-PRE-REVIEW.md), [maintainer supply-chain review](reports/2026-11-10-SUPPLY-CHAIN-REVIEW.md), [Implementation Roadmap](IMPLEMENTATION-ROADMAP.md), [Release Scope](RELEASE-SCOPE.md), and [Release Readiness](RELEASE_READINESS.md). Older dated reports remain historical snapshots bound to their stated source revisions.
+PR #119 merged at main SHA 97f11434a211f982b539ef11effd5b7432b5e4a9. Workflow #527 passed Node 22/24, live PostgreSQL/Memgraph/Redis, browser and CodeQL jobs, but failed attestation verification because mutually exclusive GitHub CLI signer options were supplied; consolidation failed closed. CodeQL reported medium alert #38 for environment-derived SBOM executable paths. Corrective branch security/supply-chain-attestation-codeql-2026-11-11 removes both issues without changing application architecture, APIs, schema, migrations or dependencies. Focused tests, local full check, SBOM generation and both npm audits pass; hosted PR CI and post-merge signer verification remain required. Issue #23 remains OPEN / PARTIAL. Independent tenant #14, broader security #25, resilience #24, operations #26, scope #13 and governance #32 remain separate gates. Package 0.6.2 remains private/unreleased; no SemVer bump, tag, publication or deployment is authorized. See the 11 November supply-chain remediation report and release scope/readiness/evidence documents.
 
-PR #118 merged into `main` at `c7653bb433ae8b363925d13babf239e64b2b5125`. Exact-mainline workflow [#522](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42879875157) passed all six jobs on that SHA, including both supported Node.js dependency/unit/security matrices, live PostgreSQL/Memgraph integration, browser/accessibility smoke, CodeQL and consolidated evidence. PR #118 closes issue #117. Issue #113 remains CLOSED / ACCEPTED for the restricted developer-preview scope; production remains NO-GO.
+## Historical 0.6.2 continuity — 10 November 2026
+
+For historical 10 November context, see the [tenant-isolation and release continuation report](reports/2026-11-10-TENANT-ISOLATION-PRE-REVIEW.md), [maintainer supply-chain review](reports/2026-11-10-SUPPLY-CHAIN-REVIEW.md), [Implementation Roadmap](IMPLEMENTATION-ROADMAP.md), [Release Scope](RELEASE-SCOPE.md), and [Release Readiness](RELEASE_READINESS.md). Older dated reports remain historical snapshots bound to their stated source revisions.
+
+Historical main on 10 November included PR #118 at SHA c7653bb433ae8b363925d13babf239e64b2b5125. Exact-mainline workflow #522 passed all six jobs on that historical revision; use the 11 November continuity section above for current status.
 
 The maintainer-generated tenant inventory contains 27 flow families, 78 route patterns, 21 implementation/source files and 41 test references. The merged PR #116 regression verifies same-slug custom-content-type definitions and records remain isolated across two sites. The inventory is a review/navigation aid, not proof of complete route discovery or an independent assessment.
 

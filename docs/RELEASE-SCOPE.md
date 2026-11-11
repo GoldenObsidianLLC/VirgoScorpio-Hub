@@ -23,7 +23,7 @@ The package remains at **0.6.2**. This scope/documentation reconciliation is not
 | Repository | `GoldenObsidianLLC/VirgoScorpio-Hub` |
 | Version | `0.6.2` |
 | Package state | Unreleased candidate; `private: true` in package metadata |
-| Current main baseline | `c7653bb433ae8b363925d13babf239e64b2b5125` (PR #118 merge) |
+| Current main baseline | 97f11434a211f982b539ef11effd5b7432b5e4a9 (PR #119 merge) |
 | Manifest release state | `EXPANDED_DEVELOPER_PREVIEW_NOT_PRODUCTION_CERTIFIED` |
 | Semantic version change | None; remains 0.6.2 |
 | Runtime minimum | Node.js `>=22.23.4` |

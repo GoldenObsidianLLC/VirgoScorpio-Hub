@@ -4,8 +4,8 @@
 
 **Formal gate:** [Issue #14 — Independent tenant/site isolation and authorization review](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/14)
 **Candidate:** `0.6.2`, private/unreleased developer preview
-**Current main:** `c7653bb433ae8b363925d13babf239e64b2b5125`
-**Exact-mainline evidence:** [Workflow #522](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42879875157), all six jobs passed on the current PR #118 merge SHA.
+**Current main (11 November 2026):** 97f11434a211f982b539ef11effd5b7432b5e4a9
+**Latest exact-mainline evidence:** [Workflow #527](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42964407873): Node 22/24, live PostgreSQL/Memgraph/Redis, browser and CodeQL jobs passed; main-only attestation verification failed and requires remediation.
 **Companion:** [Release blocker triage](../reports/RELEASE-BLOCKER-TRIAGE-2026-11-10.md)
 **Formal evidence destination after independent completion:** `artifacts/evidence/tenant-isolation-review.json`
 
@@ -15,7 +15,9 @@ The generated [10 November route/capability inventory](TENANT-ISOLATION-ROUTE-CA
 
 PR #116 merged a focused two-site same-slug custom-content-type registry/record regression. Workflow #517 passed the live test. This is targeted maintainer regression evidence only. It does not satisfy independent review issue #14 or broader independent security issue #25.
 
-PR [#118](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/118) has since merged the cloud-connection regression into current main SHA `c7653bb433ae8b363925d13babf239e64b2b5125`. It adds Site B-only `cloud:manage` checks, Site A/B list isolation, non-disclosing foreign Site A IDs for Site B `/test` and `/disable`, conflicting selector rejection and unchanged-row-state assertions. The focused PostgreSQL test passed **2/2**; the full local PostgreSQL/Memgraph/Redis runner passed **81/81, zero failures, zero skips** on a disposable local environment; `npm run check` at that pre-merge snapshot passed **583/586**, zero failures and three Windows-specific skips. Exact-mainline workflow [#522](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42879875157) passed all six required jobs on the merge SHA. These are maintainer-authored regression tests, not independent findings. The reviewer should assess the current clean mainline target and independently design and execute all additional discovery and adversarial tests.
+Historical 10 November PR #118 coverage: the cloud-connection regression merged at main SHA c7653bb433ae8b363925d13babf239e64b2b5125. Workflow #522 passed all six jobs on that historical merge. Targeted tenant maintainer regressions remain test evidence, not independent findings.
+
+The latest current-main baseline is PR #119 merge SHA 97f11434a211f982b539ef11effd5b7432b5e4a9. The initial post-merge workflow #527 exposed an attestation verification flag conflict and CodeQL alert #38 in SBOM command construction. The tracked correction is in security/supply-chain-attestation-codeql-2026-11-11; it does not change tenant-isolation implementation. Issue #14 remains OPEN / NOT PERFORMED and issue #25 remains open. Any independent reviewer must use the authorized exact current-main SHA and independently discover coverage beyond this maintainer matrix.
 
 ## 2. Independence and safe execution
 
