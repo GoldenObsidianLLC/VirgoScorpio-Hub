@@ -2,6 +2,8 @@
 
 ## Current status and repository assurance
 
+- [Full 0.6.2 release-gate report — 10 November 2026](reports/2026-11-10-VirgoScorpio-Hub-0.6.2-Release-Gate-Report.md) — current main baseline, latest pre-merge issue #23 candidate CI (#524), advisory remediation, SBOM digests, formal readiness, open issues and next actions. Production remains NO-GO.
+
 - [Tenant-isolation route and data-access inventory — 10 November 2026](security/TENANT-ISOLATION-ROUTE-CAPABILITY-MAP-2026-11-10.md) — current maintainer-generated route-family, capability, data-boundary, source-anchor and test-reference catalog; 27 families, 78 route patterns, 21 implementation files and 41 test files. Review preparation only, not independent assessment evidence.
 
 - [Tenant isolation internal pre-review — 6 November 2026](reports/2026-11-06-TENANT-ISOLATION-PRE-REVIEW.md) — relationship-route site-context validation, bidirectional cross-site endpoint tests, site-private relationship outbox envelopes, outage/replay results, coverage inventory and independent-review gaps. This is not an independent assessment or release approval.
@@ -12,11 +14,21 @@
 - [Repository coherence and continuity review — 1 November 2026](REPOSITORY-COHERENCE-AND-CONTINUITY-REVIEW-2026-11-01.md) — repository inventory, documentation drift, CI/readiness gaps, branch reconciliation, safe corrections and backlog.
 - [Local Docker resource migration report — 5 November 2026](reports/2026-11-05-LOCAL-DOCKER-RESOURCE-MIGRATION.md) — checksummed cold backups, isolated Compose restore, current 18-migration PostgreSQL schemas, live integration, Memgraph outage/replay and graph rebuild, and 9/9 local Playwright smoke; legacy-resource retirement remains pending.
 
-## Current mainline status — 10 November 2026
+- [Maintainer supply-chain review — 10 November 2026](reports/2026-11-10-SUPPLY-CHAIN-REVIEW.md) — lockfile/clean-install inventory, CycloneDX/license metadata, npm advisory remediation and main-only signed-attestation workflow. Candidate workflow #524 passed; the signer job remains unexecuted on main. Partial maintainer review only; legal clearance and formal gate acceptance remain open.
+
+## Current mainline status — 10 November 2026 (after PR #118)
+
+Current `main` is `c7653bb433ae8b363925d13babf239e64b2b5125`. Exact-mainline [workflow #522](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42879875157) passed all six jobs on that merge SHA. PR #118 closes issue #117 and adds targeted Site A/B cloud-connection isolation coverage. This does not close the independent tenant-isolation review #14 or broader security review #25.
+
+### Historical mainline status — before PR #118 merge
 
 Current `main` includes PR #116 at merge commit `eb156b7620929ae94421caf69b4ddb92ed679812`. Exact-mainline [workflow #517](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42855470069) passed all six required jobs on that exact SHA: Node.js 22.23.4, Node.js 24.22.1, PostgreSQL/Memgraph integration, browser/accessibility smoke, CodeQL and consolidated evidence. The live database/graph suite passed **81/81, zero failures, zero skips**, including the same-slug two-site custom-content-type regression. F1.20 issue #113 remains CLOSED / ACCEPTED for the restricted developer-preview reliability scope. Earlier PR #115 and workflow #42771040503 details are retained only as historical snapshots in their dated sections.
 
-### Tenant-isolation pre-review progress
+### Current tenant-isolation status
+
+The current mainline inventory includes PR #118's cloud-connection Site A/B tests. Those are targeted maintainer regression tests; issue #14 remains OPEN / NOT PERFORMED, and issue #25 remains open. The independent reviewer must perform their own route discovery and adversarial test execution.
+
+### Historical tenant-isolation pre-review progress — before PR #118 merge
 
 The current generated [10 November tenant-isolation inventory](security/TENANT-ISOLATION-ROUTE-CAPABILITY-MAP-2026-11-10.md) contains 27 flow families, 78 declared route patterns, 21 implementation/source files and 41 referenced test files. PR #116 is merged; its schema/query anchors and focused two-site same-slug custom-content-type registry/record regression are included in workflow #517's 81/81 live result. The inventory generator's freshness check remains the source for validating the curated catalog and generated JSON/Markdown outputs.
 

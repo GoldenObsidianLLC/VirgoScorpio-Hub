@@ -372,6 +372,213 @@ jobs:
           path: artifacts/ci-evidence-stage/
           if-no-files-found: warn
 
+  attest-supply-chain:
+    name: Attest dependency lockfile and SBOM
+    needs:
+      - unit-security-and-dependencies
+    if: >-
+      needs.unit-security-and-dependencies.result == 'success' &&
+      github.event_name != 'pull_request' &&
+      github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - name: Download the Node.js 22 dependency evidence
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: virgoscorpio_hub-dependency-evidence-node-22.23.4
+          path: supply-chain
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22.23.4"
+      - name: Verify lockfile and CycloneDX SBOM identity
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const { createHash } = require('node:crypto');
+
+          const lockPath = path.join('supply-chain', 'package-lock.json');
+          const sbomPath = path.join('supply-chain', 'artifacts', 'virgoscorpio-hub.sbom.cdx.json');
+          const logPath = path.join('supply-chain', 'artifacts', 'evidence', 'sbom-generation.log');
+          const lockBytes = fs.readFileSync(lockPath);
+          const sbomBytes = fs.readFileSync(sbomPath);
+          const lock = JSON.parse(lockBytes.toString('utf8'));
+          const bom = JSON.parse(sbomBytes.toString('utf8'));
+          const log = fs.readFileSync(logPath, 'utf8');
+          const root = lock.packages && lock.packages[''];
+          const component = bom.metadata && bom.metadata.component;
+          const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
+
+          if (!root || root.name !== 'virgoscorpio-hub' || root.version !== '0.6.2') {
+            throw new Error('Downloaded package-lock root identity does not match VirgoScorpio Hub 0.6.2.');
+          }
+          if (bom.bomFormat !== 'CycloneDX' || bom.specVersion !== '1.5' || !Array.isArray(bom.components) || !Array.isArray(bom.dependencies)) {
+            throw new Error('Downloaded SBOM is not a valid CycloneDX 1.5 component/dependency document.');
+          }
+          if (!component || component.purl !== 'pkg:npm/virgoscorpio-hub@0.6.2' || component.version !== '0.6.2') {
+            throw new Error('SBOM root identity does not match the reviewed package-lock.');
+          }
+          if (!log.includes('package-lock.json SHA-256: ' + sha256(lockBytes)) ||
+              !log.includes('virgoscorpio-hub.sbom.cdx.json SHA-256: ' + sha256(sbomBytes))) {
+            throw new Error('SBOM generation log does not bind the downloaded lockfile and SBOM digests.');
+          }
+          process.stdout.write(JSON.stringify({
+            package: root.name + '@' + root.version,
+            lockfileSha256: sha256(lockBytes),
+            sbomSha256: sha256(sbomBytes),
+            sbomComponents: bom.components.length,
+            sbomDependencyRecords: bom.dependencies.length
+          }, null, 2) + String.fromCharCode(10));
+          NODE
+      - name: Create SLSA build provenance for lockfile and SBOM
+        id: provenance
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: |
+            supply-chain/package-lock.json
+            supply-chain/artifacts/virgoscorpio-hub.sbom.cdx.json
+          create-storage-record: false
+      - name: Create signed SBOM attestation for the dependency lockfile
+        id: sbom
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: supply-chain/package-lock.json
+          sbom-path: supply-chain/artifacts/virgoscorpio-hub.sbom.cdx.json
+          create-storage-record: false
+      - name: Stage attestation bundles
+        env:
+          PROVENANCE_BUNDLE: ${{ steps.provenance.outputs.bundle-path }}
+          SBOM_BUNDLE: ${{ steps.sbom.outputs.bundle-path }}
+        run: |
+          set -euo pipefail
+          test -s "$PROVENANCE_BUNDLE"
+          test -s "$SBOM_BUNDLE"
+          mkdir -p artifacts/evidence/supply-chain-attestations
+          cp "$PROVENANCE_BUNDLE" artifacts/evidence/supply-chain-attestations/slsa-provenance.json
+          cp "$SBOM_BUNDLE" artifacts/evidence/supply-chain-attestations/sbom-attestation.json
+      - name: Install checksum-pinned GitHub CLI for attestation verification
+        env:
+          GH_VERSION: 2.103.3
+          GH_ARCHIVE_SHA256: 4c806978ffce1cec70853302a56d70ac6da4f19bae7adca4e1a8ab00633dd91d
+        run: |
+          set -euo pipefail
+          archive="gh_${GH_VERSION}_linux_amd64.tar.gz"
+          archive_path="$RUNNER_TEMP/$archive"
+          curl --fail --location --silent --show-error --retry 3 \
+            "https://github.com/cli/cli/releases/download/v${GH_VERSION}/${archive}" \
+            --output "$archive_path"
+          printf '%s  %s\n' "$GH_ARCHIVE_SHA256" "$archive_path" | sha256sum --check --strict
+          tar -xzf "$archive_path" -C "$RUNNER_TEMP"
+          gh_bin="$RUNNER_TEMP/gh_${GH_VERSION}_linux_amd64/bin"
+          test -x "$gh_bin/gh"
+          echo "$gh_bin" >> "$GITHUB_PATH"
+          test "$( "$gh_bin/gh" version | awk 'NR == 1 { print $3 }' )" = "$GH_VERSION"
+          "$gh_bin/gh" version
+
+      - name: Verify signed supply-chain attestations and record exact digests
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PROVENANCE_BUNDLE: ${{ steps.provenance.outputs.bundle-path }}
+          SBOM_BUNDLE: ${{ steps.sbom.outputs.bundle-path }}
+          LOCKFILE: supply-chain/package-lock.json
+          SBOM_FILE: supply-chain/artifacts/virgoscorpio-hub.sbom.cdx.json
+        run: |
+          set -euo pipefail
+          command -v gh
+          gh version
+          gh attestation verify "$LOCKFILE" \
+            --repo "$GITHUB_REPOSITORY" \
+            --bundle "$PROVENANCE_BUNDLE" \
+            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/ci.yml" \
+            --cert-identity "https://github.com/${GITHUB_REPOSITORY}/.github/workflows/ci.yml@refs/heads/main" \
+            --deny-self-hosted-runners \
+            --source-ref refs/heads/main \
+            --source-digest "$GITHUB_SHA" \
+            --format json \
+            > artifacts/evidence/supply-chain-attestations/provenance-lockfile-verification.json
+          gh attestation verify "$SBOM_FILE" \
+            --repo "$GITHUB_REPOSITORY" \
+            --bundle "$PROVENANCE_BUNDLE" \
+            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/ci.yml" \
+            --cert-identity "https://github.com/${GITHUB_REPOSITORY}/.github/workflows/ci.yml@refs/heads/main" \
+            --deny-self-hosted-runners \
+            --source-ref refs/heads/main \
+            --source-digest "$GITHUB_SHA" \
+            --format json \
+            > artifacts/evidence/supply-chain-attestations/provenance-sbom-verification.json
+          gh attestation verify "$LOCKFILE" \
+            --repo "$GITHUB_REPOSITORY" \
+            --bundle "$SBOM_BUNDLE" \
+            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/ci.yml" \
+            --cert-identity "https://github.com/${GITHUB_REPOSITORY}/.github/workflows/ci.yml@refs/heads/main" \
+            --deny-self-hosted-runners \
+            --source-ref refs/heads/main \
+            --source-digest "$GITHUB_SHA" \
+            --predicate-type https://cyclonedx.org/bom \
+            --format json \
+            > artifacts/evidence/supply-chain-attestations/sbom-verification.json
+          node <<'NODE'
+          const fs = require('node:fs');
+          const crypto = require('node:crypto');
+          const readJson = (file) => JSON.parse(fs.readFileSync(file, 'utf8'));
+          const sha256 = (file) => crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+          const stable = (value) => Array.isArray(value)
+            ? '[' + value.map(stable).join(',') + ']'
+            : value && typeof value === 'object'
+              ? '{' + Object.keys(value).sort().map((key) => JSON.stringify(key) + ':' + stable(value[key])).join(',') + '}'
+              : JSON.stringify(value);
+          const lockPath = process.env.LOCKFILE;
+          const sbomPath = process.env.SBOM_FILE;
+          const lockHash = sha256(lockPath);
+          const sbomHash = sha256(sbomPath);
+          const provenanceLock = readJson('artifacts/evidence/supply-chain-attestations/provenance-lockfile-verification.json');
+          const provenanceSbom = readJson('artifacts/evidence/supply-chain-attestations/provenance-sbom-verification.json');
+          const sbomAttestation = readJson('artifacts/evidence/supply-chain-attestations/sbom-verification.json');
+          const hasSubject = (results, digest) => Array.isArray(results) && results.some((result) =>
+            result.verificationResult?.statement?.subject?.some((subject) => subject.digest?.sha256 === digest)
+          );
+          if (!hasSubject(provenanceLock, lockHash)) throw new Error('Verified provenance did not bind the exact package-lock.json bytes.');
+          if (!hasSubject(provenanceSbom, sbomHash)) throw new Error('Verified provenance did not bind the exact CycloneDX SBOM bytes.');
+          const sbomResult = Array.isArray(sbomAttestation) && sbomAttestation.find((result) =>
+            result.verificationResult?.statement?.predicateType === 'https://cyclonedx.org/bom'
+          );
+          if (!sbomResult) throw new Error('A valid CycloneDX SBOM attestation was not returned.');
+          const verifiedPredicate = sbomResult.verificationResult.statement.predicate;
+          const generatedSbom = readJson(sbomPath);
+          if (stable(verifiedPredicate) !== stable(generatedSbom)) {
+            throw new Error('Signed CycloneDX predicate does not match the exact generated SBOM document.');
+          }
+          const summary = {
+            repository: process.env.GITHUB_REPOSITORY,
+            workflow: '.github/workflows/ci.yml',
+            sourceRef: 'refs/heads/main',
+            sourceRevision: process.env.GITHUB_SHA,
+            package: 'virgoscorpio-hub@0.6.2',
+            lockfileSha256: lockHash,
+            sbomSha256: sbomHash,
+            provenanceSubjectsVerified: ['package-lock.json', 'virgoscorpio-hub.sbom.cdx.json'],
+            sbomPredicateType: 'https://cyclonedx.org/bom',
+            sbomPredicateMatchesGeneratedFile: true
+          };
+          fs.writeFileSync(
+            'artifacts/evidence/supply-chain-attestations/verification-summary.json',
+            JSON.stringify(summary, null, 2) + String.fromCharCode(10),
+            { flag: 'wx' }
+          );
+          process.stdout.write(JSON.stringify(summary, null, 2) + String.fromCharCode(10));
+          NODE
+      - name: Upload signed supply-chain attestations
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: virgoscorpio_hub-supply-chain-attestations
+          path: artifacts/evidence/supply-chain-attestations/
+          if-no-files-found: error
+
   aggregate-release-evidence:
     name: Consolidate candidate CI evidence
     if: always()
@@ -380,6 +587,7 @@ jobs:
       - postgres-memgraph-integration
       - browser-and-accessibility
       - security-static-analysis
+      - attest-supply-chain
     runs-on: ubuntu-24.04
     permissions:
       actions: read
@@ -391,6 +599,18 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22.23.4"
+      - name: Require signed dependency attestations on mainline runs
+        env:
+          ATTESTATION_JOB_RESULT: ${{ needs.attest-supply-chain.result }}
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref }}
+        run: |
+          if [[ "$REF_NAME" == "refs/heads/main" && "$EVENT_NAME" != "pull_request" ]]; then
+            if [[ "$ATTESTATION_JOB_RESULT" != "success" ]]; then
+              echo "Mainline evidence requires successful signed lockfile/SBOM attestations." >&2
+              exit 1
+            fi
+          fi
       - name: Download this run's revision-bound evidence
         if: always()
         continue-on-error: true
