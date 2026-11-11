@@ -4,6 +4,11 @@ All notable project-level changes should be recorded here. This changelog does n
 
 ## 0.6.2 (unreleased patch candidate)
 
+### Dependency advisory remediation and supply-chain evidence (issue #23)
+
+- Update the optional transitive `fast-xml-parser` resolution from 5.11.2 to 5.12.0 in `package-lock.json` after the publication of LOW GHSA-474x-hrwr-fgx4 / CVE-2026-126066. Its fixed version is within both upstream dependency ranges; `package.json` and direct dependencies remain unchanged. A fresh local `npm ci` and post-update full/production npm audits pass with zero reported advisories. The advisory's precondition uses the non-default `stopNodes` option; repository application/package/script/test source searches found no explicit configuration.
+- Generate CycloneDX from the lockfile rather than incidental `node_modules`, use one shared frozen argument list for both npm invocation paths, normalize and validate the root package identity before hashing, and test those guarantees. The local CycloneDX 1.5 snapshot has 200 components / 201 dependency records and zero unidentified license records. This inventory and the audit results are maintainer evidence only; GPL/LGPL license review, CodeQL disposition, and signed provenance verification remain open. No SemVer increment, release or production certification is implied.
+
 ### Redis real-time reconnect resilience (F1.19)
 
 - Keep the Redis publisher and subscriber reconnecting through extended outages with shared exponential equal-jitter backoff (100 ms base window, 5-second ceiling, 50–100% of the capped window) instead of stopping after ten retries. Count every reconnect-strategy invocation with the existing fixed-cardinality metric and cover retry bounds beyond the former cutoff. Reconnection restores transport only; lost ephemeral Pub/Sub messages are not buffered or replayed. PostgreSQL remains the canonical collaboration source. This is unreleased developer-preview work and does not qualify Redis failover or production availability.

@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "product": "virgoscorpio-hub",
+  "version": "0.6.2",
+  "reviewedAt": "2026-11-11T02:04:37.459Z",
+  "node": "v26.12.1",
+  "npm": "11.19.1",
+  "packageLockSha256": "feb241bab593040a6e6f1397a832878d1b5ce1c495979cb6babad40fecf37fd8",
+  "results": [
+    {
+      "scope": "all",
+      "command": "npm audit --json",
+      "exitCode": 0,
+      "vulnerabilities": {
+        "info": 0,
+        "low": 0,
+        "moderate": 0,
+        "high": 0,
+        "critical": 0,
+        "total": 0
+      },
+      "dependencyCounts": {
+        "prod": 95,
+        "dev": 3,
+        "optional": 108,
+        "peer": 0,
+        "peerOptional": 0,
+        "total": 205
+      },
+      "parseError": null,
+      "stderr": null,
+      "file": "npm-audit-all.json",
+      "fileSha256": "5305d07dfb3498ec8ef9f110f0442907f74360f26e0d571b0f8b0d3bf9248edc"
+    },
+    {
+      "scope": "production",
+      "command": "npm audit --omit=dev --json",
+      "exitCode": 0,
+      "vulnerabilities": {
+        "info": 0,
+        "low": 0,
+        "moderate": 0,
+        "high": 0,
+        "critical": 0,
+        "total": 0
+      },
+      "dependencyCounts": {
+        "prod": 95,
+        "dev": 3,
+        "optional": 108,
+        "peer": 0,
+        "peerOptional": 0,
+        "total": 205
+      },
+      "parseError": null,
+      "stderr": null,
+      "file": "npm-audit-production.json",
+      "fileSha256": "5305d07dfb3498ec8ef9f110f0442907f74360f26e0d571b0f8b0d3bf9248edc"
+    }
+  ]
+}

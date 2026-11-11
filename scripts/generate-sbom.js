@@ -12,6 +12,7 @@ const EVIDENCE = path.join(ARTIFACTS, 'evidence');
 const SBOM_PATH = path.join(ARTIFACTS, 'virgoscorpio-hub.sbom.cdx.json');
 const LOG_PATH = path.join(EVIDENCE, 'sbom-generation.log');
 const LOCK_PATH = path.join(ROOT, 'package-lock.json');
+const SBOM_ARGS = Object.freeze(['sbom', '--sbom-format=cyclonedx', '--package-lock-only', '--omit=dev']);
 
 function sha256(value) {
   return createHash('sha256').update(value).digest('hex');
@@ -82,7 +83,7 @@ function renderGenerationLog(input) {
   const lines = [
     'VirgoScorpio Hub CycloneDX SBOM generation evidence',
     'Generated at: ' + input.generatedAt,
-    'Command: npm sbom --sbom-format=cyclonedx --omit=dev',
+    'Command: npm sbom --sbom-format=cyclonedx --package-lock-only --omit=dev',
     'Node.js: ' + input.nodeVersion,
     'npm: ' + npmVersion,
     'npm user-agent: ' + (npmUserAgent || 'unavailable'),
@@ -104,23 +105,57 @@ function renderGenerationLog(input) {
   return lines.join('\n') + '\n';
 }
 
+function buildSbomCommand(
+  npmCli = process.env.npm_execpath,
+  nodeExecutable = process.execPath,
+  platform = process.platform,
+  commandProcessor = process.env.ComSpec || 'cmd.exe'
+) {
+  const npmCliPath = typeof npmCli === 'string' ? npmCli.trim() : '';
+  if (npmCliPath) {
+    return {
+      command: nodeExecutable,
+      args: [npmCliPath, ...SBOM_ARGS],
+      shell: false
+    };
+  }
+
+  if (platform === 'win32') {
+    return {
+      command: commandProcessor,
+      args: ['/d', '/s', '/c', ['npm', ...SBOM_ARGS].join(' ')],
+      shell: false
+    };
+  }
+
+  return {
+    command: 'npm',
+    args: [...SBOM_ARGS],
+    shell: false
+  };
+}
+
+function formatSpawnError(invocation, error, npmCli = process.env.npm_execpath) {
+  return 'Unable to launch npm SBOM command (command=' + String(invocation.command) +
+    ', npm_execpath=' + String(npmCli || 'unavailable') +
+    ', code=' + String(error.code) + ', errno=' + String(error.errno) +
+    ', syscall=' + String(error.syscall) + '): ' + error.message;
+}
+
 function generateSbom() {
   fs.mkdirSync(EVIDENCE, { recursive: true });
   if (!fs.existsSync(LOCK_PATH)) throw new Error('package-lock.json is required to generate release dependency evidence.');
 
-  const npmCli = process.env.npm_execpath;
-  const command = npmCli
-    ? spawnSync(process.execPath, [npmCli, 'sbom', '--sbom-format=cyclonedx', '--omit=dev'], {
-      cwd: ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024
-    })
-    : spawnSync('npm', ['sbom', '--sbom-format=cyclonedx', '--omit=dev'], {
-      cwd: ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, shell: process.platform === 'win32'
-    });
+  const invocation = buildSbomCommand();
+  const command = spawnSync(invocation.command, invocation.args, {
+    cwd: ROOT,
+    encoding: 'utf8',
+    maxBuffer: 64 * 1024 * 1024,
+    shell: invocation.shell
+  });
 
   if (command.error) {
-    throw new Error('Unable to launch npm SBOM command (npm_execpath=' + String(npmCli) +
-      ', code=' + String(command.error.code) + ', errno=' + String(command.error.errno) +
-      ', syscall=' + String(command.error.syscall) + '): ' + command.error.message);
+    throw new Error(formatSpawnError(invocation, command.error));
   }
   if (command.status !== 0) {
     throw new Error('npm sbom failed with exit code ' + command.status + ': ' + (command.stderr || command.stdout || 'no diagnostic output'));
@@ -172,4 +207,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { generateSbom, summarizeSbom, serializeSbom, renderGenerationLog };
+module.exports = { SBOM_ARGS, buildSbomCommand, formatSpawnError, generateSbom, summarizeSbom, serializeSbom, renderGenerationLog };
