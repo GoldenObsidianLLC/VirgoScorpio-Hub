@@ -23,7 +23,7 @@ The package remains at **0.6.2**. This scope/documentation reconciliation is not
 | Repository | `GoldenObsidianLLC/VirgoScorpio-Hub` |
 | Version | `0.6.2` |
 | Package state | Unreleased candidate; `private: true` in package metadata |
-| Current main baseline | `6f661a9cf76dfa5c377ed5c65995a7e1554d3f4d` (PR #121 merge; full mainline workflow #538, including exact-main attestation verification, passed) |
+| Current main baseline | `253ef3a987d7151828cdc971f95f0faaf64a7f36` (documentation-only PR #122 merge; exact-main workflow #541, including provenance/SBOM verification, passed) |
 | Manifest release state | `EXPANDED_DEVELOPER_PREVIEW_NOT_PRODUCTION_CERTIFIED` |
 | Semantic version change | None; remains 0.6.2 |
 | Runtime minimum | Node.js `>=22.23.4` |
@@ -31,7 +31,7 @@ The package remains at **0.6.2**. This scope/documentation reconciliation is not
 | CI runtime matrix | Node.js 22.23.4 and 24.22.1 on Ubuntu 24.04 |
 | CI services | PostgreSQL 18, Memgraph 3.13.1, Redis 7.4, Chromium |
 | Vendored renderer | EnginEx 7.0.0, pinned submodule commit `d99e021f55664f006b5e65b4a58202f9c7bc4f4b` |
-| Mainline workflow | [#538](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43068232804), exact main SHA above; all seven jobs passed, including main-only SLSA provenance and signed CycloneDX SBOM verification, Node 22/24 matrices, live DB/browser/graph qualification, CodeQL and evidence aggregation. |
+| Mainline workflow | [#541](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43076849834), exact main SHA above; all seven jobs passed, including main-only SLSA provenance and signed CycloneDX SBOM verification, Node 22/24 matrices, live DB/browser/graph qualification, CodeQL and evidence aggregation. |
 | Historical pre-fix mainline runs | [#532](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43041957209) and [#533](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43044726474) completed signer verification but failed closed on Playwright apt/mirror DNS before browser and downstream DB/graph qualification; superseded by successful #538 after the setup fix. |
 | Hosted-runner follow-up | [PR #121](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/121) is merged at `6f661a9cf76dfa5c377ed5c65995a7e1554d3f4d`; branch commit `fc2fb4241b8704223ce63e94650e79031b723762` passed push [#43065225829](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43065225829) and PR [#43065234386](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43065234386), followed by exact-main #538. |
 | Unmerged issue #23 candidate | Branch `security/dependency-supply-chain-review-2026-11-10`, code/lockfile SHA `17ba575114e1ee9576e49c7ae456a1af0280b6fc`; workflow [#524](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42950578389) passed six non-attestation jobs. Main-only signing was skipped by branch policy; this is not a mainline attestation. |
