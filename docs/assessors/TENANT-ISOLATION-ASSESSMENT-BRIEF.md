@@ -1,8 +1,8 @@
-# VirgoScorpio Hub — Independent Tenant-Isolation Assessment Brief
+# VirgoScorpio Hub â€” Independent Tenant-Isolation Assessment Brief
 
 **Purpose:** commission and guide the independent application-security review tracked by [GitHub issue #14](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/14).
 
-> **Status: ASSESSOR PACKET ONLY — NO REVIEW HAS BEEN PERFORMED.** This document is a hand-off aid. It is not a security assessment, a pass, a waiver, or certification evidence. The reviewer must be independent of the implementation team and must record their own methods, results, findings, and limitations.
+> **Status: ASSESSOR PACKET ONLY â€” NO REVIEW HAS BEEN PERFORMED.** This document is a hand-off aid. It is not a security assessment, a pass, a waiver, or certification evidence. The reviewer must be independent of the implementation team and must record their own methods, results, findings, and limitations.
 
 ## 1. Candidate and boundaries
 
@@ -13,15 +13,15 @@
 | Historical pre-packet application-source baseline (0.5.1) | `ab55892dc33b87d8be4165e13931cd6888f358a1` |
 | Current main baseline for the 0.6.2 review hand-off | 97f11434a211f982b539ef11effd5b7432b5e4a9 (PR #119 merge; workflow #527 attestation verification requires remediation) |
 | Merged targeted tenant-isolation regressions | [PR #116](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/116) (custom-content-type A/B) and [PR #118](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/118) (cloud-connection A/B), both merged |
-| Exact-mainline CI evidence | [workflow #527](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42964407873), core jobs passed on current main; attestation verification failed and requires remediation |
+| Exact-mainline CI evidence | [workflow #527](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42964407873) exposed the attestation verification defect. Follow-up [PR #120](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/120) passed all six non-attestation jobs on push/PR events; main-only signing remains post-merge. |
 | Candidate branch | `main` |
 | Formal gate | `tenant-isolation-review` |
 | Evidence destination after completion | `artifacts/evidence/tenant-isolation-review.json` |
-| Coordination issue | [#14 — Independent tenant/site isolation and authorization review](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/14) |
+| Coordination issue | [#14 â€” Independent tenant/site isolation and authorization review](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/14) |
 | Technical plan | [docs/PRODUCTION-CERTIFICATION-PLAN.md](../PRODUCTION-CERTIFICATION-PLAN.md) |
 | Scope proposal | [docs/RELEASE-SCOPE.md](../RELEASE-SCOPE.md) |
 
-The original ab55892 SHA is retained solely as the historical 0.5.1 pre-packet baseline. The current 0.6.2 main baseline is 97f11434a211f982b539ef11effd5b7432b5e4a9, which includes PRs #116, #118 and #119. PRs #116/#118 add targeted tenant maintainer regression tests; PR #119 adds supply-chain controls but its first mainline attestation verification failed and is tracked for correction. These changes are not independent tenant-security acceptance. For the actual assessment, check out the authorized current target, run git rev-parse HEAD, record the exact full SHA, include all changes since the prior baseline, and bind the assessor report and evidence to the commit actually reviewed.
+The original ab55892 SHA is retained solely as the historical 0.5.1 pre-packet baseline. The current 0.6.2 main baseline is 97f11434a211f982b539ef11effd5b7432b5e4a9, which includes PRs #116, #118 and #119. PRs #116/#118 add targeted tenant maintainer regression tests; PR #119 adds supply-chain controls. Its first mainline attestation verification failed, and corrective PR #120 now passes the six non-attestation jobs on push and PR events; a successful main-only signer run is still required after merge. These changes are not independent tenant-security acceptance. For the actual assessment, check out the authorized current target, run git rev-parse HEAD, record the exact full SHA, include all changes since the prior baseline, and bind the assessor report and evidence to the commit actually reviewed.
 
 The reconciled 0.6.2 scope recommendation is documented in the [RELEASE-SCOPE.md](../RELEASE-SCOPE.md) against the current main baseline 97f11434a211f982b539ef11effd5b7432b5e4a9. Named authorized product/release-owner approval remains pending in issue #13. That product decision is separate from this technical review. Do not infer scope approval or production readiness from this packet.
 
@@ -103,7 +103,7 @@ Challenge:
 - Any path that accepts a tenant ID, site ID, account ID, actor ID, or object ID from an untrusted field.
 - Authorization time-of-check/time-of-use gaps and long-lived sessions/connections after privilege revocation.
 
-Confirm that trusted tenant context is derived from the authenticated principal and authorized membership—not from caller-controlled selectors alone.
+Confirm that trusted tenant context is derived from the authenticated principal and authorized membershipâ€”not from caller-controlled selectors alone.
 
 ### D. Test data and operation boundaries
 
@@ -165,7 +165,7 @@ The assessor should extend this matrix to every route family discovered. Add exp
 | Provider callbacks | Invalid/replayed/mismatched webhook/callback and reconciliation | Signature/identity plus tenant binding; replay is safe and scoped |
 | Denial side effects | Database, events, queues, graph/cache, audit, provider calls, error body | Denied cross-tenant requests have no unauthorized effects or disclosures |
 
-## 5. Source map — starting points, not an exhaustive inventory
+## 5. Source map â€” starting points, not an exhaustive inventory
 
 The following files are navigational starting points from the production certification plan. The assessor must discover additional modules and call sites rather than treating this table as complete.
 
@@ -235,8 +235,8 @@ Do not set `status` to `passed` while findings, retests, coverage, independence,
 - [ ] Signed report and sanitized retained artifacts stored.
 - [ ] Evidence JSON accepted and gate re-evaluated on the exact clean candidate revision.
 
-**Current handoff state — 10 November 2026:** no independent reviewer is assigned and no independent review result exists. Issue #14 remains OPEN / NOT PERFORMED. The current candidate is VirgoScorpio Hub 0.6.2 (private, unreleased developer preview), and production remains `NOT_PRODUCTION_CERTIFIED` / NO-GO. The current main and PR #116 review baselines are recorded in section 14 below.
-## 9. Historical 0.6.2 maintainer inventory snapshot — 7 November 2026
+**Current handoff state â€” 10 November 2026:** no independent reviewer is assigned and no independent review result exists. Issue #14 remains OPEN / NOT PERFORMED. The current candidate is VirgoScorpio Hub 0.6.2 (private, unreleased developer preview), and production remains `NOT_PRODUCTION_CERTIFIED` / NO-GO. The current main and PR #116 review baselines are recorded in section 14 below.
+## 9. Historical 0.6.2 maintainer inventory snapshot â€” 7 November 2026
 
 The earlier 0.5.1 source map and 7 November 2026 inventory are historical records. At that snapshot, the generated [7 November Tenant-Isolation Route and Data-Access Inventory](../security/TENANT-ISOLATION-ROUTE-CAPABILITY-MAP-2026-11-07.md) and machine-readable [inventory JSON](../../artifacts/security/tenant-isolation-route-inventory.json) served as maintainer review-preparation aids. For current 0.6.2 scope, use the 10 November hand-off in section 14 and current generated map `../security/TENANT-ISOLATION-ROUTE-CAPABILITY-MAP-2026-11-10.md`. The generator validates source anchors, refreshes line numbers, records implementation/test file digests, and fails CI when the generated files become stale.
 
@@ -274,7 +274,7 @@ The PR #91 candidate based on mainline 58b6b9707f9d63a08f55b15b0f0ee2489bdf3ef5 
 
 This adds targeted route regression coverage only. Concurrent stale-update behavior, cache/consumer invalidation and other presentation variants remain separate review items. Issues #14 and #25 remain open, no formal security evidence is created, and production remains NO-GO / NOT_PRODUCTION_CERTIFIED.
 
-## 14. Current 0.6.2 independent-review hand-off — 10 November 2026
+## 14. Current 0.6.2 independent-review hand-off â€” 10 November 2026
 
 **Candidate:** 0.6.2, private and unreleased developer preview. **Production status:** NO-GO / NOT_PRODUCTION_CERTIFIED.
 
