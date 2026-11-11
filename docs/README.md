@@ -2,6 +2,7 @@
 
 ## Current status and repository assurance
 
+- [Current 0.6.2 release-gate report — 11 November 2026](reports/2026-11-11-VirgoScorpio-Hub-0.6.2-Release-Gate-Report.md) — full production gate matrix, #541 mainline verification, signed provenance/SBOM, 15 GPL/LGPL-bearing components, current GitHub blocker dispositions and SemVer decision.
 - [11 November post-PR #122 mainline and license inventory](reports/2026-11-11-POST-PR122-MAINLINE-AND-LICENSE-INVENTORY.md) — exact-main workflow #541 evidence, signed provenance/SBOM digests, preliminary GPL/LGPL component inventory, CI action runtime follow-up, and human acceptance boundaries. Issue #23 remains OPEN / PARTIAL.
 - [11 November supply-chain attestation and CodeQL remediation](reports/2026-11-11-SUPPLY-CHAIN-ATTESTATION-REMEDIATION.md) — workflow #527 failure analysis, CLI flag correction, CodeQL alert #38 remediation, and the merged exact-main attestation repair. Historical #538 details remain in that report; the newer #541 snapshot is in the post-PR #122 report.
 
