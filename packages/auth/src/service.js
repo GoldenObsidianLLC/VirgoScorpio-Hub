@@ -435,6 +435,9 @@ function createIdentityService({ pool, env = process.env, clock = () => Date.now
       const client = await pool.connect();
       try {
         await client.query('BEGIN');
+        // Serialize membership removals per site. Without this row lock, two active
+        // owners can concurrently observe a count of two and remove each other.
+        await client.query('SELECT id FROM sites WHERE id=$1 FOR UPDATE', [siteId]);
         const isOwner = await client.query(`SELECT 1 FROM site_memberships m JOIN roles r ON r.id=m.role_id WHERE m.site_id=$1 AND m.user_id=$2 AND r.slug='site-owner'`, [siteId, userId]);
         if (isOwner.rows[0]) {
           const owners = await client.query(`SELECT count(*)::integer AS count FROM site_memberships m JOIN roles r ON r.id=m.role_id JOIN users u ON u.id=m.user_id WHERE m.site_id=$1 AND r.slug='site-owner' AND u.status='active'`, [siteId]);

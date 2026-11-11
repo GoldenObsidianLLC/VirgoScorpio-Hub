@@ -3,16 +3,24 @@
 > **Assessment date:** 11 November 2026 (America/Chicago)
 > **Decision:** **NO-GO FOR PRODUCTION — NOT_PRODUCTION_CERTIFIED**
 > **Permitted classification:** Private, unreleased, isolated self-hosted developer preview only.
-> **Current main:** 253ef3a987d7151828cdc971f95f0faaf64a7f36
-> **Exact-main CI:** [Workflow #541](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43076849834) — all seven jobs successful.
+> **Current main:** 762e3fbc25f6b98c52815b5653c54fd05826ddb3
+> **Exact-main CI:** [Workflow #552](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43113738148) — all seven jobs successful.
 
 This is a maintainer engineering and release-evidence report. It is not independent security certification, legal advice, provider qualification, release-owner approval, or authorization to deploy or publish.
 
+## Current status update — after PR #123 merge (11 November 2026)
+
+PR #123 merged at main SHA `762e3fbc25f6b98c52815b5653c54fd05826ddb3`. The exact-main push [workflow #552](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43113738148) passed all seven jobs, including supported Node.js matrices, live PostgreSQL/Memgraph/Redis integration, browser/accessibility, CodeQL, exact-main provenance and signed SBOM verification, and evidence consolidation. PR #123 moves the two pinned artifact-download steps to the Node.js 24-compatible v7.0.0 action; it changes CI tooling only. No formal review submission was recorded for PR #123. Do not describe the merge or CI pass as independent approval.
+
+Qualified independent reviewers are not currently available to the project. At the owner's direction, internal development will continue using the [maintainer-led security assurance policy](../security/MAINTAINER-LED-SECURITY-ASSURANCE.md). Independent reviews #14 and #25 remain OPEN / NOT PERFORMED as production gates, but are not prerequisites for ordinary private, isolated developer-preview engineering. Maintainer checks are not independent assessments; do not close #14/#25, create their formal evidence artifacts, or claim production certification.
+
+The implementation follow-up on branch `security/maintainer-led-tenant-assurance-2026-11-11` adds per-site serialization to membership removals and a live PostgreSQL concurrency regression. Local full checks passed 590 tests (587 passed, 0 failed, 3 platform-specific skips), artifact verification (235 required paths / 243 JavaScript files), tenant inventory generation/check, and `npm audit --audit-level=high` (0 vulnerabilities). The live PostgreSQL owner-concurrency regression was skipped locally because no disposable database was configured; hosted integration must execute it before merge. This work is non-production and does not change the package version or release decision.
+
 ## 1. Executive decision
 
-VirgoScorpio Hub 0.6.2 remains **private and unreleased**. The exact current main revision has strong automated validation: both supported Node.js matrices, live PostgreSQL/Memgraph/Redis integration, browser and collaboration checks, CodeQL execution, exact-main SLSA provenance and signed CycloneDX SBOM verification, and consolidated evidence all passed in workflow #541.
+VirgoScorpio Hub 0.6.2 remains **private and unreleased**. Current main `762e3fbc25f6b98c52815b5653c54fd05826ddb3` passed all seven jobs in exact-main workflow #552, including both supported Node.js matrices, live PostgreSQL/Memgraph/Redis integration, browser and collaboration checks, CodeQL, exact-main SLSA provenance and signed CycloneDX SBOM verification, and consolidated evidence. The detailed #541 evidence below is retained as a historical pre-PR #123 snapshot.
 
-That evidence materially improves confidence in the tested source and CI paths. It does **not** satisfy the remaining human, independent, provider, operational, governance, or formal release-evidence gates. In particular:
+That evidence materially improves confidence in the tested source and CI paths. It does **not** satisfy the remaining human, independent, provider, operational, governance, or formal release-evidence gates. Independent reviews are currently unavailable, so maintainers will continue limited internal engineering under the documented assurance policy; this changes development sequencing, not the production release gates. In particular:
 
 - Qualified maintainer review of dependencies, license/distribution obligations, provenance and CodeQL findings remains outstanding under [issue #23](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/23).
 - The independent tenant-isolation review [#14](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/14) and broader independent security assessment [#25](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/25) have not been performed.
@@ -30,17 +38,17 @@ That evidence materially improves confidence in the tested source and CI paths. 
 | Package | virgoscorpio-hub@0.6.2 | private: true; unreleased |
 | Declared Node.js floor | >=22.23.4 | CI matrix: 22.23.4 and 24.22.1 |
 | npm used by supported CI matrix | 11.19.1 | Lockfile-driven install |
-| Current main SHA | 253ef3a987d7151828cdc971f95f0faaf64a7f36 | PR #122 documentation-only merge |
+| Current main SHA | 762e3fbc25f6b98c52815b5653c54fd05826ddb3 | PR #123 CI action-runtime update merge |
 | Previous product/runtime baseline | 6f661a9cf76dfa5c377ed5c65995a7e1554d3f4d | PR #121 merge; PR #122 did not change application runtime |
 | EnginEx submodule | d99e021f55664f006b5e65b4a58202f9c7bc4f4b | Pinned; not changed in this work |
-| Latest exact-main workflow | [#541](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43076849834) | 7/7 jobs successful |
-| Current CI maintenance PR | [#123](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/123) | Open; CI green; awaiting human review |
+| Latest exact-main workflow | [#552](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43113738148) | 7/7 jobs successful |
+| CI maintenance PR | [#123](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/123) | Merged to main; no formal review submissions recorded |
 
 PR #122 merged at 253ef3a as a documentation-only reconciliation. It did not change application code, dependency manifests or lockfile, API contracts, schemas, migrations, provider contracts, architecture or package version. No submitted human review was recorded for PR #122; its merge is not an independent review or product-owner approval.
 
-PR #123 updates the two pinned actions/download-artifact references in CI to the Node.js 24-compatible v7.0.0 action. The pre-report validation head 8669c291e331e40cbe3017d6eb5b15c368b20e5f passed its branch-push and pull-request workflows (details in section 6). This full report is added as documentation-only commit 274d5090df9bf914a0f6acd70e07cbaa8f135e86 on the same PR branch; the workflows for that report-inclusive head were queued at the time of this report update and are not counted as passing evidence here. PR #123 remains open and unmerged, with no submitted review recorded. The change affects CI action runtime only, not the product's Node.js support floor, package dependencies, application behavior, APIs, schemas or migrations.
+PR #123 changed the two pinned `actions/download-artifact` references in CI to verified Node.js 24-compatible v7.0.0. Its final PR head passed all six non-attestation jobs and consolidated evidence; it then merged to main at `762e3fbc25f6b98c52815b5653c54fd05826ddb3`. Exact-main workflow [#552](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43113738148) passed all seven jobs, including main-only signed provenance/SBOM verification. No formal review submission was recorded for PR #123. Passing CI and merge status do not constitute an independent security assessment or production acceptance. The change affects CI action runtime only, not the product's Node.js support floor, package dependencies, application behavior, APIs, schemas or migrations.
 
-## 3. Exact-main workflow #541
+## 3. Previous exact-main workflow #541 (historical; superseded by #552)
 
 [Workflow #541](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43076849834) was a push to main for the exact SHA 253ef3a987d7151828cdc971f95f0faaf64a7f36. It completed successfully with all seven jobs:
 
@@ -124,7 +132,7 @@ All six non-attestation jobs passed on each run. Both Node matrices passed 590/5
 
 The Node.js 20 action-runtime warning did not recur. A separate [DEP0005] Buffer() deprecation warning remains in the artifact download path. Upstream [actions/toolkit issue #2003](https://github.com/actions/toolkit/issues/2003) traces the warning to the unzip-stream reader used by @actions/artifact; a 5 November 2026 upstream comment reproduces it with @actions/artifact@6.3.1 / unzip-stream@0.3.4 and identifies unzip-stream/lib/unzip-stream.js:47. Artifact download and checksum verification succeeded. No local patch, warning suppression, or replacement ZIP implementation was introduced. Track the upstream dependency; do not treat this non-failing warning as an application-runtime vulnerability or as proof that the upstream reader is risk-free.
 
-PR #123 remains **OPEN / UNMERGED** pending human review. Passing CI does not constitute approval.
+PR #123 has since merged to main at `762e3fbc25f6b98c52815b5653c54fd05826ddb3`; exact-main workflow #552 passed 7/7 jobs. No formal review submission was recorded for that PR. Passing CI does not constitute independent security assessment or production acceptance.
 
 ## 7. Formal release-readiness record and baseline mismatch
 
@@ -205,22 +213,23 @@ No version bump, release tag, GitHub Release, npm publication, production deploy
 
 ## 12. Prioritized next steps
 
-1. **Complete human review of PR #123.** The action change and pre-report branch head passed their CI workflows; the current report-inclusive head 274d509 is subject to its own branch-push and PR workflows (queued at report update). The PR remains open with no submitted review. Preserve the pinned action SHA and evidence checks; do not merge without the required review/approval.
-2. **Resolve scope and governance first.** Obtain the authorized decisions and owner assignments required by #13 and #32. These decisions determine which providers, environments and services can legitimately be tested and who is accountable.
-3. **Complete issue #23 human acceptance.** Review exact-main #541 bundles/digests, dependency maintenance and advisories, GPL/LGPL obligations, local EnginEx distribution relationship and exact-SHA CodeQL results. Record a qualified reviewer, date, findings and formal risk disposition.
-4. **Commission independent assurance.** Arrange properly authorized, independent reviews for #14 and #25 with a defined scope and rules of engagement. Do not substitute maintainer-authored inventories or tests for assessor work.
-5. **Establish the operational target before resilience testing.** Under #26, name owners and approve the deployment topology, recovery model, secret controls and runbooks. Then define workload, latency/error SLOs and resource budgets before executing #24 load/soak, fault-injection and full backup/restore drills.
-6. **Recompute formal readiness on the approved exact candidate.** Refresh the stale manifest/evidence baseline through the authorized process, retain all exact-SHA artifacts and reviewer decisions, and require the fail-closed release assertion to pass before reconsidering production status.
+1. **Complete F1.21 on the maintainer-led path.** Open development tracking issue [#124](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/124) covers the per-site membership-removal lock and concurrent last-owner regression. The dedicated hosted PostgreSQL integration job must execute the test on the exact PR head; a local skip is not a pass.
+2. **Continue tenant and authorization hardening.** Extend targeted maintainer-authored tests across remaining route families, role combinations, membership lifecycle, selector conflicts, side-effect oracles, active-stream revocation and transaction/recovery paths. Keep the source-anchored inventory current and explicitly document uncovered scenarios.
+3. **Complete qualified human supply-chain acceptance when available.** Under #23, review dependency maintenance/advisories, GPL/LGPL obligations and distribution relationships, exact-main provenance/SBOM digests, and exact-SHA CodeQL disposition. Maintainer-generated inventory is preparation, not legal clearance.
+4. **Continue safe resilience/operations preparation.** Under #24/#26, use disposable services and synthetic data to expand fault/recovery exercises. Production-target load/soak, backup/restore and RPO/RTO acceptance still require approved topology, workload criteria and named owners.
+5. **Keep independent and governance gates accurately open.** Reviews #14 and #25 have not been performed because qualified assessors are unavailable. This does not block ordinary private, non-production engineering under the maintainer-led policy, but both remain production certification gates. Obtain authorized scope/governance decisions under #13/#32 before any production-facing action.
+6. **Recompute formal readiness only on an authorized exact candidate.** Preserve exact-SHA artifacts and reviewer decisions; do not transplant historical evidence, populate unperformed independent-review contracts, or weaken the fail-closed release assertion.
 
-No unrelated product feature expansion is recommended ahead of these P0/P1 release and assurance gates. The next software-owned change already in flight is the focused CI action-runtime maintenance in PR #123; subsequent resilience engineering should be scoped to the approved #24 topology and acceptance criteria rather than inventing production assumptions.
+Maintainer-led work is a development-continuity process, not a substitute for independent assessment, a production risk waiver, or a release approval. Package 0.6.2 remains private/unreleased; production remains NO-GO / NOT_PRODUCTION_CERTIFIED.
 
 ## 13. Evidence index and limitations
 
-- Current mainline CI and exact-main provenance: [workflow #541](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43076849834).
+- Current mainline CI and exact-main provenance: [workflow #552](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43113738148), exact main SHA `762e3fbc25f6b98c52815b5653c54fd05826ddb3` (7/7 jobs passed). [Workflow #541](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43076849834) is historical pre-PR #123 evidence.
 - CI action-runtime follow-up: [PR #123](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/123); pre-report validated revision runs [43086558620](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43086558620) and [43086573303](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43086573303); report-inclusive revision checks at report-update time [43095064923](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43095064923) and [43095074803](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43095074803) were queued.
 - Mainline license, attestation and CI detail: [post-PR #122 mainline and license inventory](2026-11-11-POST-PR122-MAINLINE-AND-LICENSE-INVENTORY.md).
 - Supply-chain remediation history: [supply-chain attestation remediation](2026-11-11-SUPPLY-CHAIN-ATTESTATION-REMEDIATION.md).
 - Scope and gate definitions: [release scope](../RELEASE-SCOPE.md), [release readiness](../RELEASE_READINESS.md), [release evidence](../RELEASE-EVIDENCE.md), [implementation roadmap](../IMPLEMENTATION-ROADMAP.md), and [roadmap](../ROADMAP.md).
+- Maintainer-led internal assurance policy: [maintainer-led security assurance](../security/MAINTAINER-LED-SECURITY-ASSURANCE.md).
 - Upstream artifact-reader warning: [actions/toolkit issue #2003](https://github.com/actions/toolkit/issues/2003).
 
 This report relies on revision-bound hosted CI results, repository documentation and GitHub issue/PR state observed on 11 November 2026. It does not claim access to a production deployment, production provider credentials, customer data, independent assessor results, a full backup/restore environment or an authorized release-owner decision.

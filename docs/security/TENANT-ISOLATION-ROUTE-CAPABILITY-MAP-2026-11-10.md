@@ -9,7 +9,7 @@ Maintainer-prepared route, capability, data-access, and regression-test navigati
 - Status: MAINTAINER_PREPARED_NOT_INDEPENDENTLY_REVIEWED.
 - Generated from the current working-tree implementation anchors and the catalog at docs/security/tenant-isolation-route-inventory.catalog.json.
 - Implementation-source digest: 764475f6561a4a613c10dd133130f0fb91cb950cc9cec8ac3eb0a7c915e33bd4 across 21 files.
-- Referenced-test digest: 7c9180b63d1bf3ea4a472fdd3928a1e3c4609e4ebd4d8bd2c605812ecd5f4e3e across 41 files.
+- Referenced-test digest: 5ca2f3fa47aa8146b600342dfece44e3f145f9f71ee2b9666b8ad8bdffd508e5 across 41 files.
 - Inventory size: 27 route/flow families, 78 declared route patterns, 21 source files, and 41 test files.
 - Regenerate with npm run security:tenant-inventory; CI checks freshness with node scripts/generate-tenant-isolation-route-inventory.js --check.
 
@@ -115,7 +115,7 @@ Tests: test/content-type-routes.test.js, test/collaboration-api.test.js, test/re
 - Side effects: Add/remove membership; Create invitation; Mail delivery intent; Audit and session/realtime authorization invalidation
 - Source: apps/api/src/site-membership-routes.js (lines 33, 68, 89); apps/api/src/server.js (lines 1792)
 - Test references: test/site-membership-routes.test.js, test/integration/tenant-membership-administration-isolation.integration.test.js
-- Coverage characterization: **targeted-selector-reconciliation-and-two-site-side-effects**. Unit tests assert resolver-before-capability ordering. The live A/B integration scenario rejects path/header, path/query and path/body conflicts for member listing, member creation and invitation creation, then compares membership, invitation, mail-outbox and audit snapshots for both sites. Foreign-user membership and invitation controls remain covered. Last-owner concurrency, broader role combinations and revocation of active streams remain independent-review work.
+- Coverage characterization: **targeted-selector-reconciliation-and-two-site-side-effects**. Unit tests assert resolver-before-capability ordering. The live A/B integration scenario rejects path/header, path/query and path/body conflicts for member listing, member creation and invitation creation, then compares membership, invitation, mail-outbox and audit snapshots for both sites. Foreign-user membership and invitation controls remain covered. A maintainer-authored live PostgreSQL regression now serializes concurrent removals of two active Site A owners, verifies exactly one removal succeeds, the other receives ERR_VIRGOSCORPIO_HUB_LAST_OWNER, one active owner remains, and exactly one removal audit is written. This targeted test is not independent review. Broader role combinations, full owner-transfer lifecycle and revocation of active streams still require additional maintainer coverage; independent route discovery and security acceptance remain separate production gates.
 
 ### 5. Design system, reusable components, templates, taxonomy, relationships, menus and AI policy
 
