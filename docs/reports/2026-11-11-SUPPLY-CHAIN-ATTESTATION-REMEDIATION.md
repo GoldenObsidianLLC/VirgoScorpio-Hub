@@ -1,17 +1,33 @@
 # VirgoScorpio Hub 0.6.2 — Supply-Chain Attestation and CodeQL Remediation
 
-> **Status: PR #121 MERGED; EXACT-MAIN ATTESTATION AND FULL CI PASSED IN #538.** Current main is `6f661a9cf76dfa5c377ed5c65995a7e1554d3f4d`. Workflow #538 passed all seven jobs, including exact-main SLSA provenance and signed CycloneDX SBOM verification, both Node matrices, live PostgreSQL/Memgraph/Redis and browser qualification, CodeQL and evidence aggregation. CodeQL alert #38 is fixed and no open main alerts remain. The earlier #532/#533 Ubuntu apt/mirror DNS failures are historical pre-fix results; PR #121 removed that Playwright setup dependency and is merged. This report is not qualified human dependency/license acceptance, a legal opinion, an independent security assessment, or production approval.
+> **Status: PRs #121 AND #122 MERGED; EXACT-MAIN ATTESTATION AND FULL CI PASSED IN #541.** Current main is `253ef3a987d7151828cdc971f95f0faaf64a7f36`. Workflow #541 passed all seven jobs, including exact-main SLSA provenance and signed CycloneDX SBOM verification, both Node matrices, live PostgreSQL/Memgraph/Redis and browser qualification, CodeQL and evidence aggregation. The current signed SBOM identifies 15 GPL/LGPL-bearing components; a machine inventory and human-review brief are linked below. CodeQL alert #38 is fixed. The earlier #532/#533 Ubuntu apt/mirror DNS failures are historical pre-fix results; PR #121 removed that Playwright setup dependency and is merged. PR #122 is a documentation-only reconciliation. This report is not qualified human dependency/license acceptance, a legal opinion, an independent security assessment, or production approval.
 
 - **Snapshot:** 11 November 2026 (America/Chicago)
 - **Package:** virgoscorpio-hub 0.6.2, private and unreleased
-- **Current main baseline:** `6f661a9cf76dfa5c377ed5c65995a7e1554d3f4d` (PR #121 merge)
-- **Final mainline CI:** [workflow #538](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43068232804) (push on exact main SHA; all seven jobs passed)
+- **Current main baseline:** `253ef3a987d7151828cdc971f95f0faaf64a7f36` (documentation-only PR #122 merge; PR #121 remains the hosted-runner fix)
+- **Latest mainline CI:** [workflow #541](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43076849834) (push on exact current main SHA; all seven jobs passed)
 - **Issue:** [#23 — dependency, SBOM, provenance and CodeQL review](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/23)
 - **Merged remediation:** [PR #120](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/120)
 - **Merged hosted-runner follow-up:** [PR #121](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/121), branch head `fc2fb4241b8704223ce63e94650e79031b723762`, merge commit `6f661a9cf76dfa5c377ed5c65995a7e1554d3f4d`
 - **Production disposition:** **NO-GO / NOT_PRODUCTION_CERTIFIED**
 
-## Final mainline verification — workflow #538
+## Latest mainline verification — workflow #541 (post PR #122)
+
+PR #122 merged as a documentation-only reconciliation at exact main SHA `253ef3a987d7151828cdc971f95f0faaf64a7f36`. Mainline push workflow [#541](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43076849834) passed all seven jobs: Node.js 22.23.4 and 24.22.1 matrices, PostgreSQL/Memgraph/Redis integration, browser/accessibility smoke, CodeQL, main-only SLSA provenance and signed CycloneDX SBOM verification, and consolidated evidence (`CI EVIDENCE: PASS`). Both Node matrices passed 590/590 Hub and 94/94 EnginEx tests, with zero vulnerabilities in both npm audit scopes. Live integration passed 82/82; 18/18 fresh migrations applied and 18/18 idempotent skips were observed; PostgreSQL collaboration Playwright passed 3/3; browser/accessibility smoke passed 9/9; Memgraph outage/outbox replay and canonical graph rebuild passed.
+
+| Exact mainline evidence | Value |
+|---|---|
+| Lockfile SHA-256 | `8f3786bcfcd03d0b63761c7107e4d757ae5b45171ba2f6c086ff38c027c8b086` |
+| Signed CycloneDX SBOM SHA-256 | `ffc009df28f0a01cdeffde597760f7244dff3c42a0a92fc6b7109b2bc0d6ad4a` |
+| SBOM | CycloneDX 1.5; 200 components; 201 dependency records |
+| Predicate | `https://cyclonedx.org/bom`; signed predicate equals generated SBOM |
+| Attestation artifact | ID `13882262940`; archive digest `sha256:ecfe525d863e754dfd0f4d3dab6b9955ddbf17d1bd1a444691355614fe6c772c`; expires 9 February 2027 |
+| Source ref / revision | `refs/heads/main`; `253ef3a987d7151828cdc971f95f0faaf64a7f36` |
+| Transparency entries | [SLSA provenance 66389823](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/attestations/66389823); [signed SBOM 66389838](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/attestations/66389838) |
+
+The signed SBOM contains 15 GPL/LGPL-bearing components: ten platform-specific `@img/sharp-libvips-*@1.3.4` packages with `LGPL-3.0-or-later`, four `@img/sharp-*` platform packages (`@img/sharp-wasm32`, `@img/sharp-win32-arm64`, `@img/sharp-win32-ia32`, `@img/sharp-win32-x64`) carrying combined Apache/LGPL/MIT expressions, and vendored `enginex-ai-native@7.0.0` with `GPL-2.0-or-later`. The SBOM reports 200/200 components with identified license expressions. This does not resolve distribution, platform-installation, linking, notice, source-offer, or modification obligations. The full component inventory and human-review questions are in the [post-PR #122 mainline and license inventory report](2026-11-11-POST-PR122-MAINLINE-AND-LICENSE-INVENTORY.md). Issue #23 remains OPEN / PARTIAL; a qualified reviewer must complete and record the license/distribution and dependency-maintenance assessment, exact-source attestation review and human CodeQL disposition. Do not populate the formal acceptance evidence or close the issue from CI/maintainer analysis alone.
+
+## Prior mainline verification — workflow #538 (superseded by #541)
 
 Mainline push workflow [#538](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43068232804) completed successfully on exact main SHA `6f661a9cf76dfa5c377ed5c65995a7e1554d3f4d`; all seven jobs passed. The main-only signer generated and verified SLSA provenance for the exact `package-lock.json` and CycloneDX SBOM bytes, the signed SBOM attestation, exact repository/workflow certificate identity, `refs/heads/main`, the full source SHA and both subject digests. It checked predicate type `https://cyclonedx.org/bom` and confirmed the signed predicate equals the generated SBOM document.
 
