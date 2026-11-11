@@ -23,7 +23,7 @@ The package remains at **0.6.2**. This scope/documentation reconciliation is not
 | Repository | `GoldenObsidianLLC/VirgoScorpio-Hub` |
 | Version | `0.6.2` |
 | Package state | Unreleased candidate; `private: true` in package metadata |
-| Current main baseline | 97f11434a211f982b539ef11effd5b7432b5e4a9 (PR #119 merge) |
+| Current main baseline | `85ca5ea531ba5f71278f725dac096ee628053d63` (PR #120 merge; mainline attestation verification succeeded in workflow #533) |
 | Manifest release state | `EXPANDED_DEVELOPER_PREVIEW_NOT_PRODUCTION_CERTIFIED` |
 | Semantic version change | None; remains 0.6.2 |
 | Runtime minimum | Node.js `>=22.23.4` |
@@ -31,7 +31,7 @@ The package remains at **0.6.2**. This scope/documentation reconciliation is not
 | CI runtime matrix | Node.js 22.23.4 and 24.22.1 on Ubuntu 24.04 |
 | CI services | PostgreSQL 18, Memgraph 3.13.1, Redis 7.4, Chromium |
 | Vendored renderer | EnginEx 7.0.0, pinned submodule commit `d99e021f55664f006b5e65b4a58202f9c7bc4f4b` |
-| Mainline workflow | Run [#522](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42879875157), exact main SHA above; all six required jobs passed |
+| Mainline workflow | Runs [#532](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43041957209) and [#533](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43044726474), exact main SHA above; signer verification passed, but overall CI failed closed on an Ubuntu apt-mirror DNS failure during Playwright setup. These are the pre-fix mainline runs. |\n| Hosted-runner follow-up | [PR #121](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/121), branch SHA `85b39b2388ea65e397ef4502eb961c486ff8e823`; push [#43062643567](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43062643567) and PR [#535](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43063552026) passed all six non-attestation jobs and evidence aggregation, including browser/DB/graph recovery qualification. The signer is skipped on non-main events by design; PR #121 remains open/unmerged. |
 | Unmerged issue #23 candidate | Branch `security/dependency-supply-chain-review-2026-11-10`, code/lockfile SHA `17ba575114e1ee9576e49c7ae456a1af0280b6fc`; workflow [#524](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42950578389) passed six non-attestation jobs. Main-only signing was skipped by branch policy; this is not a mainline attestation. |
 | Active manifest candidate validation | `RELEASE-MANIFEST.json` still records `candidateValidation.baselineCommit` as `36220abf4ebcc629fa616961879f5a2ffe1f847d`; it does **not** match the current main/candidate snapshot. Do not treat historical run #472 as current or transplant its evidence. Refresh the source-bound candidate metadata only after final exact-SHA verification and authorized release-owner review. |
 | Release decision | NO-GO for production; named release-owner scope approval remains pending |

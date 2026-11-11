@@ -1,14 +1,54 @@
 # VirgoScorpio Hub 0.6.2 — Supply-Chain Attestation and CodeQL Remediation
 
-> **Status: REMEDIATION IN REVIEW.** This report records the first exact-mainline execution of the main-only attestation controls after PR #119 merged, the concrete verification and CodeQL failures, and the focused corrective patch. It is not human dependency/license acceptance, a legal opinion, an independent security assessment, or production approval.
+> **Status: POST-MERGE ATTESTATION VERIFIED; HOSTED-RUNNER FIX VALIDATED IN PR #121.** PR #120 is merged. Mainline workflows #532/#533 successfully completed the signer job and run #533 verified the exact-main lockfile/SBOM provenance and signed CycloneDX attestation. CodeQL alert #38 is fixed. The pre-fix mainline workflows remain failed closed because the Ubuntu package-mirror DNS outage interrupted Playwright's apt-based `--with-deps` installation; the replacement passed both branch push and PR CI workflows. PR #121 is open and unmerged pending review. This report is not qualified human dependency/license acceptance, a legal opinion, an independent security assessment, or production approval.
 
 - **Snapshot:** 11 November 2026 (America/Chicago)
 - **Package:** virgoscorpio-hub 0.6.2, private and unreleased
-- **Main baseline:** 97f11434a211f982b539ef11effd5b7432b5e4a9 (PR #119 merge)
-- **Post-merge CI:** [workflow #527](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42964407873)
+- **Current main baseline:** `85ca5ea531ba5f71278f725dac096ee628053d63` (PR #120 merge)
+- **Mainline CI:** [workflow #532](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43041957209) (push) and [workflow #533](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43044726474) (workflow dispatch)
 - **Issue:** [#23 — dependency, SBOM, provenance and CodeQL review](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/23)
-- **Corrective branch:** security/supply-chain-attestation-codeql-2026-11-11
+- **Merged remediation:** [PR #120](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/120)
+- **Hosted-runner follow-up:** [PR #121](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/121), branch `ci/playwright-hosted-runner-deps-2026-11-11`, commit `85b39b2388ea65e397ef4502eb961c486ff8e823`
 - **Production disposition:** **NO-GO / NOT_PRODUCTION_CERTIFIED**
+
+## Post-merge attestation verification — workflow #533
+
+The main-only signer job for workflow #533 (run 43044726474, attempt 1) completed successfully on exact main SHA `85ca5ea531ba5f71278f725dac096ee628053d63` with source ref `refs/heads/main`. The job generated SLSA provenance for the package lockfile and CycloneDX SBOM, created the signed SBOM attestation, verified the bundles with the exact repository/workflow certificate identity, checked the source SHA and hosted-runner restriction, matched both provenance subject digests, confirmed predicate type `https://cyclonedx.org/bom`, and verified that the signed predicate equals the generated SBOM document.
+
+The retained `virgoscorpio_hub-supply-chain-attestations` artifact is ID `13866578378`, run-bound to #533 and SHA `85ca5ea531ba5f71278f725dac096ee628053d63`. Archive digest: `sha256:d5d36adfff4d11a6c71bda0ea1cd30e2f9045dde716c5e9a06888f7f76cff95d`; expiration: 9 February 2027. The downloaded verification summary records:
+
+| Evidence field | Exact value |
+|---|---|
+| Lockfile SHA-256 | `8f3786bcfcd03d0b63761c7107e4d757ae5b45171ba2f6c086ff38c027c8b086` |
+| CycloneDX SBOM SHA-256 | `60d1dbc76e4ea3a7d8f661280b9ae1ec4bb159304ded39e49018df1272b0fdd8` |
+| SBOM predicate type | `https://cyclonedx.org/bom` |
+| Predicate equals generated SBOM | `true` |
+
+GitHub reports CodeQL alert #38 as `fixed` (not dismissed) on main as of 11 November 2026, and the open-alert query for `refs/heads/main` returns an empty set. Issue #23 remains OPEN / PARTIAL because qualified human dependency/license/distribution review and formal reviewer acceptance are still outstanding.
+
+The full mainline workflows #532 and #533 did not pass on their pre-fix main SHA: `npx playwright install --with-deps chromium` attempted to install OS packages through Ubuntu mirrors and failed with temporary DNS resolution errors for `azure.archive.ubuntu.com`. The Chromium failure skipped browser and downstream DB/graph-recovery steps; the evidence aggregator correctly failed closed. This is retained as the historical failure that motivated the correction, not a reason to waive qualification.
+
+The correction is on branch commit `85b39b2388ea65e397ef4502eb961c486ff8e823` and proposed in [PR #121](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/121). The two hosted Chromium steps now run `npx playwright install chromium`, while browser startup and all downstream tests remain enabled. Branch push workflow [#43062643567](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43062643567) and PR workflow [#535](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43063552026) passed all six non-attestation jobs and the evidence aggregator. Validation included 590/590 Hub and 94/94 EnginEx tests on each Node 22.23.4/24.22.1 matrix, zero npm audit vulnerabilities in both scopes on both runtimes, CycloneDX 1.5 (200 components / 201 dependency records), 82/82 live integration tests with zero failures/skips, PostgreSQL collaboration Playwright 3/3, browser/accessibility smoke 9/9, real Memgraph outage/outbox replay, deterministic graph rebuild, CodeQL and consolidated revision/checksum evidence. The signer was skipped by design on these branch/PR events; exact-main signing was verified separately in #533. PR #121 remains OPEN / UNMERGED pending human review.
+
+## Hosted-runner follow-up validation — PR #121
+
+The correction replaces only the two `npx playwright install --with-deps chromium` commands with `npx playwright install chromium`. Playwright still downloads Chromium; all actual browser startup, smoke, collaboration, Redis, Memgraph outage/replay and graph rebuild steps remain enabled. No runtime package, lockfile, application API, schema, migration, provider contract or product architecture changed.
+
+The branch push [workflow #43062643567](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43062643567) and pull-request [workflow #535](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43063552026) both passed all six non-attestation jobs and the consolidated evidence aggregator on exact branch commit `85b39b2388ea65e397ef4502eb961c486ff8e823`:
+
+| Check | Result |
+|---|---|
+| Node.js 22.23.4 | 590/590 Hub tests; 94/94 EnginEx tests; 0 vulnerabilities in both npm audit scopes; CycloneDX 1.5 with 200 components / 201 dependency records |
+| Node.js 24.22.1 | 590/590 Hub tests; 94/94 EnginEx tests; 0 vulnerabilities in both npm audit scopes; CycloneDX 1.5 with 200 components / 201 dependency records |
+| Live PostgreSQL/Memgraph/Redis integration | 82/82; zero failures/skips; fresh migrations and idempotency pass |
+| PostgreSQL-backed collaboration browser | 3/3 |
+| Browser editor/accessibility smoke | 9/9 |
+| Real Memgraph outage/outbox replay | PASS; pending event replayed after service restart without duplicate delivery |
+| Canonical graph rebuild | PASS; tombstones/stale nodes handled and repeated rebuild deterministic |
+| CodeQL | PASS |
+| Consolidated CI evidence | PASS; exact revision and evidence checksums verified |
+
+The corrected push run retained 10 non-expired run-bound CI artifacts (including Node 22/24 test and dependency evidence, browser/accessibility evidence, live integration, CodeQL, release readiness and consolidated evidence); they expire 9 February 2027. The main-only signer was skipped as designed on the branch/PR events; signed exact-main provenance/SBOM remains verified separately in workflow #533. The PR workflow #535 also passed against the pull request merge ref. PR #121 remains OPEN / UNMERGED pending human review; this validation resolves the hosted-runner CI setup issue but does not close the human supply-chain/release gate.
 
 ## 1. What the first mainline run established
 
