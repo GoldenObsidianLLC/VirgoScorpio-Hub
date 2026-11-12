@@ -1,4 +1,4 @@
-## Current mainline snapshot — 11 November 2026 (0.6.2, post PR #128)
+## Current mainline snapshot — 12 November 2026 (0.6.2, post PR #129)
 
 Current main is `7b3fe3f857bd20bf5d56bcc31a2044a89ffcfbb3`, the merge of F1.23 PR #128. Exact-main workflow [#570](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43157466258) completed successfully with all seven jobs passing: live PostgreSQL/Memgraph integration (90/90, zero failures/skips), Node 22/24 matrices (594/594 each), fresh migrations, collaboration Playwright (3/3), browser/accessibility smoke (9/9), CodeQL, main-only provenance/SBOM attestation and evidence aggregation. PR #128 adds the F1.23 invitation acceptance audit/lifecycle hardening; no formal review submission was recorded, so the maintainer merge and passing CI are not independent approval.
 

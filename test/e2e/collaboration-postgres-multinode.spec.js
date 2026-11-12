@@ -946,3 +946,208 @@ test(`WebSocket reauthorizes against PostgreSQL ${scenario.name} when Redis auth
   }
 });
 }
+
+
+test('F1.26 restores authorization Pub/Sub delivery on the remote API node after Redis reconnect', async ({ browser }) => {
+  test.skip(!integrationEnabled, 'Requires the explicit disposable PostgreSQL and loopback Redis integration environment.');
+  test.skip(!outageAuthorizationEnabled, 'F1.26 Redis Pub/Sub re-subscription qualification runs only against the dedicated disposable CI service.');
+  test.setTimeout(180_000);
+
+  const fixturePool = new Pool({ connectionString: databaseUrl, max: 3, connectionTimeoutMillis: 4_000 });
+  const poolA = new Pool({ connectionString: databaseUrl, max: 4, connectionTimeoutMillis: 4_000 });
+  const poolB = new Pool({ connectionString: databaseUrl, max: 4, connectionTimeoutMillis: 4_000 });
+  const storeA = createPostgresStore({ pool: poolA });
+  const storeB = createPostgresStore({ pool: poolB });
+  const userIds = [];
+  const clients = [];
+  let siteA;
+  let siteB;
+  let nodeA;
+  let nodeB;
+  let redisOutageStopped = false;
+  let redisRestoreError;
+
+  try {
+    siteA = await createSite(fixturePool, 'f1-26-resubscribe-site-a');
+    siteB = await createSite(fixturePool, 'f1-26-resubscribe-site-b');
+    const owner = await createUser(fixturePool, 'f1-26-resubscribe-owner');
+    const revokedEditor = await createUser(fixturePool, 'f1-26-resubscribe-revoked-editor');
+    const unaffectedEditor = await createUser(fixturePool, 'f1-26-resubscribe-unaffected-editor');
+    userIds.push(owner.id, revokedEditor.id, unaffectedEditor.id);
+
+    const roleResult = await fixturePool.query(
+      "SELECT id,slug FROM roles WHERE slug IN ('site-owner','editor')"
+    );
+    const roleIds = new Map(roleResult.rows.map(row => [row.slug, row.id]));
+    expect(roleIds.has('site-owner')).toBe(true);
+    expect(roleIds.has('editor')).toBe(true);
+
+    const passwords = [
+      'F1-26-Owner-Password-2026',
+      'F1-26-Revoked-Editor-Password-2026',
+      'F1-26-Unaffected-Editor-Password-2026'
+    ];
+    await fixturePool.query(
+      'UPDATE users SET password_hash=CASE id WHEN $1 THEN $2 WHEN $3 THEN $4 WHEN $5 THEN $6 END WHERE id=ANY($7::uuid[])',
+      [
+        owner.id, await hashPassword(passwords[0]),
+        revokedEditor.id, await hashPassword(passwords[1]),
+        unaffectedEditor.id, await hashPassword(passwords[2]),
+        userIds
+      ]
+    );
+    await fixturePool.query(
+      'INSERT INTO site_memberships(site_id,user_id,role_id) VALUES($1,$2,$3),($1,$4,$5),($6,$7,$5)',
+      [siteA, owner.id, roleIds.get('site-owner'), revokedEditor.id, roleIds.get('editor'),
+        siteB, unaffectedEditor.id]
+    );
+
+    const siteADraft = await createDraft(storeA, {
+      siteId: siteA, authorId: owner.id, title: 'F1.26 restored Site A draft'
+    });
+    const siteBDraft = await createDraft(storeA, {
+      siteId: siteB, authorId: unaffectedEditor.id, title: 'F1.26 unaffected Site B draft'
+    });
+    const siteADocument = (await storeB.getById({ siteId: siteA, id: siteADraft.id })).body;
+    const siteBDocument = (await storeB.getById({ siteId: siteB, id: siteBDraft.id })).body;
+    const channelPrefix = 'virgoscorpio_hub:test:f1-26-resubscribe:' + randomUUID();
+
+    // Use each node's normal PostgreSQL-backed identity service and callback.
+    // The 60-second heartbeat separates event-driven revocation from polling.
+    nodeA = await createRedisApiInstance({
+      redisUrl, channelPrefix, siteIds: [siteA, siteB], store: storeA,
+      pool: poolA, heartbeatMs: 60_000
+    });
+    nodeB = await createRedisApiInstance({
+      redisUrl, channelPrefix, siteIds: [siteA, siteB], store: storeB,
+      pool: poolB, heartbeatMs: 60_000
+    });
+    expect(nodeA.bridge.isReady).toBe(true);
+    expect(nodeB.bridge.isReady).toBe(true);
+
+    const ownerToken = await loginForSession(nodeA.baseUrl, {
+      email: owner.email, password: passwords[0]
+    });
+    const revokedToken = await loginForSession(nodeB.baseUrl, {
+      email: revokedEditor.email, password: passwords[1]
+    });
+    const unaffectedToken = await loginForSession(nodeB.baseUrl, {
+      email: unaffectedEditor.email, password: passwords[2]
+    });
+    const revokedClient = await openPostgresClient(browser, {
+      baseUrl: nodeB.baseUrl, siteId: siteA, contentId: siteADraft.id,
+      sessionNumber: 27, clientId: 'f1-26-revoked-editor',
+      document: siteADocument, sessionToken: revokedToken
+    });
+    clients.push(revokedClient);
+    const unaffectedClient = await openPostgresClient(browser, {
+      baseUrl: nodeB.baseUrl, siteId: siteB, contentId: siteBDraft.id,
+      sessionNumber: 28, clientId: 'f1-26-unaffected-editor',
+      document: siteBDocument, sessionToken: unaffectedToken
+    });
+    clients.push(unaffectedClient);
+    await revokedClient.page.evaluate(() => {
+      const socket = window.__virgoscorpio_hubCollaboration?.socket;
+      if (!socket) throw new Error('Collaboration WebSocket is unavailable.');
+      window.__f126AuthorizationClose = null;
+      socket.addEventListener('close', event => {
+        window.__f126AuthorizationClose = { code: event.code, reason: event.reason };
+      }, { once: true });
+    });
+    expect(revokedClient.joined.sequence).toBe(0);
+    expect(unaffectedClient.joined.sequence).toBe(0);
+    expect(nodeB.deliveredAuthorizationInvalidations).toBe(0);
+
+    // Stop only the exact, prevalidated Redis 7.4 CI service.
+    expect(inspectRedisOutageTarget(outageTarget).running).toBe(true);
+    redisOutageStopped = true;
+    stopRedisOutageTarget(outageTarget);
+    expect(inspectRedisOutageTarget(outageTarget).running).toBe(false);
+    await expect.poll(() => nodeA.bridge.isReady, { timeout: 20_000 }).toBe(false);
+    await expect.poll(() => nodeB.bridge.isReady, { timeout: 20_000 }).toBe(false);
+    expect(await revokedClient.page.evaluate(
+      () => window.__virgoscorpio_hubCollaboration.socket.readyState
+    )).toBe(1);
+
+    startRedisOutageTarget(outageTarget);
+    await waitForRestoredRedis(redisUrl, 30_000);
+    redisOutageStopped = false;
+    await expect.poll(() => nodeA.bridge.isReady, { timeout: 30_000 }).toBe(true);
+    await expect.poll(() => nodeB.bridge.isReady, { timeout: 30_000 }).toBe(true);
+    expect(inspectRedisOutageTarget(outageTarget).running).toBe(true);
+    expect(await revokedClient.page.evaluate(
+      () => window.__virgoscorpio_hubCollaboration.socket.readyState
+    )).toBe(1);
+    expect(nodeB.deliveredAuthorizationInvalidations).toBe(0);
+
+    // A new committed removal must traverse the real identity callback,
+    // restored Redis Pub/Sub subscriber and the remote event hub before
+    // the 60-second heartbeat can fire.
+    const removal = await fetch(
+      nodeA.baseUrl + '/api/v1/sites/' + siteA + '/members/' + revokedEditor.id,
+      {
+        method: 'DELETE',
+        headers: { authorization: 'Bearer ' + ownerToken },
+        signal: AbortSignal.timeout(15_000)
+      }
+    );
+    expect(removal.status).toBe(200);
+    expect((await removal.json()).removed).toBe(true);
+    await expect.poll(() => nodeB.deliveredAuthorizationInvalidations, {
+      timeout: 5_000, intervals: [50, 100, 250]
+    }).toBe(1);
+    await expect.poll(
+      () => revokedClient.page.evaluate(
+        () => window.__virgoscorpio_hubCollaboration.socket.readyState
+      ),
+      { timeout: 5_000, intervals: [50, 100, 250] }
+    ).toBe(3);
+
+    const closeEvent = await revokedClient.page.evaluate(() => window.__f126AuthorizationClose);
+    expect(closeEvent.code).toBe(1008);
+    const removedMembership = await fixturePool.query(
+      'SELECT 1 FROM site_memberships WHERE site_id=$1 AND user_id=$2',
+      [siteA, revokedEditor.id]
+    );
+    expect(removedMembership.rowCount).toBe(0);
+    await sendCollaborationCommand(unaffectedClient.page, { type: 'ping' });
+    expect((await waitForCollaborationMessage(unaffectedClient.page, 'pong', 3_000)).type).toBe('pong');
+
+    const revokedHistory = await storeB.getCollaborationSync({
+      siteId: siteA, contentId: siteADraft.id, afterSequence: 0
+    });
+    expect(revokedHistory.sequence).toBe(0);
+    expect(revokedHistory.operations).toEqual([]);
+    const unaffectedHistory = await storeB.getCollaborationSync({
+      siteId: siteB, contentId: siteBDraft.id, afterSequence: 0
+    });
+    expect(unaffectedHistory.sequence).toBe(0);
+    expect(unaffectedHistory.operations).toEqual([]);
+  } finally {
+    if (redisOutageStopped) {
+      try {
+        startRedisOutageTarget(outageTarget);
+        await waitForRestoredRedis(redisUrl, 30_000);
+        redisOutageStopped = false;
+      } catch (error) {
+        redisRestoreError = error;
+      }
+    }
+    await closeClients(clients);
+    await nodeA?.close().catch(() => {});
+    await nodeB?.close().catch(() => {});
+    await Promise.all([poolA.end().catch(() => {}), poolB.end().catch(() => {})]);
+    if (siteA || siteB) {
+      await fixturePool.query(
+        'DELETE FROM sites WHERE id=ANY($1::uuid[])',
+        [[siteA, siteB].filter(Boolean)]
+      ).catch(() => {});
+    }
+    if (userIds.length) {
+      await fixturePool.query('DELETE FROM auth_sessions WHERE user_id=ANY($1::uuid[])', [userIds]).catch(() => {});
+      await fixturePool.query('DELETE FROM users WHERE id=ANY($1::uuid[])', [userIds]).catch(() => {});
+    }
+    await fixturePool.end();
+    if (redisRestoreError) throw redisRestoreError;
+  }
+});
