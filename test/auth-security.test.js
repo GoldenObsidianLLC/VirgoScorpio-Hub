@@ -19,6 +19,40 @@ test('password policy and scrypt hashes are enforced', async () => {
   assert.equal(await verifyPassword('anything', 'unknown$scheme'), false);
 });
 
+test('ordinary membership and invitation APIs cannot grant the site-owner role', async () => {
+  const queries = [];
+  const pool = {
+    async query(sql) {
+      queries.push(sql);
+      throw new Error('Owner-role rejection must happen before database access.');
+    },
+    async connect() {
+      throw new Error('Owner-role rejection must happen before opening a transaction.');
+    },
+  };
+  const identity = createIdentityService({ pool, env: {} });
+
+  await assert.rejects(
+    identity.addMember({
+      siteId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+      email: 'owner-escalation@example.test',
+      roleSlug: 'site-owner',
+    }),
+    error => error.statusCode === 400 && error.code === 'ERR_VIRGOSCORPIO_HUB_INVALID_ROLE'
+  );
+  await assert.rejects(
+    identity.createInvitation({
+      siteId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+      email: 'owner-escalation@example.test',
+      roleSlug: 'site-owner',
+      invitedBy: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    }),
+    error => error.statusCode === 400 && error.code === 'ERR_VIRGOSCORPIO_HUB_INVALID_ROLE'
+  );
+
+  assert.deepEqual(queries, [], 'unsupported owner grants must fail before PostgreSQL side effects');
+});
+
 test('identity service emits scoped authorization invalidations after membership and session changes', async () => {
   const userId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
   const siteId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';

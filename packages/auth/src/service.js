@@ -488,6 +488,11 @@ function createIdentityService({ pool, env = process.env, clock = () => Date.now
         } else if (user.rows[0].status !== 'active') { const error = new Error('This account is disabled. Contact the site administrator.'); error.statusCode = 403; error.code = 'ERR_VIRGOSCORPIO_HUB_ACCOUNT_DISABLED'; throw error; }
         await client.query('INSERT INTO site_memberships(site_id,user_id,role_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING', [data.site_id, user.rows[0].id, data.role_id]);
         await client.query('UPDATE site_invitations SET accepted_at=now() WHERE id=$1', [data.id]);
+        await client.query(
+          `INSERT INTO audit_events(site_id,actor_id,action,target_type,target_id,result,details)
+           VALUES($1,$2,'site.invitation_accepted','invitation',$3,'success',$4::jsonb)`,
+          [data.site_id, user.rows[0].id, data.id, JSON.stringify({ role: data.role_slug })]
+        );
         await client.query('COMMIT');
         await notifyAuthorizationChange({ siteId: data.site_id, principalId: user.rows[0].id });
         return { user: safeUser(user.rows[0]), siteId: data.site_id, role: data.role_slug };
