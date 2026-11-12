@@ -3,7 +3,7 @@
   "product": "VirgoScorpio Hub 0.6.2 (unreleased developer-preview candidate)",
   "purpose": "Maintainer-prepared route, capability, data-access, and regression-test navigation inventory for independent tenant/site-isolation review issue #14.",
   "status": "MAINTAINER_PREPARED_NOT_INDEPENDENTLY_REVIEWED",
-  "scopeNote": "The catalog is a curated route-family inventory. Source anchors are checked against the current files and line numbers are generated. Route patterns, capability descriptions, data-access notes, and test limitations remain maintainer-authored metadata; they are not inferred proofs of runtime behavior. Updated 10 November 2026 with targeted two-site custom content-type registry/record coverage; independent review remains outstanding.",
+  "scopeNote": "The catalog is a curated route-family inventory. Source anchors are checked against the current files and line numbers are generated. Route patterns, capability descriptions, data-access notes, and test limitations remain maintainer-authored metadata; they are not inferred proofs of runtime behavior. Updated 11 November 2026 with targeted two-site custom-content-type registry/record coverage and F1.22 site-membership role-matrix, disabled-user, membership-lifecycle and authenticated SSE-revocation coverage; independent review remains outstanding.",
   "commonControls": [
     {
       "name": "Authentication and developer-token boundary",
@@ -261,8 +261,8 @@
         "test/integration/tenant-membership-administration-isolation.integration.test.js"
       ],
       "coverage": {
-        "level": "targeted-selector-reconciliation-and-two-site-side-effects",
-        "limits": "Unit tests assert resolver-before-capability ordering. The live A/B integration scenario rejects path/header, path/query and path/body conflicts for member listing, member creation and invitation creation, then compares membership, invitation, mail-outbox and audit snapshots for both sites. Foreign-user membership and invitation controls remain covered. A maintainer-authored live PostgreSQL regression now serializes concurrent removals of two active Site A owners, verifies exactly one removal succeeds, the other receives ERR_VIRGOSCORPIO_HUB_LAST_OWNER, one active owner remains, and exactly one removal audit is written. This targeted test is not independent review. Broader role combinations, full owner-transfer lifecycle and revocation of active streams still require additional maintainer coverage; independent route discovery and security acceptance remain separate production gates."
+        "level": "maintainer-role-matrix-membership-lifecycle-and-sse-revocation",
+        "limits": "Maintainer-authored coverage adds a disposable-PostgreSQL role matrix for site-owner, editor, author, and viewer capabilities; cross-site denials; disabled-user denial; and viewer authorization before membership addition, after addition, and after removal. The live A/B integration scenario still rejects conflicting path/header, path/query, and path/body selectors before side effects and compares membership, invitation, mail-outbox, and audit snapshots for both sites. The added SSE scenario opens an authenticated Site A viewer presence stream, removes that membership as the owner, and asserts that the site/principal authorization invalidation closes the existing in-process SSE subscription. The existing concurrent owner-removal regression remains. This is targeted maintainer evidence only: owner-transfer and invitation-acceptance lifecycle, WebSocket/collaboration revocation, Redis cross-instance invalidation/recovery, other route-family role combinations, and broader transaction/fault-recovery paths remain uncovered; the inventory is not proof of exhaustive route discovery or independent security acceptance. The live scenario requires a disposable PostgreSQL DATABASE_URL and must be reported as skipped when unavailable."
       },
       "methods": [
         "GET",

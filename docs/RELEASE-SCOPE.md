@@ -23,7 +23,8 @@ The package remains at **0.6.2**. This scope/documentation reconciliation is not
 | Repository | `GoldenObsidianLLC/VirgoScorpio-Hub` |
 | Version | `0.6.2` |
 | Package state | Unreleased candidate; `private: true` in package metadata |
-| Current main baseline | `e61baf5c1c25c8a936de6b79ba818b287d2e1cd7` (PR #125 concurrent last-owner serialization merge; exact-main workflow #555 passed all seven jobs, including provenance/SBOM verification) |
+| Current main baseline | `9627097269b91c39fcd345430894cdcba972b89e` (docs-only PR #126; exact-main workflow #558 passed all seven jobs) |
+| Runtime code baseline | `e61baf5c1c25c8a936de6b79ba818b287d2e1cd7` (PR #125 concurrent last-owner serialization; exact-main workflow #555 passed all seven jobs, including the 83/83 live integration suite) |
 | Manifest release state | `EXPANDED_DEVELOPER_PREVIEW_NOT_PRODUCTION_CERTIFIED` |
 | Semantic version change | None; remains 0.6.2 |
 | Runtime minimum | Node.js `>=22.23.4` |
@@ -31,11 +32,12 @@ The package remains at **0.6.2**. This scope/documentation reconciliation is not
 | CI runtime matrix | Node.js 22.23.4 and 24.22.1 on Ubuntu 24.04 |
 | CI services | PostgreSQL 18, Memgraph 3.13.1, Redis 7.4, Chromium |
 | Vendored renderer | EnginEx 7.0.0, pinned submodule commit `d99e021f55664f006b5e65b4a58202f9c7bc4f4b` |
-| Mainline workflow | [#541](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43076849834), exact main SHA above; all seven jobs passed, including main-only SLSA provenance and signed CycloneDX SBOM verification, Node 22/24 matrices, live DB/browser/graph qualification, CodeQL and evidence aggregation. |
+| Mainline workflow | [#558](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43131573134), current main SHA above; all seven jobs passed, including main-only SLSA provenance and signed CycloneDX SBOM verification and evidence aggregation. |
+| Runtime code workflow | [#555](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43122759167), runtime code SHA above; all seven jobs passed, including Node 22/24, live DB/browser/graph qualification, CodeQL and evidence aggregation. |
 | Historical pre-fix mainline runs | [#532](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43041957209) and [#533](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43044726474) completed signer verification but failed closed on Playwright apt/mirror DNS before browser and downstream DB/graph qualification; superseded by successful #538 after the setup fix. |
 | Hosted-runner follow-up | [PR #121](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/121) is merged at `6f661a9cf76dfa5c377ed5c65995a7e1554d3f4d`; branch commit `fc2fb4241b8704223ce63e94650e79031b723762` passed push [#43065225829](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43065225829) and PR [#43065234386](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43065234386), followed by exact-main #538. |
 | Unmerged issue #23 candidate | Branch `security/dependency-supply-chain-review-2026-11-10`, code/lockfile SHA `17ba575114e1ee9576e49c7ae456a1af0280b6fc`; workflow [#524](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42950578389) passed six non-attestation jobs. Main-only signing was skipped by branch policy; this is not a mainline attestation. |
-| Active manifest candidate validation | `RELEASE-MANIFEST.json` still records `candidateValidation.baselineCommit` as `36220abf4ebcc629fa616961879f5a2ffe1f847d`; it does **not** match the current main/candidate snapshot. Do not treat historical run #472 as current or transplant its evidence. Refresh the source-bound candidate metadata only after final exact-SHA verification and authorized release-owner review. |
+| Active manifest candidate validation | `RELEASE-MANIFEST.json` still records `candidateValidation.baselineCommit` as `36220abf4ebcc629fa616961879f5a2ffe1f847d`; it does **not** match current main `9627097269b91c39fcd345430894cdcba972b89e` or runtime code baseline `e61baf5c1c25c8a936de6b79ba818b287d2e1cd7`. Do not treat historical run #472 as current or transplant its evidence. Refresh source-bound candidate metadata only after final exact-SHA verification and authorized release-owner review. |
 | Release decision | NO-GO for production; named release-owner scope approval remains pending |
 
 The local Windows development host has also exercised Node.js 26.12.1. That is useful local engineering evidence; it does not expand the declared Node support floor or establish a Windows production-support matrix.
