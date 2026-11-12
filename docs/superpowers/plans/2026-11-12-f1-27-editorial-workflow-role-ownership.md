@@ -2,7 +2,7 @@
 
 **Date:** 12 November 2026
 
-**Status:** Implementation, focused API tests, and the local full repository check are complete; exact-head hosted PostgreSQL/Memgraph validation remains pending.
+**Status:** Exact-head hosted validation completed successfully in workflows #583/#584; human review remains pending. The Windows-local PostgreSQL fixture is skipped without a disposable database.
 
 **Tracking:** [Issue #124](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/124).
 
@@ -24,8 +24,8 @@ Enforce the existing author own-content edit boundary when submitting a draft fo
 - [x] Regenerate the source-anchored tenant-isolation inventory: 27 flow families, 78 route patterns, 21 source files and 42 test references.
 - [x] Run `npm run check`: 595 tests, 592 passed, 0 failed, 3 Windows-specific skips; artifact verification covered 235 required paths and syntax-checked 243 JavaScript files.
 - [x] Run `git diff --check` and changed-Markdown relative-link/conflict-marker validation.
-- [ ] Execute the live workflow role/ownership fixture on exact-head hosted PostgreSQL/Memgraph CI with zero integration skips.
-- [x] Reconcile the candidate state and latest local check counts in README/docs index, implementation/product roadmaps, release scope/readiness/report, maintainer assurance policy and generated route inventory; exact-head hosted validation remains pending.
+- [x] Execute the live workflow role/ownership fixture on exact-head hosted workflows #583/#584: each PostgreSQL/Memgraph suite passed 93/93 with zero failures/skips; Node 22/24 each passed 595/595; CodeQL, browser/accessibility 9/9, collaboration Playwright 4/4 and fresh migrations passed. Main-only attestation skipped by design.
+- [x] Reconcile exact-head hosted results and the maintainer-review boundary across README/docs index, implementation/product roadmaps, release scope/readiness/report, assurance policy and generated inventory.
 - [ ] Obtain human review; no formal PR review submission is currently recorded.
 
 ## Local validation boundary

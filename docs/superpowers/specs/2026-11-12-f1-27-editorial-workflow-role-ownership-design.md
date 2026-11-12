@@ -2,7 +2,7 @@
 
 **Date:** 12 November 2026
 
-**Status:** Implemented as a maintainer-led candidate. Focused API tests passed 26/26 and local `npm run check` passed 595 tests (592 passed, 0 failed, 3 Windows-specific skips); the live PostgreSQL/Memgraph fixture remains unexecuted locally and exact-head hosted validation is pending.
+**Status:** Implemented as a maintainer-led candidate and executed successfully on exact head by hosted workflows #583/#584. Each live PostgreSQL/Memgraph fixture passed 93/93 with zero failures/skips; Node 22/24 each passed 595/595; CodeQL, browser/accessibility 9/9, collaboration Playwright 4/4 and fresh migrations passed. Main-only attestation was skipped by design. Local `npm run check` passed 595 tests (592 passed, 0 failed, 3 Windows-specific skips); local database integration remains skipped without a disposable PostgreSQL service.
 
 **Tracking:** [Issue #124](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/124). Candidate branch: `security/editorial-workflow-role-gates-2026-11-12`.
 
