@@ -4,7 +4,7 @@
   "purpose": "Maintainer-prepared route, capability, data-access, and regression-test navigation inventory for independent tenant/site-isolation review issue #14.",
   "status": "MAINTAINER_PREPARED_NOT_INDEPENDENTLY_REVIEWED",
   "notAnIndependentAssessment": true,
-  "scopeNote": "The catalog is a curated route-family inventory. Source anchors are checked against the current files and line numbers are generated. Route patterns, capability descriptions, data-access notes, and test limitations remain maintainer-authored metadata; they are not inferred proofs of runtime behavior. Updated 10 November 2026 with targeted two-site custom content-type registry/record coverage; independent review remains outstanding.",
+  "scopeNote": "Curated, source-anchored navigation inventory; route patterns, capabilities, data-access notes and test limitations remain maintainer-authored metadata, not proofs of runtime behavior. Updated 11 November 2026 with two-site custom-content-type coverage and F1.22 membership role-matrix, disabled-user, lifecycle and authenticated SSE-revocation coverage. F1.22 test-bearing commit a7e5318de9c499b14ff2e63c1539861b3e2bdd2a was the exact draft PR #127 head exercised by workflows #559/#560; live suite 85/85, zero failures/skips. Independent review remains outstanding.",
   "generatedBy": "scripts/generate-tenant-isolation-route-inventory.js",
   "sourceTree": {
     "fileCount": 21,
@@ -35,7 +35,7 @@
   },
   "testTree": {
     "fileCount": 41,
-    "sha256": "5ca2f3fa47aa8146b600342dfece44e3f145f9f71ee2b9666b8ad8bdffd508e5",
+    "sha256": "6d2c74c4d4e49ba56b6de4f53c0eaf896fdcfe438189c0e7c810845262a59db8",
     "files": [
       "test/ai-queue-worker.test.js",
       "test/ai-task-queue.test.js",
@@ -445,8 +445,8 @@
         "test/integration/tenant-membership-administration-isolation.integration.test.js"
       ],
       "coverage": {
-        "level": "targeted-selector-reconciliation-and-two-site-side-effects",
-        "limits": "Unit tests assert resolver-before-capability ordering. The live A/B integration scenario rejects path/header, path/query and path/body conflicts for member listing, member creation and invitation creation, then compares membership, invitation, mail-outbox and audit snapshots for both sites. Foreign-user membership and invitation controls remain covered. A maintainer-authored live PostgreSQL regression now serializes concurrent removals of two active Site A owners, verifies exactly one removal succeeds, the other receives ERR_VIRGOSCORPIO_HUB_LAST_OWNER, one active owner remains, and exactly one removal audit is written. This targeted test is not independent review. Broader role combinations, full owner-transfer lifecycle and revocation of active streams still require additional maintainer coverage; independent route discovery and security acceptance remain separate production gates."
+        "level": "maintainer-role-matrix-membership-lifecycle-and-sse-revocation",
+        "limits": "Maintainer-authored disposable-PostgreSQL coverage: site-owner/editor/author/viewer capability matrix, cross-site and disabled-user denials, membership authorization before and after add/remove, and A/B selector-conflict/no-side-effect snapshots for membership, invitation, mail-outbox and audit state. Authenticated Site A viewer presence SSE is closed by site/principal authorization invalidation after owner-driven removal; this uses the in-process hub only. Hosted PR #127 runs #559/#560 executed this fixture at test-bearing commit a7e5318de9c499b14ff2e63c1539861b3e2bdd2a: each live PostgreSQL/Memgraph suite passed 85/85 with zero failures/skips, including role matrix, SSE revocation and F1.21 concurrent-owner regression. Local Windows integration remains skipped without disposable PostgreSQL DATABASE_URL. Owner-transfer/invitation-acceptance lifecycle, WebSocket/collaboration revocation, Redis cross-instance invalidation/recovery, other route-family combinations and broader transaction/fault-recovery remain uncovered. This is targeted maintainer evidence, not exhaustive route discovery or independent security acceptance."
       },
       "methods": [
         "GET",

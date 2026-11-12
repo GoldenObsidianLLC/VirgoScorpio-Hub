@@ -6,6 +6,7 @@ const { randomUUID } = require('node:crypto');
 const { createPostgresPool } = require('../../packages/db/src/postgres-store');
 const { createIdentityService, hashPassword } = require('../../packages/auth/src/service');
 const { createApiServer } = require('../../apps/api/src/server');
+const { createRealtimeHub } = require('../../packages/realtime/src/event-hub');
 
 const enabled = Boolean(
   process.env.DATABASE_URL &&
@@ -41,6 +42,21 @@ async function membershipSideEffects(pool, siteId, watchedRecipient) {
   };
 }
 
+async function readWithTimeout(reader, timeoutMs) {
+  let timer;
+  try {
+    return await Promise.race([
+      reader.read(),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error('Timed out waiting for the real-time stream to close.')), timeoutMs);
+        timer.unref?.();
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 test(
   'tenant isolation: site membership and invitation administration cannot cross site boundaries',
   { skip: !enabled },
@@ -60,11 +76,33 @@ test(
       DATABASE_URL: process.env.DATABASE_URL,
       REQUIRE_VERIFIED_EMAIL: 'false',
       VIRGOSCORPIO_HUB_EXPOSE_DEV_TOKENS: 'false',
+      VIRGOSCORPIO_HUB_REALTIME_ENABLED: 'true',
     };
     delete env.VIRGOSCORPIO_HUB_API_TOKEN;
-    const identity = createIdentityService({ pool, env });
+
+    const authorizationChanges = [];
+    let identity = null;
+    const realtimeHub = createRealtimeHub({
+      authorizeSubscribe: async ({ principal, sessionId, siteId, topic }) => {
+        if (topic !== 'presence' || !identity || !sessionId || principal?.isDeveloper) return false;
+        if (!(await identity.isSessionActive({ userId: principal.id, sessionId }))) return false;
+        return Boolean(await identity.authorizeSite(principal.id, siteId, 'content:read'));
+      },
+    });
+    identity = createIdentityService({
+      pool,
+      env,
+      onAuthorizationChange: async change => {
+        authorizationChanges.push(change);
+        realtimeHub.invalidateAuthorization(change);
+      },
+    });
+    let streamReader = null;
+    let streamController = null;
 
     t.after(async () => {
+      if (streamController) streamController.abort();
+      if (streamReader) await streamReader.cancel().catch(() => {});
       if (server) {
         if (server.listening) await new Promise(resolve => server.close(resolve));
         await server.virgoScorpioHub.close().catch(() => {});
@@ -100,10 +138,10 @@ test(
     siteIds.push(siteB);
 
     const roles = await pool.query(
-      "SELECT id,slug FROM roles WHERE slug IN ('site-owner','editor','viewer')"
+      "SELECT id,slug FROM roles WHERE slug IN ('site-owner','editor','author','viewer')"
     );
     const roleIds = new Map(roles.rows.map(row => [row.slug, row.id]));
-    for (const required of ['site-owner', 'editor', 'viewer']) {
+    for (const required of ['site-owner', 'editor', 'author', 'viewer']) {
       assert.ok(roleIds.has(required), `the ${required} seed role must exist`);
     }
 
@@ -128,10 +166,20 @@ test(
     const actorB = await createUser('Site B Owner', true);
     const targetB = await createUser('Site B Existing Member');
     const targetA = await createUser('Site A Provisioning Target');
+    const editorA = await createUser('Site A Editor');
+    const authorA = await createUser('Site A Author');
+    const streamViewerA = await createUser('Site A Stream Viewer', true);
+    const disabledViewerA = await createUser('Site A Disabled Viewer');
 
     await pool.query(
-      'INSERT INTO site_memberships(site_id,user_id,role_id) VALUES($1,$2,$3),($1,$4,$3),($5,$6,$3),($5,$7,$8)',
-      [siteA, actorA.id, roleIds.get('site-owner'), coOwnerA.id, siteB, actorB.id, targetB.id, roleIds.get('editor')]
+      `INSERT INTO site_memberships(site_id,user_id,role_id)
+       VALUES($1,$2,$3),($1,$4,$3),($5,$6,$3),($5,$7,$8),($1,$9,$8),($1,$10,$11),($1,$12,$13),($1,$14,$13)`,
+      [
+        siteA, actorA.id, roleIds.get('site-owner'), coOwnerA.id,
+        siteB, actorB.id, targetB.id, roleIds.get('editor'),
+        editorA.id, authorA.id, roleIds.get('author'),
+        streamViewerA.id, roleIds.get('viewer'), disabledViewerA.id,
+      ]
     );
 
     const sessionA = await identity.login({
@@ -148,11 +196,19 @@ test(
       userAgent: 'tenant-membership-isolation-test',
     });
     assert.equal(coOwnerSessionA.mfaRequired, false);
+    const streamViewerSessionA = await identity.login({
+      email: streamViewerA.email,
+      password: 'Isolation-Password-2026',
+      ip: '127.0.0.1',
+      userAgent: 'tenant-membership-stream-revocation-test',
+    });
+    assert.equal(streamViewerSessionA.mfaRequired, false);
 
     server = createApiServer({
       env,
       pool,
       identityService: identity,
+      realtimeHub,
       logger: { error() {} },
     });
     await new Promise((resolve, reject) => {
@@ -169,6 +225,58 @@ test(
     mailRecipients.push(attemptedInviteEmail);
     const before = await membershipSideEffects(pool, siteB, attemptedInviteEmail);
     const beforeSiteA = await membershipSideEffects(pool, siteA, attemptedInviteEmail);
+
+    await t.test('identity authorization enforces owner, editor, author, viewer, active-user, and site boundaries', async () => {
+      const matrix = [
+        {
+          label: 'site owner',
+          userId: actorA.id,
+          siteId: siteA,
+          expected: { 'site:manage': true, 'content:read': true, 'content:publish': true },
+        },
+        {
+          label: 'editor',
+          userId: editorA.id,
+          siteId: siteA,
+          expected: { 'content:read': true, 'content:edit': true, 'site:manage': false, 'content:publish': false },
+        },
+        {
+          label: 'author',
+          userId: authorA.id,
+          siteId: siteA,
+          expected: { 'content:read:own': true, 'content:edit:own': true, 'content:read': false, 'content:edit': false, 'site:manage': false },
+        },
+        {
+          label: 'viewer',
+          userId: streamViewerA.id,
+          siteId: siteA,
+          expected: { 'content:read': true, 'content:edit': false, 'site:manage': false, 'content:publish': false },
+        },
+        {
+          label: 'Site B editor',
+          userId: targetB.id,
+          siteId: siteB,
+          expected: { 'content:read': true, 'content:edit': true, 'site:manage': false },
+        },
+      ];
+
+      for (const entry of matrix) {
+        for (const [capability, expected] of Object.entries(entry.expected)) {
+          assert.equal(
+            await identity.authorizeSite(entry.userId, entry.siteId, capability),
+            expected,
+            `${entry.label} capability ${capability} must resolve to ${expected}`
+          );
+        }
+      }
+
+      assert.equal(await identity.authorizeSite(actorA.id, siteB, 'site:manage'), false);
+      assert.equal(await identity.authorizeSite(actorB.id, siteA, 'content:read'), false);
+      assert.equal(await identity.authorizeSite(targetB.id, siteA, 'content:edit'), false);
+
+      await pool.query("UPDATE users SET status='disabled' WHERE id=$1", [disabledViewerA.id]);
+      assert.equal(await identity.authorizeSite(disabledViewerA.id, siteA, 'content:read'), false);
+    });
 
     async function denyCrossSite(method, url, body) {
       const response = await fetch(base + url, {
@@ -221,6 +329,8 @@ test(
     });
 
     await t.test('site A owner can list and add members to site A', async () => {
+      assert.equal(await identity.authorizeSite(targetA.id, siteA, 'content:read'), false);
+
       const listBefore = await fetch(`${base}/api/v1/sites/${siteA}/members`, {
         headers: { authorization: `Bearer ${sessionA.token}` },
       });
@@ -237,12 +347,56 @@ test(
       assert.equal(add.status, 201);
       const added = await add.json();
       assert.equal(added.member.id, targetA.id);
+      assert.equal(await identity.authorizeSite(targetA.id, siteA, 'content:read'), true);
 
       const membership = await pool.query(
         'SELECT role_id FROM site_memberships WHERE site_id=$1 AND user_id=$2',
         [siteA, targetA.id]
       );
       assert.deepEqual(membership.rows.map(row => row.role_id), [roleIds.get('viewer')]);
+    });
+
+    await t.test('removing a site member immediately revokes that member\'s active SSE stream', async () => {
+      streamController = new AbortController();
+      const streamResponse = await fetch(
+        `${base}/api/v1/sites/${siteA}/realtime/events?topic=presence`,
+        {
+          headers: {
+            authorization: `Bearer ${streamViewerSessionA.token}`,
+            accept: 'text/event-stream',
+          },
+          signal: streamController.signal,
+        }
+      );
+      assert.equal(streamResponse.status, 200);
+      assert.match(streamResponse.headers.get('content-type') || '', /text\/event-stream/);
+      assert.ok(streamResponse.body);
+      streamReader = streamResponse.body.getReader();
+
+      const decoder = new TextDecoder();
+      let readyFrame = '';
+      while (!readyFrame.includes('event: connection.ready')) {
+        const chunk = await readWithTimeout(streamReader, 5_000);
+        assert.equal(chunk.done, false, 'the authorized stream must announce readiness before revocation');
+        readyFrame += decoder.decode(chunk.value, { stream: true });
+        assert.ok(readyFrame.length <= 4_096, 'the readiness frame must remain bounded');
+      }
+      assert.equal(realtimeHub.subscriberCount, 1);
+
+      const removal = await fetch(`${base}/api/v1/sites/${siteA}/members/${streamViewerA.id}`, {
+        method: 'DELETE',
+        headers: { authorization: `Bearer ${sessionA.token}` },
+      });
+      assert.equal(removal.status, 200);
+      assert.equal((await removal.json()).removed, true);
+      assert.ok(
+        authorizationChanges.some(change => change.siteId === siteA && change.principalId === streamViewerA.id),
+        'the committed membership removal must publish a site-and-principal authorization change'
+      );
+
+      const closed = await readWithTimeout(streamReader, 5_000);
+      assert.equal(closed.done, true, 'membership revocation must terminate the existing SSE response');
+      assert.equal(realtimeHub.subscriberCount, 0);
     });
 
     await t.test('site A owner cannot enumerate site B members', async () => {
@@ -291,6 +445,7 @@ test(
         [siteA, targetA.id]
       );
       assert.equal(membership.rowCount, 0);
+      assert.equal(await identity.authorizeSite(targetA.id, siteA, 'content:read'), false);
       assert.deepEqual(await membershipSideEffects(pool, siteB, attemptedInviteEmail), before);
     });
 
