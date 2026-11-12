@@ -2,9 +2,9 @@
 
 **Date:** 11 November 2026
 
-**Status:** Test implementation and local validation complete; exact-head hosted PostgreSQL/Memgraph validation pending.
+**Status:** Test implementation and local validation complete. Source-test commit 23cb913 passed hosted push workflow #571 (91/91 live PostgreSQL/Memgraph tests, zero failures/skips), including the injected audit failure/retry case. Final PR-head push/PR validation and human review are pending.
 
-**Tracking:** [Issue #124](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/124), draft [PR #128](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/128).
+**Tracking:** [Issue #124](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/124), draft [PR #129](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/129), branch security/invitation-audit-fault-recovery-2026-11-11.
 
 **Design:** [F1.24 design](../specs/2026-11-11-f1-24-invitation-audit-fault-recovery-design.md).
 
@@ -23,9 +23,10 @@ Prove that PostgreSQL failure while inserting the invitation-acceptance audit ev
 - [x] Run JavaScript syntax validation and focused auth unit tests.
 - [x] Regenerate the source-anchored tenant-isolation inventory.
 - [x] Run `npm run check`: 594 tests, 591 passed, 0 failed, 3 Windows-specific skips; inventory freshness passed.
-- [ ] Execute the new database-backed fault-injection case on the exact PR head in hosted PostgreSQL/Memgraph CI with zero skips.
+- [x] Execute the fault-injection test on the F1.24 source tree in hosted push workflow [#571](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43162508545): 91/91 PostgreSQL/Memgraph tests, zero failures/skips, including the injected audit failure/retry case.
+- [ ] Execute exact-head push and PR workflows after docs reconciliation; require zero integration skips.
 - [ ] Reconcile exact-head workflow IDs and results in this plan, design, implementation/release roadmaps, release readiness, release-gate report, assurance policy, and generated inventory.
-- [ ] Human review of draft PR #128; no formal review submission is currently recorded.
+- [ ] Human review of draft PR #129; no formal review submission is currently recorded.
 
 ## Local validation boundary
 

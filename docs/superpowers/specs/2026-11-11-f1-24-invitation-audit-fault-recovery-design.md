@@ -2,9 +2,9 @@
 
 **Date:** 11 November 2026
 
-**Status:** Implemented as a maintainer-led candidate; local syntax/unit/full checks pass. Exact-head hosted PostgreSQL/Memgraph validation is pending.
+**Status:** Implemented as a maintainer-led candidate. The source-test revision passed push workflow #571 (91/91 live PostgreSQL/Memgraph tests, zero failures/skips), including the injected audit failure and retry. Final PR-head validation and human review remain pending.
 
-**Tracking:** Issue [#124](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/124), draft PR [#128](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/128).
+**Tracking:** Issue [#124](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/124), draft PR [#129](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/129), branch security/invitation-audit-fault-recovery-2026-11-11.
 
 ## Problem
 
