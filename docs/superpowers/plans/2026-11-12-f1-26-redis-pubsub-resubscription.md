@@ -28,7 +28,7 @@ Prove that after the exact disposable Redis 7.4 service is stopped and restarted
 - [x] Run focused Redis reconnect/bridge/outage-guard unit tests: **20/20 passed**.
 - [x] Run `npm run check`: **594 tests, 591 passed, 0 failed, 3 Windows-specific skips**; artifact verification covered 235 required paths and syntax-checked 243 JavaScript files.
 - [ ] Execute the new real Redis outage/restart Playwright case in exact-head hosted PostgreSQL/Redis CI with zero skips.
-- [ ] Reconcile exact-head results in the implementation/product roadmaps, README/docs index, release scope/readiness/report, maintainer assurance policy, and this design/plan.
+- [x] Reconcile current-main #579, merged F1.25, and F1.26 candidate/pending-hosted-validation status across implementation/product roadmaps, README/docs index, release scope/readiness/report, maintainer assurance policy, generated inventory, and this plan.
 - [ ] Obtain human review; the change is maintainer-led test evidence, not independent security approval.
 
 ## Local validation boundary

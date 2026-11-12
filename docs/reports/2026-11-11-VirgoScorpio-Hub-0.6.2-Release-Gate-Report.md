@@ -1,28 +1,28 @@
 # VirgoScorpio Hub 0.6.2 — Release Gate Report
 
-> **Assessment date:** 11 November 2026 (America/Chicago)
+> **Assessment date:** 12 November 2026 (America/Chicago)
 > **Decision:** **NO-GO FOR PRODUCTION — NOT_PRODUCTION_CERTIFIED**
 > **Permitted classification:** Private, unreleased, isolated self-hosted developer preview only.
-> **Current main:** 7b3fe3f857bd20bf5d56bcc31a2044a89ffcfbb3 (F1.23 PR #128 merge)
-> **Exact-main CI:** [Workflow #570](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43157466258) — all seven jobs successful on current main.
+> **Current main:** 9f8e612c883a78d322d2086b4b08d3438b0b9231 (F1.25 PR #130 merge)
+> **Exact-main CI:** [Workflow #579](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43199180307) — all seven jobs successful on current main.
 
 This is a maintainer engineering and release-evidence report. It is not independent security certification, legal advice, provider qualification, release-owner approval, or authorization to deploy or publish.
 
-## Current status update — after PR #128 merge and F1.24 source-tree hosted validation (11 November 2026)
+## Current status update — after PR #130 merge and F1.26 candidate start (12 November 2026)
 
-PR #128 merged F1.23 at current main 7b3fe3f857bd20bf5d56bcc31a2044a89ffcfbb3. Exact-main workflow #570 passed all seven jobs: PostgreSQL/Memgraph integration 90/90 with zero failures/skips, Node 22/24 each 594/594, CodeQL, browser/accessibility 9/9, collaboration Playwright 3/3, main-only attestation and evidence aggregation. The repository maintainer performed the merge; GitHub records no formal review submission. This is maintainer/automation evidence, not independent security approval.
+Current main 9f8e612c883a78d322d2086b4b08d3438b0b9231 passed exact-main workflow #579 with all seven jobs successful. The workflow passed live PostgreSQL/Memgraph integration, Node 22/24, CodeQL, browser/accessibility, collaboration Playwright, signed mainline provenance/SBOM and evidence consolidation. Lockfile SHA-256 8f3786bcfcd03d0b63761c7107e4d757ae5b45171ba2f6c086ff38c027c8b086; CycloneDX 1.5 SBOM SHA-256 c629688fa951b0c85029a61b4c01b46776d394ec6230821be7ea024934a79db7 (200 components/201 dependency records); attestation artifact 13934022679 has archive digest sha256:72da4993f83841bee0a83f6f4b01d12e08dc34453ec6dab5065023f72637031e and expires 10 February 2027. PR #130/F1.25 merged without formal review submission; maintainer/automation evidence is not independent approval. Qualified human GPL/LGPL license/distribution review remains outstanding under #23.
 
 F1.23 adds request-correlated site.invitation_accepted audit recording in the same transaction as membership insertion and invitation consumption, correct verification/MFA response metadata, rollback on audit failure and post-commit authorization invalidation. PR-head runs #566/#567 and docs-final #568/#569 passed; each live DB suite passed 90/90 with zero failures/skips. No owner-transfer endpoint was introduced.
 
 Workflow #570 supply-chain evidence: lockfile SHA-256 8f3786bcfcd03d0b63761c7107e4d757ae5b45171ba2f6c086ff38c027c8b086; signed CycloneDX 1.5 SBOM SHA-256 8d0eecd1f3fb1ff9e6a789bf6c83dbaac7fa021816eacadb0599e68fecae4e2a (200 components/201 dependency records; 15 GPL/LGPL-bearing components); attestation artifact 13915969372, archive digest sha256:aadca34b66455788e7721534266b894fa0fd71ae2cb8ab6de59a875791125413. Human license/distribution acceptance remains open under #23.
 
-F1.24 is a separate test-only follow-up under issue #124 in draft PR #129 on branch security/invitation-audit-fault-recovery-2026-11-11, based on merged main. Source-test commit 23cb91382473d66bb9affe49e4ec1876f18a5724 passed push workflow #571 with 91/91 PostgreSQL/Memgraph tests, zero failures/skips, including the injected audit-failure test; Node 22/24, CodeQL, browser/accessibility and evidence consolidation passed. Local npm run check passed 594 tests (591 passed, 0 failed, 3 Windows skips); live DB tests are skipped locally without disposable PostgreSQL. Final PR-head CI after documentation reconciliation and human review remain pending.
+F1.24 merged via PR #129 at main 5929a53a1c551a2fe43bc38e61cb63dbecec52f5. Exact PR-head workflows #572/#573 and exact-main #574 passed 91/91 live PostgreSQL/Memgraph integration with zero failures/skips, including injected invitation-acceptance audit failure, rollback, original token-digest preservation, no authorization invalidation and same-token retry. Node 22/24 each passed 594/594; CodeQL, browser/accessibility 9/9, collaboration Playwright 3/3, fresh migrations, signed mainline attestation and evidence consolidation passed. PR #129 had no formal review submission; maintainer/automation evidence only. Local npm run check passed 594 tests (591 passed, 0 failed, 3 Windows-specific skips); local PostgreSQL integration is skipped without a disposable DATABASE_URL.
 
 Reviews #14/#25 remain OPEN / NOT PERFORMED; issue #23 remains OPEN / PARTIAL. No independent evidence artifacts are populated. Production remains NO-GO / NOT_PRODUCTION_CERTIFIED; package 0.6.2 remains private/unreleased.
 
 ## 1. Executive decision
 
-VirgoScorpio Hub 0.6.2 remains **private and unreleased**. Current main is 7b3fe3f857bd20bf5d56bcc31a2044a89ffcfbb3, the merge of F1.23 PR #128, and passed all seven jobs in exact-main workflow #570: 90/90 live PostgreSQL/Memgraph tests, Node 22/24 594/594, CodeQL, signed main-only provenance/SBOM, browser/accessibility and collaboration Playwright. PR #128 was merged by the repository maintainer with no formal review submission recorded; the merge does not establish independent acceptance. Workflow #563 and earlier runs remain historical source-bound evidence.
+VirgoScorpio Hub 0.6.2 remains **private and unreleased**. Current main is 9f8e612c883a78d322d2086b4b08d3438b0b9231 and exact-main workflow #579 passed all seven jobs: live PostgreSQL/Memgraph integration, Node 22/24, CodeQL, browser/accessibility, collaboration Playwright, fresh migrations, signed mainline provenance/SBOM and evidence consolidation. PR #130/F1.25 merged without a formal review submission; this is maintainer/automation evidence, not independent approval. Attestation artifact 13934022679 has archive digest sha256:72da4993f83841bee0a83f6f4b01d12e08dc34453ec6dab5065023f72637031e and expires 10 February 2027. Lockfile SHA-256 8f3786bcfcd03d0b63761c7107e4d757ae5b45171ba2f6c086ff38c027c8b086. CycloneDX 1.5 SBOM SHA-256 c629688fa951b0c85029a61b4c01b46776d394ec6230821be7ea024934a79db7 (200 components/201 dependency records; 15 GPL/LGPL-bearing components require qualified human license/distribution review). This evidence does not satisfy remaining human, independent, provider, operational, governance or formal release-evidence gates.
 
 That evidence materially improves confidence in the tested source and CI paths. It does **not** satisfy the remaining human, independent, provider, operational, governance, or formal release-evidence gates. Independent reviews are currently unavailable, so maintainers will continue limited internal engineering under the documented assurance policy; this changes development sequencing, not the production release gates. In particular:
 
@@ -42,11 +42,11 @@ That evidence materially improves confidence in the tested source and CI paths. 
 | Package | virgoscorpio-hub@0.6.2 | private: true; unreleased |
 | Declared Node.js floor | >=22.23.4 | CI matrix: 22.23.4 and 24.22.1 |
 | npm used by supported CI matrix | 11.19.1 | Lockfile-driven install |
-| Current main SHA | 7b3fe3f857bd20bf5d56bcc31a2044a89ffcfbb3 | F1.23 PR #128 merge; exact-main workflow #570 |
+| Current main SHA | 9f8e612c883a78d322d2086b4b08d3438b0b9231 | F1.25 PR #130 merge; exact-main workflow #579 |
 | Runtime code baseline | e61baf5c1c25c8a936de6b79ba818b287d2e1cd7 | PR #125 concurrent site-owner removal serialization; exact-main workflow #555 |
 | Immediate previous main baseline | 9627097269b91c39fcd345430894cdcba972b89e | PR #126 documentation-only main snapshot, before F1.22 PR #127 |
 | EnginEx submodule | d99e021f55664f006b5e65b4a58202f9c7bc4f4b | Pinned; not changed in this work |
-| Latest exact-main workflow | [#570](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43157466258) | Current main; 7/7 jobs successful, 90/90 live integration tests |
+| Latest exact-main workflow | [#579](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43199180307) | Current main; 7/7 jobs successful; signed provenance/SBOM and live integration |
 | Runtime code exact-main workflow | [#555](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43122759167) | Product-code baseline; 7/7 jobs successful |
 | CI maintenance PR | [#123](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/123) | Merged to main; no formal review submissions recorded |
 | Tenant authorization maintenance PR | [#125](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/125) | Merged at runtime code baseline; hosted PostgreSQL regression passed; no formal review submission recorded |
@@ -56,7 +56,7 @@ PR #122 merged at 253ef3a as a documentation-only reconciliation. It did not cha
 
 PR #123 changed the two pinned `actions/download-artifact` references in CI to verified Node.js 24-compatible v7.0.0. Its final PR head passed all six non-attestation jobs and consolidated evidence; it then merged to main at `762e3fbc25f6b98c52815b5653c54fd05826ddb3`. Exact-main workflow [#552](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43113738148) passed all seven jobs, including main-only signed provenance/SBOM verification. No formal review submission was recorded for PR #123. Passing CI and merge status do not constitute an independent security assessment or production acceptance. The change affects CI action runtime only, not the product's Node.js support floor, package dependencies, application behavior, APIs, schemas or migrations.
 
-## 3. Historical exact-main workflow #541 (superseded by runtime baseline #555 and current-main #558)
+## 3. Historical workflow #541 (superseded by runtime baseline #555 and current main #574)
 
 [Workflow #541](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43076849834) was a push to main for the exact SHA 253ef3a987d7151828cdc971f95f0faaf64a7f36. It completed successfully with all seven jobs:
 
@@ -95,7 +95,7 @@ The exact-main signer verified SLSA provenance and the signed CycloneDX SBOM aga
 | Artifact expiry | 9 February 2027 |
 | Exact source revision | `e61baf5c1c25c8a936de6b79ba818b287d2e1cd7` |
 
-This bundle is bound to workflow #555 and runtime code SHA `e61baf5c1c25c8a936de6b79ba818b287d2e1cd7`, the main source revision at the time of the PR #125 merge. It is not the attestation bundle for current main after PR #127; use workflow #563 current-main digests in section 2. The signed provenance/SBOM provide source and artifact integrity evidence; they do not replace qualified human dependency maintenance, GPL/LGPL license/distribution review or formal acceptance under issue #23. Workflow #558 is the exact attestation for the immediately preceding docs-only main SHA `9627097269b91c39fcd345430894cdcba972b89e`; earlier #541/#552 evidence remains historical.
+This bundle is bound to workflow #555 and runtime code SHA `e61baf5c1c25c8a936de6b79ba818b287d2e1cd7`, the main source revision at the time of the PR #125 merge. It is historical runtime-baseline provenance, not the attestation bundle for current main. The post-PR #127 main attestation is workflow #563; post-PR #128 main is workflow #570; current main after PR #129 is workflow #574, whose artifact/digest details appear in section 1. The signed provenance/SBOM provide source and artifact integrity evidence; they do not replace qualified human dependency maintenance, GPL/LGPL license/distribution review or formal acceptance under issue #23. Workflow #558 remains bound to the preceding docs-only main SHA `9627097269b91c39fcd345430894cdcba972b89e`; #541/#552 are older historical snapshots.
 
 ## 5. Dependency and license inventory
 
@@ -143,7 +143,7 @@ PR #123 merged at `762e3fbc25f6b98c52815b5653c54fd05826ddb3`; exact-main workflo
 
 ## 7. Formal release-readiness record and baseline mismatch
 
-The committed RELEASE-MANIFEST.json still records its latestMainEvidence, latestCandidateEvidence and scopeReconciliation.baselineCommit against 36220abf4ebcc629fa616961879f5a2ffe1f847d and historical workflow #472. That SHA is **not** current main 7b3fe3f857bd20bf5d56bcc31a2044a89ffcfbb3 (F1.23 PR #128; exact-main workflow #570) or the earlier runtime baseline e61baf5c1c25c8a936de6b79ba818b287d2e1cd7; workflow #472 is not current-main run #570.
+The committed RELEASE-MANIFEST.json still records its latestMainEvidence, latestCandidateEvidence and scopeReconciliation.baselineCommit against historical SHA 36220abf4ebcc629fa616961879f5a2ffe1f847d and workflow #472. That SHA is **not** current main 9f8e612c883a78d322d2086b4b08d3438b0b9231 (F1.25 PR #130; exact-main workflow #579) or the runtime code baseline 7b3fe3f857bd20bf5d56bcc31a2044a89ffcfbb3; workflow #472 is not current-main run #579.
 
 The last formally stored readiness classification associated with that older manifest baseline is:
 
@@ -157,7 +157,7 @@ The last formally stored readiness classification associated with that older man
 | Production decision | **NO_GO** |
 | readyForProduction | false |
 
-This count is retained as the **last recorded formal snapshot**, not represented as a newly evaluated result for current main SHA 7b3fe3f857bd20bf5d56bcc31a2044a89ffcfbb3 or workflow #570. CI success does not automatically refresh the formal manifest or satisfy its independent evidence-owner contracts. The candidate baseline mismatch must be resolved through the authorized release process; historical evidence must not be transplanted or relabeled.
+This count is retained as the **last recorded formal snapshot**, not represented as a newly evaluated result for current main SHA 9f8e612c883a78d322d2086b4b08d3438b0b9231 or workflow #579. CI success does not automatically refresh the formal manifest or satisfy its independent evidence-owner contracts. The candidate baseline mismatch must be resolved through the authorized release process; historical evidence must not be transplanted or relabeled.
 
 Do not mark the formal gate accepted, populate missing evidence files, or represent npm run release:assert-ready as passing unless a fresh, clean, exact-candidate evaluation and the required evidence-owner approvals demonstrate that result.
 
@@ -220,7 +220,7 @@ No version bump, release tag, GitHub Release, npm publication, production deploy
 
 ## 12. Prioritized next steps
 
-1. **Complete final exact-head hosted validation and human review of F1.24 PR #129.** PR #128 merged at main 7b3fe3f857bd20bf5d56bcc31a2044a89ffcfbb3 without a formal review submission; exact-main workflow #570 passed all seven jobs. F1.24 source-test commit 23cb913 passed push workflow #571 with 91/91 live PostgreSQL/Memgraph tests and zero failures/skips, including trigger-injected audit failure, rollback, preserved token digest, no invalidation and same-token retry. Node 22/24 594/594, CodeQL, browser/accessibility 9/9 and evidence consolidation passed. The exact final PR head after docs reconciliation must still pass push and PR workflows with zero integration skips. Keep PR #129 draft/open pending human review.
+1. **Complete F1.26 exact-head hosted validation and obtain human review.** The candidate adds a test-only Redis 7.4 stop/restore scenario proving both API bridges reconnect and a new authorization invalidation is delivered to the remote subscriber after re-subscription, closing only the revoked Site A socket before its test-only heartbeat. Exact-head hosted Redis/PostgreSQL/Playwright execution is pending; the Windows maintainer host does not stop Redis. The test proves delivery of a new post-reconnect Pub/Sub event, not replay/durable delivery of messages lost during the outage; PostgreSQL and existing command/heartbeat reauthorization fallbacks remain essential. PR #130/F1.25 merged without a formal review submission, so human review of the maintainer-led sequence remains outstanding. Continue issue #124 with broader role-family and transaction/recovery work only after the bounded F1.26 scenario is verified.
 2. **Complete qualified human supply-chain acceptance when available.** Under #23, review dependency maintenance/advisories, GPL/LGPL obligations and distribution relationships, exact-main provenance/SBOM digests, and exact-SHA CodeQL disposition. Maintainer-generated inventory is preparation, not legal clearance.
 3. **Continue safe resilience/operations preparation.** Under #24/#26, use disposable services and synthetic data to expand fault/recovery exercises. Production-target load/soak, backup/restore and RPO/RTO acceptance still require approved topology, workload criteria and named owners.
 4. **Keep independent and governance gates accurately open.** Reviews #14 and #25 have not been performed because qualified assessors are unavailable. This does not block ordinary private, non-production engineering under the maintainer-led policy, but both remain production certification gates. Obtain authorized scope/governance decisions under #13/#32 before any production-facing action.
@@ -230,11 +230,13 @@ Maintainer-led work is a development-continuity process, not a substitute for in
 
 ## 13. Evidence index and limitations
 
-- Current-main CI and attestation: [workflow #570](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43157466258), current main SHA `7b3fe3f857bd20bf5d56bcc31a2044a89ffcfbb3` (7/7 jobs passed; live integration 90/90, Node 22/24 594/594 each, CodeQL, browser 9/9, Playwright 3/3, signed provenance/SBOM and evidence consolidation). Prior #563/#558/#555/#552/#541 runs remain historical source-bound snapshots.
+- Current-main CI and attestation: [workflow #579](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43199180307), current main SHA 9f8e612c883a78d322d2086b4b08d3438b0b9231 (7/7 jobs passed, including live PostgreSQL/Memgraph, Node 22/24, CodeQL, browser/accessibility, collaboration Playwright, signed provenance/SBOM and evidence consolidation). Attestation artifact 13934022679, archive digest sha256:72da4993f83841bee0a83f6b4f01d12e08dc34453ec6dab5065023f72637031e. Workflows #574/#570/#563/#558/#555/#552/#541 remain historical source-bound snapshots.
 - Maintainer-led tenant hardening: [PR #125](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/125) merged at `e61baf5c1c25c8a936de6b79ba818b287d2e1cd7`. Hosted PR workflows #553/#554 both passed; the live PostgreSQL integration suite passed 83/83 with zero skips, including the concurrent owner-removal regression. Exact-main workflow #555 passed all seven jobs. No formal review submission was recorded; this is maintainer/automated evidence, not independent assessment. See [issue #124](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/124).
 - F1.22 merged in PR #127 at main `3c5df47f7a397f76a5368ef7bc036579e5406835`; test-bearing commit `a7e5318de9c499b14ff2e63c1539861b3e2bdd2a` passed exact-head hosted workflows #559/#560 and current-main workflow #563 (85/85 live PostgreSQL/Memgraph integration, zero failures/skips). GitHub records no formal review submission; this is maintainer/automation evidence, not independent assessment.
 - F1.23 merged via PR #128 at main `7b3fe3f857bd20bf5d56bcc31a2044a89ffcfbb3`; exact-main #570 passed 90/90 live integration, Node 22/24 594/594, CodeQL, browser/accessibility 9/9, collaboration Playwright 3/3 and main-only attestation. No formal review submission was recorded for PR #128; this is maintainer/automation evidence, not independent approval.
-- F1.24 audit fault-recovery follow-up in draft PR #129 on branch security/invitation-audit-fault-recovery-2026-11-11: source-test commit 23cb913 passed push workflow #571 with 91/91 live PostgreSQL/Memgraph tests, zero failures/skips, including injected audit failure, rollback, preserved token digest, no invalidation and same-token retry. Node 22/24 594/594, CodeQL, browser/accessibility 9/9 and evidence consolidation passed. Final PR-head push/PR workflows after docs reconciliation and human review remain pending.
+- F1.24 merged via PR #129 at main 5929a53a1c551a2fe43bc38e61cb63dbecec52f5: PR-head #572/#573 and exact-main #574 each passed 91/91 live PostgreSQL/Memgraph integration with zero failures/skips, including trigger-injected audit failure, rollback, token-digest preservation, no invalidation and same-token retry. Node 22/24 594/594, CodeQL, browser/accessibility 9/9, collaboration Playwright 3/3, signed main provenance/SBOM and evidence aggregation passed. No formal review submission was recorded; maintainer/automation evidence only.
+- F1.25 merged in PR #130 at main 9f8e612c883a78d322d2086b4b08d3438b0b9231: exact-head #575/#576 and docs-final #577/#578 each passed 92/92 live PostgreSQL/Memgraph tests with zero failures/skips, Node 22/24 594/594, CodeQL, browser/accessibility 9/9 and collaboration Playwright 3/3. No formal review submission; maintainer/automation evidence only.
+- F1.26 candidate on security/redis-pubsub-resubscribe-2026-11-12 under issue #124: test-only exact-container Redis 7.4 outage/reconnect Playwright test; validates remote authorization Pub/Sub re-subscription on a new post-restore event. Exact-head hosted Redis/PostgreSQL/Playwright execution pending; no durable replay claim. Test-only; no production runtime/API/schema/migration/dependency/provider/package-version change.
 - CI action-runtime follow-up: [PR #123](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/123); its final PR head passed the six non-attestation checks and consolidated evidence, and exact-main workflow #552 verified the merge. No formal review submission was recorded.
 - Mainline license, attestation and CI detail: [post-PR #122 mainline and license inventory](2026-11-11-POST-PR122-MAINLINE-AND-LICENSE-INVENTORY.md), retained as historical evidence for the PR #122 source revision rather than the current mainline.
 - Supply-chain remediation history: [supply-chain attestation remediation](2026-11-11-SUPPLY-CHAIN-ATTESTATION-REMEDIATION.md).
@@ -242,6 +244,6 @@ Maintainer-led work is a development-continuity process, not a substitute for in
 - Maintainer-led internal assurance policy: [maintainer-led security assurance](../security/MAINTAINER-LED-SECURITY-ASSURANCE.md).
 - Upstream artifact-reader warning: [actions/toolkit issue #2003](https://github.com/actions/toolkit/issues/2003).
 
-This report relies on revision-bound hosted CI results, repository documentation and GitHub issue/PR state observed on 11 November 2026. It does not claim access to a production deployment, production provider credentials, customer data, independent assessor results, a full backup/restore environment or an authorized release-owner decision.
+This report relies on revision-bound hosted CI results, repository documentation and GitHub issue/PR state observed on 12 November 2026. It does not claim access to a production deployment, production provider credentials, customer data, independent assessor results, a full backup/restore environment or an authorized release-owner decision.
 
 **Final disposition: NO-GO FOR PRODUCTION.** Keep 0.6.2 private and unreleased until every applicable technical, independent, provider, legal, operational and release-approval gate is satisfied and accepted.

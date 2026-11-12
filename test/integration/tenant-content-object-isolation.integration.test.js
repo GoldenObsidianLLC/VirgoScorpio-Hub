@@ -39,6 +39,7 @@ test(
     const siteIds = [];
     const userIds = [];
     let roleId = null;
+    let editorRoleId = null;
     let server = null;
 
     const env = {
@@ -65,6 +66,7 @@ test(
         await pool.query('DELETE FROM users WHERE id=ANY($1::uuid[])', [userIds]).catch(() => {});
       }
       if (roleId) await pool.query('DELETE FROM roles WHERE id=$1', [roleId]).catch(() => {});
+      if (editorRoleId) await pool.query('DELETE FROM roles WHERE id=$1', [editorRoleId]).catch(() => {});
       await pool.end();
     });
 
@@ -109,6 +111,32 @@ test(
     await pool.query(
       'INSERT INTO site_memberships(site_id,user_id,role_id) VALUES($1,$2,$3)',
       [siteB, actor.id, roleId]
+    );
+
+    const editorRoleResult = await pool.query(
+      'INSERT INTO roles(slug,label,capabilities) VALUES($1,$2,$3::jsonb) RETURNING id',
+      [
+        `tenant-object-editor-${randomUUID().slice(0, 10)}`,
+        'Tenant Object Site B Editor',
+        JSON.stringify(['content:read', 'content:create', 'content:edit']),
+      ]
+    );
+    editorRoleId = editorRoleResult.rows[0].id;
+    const editorPassword = 'Editor-Password-2026';
+    const editorResult = await pool.query(
+      `INSERT INTO users(email,display_name,password_hash,status)
+       VALUES($1,$2,$3,'active') RETURNING id,email`,
+      [
+        `tenant-object-editor-${randomUUID()}@example.test`,
+        'Site B Editor Without Site Management',
+        await hashPassword(editorPassword),
+      ]
+    );
+    const editor = editorResult.rows[0];
+    userIds.push(editor.id);
+    await pool.query(
+      'INSERT INTO site_memberships(site_id,user_id,role_id) VALUES($1,$2,$3)',
+      [siteB, editor.id, editorRoleId]
     );
 
     const document = {
@@ -175,6 +203,15 @@ test(
       userAgent: 'tenant-object-isolation-test',
     });
     assert.equal(session.mfaRequired, false);
+    const editorSession = await identity.login({
+      email: editor.email,
+      password: editorPassword,
+      ip: '127.0.0.1',
+      userAgent: 'tenant-object-editor-role-test',
+    });
+    assert.equal(editorSession.mfaRequired, false);
+    assert.equal(await identity.authorizeSite(editor.id, siteB, 'content:read'), true);
+    assert.equal(await identity.authorizeSite(editor.id, siteB, 'site:manage'), false);
 
     server = createApiServer({
       env,
@@ -190,6 +227,7 @@ test(
 
     const base = `http://127.0.0.1:${server.address().port}`;
     const headers = { authorization: `Bearer ${session.token}`, 'x-virgoscorpio-hub-site-id': siteB };
+    const editorHeaders = { authorization: `Bearer ${editorSession.token}`, 'x-virgoscorpio-hub-site-id': siteB };
     const before = await contentSideEffects(pool, siteA, foreignContent.id);
     assert.ok(before, 'site A fixture must exist before adversarial requests');
     await t.test('relationship endpoints must belong to the selected site and valid same-site relationships still work', async () => {
@@ -463,7 +501,112 @@ test(
         [siteB, slug, rejectedTitle]
       );
       assert.equal(rejectedWrite.rowCount, 0, 'rejected cross-site writes must not persist content');
+
+      const concurrentLabels = [
+        'Site B Concurrent Registry Revision A',
+        'Site B Concurrent Registry Revision B',
+      ];
+      const concurrentResponses = await Promise.all(concurrentLabels.map(label => fetch(base + '/api/v1/content-types', {
+        method: 'POST',
+        headers: { ...headers, 'content-type': 'application/json' },
+        body: JSON.stringify({ definition: definition(label) }),
+      })));
+      assert.deepEqual(
+        concurrentResponses.map(response => response.status),
+        [201, 201],
+        'both concurrent updates for the same site/slug must serialize successfully'
+      );
+      const concurrentPayloads = await Promise.all(concurrentResponses.map(response => response.json()));
+      assert.deepEqual(
+        concurrentPayloads.map(payload => payload.definition.version).sort((a, b) => a - b),
+        [2, 3],
+        'the advisory lock must assign distinct consecutive versions'
+      );
+
+      const siteBVersions = await pool.query(
+        'SELECT version,active,label FROM content_type_definitions WHERE site_id=$1 AND slug=$2 ORDER BY version',
+        [siteB, slug]
+      );
+      assert.deepEqual(
+        siteBVersions.rows.map(row => ({ version: row.version, active: row.active })),
+        [
+          { version: 1, active: false },
+          { version: 2, active: false },
+          { version: 3, active: true },
+        ],
+        'only the newest Site B definition version may remain active'
+      );
+      const winningSiteBLabel = concurrentPayloads.find(payload => payload.definition.version === 3).definition.label;
+      assert.equal(siteBVersions.rows[2].label, winningSiteBLabel);
+
+      const currentRegistryResponse = await fetch(base + '/api/v1/content-types', { headers });
+      assert.equal(currentRegistryResponse.status, 200);
+      const currentRegistry = await currentRegistryResponse.json();
+      const currentDefinition = currentRegistry.definitions.find(item => item.name === slug);
+      assert.equal(currentDefinition?.version, 3);
+      assert.equal(currentDefinition?.label, winningSiteBLabel);
+      assert.equal(
+        currentRegistry.definitions.filter(item => item.name === slug).length,
+        1,
+        'registry reads must expose exactly one active Site B definition for this slug'
+      );
+
+      const siteAVersions = await pool.query(
+        'SELECT version,active,label FROM content_type_definitions WHERE site_id=$1 AND slug=$2 ORDER BY version',
+        [siteA, slug]
+      );
+      assert.deepEqual(siteAVersions.rows, [
+        { version: 1, active: true, label: siteALabel },
+      ], 'Site B registry updates must not alter the same-slug Site A definition');
     });
+
+    await t.test('content type definition writes require site management before persistence', async () => {
+      const deniedSlug = 'unauthorized-registry-' + randomUUID().slice(0, 8);
+      const deniedLabel = 'Must Not Persist Site B Editor Definition';
+      const before = await pool.query(
+        'SELECT count(*)::int AS count FROM content_type_definitions WHERE site_id=$1',
+        [siteB]
+      );
+
+      const registryRead = await fetch(base + '/api/v1/content-types', { headers: editorHeaders });
+      assert.equal(registryRead.status, 200, 'an editor with content:read may read the site-scoped registry');
+      assert.equal(JSON.stringify(await registryRead.json()).includes(deniedLabel), false);
+
+      const denied = await fetch(base + '/api/v1/content-types', {
+        method: 'POST',
+        headers: { ...editorHeaders, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          definition: {
+            apiVersion: 1,
+            name: deniedSlug,
+            label: deniedLabel,
+            version: 1,
+            source: 'admin',
+            fields: [{ name: 'title', type: 'string', required: true, maxLength: 180 }],
+            capabilities: ['read', 'create', 'edit'],
+            publicationPolicy: 'review-required',
+          },
+        }),
+      });
+      assert.equal(denied.status, 403);
+      const deniedPayload = await denied.json();
+      assert.equal(deniedPayload.code, 'ERR_VIRGOSCORPIO_HUB_FORBIDDEN');
+      assert.equal(JSON.stringify(deniedPayload).includes(deniedLabel), false);
+
+      const [rows, after] = await Promise.all([
+        pool.query(
+          'SELECT id FROM content_type_definitions WHERE site_id=$1 AND slug=$2',
+          [siteB, deniedSlug]
+        ),
+        pool.query(
+          'SELECT count(*)::int AS count FROM content_type_definitions WHERE site_id=$1',
+          [siteB]
+        ),
+      ]);
+      assert.equal(rows.rowCount, 0, 'a member without site:manage must not persist a registry definition');
+      assert.equal(after.rows[0].count, before.rows[0].count, 'denied registry writes must have no definition-row side effects');
+    });
+
     const cases = [
       {
         name: 'page read',
