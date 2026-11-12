@@ -703,6 +703,103 @@ test(
       assert.equal(audits.rows[0].request_id, accepted.payload.requestId);
     });
 
+    await t.test('audit persistence failure rolls back invitation acceptance and allows a safe retry', async () => {
+      const invitedEmail = 'audit-failure-site-a-invite-' + randomUUID() + '@example.test';
+      const created = await createSiteAInvitation(invitedEmail, 'editor');
+      assert.equal(created.response.status, 201);
+      const { token, invitation } = await readSiteAInvitation(invitedEmail);
+
+      // Inject a narrowly scoped PostgreSQL failure only for this test site's
+      // invitation-acceptance audit row. The trigger is removed before retry.
+      const suffix = randomUUID().replace(/-/g, '');
+      const functionName = 'test_inv_audit_fail_' + suffix;
+      const triggerName = 'test_inv_audit_fail_' + suffix;
+      const createFunction = `CREATE FUNCTION public.${functionName}()
+        RETURNS trigger LANGUAGE plpgsql AS $body$
+        BEGIN
+          IF NEW.site_id = '${siteA}'::uuid
+             AND NEW.action = 'site.invitation_accepted' THEN
+            RAISE EXCEPTION 'injected invitation-acceptance audit failure'
+              USING ERRCODE = 'P0001';
+          END IF;
+          RETURN NEW;
+        END;
+        $body$`;
+      const authorizationChangesBefore = authorizationChanges.length;
+
+      await pool.query(createFunction);
+
+      try {
+        await pool.query(
+          `CREATE TRIGGER ${triggerName}
+             BEFORE INSERT ON audit_events
+             FOR EACH ROW EXECUTE FUNCTION public.${functionName}()`
+        );
+
+        const failed = await redeemInvitation(token);
+        assert.equal(failed.status, 500, 'audit persistence failure must fail the acceptance request');
+
+        const [users, memberships, pending, acceptanceAudits] = await Promise.all([
+          pool.query('SELECT id FROM users WHERE lower(email)=lower($1)', [invitedEmail]),
+          pool.query(
+            `SELECT 1 FROM site_memberships m
+              JOIN users u ON u.id=m.user_id
+             WHERE m.site_id=$1 AND lower(u.email)=lower($2)`,
+            [siteA, invitedEmail]
+          ),
+          pool.query('SELECT accepted_at,token_hash FROM site_invitations WHERE id=$1', [invitation.id]),
+          pool.query(
+            "SELECT id FROM audit_events WHERE site_id=$1 AND action='site.invitation_accepted' AND target_id=$2",
+            [siteA, invitation.id]
+          ),
+        ]);
+        userIds.push(...users.rows.map(user => user.id));
+        assert.equal(users.rowCount, 0, 'new-account creation must roll back with the failed acceptance');
+        assert.equal(memberships.rowCount, 0, 'membership insertion must roll back with the failed acceptance');
+        assert.equal(pending.rows[0].accepted_at, null, 'the invitation must remain redeemable');
+        assert.equal(pending.rows[0].token_hash, digest(token), 'the original token digest must remain available for a safe retry');
+        assert.equal(acceptanceAudits.rowCount, 0, 'the failed audit insert must not leave a partial event');
+        assert.equal(
+          authorizationChanges.length,
+          authorizationChangesBefore,
+          'a rolled-back acceptance must not publish authorization invalidation'
+        );
+      } finally {
+        await pool.query(`DROP TRIGGER IF EXISTS ${triggerName} ON audit_events`);
+        await pool.query(`DROP FUNCTION IF EXISTS public.${functionName}()`);
+      }
+
+      const retry = await redeemInvitation(token);
+      assert.equal(retry.status, 200, 'the same one-time token must succeed after the audit sink recovers');
+      const accepted = await retry.json();
+      assert.equal(accepted.status, 'accepted');
+      assert.equal(accepted.user.email, invitedEmail);
+      userIds.push(accepted.user.id);
+
+      const [users, memberships, consumed, acceptanceAudits] = await Promise.all([
+        pool.query('SELECT id FROM users WHERE lower(email)=lower($1)', [invitedEmail]),
+        pool.query(
+          `SELECT 1 FROM site_memberships m
+            JOIN users u ON u.id=m.user_id
+           WHERE m.site_id=$1 AND lower(u.email)=lower($2)`,
+          [siteA, invitedEmail]
+        ),
+        pool.query('SELECT accepted_at FROM site_invitations WHERE id=$1', [invitation.id]),
+        pool.query(
+          "SELECT id,request_id FROM audit_events WHERE site_id=$1 AND action='site.invitation_accepted' AND target_id=$2",
+          [siteA, invitation.id]
+        ),
+      ]);
+      assert.equal(users.rowCount, 1);
+      assert.equal(memberships.rowCount, 1);
+      assert.ok(consumed.rows[0].accepted_at);
+      assert.equal(acceptanceAudits.rowCount, 1);
+      assert.equal(acceptanceAudits.rows[0].request_id, accepted.requestId);
+      assert.deepEqual(authorizationChanges.slice(authorizationChangesBefore), [
+        { siteId: siteA, principalId: accepted.user.id },
+      ], 'the successful retry must publish exactly one post-commit authorization invalidation');
+    });
+
     await t.test('ordinary member addition and invitation creation cannot grant site-owner', async () => {
       const ownerEscalationEmail = 'owner-escalation-attempt-' + randomUUID() + '@example.test';
       mailRecipients.push(ownerEscalationEmail);
