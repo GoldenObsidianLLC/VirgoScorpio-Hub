@@ -276,6 +276,7 @@ async function createRedisApiInstance({
   let dropNextDocumentRelay = false;
   let dropNextAuthorizationInvalidation = false;
   let droppedAuthorizationInvalidations = 0;
+  let deliveredAuthorizationInvalidations = 0;
   let publisherCreated = false;
   let subscriberCreated = false;
   const createFaultInjectingClient = options => {
@@ -305,6 +306,7 @@ async function createRedisApiInstance({
             droppedAuthorizationInvalidations += 1;
             return;
           }
+          deliveredAuthorizationInvalidations += 1;
           return listener(message, channel);
         }, ...args);
       };
@@ -354,6 +356,9 @@ async function createRedisApiInstance({
     },
     get droppedAuthorizationInvalidations() {
       return droppedAuthorizationInvalidations;
+    },
+    get deliveredAuthorizationInvalidations() {
+      return deliveredAuthorizationInvalidations;
     },
     async close() {
       if (closed) return;
