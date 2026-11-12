@@ -431,24 +431,25 @@
     }
   },
   "candidateValidation": {
-    "reviewedAt": "2026-11-09",
-    "baselineCommit": "36220abf4ebcc629fa616961879f5a2ffe1f847d",
+    "reviewedAt": "2026-11-12",
+    "baselineCommit": "4a9ee181be5d9d46d94ed11a14de64b4dbbe9907",
     "branch": "main",
     "semver": {
       "previousVersion": "0.6.1",
       "candidateVersion": "0.6.2",
       "changeType": "patch",
       "released": false,
-      "reason": "The 0.6.2 patch candidate retains the compatible internal library/media API route-family extraction rationale. Subsequent F1.12–F1.18 work adds scoped collaboration and authorization regression coverage without changing the package SemVer, public HTTP contract, or database schema. The current release-scope reconciliation is documentation/evidence metadata only."
+      "reason": "The original compatible internal library/media route-family extraction remains the 0.6.2 patch basis. F1.21-F1.27 add scoped authorization, concurrency, audit and collaboration reliability regressions without changing the public HTTP contract, dependencies or database schema. F1.27 reuses canEditContent to enforce author ownership on submit-review. The candidate remains private and unreleased."
     },
     "includedChanges": [
-      "Internal library/media API route-family extraction remains within the 0.6.2 patch candidate; API authentication, site resolution, authorization and error handling remain in the shared composition path.",
-      "F1.12–F1.18 add limited developer-preview collaborative editing and maintainer-authored authorization regressions; F1.18 qualifies heartbeat reauthorization after a lost Redis authorization notification. No production runtime, public API, dependency, schema or migration change was introduced by these increments.",
-      "0.6.2 scope, sample defaults, optional provider exclusions, 14-gate evidence environments and proposed accountable roles are reconciled; named release-owner and provider owner assignments remain pending."
+      "Compatible internal library/media API route-family extraction; authentication, site resolution, authorization and error handling remain in the shared API composition path.",
+      "F1.21-F1.26 add targeted maintainer-led tenant ownership, role, invitation audit, fault rollback, content-type registry concurrency and Redis re-subscription regressions. Redis Pub/Sub remains ephemeral; PostgreSQL plus command/heartbeat reauthorization remain authoritative fallbacks.",
+      "F1.27 merged through PR #132: submit-review now reuses canEditContent after the site capability check; seeded author/editor/site-owner regression coverage asserts no side effects on denial. No API contract, schema, migration, dependency, provider or package-version change.",
+      "F1.27 exact-main workflow #585 passed all seven jobs on 4a9ee181be5d9d46d94ed11a14de64b4dbbe9907."
     ],
     "localValidation": {
       "status": "PASS_WITH_PLATFORM_SKIPS",
-      "reviewedAt": "2026-11-09",
+      "reviewedAt": "2026-11-12",
       "runtime": {
         "node": "26.12.1",
         "platform": "win32",
@@ -457,14 +458,14 @@
       },
       "artifactCheck": {
         "status": "PASS",
-        "requiredPaths": 230,
-        "javascriptFilesSyntaxChecked": 236
+        "requiredPaths": 235,
+        "javascriptFilesSyntaxChecked": 243
       },
       "unitTests": {
         "status": "PASS_WITH_PLATFORM_SKIPS",
         "command": "npm run check",
-        "tests": 566,
-        "passed": 563,
+        "tests": 595,
+        "passed": 592,
         "failed": 0,
         "skipped": 3,
         "skipNotes": [
@@ -476,31 +477,32 @@
         "status": "PASS",
         "flowFamilies": 27,
         "declaredRoutePatterns": 78,
-        "implementationSourceFiles": 19,
-        "referencedTestFiles": 41
+        "implementationSourceFiles": 21,
+        "referencedTestFiles": 42
       },
       "markdownAndDiffCheck": {
         "brokenInRepositoryLinks": 0,
+        "conflictMarkers": 0,
         "diffCheck": "PASS"
       }
     },
-    "hostedCi": "PASS on mainline workflow #472 for exact source 36220abf4ebcc629fa616961879f5a2ffe1f847d; all six jobs succeeded.",
+    "hostedCi": "PASS on exact-main workflow #585 for source 4a9ee181be5d9d46d94ed11a14de64b4dbbe9907; all seven jobs succeeded.",
     "productionCertified": false,
-    "localValidationSummary": "PASS_WITH_PLATFORM_SKIPS: Windows Node 26.12.1; 566 Hub tests (563 passed, 0 failed, 3 platform-specific skips); 230 required artifact paths; 236 JavaScript files syntax-checked; tenant inventory 27 families, 78 route patterns, 19 source files and 41 test files.",
+    "localValidationSummary": "Windows Node 26.12.1 local development: npm run check 595 tests (592 passed, 0 failed, 3 platform-specific skips); focused API tests 26/26; artifact verification 235 required paths/243 JavaScript syntax checks; tenant inventory 27 families/78 routes/21 source files/42 test references; 180 relative Markdown links checked/0 broken. Local database fixture skipped without a disposable DATABASE_URL; hosted exact-main database suite passed 93/93 without skips.",
     "hostedCiEvidence": {
       "mainline": {
-        "runNumber": 472,
-        "runId": 42535903899,
-        "commit": "36220abf4ebcc629fa616961879f5a2ffe1f847d",
+        "runNumber": 585,
+        "runId": 43266581120,
+        "commit": "4a9ee181be5d9d46d94ed11a14de64b4dbbe9907",
         "event": "push",
         "conclusion": "success",
-        "completedJobs": 6,
-        "successfulJobs": 6
+        "completedJobs": 7,
+        "successfulJobs": 7
       },
       "node22": {
         "version": "22.23.4",
         "hubTests": {
-          "passed": 566,
+          "passed": 595,
           "failed": 0,
           "skipped": 0
         },
@@ -509,14 +511,14 @@
           "failed": 0,
           "skipped": 0
         },
-        "requiredPaths": 230,
-        "javascriptSyntaxChecked": 236,
+        "requiredPaths": 235,
+        "javascriptSyntaxChecked": 243,
         "npmAuditVulnerabilities": 0
       },
       "node24": {
         "version": "24.22.1",
         "hubTests": {
-          "passed": 566,
+          "passed": 595,
           "failed": 0,
           "skipped": 0
         },
@@ -525,20 +527,20 @@
           "failed": 0,
           "skipped": 0
         },
-        "requiredPaths": 230,
-        "javascriptSyntaxChecked": 236,
+        "requiredPaths": 235,
+        "javascriptSyntaxChecked": 243,
         "npmAuditVulnerabilities": 0
       },
       "livePostgresMemgraph": {
-        "tests": 79,
-        "passed": 79,
+        "tests": 93,
+        "passed": 93,
         "failed": 0,
         "skipped": 0,
         "todo": 0,
         "migrationsApplied": 18,
         "idempotentSecondPass": 18,
         "disposableDatabaseDropped": true,
-        "supportedUpgrade": "v0008-to-latest PASS",
+        "supportedUpgrade": "Not separately asserted in #585; do not infer from fresh migration checks.",
         "memgraphOutageReplay": "PASS",
         "canonicalGraphRebuild": "PASS"
       },
@@ -548,23 +550,23 @@
         "skipped": 0
       },
       "serviceLessIntegration": {
-        "skippedPerRuntime": 33,
+        "skippedPerRuntime": 34,
         "status": "PARTIAL",
         "countedAsLivePass": false
       },
       "sbom": {
         "format": "CycloneDX 1.5",
-        "componentsPerRuntime": 177,
-        "dependenciesPerRuntime": 178,
+        "componentsPerRuntime": 200,
+        "dependenciesPerRuntime": 201,
         "npm": "11.19.1",
-        "lockfileSha256": "f404ce5862bffa60daa2cb9cd471e6ac7893b048b2e877e623ddf43c1a15e7ce",
+        "lockfileSha256": "8f3786bcfcd03d0b63761c7107e4d757ae5b45171ba2f6c086ff38c027c8b086",
         "normalizedRuntimeParity": "PASS",
-        "humanLicenseAndProvenanceReview": "OPEN"
+        "humanLicenseAndProvenanceReview": "OPEN: 14 components have LGPL license terms and require qualified human license/distribution review."
       },
       "codeql": "PASS; not an independent application-security assessment."
     },
     "formalReadiness": {
-      "sourceRevision": "36220abf4ebcc629fa616961879f5a2ffe1f847d",
+      "sourceRevision": "4a9ee181be5d9d46d94ed11a14de64b4dbbe9907",
       "releaseClassification": "NOT_PRODUCTION_CERTIFIED",
       "readyForProduction": false,
       "pass": 7,
@@ -575,18 +577,18 @@
       "productionCertification": "BLOCKED"
     },
     "supplementalEvidenceDiscrepancy": {
-      "status": "STALE_LOCAL_SUPPLEMENTAL_EVIDENCE",
-      "summary": "The local release:readiness snapshot has a separate fresh-migration artifact BLOCKED by its exact-source contract; hosted run #472 independently produced exact-revision PASS PostgreSQL/Memgraph evidence. Do not transplant run-bound artifacts or alter their source SHA.",
-      "action": "Refresh local supplemental evidence from the exact candidate revision when needed; do not use historical or cross-commit evidence."
+      "status": "PRELIMINARY_READINESS_SNAPSHOT_PRECEDES_DATABASE_PRODUCER",
+      "summary": "The exact-source release-readiness snapshot is generated inside the Node jobs before the dedicated PostgreSQL/Memgraph producer has uploaded its artifacts. It therefore records database/migration evidence as BLOCKED or missing. Later in the same exact-main workflow #585, the database producer passed 93/93 with zero skips, fresh migrations passed 18/18 plus 18/18 idempotent second-pass skips, and evidence consolidation passed. This is a producer-ordering/report-finalization discrepancy, not a database test failure. The overall release remains NO-GO because independent, provider, human, operational and governance evidence is still missing.",
+      "action": "Generate a final release-readiness artifact after all exact-source producer artifacts are downloaded, schema/source/checksum-validated and consolidated. Retain preliminary reports as diagnostics; never transplant evidence across runs or source SHAs."
     },
     "pullRequest": {
-      "number": 109,
-      "url": "https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/109",
+      "number": 132,
+      "url": "https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/132",
       "state": "closed",
       "merged": true,
-      "head": "a55c36fe18863b540c279d7f690c81ba3c4438c7",
-      "base": "aaab380978edab446516fe92da99257e798a6200",
-      "mergeRef": "36220abf4ebcc629fa616961879f5a2ffe1f847d",
+      "head": "ffb2632ed11f774982587a49abaef6bfe4380be0",
+      "base": "0748f56e01421d13121ec08f7bc036579e5406835",
+      "mergeRef": "4a9ee181be5d9d46d94ed11a14de64b4dbbe9907",
       "reviewCount": 0
     }
   },
@@ -937,30 +939,30 @@
     "localValidationSummary": "PASS: 202 required paths, 211 JavaScript files syntax-checked; 461 unit tests (458 passed, 0 failed, 3 Windows/platform-specific skips); focused AI route/API/context suites 45/45; package-lock audit 0 vulnerabilities."
   },
   "latestMainEvidence": {
-    "reviewedAt": "2026-11-09",
+    "reviewedAt": "2026-11-12",
     "version": "0.6.2",
-    "commit": "36220abf4ebcc629fa616961879f5a2ffe1f847d",
+    "commit": "4a9ee181be5d9d46d94ed11a14de64b4dbbe9907",
     "pullRequest": {
-      "number": 109,
-      "url": "https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/109",
-      "mergedAt": "2026-11-08T23:35:24Z",
-      "mergeCommit": "36220abf4ebcc629fa616961879f5a2ffe1f847d"
+      "number": 132,
+      "url": "https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/132",
+      "mergedAt": "2026-11-12T17:10:22Z",
+      "mergeCommit": "4a9ee181be5d9d46d94ed11a14de64b4dbbe9907"
     },
     "workflow": {
-      "runId": 42535903899,
-      "runNumber": 472,
-      "url": "https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42535903899",
-      "completedChecks": 6,
-      "successfulChecks": 6
+      "runId": 43266581120,
+      "runNumber": 585,
+      "url": "https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43266581120",
+      "completedChecks": 7,
+      "successfulChecks": 7
     },
     "results": {
       "node22HubTests": {
-        "passed": 566,
+        "passed": 595,
         "failed": 0,
         "skipped": 0
       },
       "node24HubTests": {
-        "passed": 566,
+        "passed": 595,
         "failed": 0,
         "skipped": 0
       },
@@ -970,7 +972,7 @@
         "skipped": 0
       },
       "livePostgresMemgraph": {
-        "passed": 79,
+        "passed": 93,
         "failed": 0,
         "skipped": 0
       },
@@ -984,29 +986,29 @@
         "failed": 0,
         "skipped": 0
       },
-      "codeql": "Workflow passed; current repository query returned zero open code-scanning alerts on 2026-11-09.",
+      "codeql": "Exact-main workflow job passed; automated analysis is not an independent security assessment.",
       "dependencyAudit": {
         "highOrCriticalVulnerabilities": 0
       },
       "sbom": {
-        "node22Components": 177,
-        "node22Dependencies": 178,
-        "node24Components": 177,
-        "node24Dependencies": 178,
+        "node22Components": 200,
+        "node22Dependencies": 201,
+        "node24Components": 200,
+        "node24Dependencies": 201,
         "sameLockfile": true,
-        "lockfileSha256": "f404ce5862bffa60daa2cb9cd471e6ac7893b048b2e877e623ddf43c1a15e7ce",
+        "lockfileSha256": "8f3786bcfcd03d0b63761c7107e4d757ae5b45171ba2f6c086ff38c027c8b086",
         "normalizedComponentAndDependencyGraphParity": "PASS",
-        "disposition": "Identical normalized inventory; human license/provenance review remains open."
+        "disposition": "14 components have LGPL license terms; no component lacks an identified license expression. Qualified human license/distribution review remains open."
       },
-      "requiredPaths": 230,
-      "javascriptSyntaxChecked": 236,
+      "requiredPaths": 235,
+      "javascriptSyntaxChecked": 243,
       "serviceLessIntegration": {
-        "skippedPerRuntime": 33,
+        "skippedPerRuntime": 34,
         "status": "PARTIAL",
         "countedAsLivePass": false
       },
       "liveIntegrationDetails": {
-        "supportedUpgradeFixture": "v0008-to-latest PASS",
+        "supportedUpgradeFixture": "Not separately asserted in this workflow snapshot; do not infer from fresh migrations.",
         "memgraphOutageReplay": "PASS",
         "canonicalGraphRebuild": "PASS"
       }
@@ -1073,40 +1075,40 @@
     }
   },
   "latestCandidateEvidence": {
-    "reviewedAt": "2026-11-09",
+    "reviewedAt": "2026-11-12",
     "version": "0.6.2",
     "branch": "main",
-    "headCommit": "36220abf4ebcc629fa616961879f5a2ffe1f847d",
-    "mergeRefCommit": "36220abf4ebcc629fa616961879f5a2ffe1f847d",
+    "headCommit": "4a9ee181be5d9d46d94ed11a14de64b4dbbe9907",
+    "mergeRefCommit": "4a9ee181be5d9d46d94ed11a14de64b4dbbe9907",
     "pullRequest": {
-      "number": 109,
-      "url": "https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/109",
+      "number": 132,
+      "url": "https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/132",
       "state": "closed",
       "merged": true,
-      "head": "a55c36fe18863b540c279d7f690c81ba3c4438c7",
-      "base": "aaab380978edab446516fe92da99257e798a6200",
-      "mergeRef": "36220abf4ebcc629fa616961879f5a2ffe1f847d",
+      "head": "ffb2632ed11f774982587a49abaef6bfe4380be0",
+      "base": "0748f56e01421d13121ec08f7bc036579e5406835",
+      "mergeRef": "4a9ee181be5d9d46d94ed11a14de64b4dbbe9907",
       "reviewCount": 0
     },
     "ci": {
       "mainlineRun": {
-        "id": 42535903899,
-        "number": 472,
+        "id": 43266581120,
+        "number": 585,
         "event": "push",
         "conclusion": "success"
       },
-      "jobsPerRun": 6,
+      "jobsPerRun": 7,
       "status": "PASS",
       "workflowStatus": "completed"
     },
     "tests": {
       "node22Hub": {
-        "passed": 566,
+        "passed": 595,
         "failed": 0,
         "skipped": 0
       },
       "node24Hub": {
-        "passed": 566,
+        "passed": 595,
         "failed": 0,
         "skipped": 0
       },
@@ -1116,7 +1118,7 @@
         "skipped": 0
       },
       "livePostgresMemgraph": {
-        "passed": 79,
+        "passed": 93,
         "failed": 0,
         "skipped": 0
       },
@@ -1125,7 +1127,7 @@
         "secondPassSkipped": 18,
         "disposableDatabaseDropped": true
       },
-      "supportedUpgradeFixture": "v0008-to-latest PASS",
+      "supportedUpgradeFixture": "Not separately asserted in workflow #585; do not infer from fresh migration checks.",
       "memgraphOutageReplay": "PASS",
       "canonicalGraphRebuild": "PASS",
       "playwrightSmoke": {
@@ -1133,26 +1135,26 @@
         "failed": 0,
         "skipped": 0
       },
-      "requiredPaths": 230,
-      "javascriptSyntaxChecked": 236,
+      "requiredPaths": 235,
+      "javascriptSyntaxChecked": 243,
       "npmAuditVulnerabilities": 0,
       "serviceLessIntegration": {
-        "skippedPerRuntime": 33,
+        "skippedPerRuntime": 34,
         "status": "PARTIAL"
       }
     },
     "sbom": {
       "cyclonedx": "1.5",
-      "lockfileSha256": "f404ce5862bffa60daa2cb9cd471e6ac7893b048b2e877e623ddf43c1a15e7ce",
+      "lockfileSha256": "8f3786bcfcd03d0b63761c7107e4d757ae5b45171ba2f6c086ff38c027c8b086",
       "npm": "11.19.1",
-      "node22Components": 177,
-      "node22Dependencies": 178,
-      "node24Components": 177,
-      "node24Dependencies": 178,
+      "node22Components": 200,
+      "node22Dependencies": 201,
+      "node24Components": 200,
+      "node24Dependencies": 201,
       "normalizedComponentAndDependencyGraphParity": "PASS"
     },
     "formalReadiness": {
-      "sourceRevision": "36220abf4ebcc629fa616961879f5a2ffe1f847d",
+      "sourceRevision": "4a9ee181be5d9d46d94ed11a14de64b4dbbe9907",
       "releaseClassification": "NOT_PRODUCTION_CERTIFIED",
       "readyForProduction": false,
       "pass": 7,
@@ -1237,8 +1239,8 @@
     }
   },
   "scopeReconciliation": {
-    "reviewedAt": "2026-11-09",
-    "sourceRevision": "36220abf4ebcc629fa616961879f5a2ffe1f847d",
+    "reviewedAt": "2026-11-12",
+    "sourceRevision": "4a9ee181be5d9d46d94ed11a14de64b4dbbe9907",
     "document": "docs/RELEASE-SCOPE.md",
     "classification": "EXPANDED_DEVELOPER_PREVIEW_NOT_PRODUCTION_CERTIFIED",
     "decisionStatus": "TECHNICAL_RECOMMENDATION_PENDING_AUTHORIZED_RELEASE_OWNER_APPROVAL",
@@ -1300,22 +1302,22 @@
       "node": "26.12.1",
       "command": "npm run check",
       "tests": {
-        "total": 566,
-        "passed": 563,
+        "total": 595,
+        "passed": 592,
         "failed": 0,
         "skipped": 3
       },
       "artifactCheck": {
-        "requiredPaths": 230,
-        "javascriptFilesSyntaxChecked": 236
+        "requiredPaths": 235,
+        "javascriptFilesSyntaxChecked": 243
       },
       "tenantInventory": {
         "flowFamilies": 27,
         "routePatterns": 78,
-        "sourceFiles": 19,
-        "testFiles": 41
+        "sourceFiles": 21,
+        "testFiles": 42
       },
-      "interpretation": "Three platform-specific skips; Node 26 local development only, not support-matrix evidence."
+      "interpretation": "Three platform-specific skips; Node 26 local development only, not support-matrix evidence. Local database fixture skipped; exact-main hosted database validation passed 93/93 without skips."
     },
     "evidenceOwnerMatrix": {
       "document": "docs/RELEASE-SCOPE.md#61-evidence-environment-and-accountable-role-mapping",

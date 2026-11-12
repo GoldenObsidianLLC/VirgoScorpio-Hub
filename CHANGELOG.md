@@ -4,6 +4,11 @@ All notable project-level changes should be recorded here. This changelog does n
 
 ## 0.6.2 (unreleased patch candidate)
 
+### Editorial workflow author ownership (F1.27; PR #132 merged 12 November 2026)
+
+- Reuse the existing `canEditContent` authorization helper in the `submit-review` workflow action after the site-level `content:submit-review` capability check. Authors may submit their own drafts but cannot submit another same-site member's content; site-wide editor and owner behavior remains unchanged. Add database-free API coverage and a seeded-role PostgreSQL matrix that verifies denied actions leave content, workflow, audit, outbox and collaboration state unchanged. Exact-main workflow #585 passed 93/93 live PostgreSQL/Memgraph tests with zero skips. This is a compatible authorization correction within the unreleased 0.6.2 candidate; no route contract, schema, migration, dependency, provider, lockfile or SemVer change. Maintainer/automation evidence only; independent reviews remain open.
+
+
 ### Dependency advisory remediation and supply-chain evidence (issue #23)
 
 - Update the optional transitive `fast-xml-parser` resolution from 5.11.2 to 5.12.0 in `package-lock.json` after the publication of LOW GHSA-474x-hrwr-fgx4 / CVE-2026-126066. Its fixed version is within both upstream dependency ranges; `package.json` and direct dependencies remain unchanged. A fresh local `npm ci` and post-update full/production npm audits pass with zero reported advisories. The advisory's precondition uses the non-default `stopNodes` option; repository application/package/script/test source searches found no explicit configuration.
