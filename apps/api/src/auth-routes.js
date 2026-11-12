@@ -163,7 +163,7 @@ function createAuthRouteHandlers(dependencies = {}) {
       }
       if (!identity) return sendJson(res, 503, { error: 'Authentication requires PostgreSQL.', code: 'ERR_VIRGOSCORPIO_HUB_IDENTITY_DISABLED', requestId });
       const body = await readJson(req, Math.min(maxBody, MAX_AUTH_BODY_BYTES));
-      const result = await identity.acceptInvitation({ token: body.token, password: body.password, displayName: body.displayName });
+      const result = await identity.acceptInvitation({ token: body.token, password: body.password, displayName: body.displayName, requestId });
       return sendJson(res, 200, { status: 'accepted', ...result, requestId });
     }
 

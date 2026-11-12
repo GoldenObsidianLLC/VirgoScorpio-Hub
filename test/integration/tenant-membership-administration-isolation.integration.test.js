@@ -558,12 +558,13 @@ test(
       assert.ok(consumed.rows[0].accepted_at);
 
       const acceptedAudit = await pool.query(
-        "SELECT site_id,actor_id,action,target_type,target_id,details FROM audit_events WHERE site_id=$1 AND action='site.invitation_accepted' AND target_id=$2",
+        "SELECT site_id,actor_id,action,target_type,target_id,request_id,details FROM audit_events WHERE site_id=$1 AND action='site.invitation_accepted' AND target_id=$2",
         [siteA, invitation.id]
       );
       assert.equal(acceptedAudit.rows.length, 1);
       assert.equal(acceptedAudit.rows[0].actor_id, acceptedPayload.user.id);
       assert.equal(acceptedAudit.rows[0].target_type, 'invitation');
+      assert.equal(acceptedAudit.rows[0].request_id, acceptedPayload.requestId);
       assert.equal(acceptedAudit.rows[0].details.role, 'editor');
       assert.equal(JSON.stringify(acceptedAudit.rows[0].details).includes(token), false);
       assert.deepEqual(authorizationChanges.slice(authorizationChangesBefore), [
@@ -582,6 +583,7 @@ test(
     });
 
     await t.test('an existing active account accepts only the invited site membership', async () => {
+      await pool.query('UPDATE users SET email_verified_at=now(),mfa_enabled=true WHERE id=$1', [targetB.id]);
       const authorizationChangesBefore = authorizationChanges.length;
       const created = await createSiteAInvitation(targetB.email, 'viewer');
       assert.equal(created.response.status, 201);
@@ -593,15 +595,16 @@ test(
       assert.equal(payload.user.id, targetB.id);
       assert.equal(payload.siteId, siteA);
       assert.equal(payload.role, 'viewer');
+      assert.equal(payload.user.emailVerified, true);
+      assert.equal(payload.user.mfaEnabled, true, 'acceptance must preserve existing MFA configuration');
 
       const memberships = await pool.query(
         'SELECT m.site_id,r.slug AS role FROM site_memberships m JOIN roles r ON r.id=m.role_id WHERE m.user_id=$1 ORDER BY m.site_id,r.slug',
         [targetB.id]
       );
-      assert.deepEqual(
-        memberships.rows.map(row => ({ siteId: row.site_id, role: row.role })),
-        [{ siteId: siteA, role: 'viewer' }, { siteId: siteB, role: 'editor' }]
-      );
+      assert.equal(memberships.rows.length, 2);
+      assert.equal(memberships.rows.find(row => row.site_id === siteA)?.role, 'viewer');
+      assert.equal(memberships.rows.find(row => row.site_id === siteB)?.role, 'editor');
       assert.deepEqual(authorizationChanges.slice(authorizationChangesBefore), [
         { siteId: siteA, principalId: targetB.id },
       ]);
@@ -693,10 +696,11 @@ test(
         { siteId: siteA, principalId: accepted.payload.user.id },
       ]);
       const audits = await pool.query(
-        "SELECT id FROM audit_events WHERE site_id=$1 AND action='site.invitation_accepted' AND target_id=$2",
+        "SELECT id,request_id FROM audit_events WHERE site_id=$1 AND action='site.invitation_accepted' AND target_id=$2",
         [siteA, invitation.id]
       );
       assert.equal(audits.rowCount, 1);
+      assert.equal(audits.rows[0].request_id, accepted.payload.requestId);
     });
 
     await t.test('ordinary member addition and invitation creation cannot grant site-owner', async () => {

@@ -3,7 +3,7 @@
   "product": "VirgoScorpio Hub 0.6.2 (unreleased developer-preview candidate)",
   "purpose": "Maintainer-prepared route, capability, data-access, and regression-test navigation inventory for independent tenant/site-isolation review issue #14.",
   "status": "MAINTAINER_PREPARED_NOT_INDEPENDENTLY_REVIEWED",
-  "scopeNote": "Curated, source-anchored navigation inventory; route patterns, capabilities, data-access notes and test limitations remain maintainer-authored metadata, not proofs of runtime behavior. Updated 11 November 2026 with two-site custom-content-type coverage and F1.22 membership role-matrix, disabled-user, lifecycle and authenticated SSE-revocation coverage. F1.22 test-bearing commit a7e5318de9c499b14ff2e63c1539861b3e2bdd2a was the exact draft PR #127 head exercised by workflows #559/#560; live suite 85/85, zero failures/skips. Independent review remains outstanding.",
+  "scopeNote": "Curated, source-anchored navigation inventory; route patterns, capabilities, data-access notes and test limitations remain maintainer-authored metadata, not proofs of runtime behavior. F1.21/F1.22 maintainer regressions were merged in PR #127 at main 3c5df47f7a397f76a5368ef7bc036579e5406835 and validated by exact-main workflow #563. F1.23 candidate adds invitation-acceptance lifecycle, one-time redemption/replay, existing/disabled-account handling, expiration, concurrent redemption, transactional acceptance audit, and denial of site-owner grants through ordinary add/invite endpoints. Its live coverage remains pending exact-head hosted PostgreSQL/Memgraph CI. No owner-transfer API exists; designing such a high-privilege operation requires separately authorized scope/API review. Independent review #14 remains outstanding.",
   "commonControls": [
     {
       "name": "Authentication and developer-token boundary",
@@ -232,13 +232,17 @@
         "invitations",
         "mail/outbox",
         "audit events",
-        "authorization invalidation"
+        "authorization invalidation",
+        "transactional invitation-acceptance audit"
       ],
       "sideEffects": [
         "Add/remove membership",
         "Create invitation",
         "Mail delivery intent",
-        "Audit and session/realtime authorization invalidation"
+        "Audit and session/realtime authorization invalidation",
+        "Consume invitation and create membership in one PostgreSQL transaction",
+        "Site-scoped invitation-acceptance audit",
+        "Post-commit authorization invalidation"
       ],
       "sourceRefs": [
         {
@@ -258,11 +262,12 @@
       ],
       "tests": [
         "test/site-membership-routes.test.js",
-        "test/integration/tenant-membership-administration-isolation.integration.test.js"
+        "test/integration/tenant-membership-administration-isolation.integration.test.js",
+        "test/auth-security.test.js"
       ],
       "coverage": {
-        "level": "maintainer-role-matrix-membership-lifecycle-and-sse-revocation",
-        "limits": "Maintainer-authored disposable-PostgreSQL coverage: site-owner/editor/author/viewer capability matrix, cross-site and disabled-user denials, membership authorization before and after add/remove, and A/B selector-conflict/no-side-effect snapshots for membership, invitation, mail-outbox and audit state. Authenticated Site A viewer presence SSE is closed by site/principal authorization invalidation after owner-driven removal; this uses the in-process hub only. Hosted PR #127 runs #559/#560 executed this fixture at test-bearing commit a7e5318de9c499b14ff2e63c1539861b3e2bdd2a: each live PostgreSQL/Memgraph suite passed 85/85 with zero failures/skips, including role matrix, SSE revocation and F1.21 concurrent-owner regression. Local Windows integration remains skipped without disposable PostgreSQL DATABASE_URL. Owner-transfer/invitation-acceptance lifecycle, WebSocket/collaboration revocation, Redis cross-instance invalidation/recovery, other route-family combinations and broader transaction/fault-recovery remain uncovered. This is targeted maintainer evidence, not exhaustive route discovery or independent security acceptance."
+        "level": "maintainer-role-matrix-membership-lifecycle-sse-and-invitation-acceptance-candidate",
+        "limits": "Merged F1.22 maintainer evidence: site-owner/editor/author/viewer capability matrix, cross-site and disabled-user denial, membership add/remove authorization lifecycle, authenticated presence SSE revocation, selector-conflict/no-side-effect snapshots, and F1.21 concurrent last-owner removal; exact main workflow #563 passed 85/85 live PostgreSQL/Memgraph integration with zero failures/skips. F1.23 candidate extends the live fixture to exercise one-time invitation acceptance for new and existing accounts, site-bounded membership changes, disabled and expired invitation rejection without consumption, replay rejection, concurrent double redemption with exactly one successful transaction/audit/invalidation, raw-token absence from database audit details, and owner-role escalation rejection through ordinary add/invite APIs. Acceptance now writes the site.invitation_accepted audit event in the same transaction as membership creation and invitation consumption; notification remains post-commit. These new F1.23 cases are not yet hosted-validated and must be executed on the exact PR head before being described as validated. Local Windows integration skips without a disposable PostgreSQL DATABASE_URL. The existing product has no owner-transfer endpoint; no new owner-promotion/transfer API is introduced here. A future transfer operation needs an authorized API/behavior contract and separate security review. Redis cross-instance invalidation, WebSocket/collaboration revocation, broader route-family role combinations and broader transaction/fault-recovery remain uncovered. All evidence is maintainer-led, not independent review or exhaustive route discovery."
       },
       "methods": [
         "GET",

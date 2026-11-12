@@ -53,6 +53,121 @@ test('ordinary membership and invitation APIs cannot grant the site-owner role',
   assert.deepEqual(queries, [], 'unsupported owner grants must fail before PostgreSQL side effects');
 });
 
+test('invitation acceptance audits transactionally with request correlation and post-commit invalidation', async t => {
+  const userId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const siteId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+  const invitationId = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+  const token = Buffer.alloc(32, 7).toString('base64url');
+  const requestId = 'request-invitation-acceptance-123';
+  const user = {
+    id: userId,
+    email: 'invitee@example.test',
+    display_name: 'Invited Member',
+    status: 'active',
+    email_verified_at: new Date('2026-11-11T12:00:00.000Z'),
+    mfa_enabled: false,
+  };
+
+  async function runScenario({ failAudit = false } = {}) {
+    const events = [];
+    const auditValues = [];
+    const invalidations = [];
+    const pool = {
+      async query() {
+        throw new Error('Unexpected pool-level query during invitation acceptance.');
+      },
+      async connect() {
+        return {
+          async query(sql, values = []) {
+            events.push(sql);
+            if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') {
+              return { rowCount: 0, rows: [] };
+            }
+            if (sql.includes('FROM site_invitations') && sql.includes('FOR UPDATE')) {
+              return {
+                rowCount: 1,
+                rows: [{
+                  id: invitationId,
+                  site_id: siteId,
+                  email: user.email,
+                  role_id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+                  role_slug: 'editor',
+                }],
+              };
+            }
+            if (sql.includes('FROM users WHERE lower(email)')) {
+              return { rowCount: 1, rows: [user] };
+            }
+            if (sql.includes('INSERT INTO site_memberships')) {
+              return { rowCount: 1, rows: [] };
+            }
+            if (sql.includes('UPDATE site_invitations SET accepted_at')) {
+              return { rowCount: 1, rows: [] };
+            }
+            if (sql.includes('INSERT INTO audit_events')) {
+              auditValues.push(values);
+              if (failAudit) throw new Error('simulated audit storage failure');
+              return { rowCount: 1, rows: [] };
+            }
+            throw new Error('Unexpected invitation-acceptance query: ' + sql);
+          },
+          release() { events.push('RELEASE'); },
+        };
+      },
+    };
+    const identity = createIdentityService({
+      pool,
+      env: {},
+      onAuthorizationChange: async change => {
+        events.push('INVALIDATE');
+        invalidations.push(change);
+      },
+    });
+    return {
+      events,
+      auditValues,
+      invalidations,
+      accept: () => identity.acceptInvitation({ token, password: 'unused-existing-account-password', requestId }),
+    };
+  }
+
+  await t.test('commits membership, invitation consumption and correlated audit before invalidation', async () => {
+    const scenario = await runScenario();
+    const accepted = await scenario.accept();
+    const auditInsert = scenario.events.findIndex(sql => typeof sql === 'string' && sql.includes('INSERT INTO audit_events'));
+    const commit = scenario.events.indexOf('COMMIT');
+    const invalidation = scenario.events.indexOf('INVALIDATE');
+
+    assert.equal(accepted.siteId, siteId);
+    assert.equal(accepted.role, 'editor');
+    assert.equal(accepted.user.id, userId);
+    assert.equal(accepted.user.emailVerified, true);
+    assert.ok(auditInsert > scenario.events.indexOf('UPDATE site_invitations SET accepted_at'));
+    assert.ok(commit > auditInsert);
+    assert.ok(invalidation > commit, 'authorization invalidation is emitted only after the transaction commits');
+    assert.deepEqual(scenario.auditValues[0], [
+      siteId,
+      userId,
+      invitationId,
+      requestId,
+      JSON.stringify({ role: 'editor' }),
+    ]);
+    assert.deepEqual(scenario.invalidations, [{ siteId, principalId: userId }]);
+  });
+
+  await t.test('rolls back membership and invitation acceptance when the audit insert fails', async () => {
+    const scenario = await runScenario({ failAudit: true });
+    await assert.rejects(
+      scenario.accept(),
+      /simulated audit storage failure/
+    );
+    assert.ok(scenario.events.includes('ROLLBACK'));
+    assert.equal(scenario.events.includes('COMMIT'), false);
+    assert.equal(scenario.events.includes('INVALIDATE'), false);
+    assert.deepEqual(scenario.invalidations, []);
+  });
+});
+
 test('identity service emits scoped authorization invalidations after membership and session changes', async () => {
   const userId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
   const siteId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
