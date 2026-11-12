@@ -2,7 +2,7 @@
 
 **Date:** 12 November 2026
 
-**Status:** Test implementation and local validation complete; exact-head hosted database validation and human review pending.
+**Status:** Exact-head hosted validation complete on final code/test head `d37cde71daa84e75a2ad2cae8701c9d98a08a1ca`; human review remains pending.
 
 **Tracking:** [Issue #124](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/124).
 
@@ -28,13 +28,14 @@ Use the existing live two-site PostgreSQL fixture to verify that non-admin regis
 - [x] Run `npm run check`: 594 tests, 591 passed, 0 failed, 3 Windows-specific skips; 235 required paths and 243 JavaScript files syntax-checked.
 - [x] Run `git diff --check`; passed.
 - [x] Validate relative Markdown links; 158 links across 11 changed/new Markdown files, zero broken.
-- [ ] Open a draft PR against current main and require exact-head hosted PostgreSQL/Memgraph CI with zero skips for the new integration assertions.
-- [ ] Reconcile current-main #129/#574 evidence, F1.25 candidate status, and exact PR-head results in the implementation roadmap, roadmap, README/docs index, release readiness/scope, release-gate report, assurance policy and generated inventory.
-- [ ] Human review remains pending; no issue closure is requested.
+- [x] Opened draft [PR #130](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/130) against current main `5929a53a1c551a2fe43bc38e61cb63dbecec52f5` at head `d37cde71daa84e75a2ad2cae8701c9d98a08a1ca`.
+- [x] Exact-head push workflow [#575](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43191238551) and pull-request workflow [#576](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43191393692) both passed all required non-attestation jobs. Each live PostgreSQL/Memgraph suite passed **92/92, zero failures, zero skips**, including both F1.25 regressions. Node 22/24 each passed **594/594, zero failures/skips**; CodeQL passed; browser/accessibility passed 9/9; collaboration Playwright passed 3/3; dependency audit reported 0 vulnerabilities. Main-only signed attestation was skipped by design on feature-branch events.
+- [x] Reconciled the implementation roadmap, roadmap, README/docs index, release readiness/scope, release-gate report, assurance policy and generated inventory to F1.25 hosted evidence while preserving main SHA/workflow #574 as the current-main baseline.
+- [ ] Human review remains pending; PR #130 remains draft/open and no issue closure is requested.
 
 ## Validation boundary
 
-The live PostgreSQL integration is expected to skip locally on this Windows host without a disposable `DATABASE_URL`. A local unit/full-check pass does not count as execution of the integration assertions. Hosted exact-head PostgreSQL/Memgraph CI must run the new case without failures or skips.
+The live PostgreSQL integration is skipped locally on this Windows host without a disposable `DATABASE_URL`; the local skip is not claimed as a pass. Exact-head push/PR workflows #575/#576 each executed the fixture on head `d37cde71daa84e75a2ad2cae8701c9d98a08a1ca` with **92/92 passed, zero failed, zero skipped**. Both supported Node matrices, CodeQL, browser/accessibility, collaboration Playwright and evidence consolidation passed. Main-only attestation was skipped by design on feature-branch events. This is maintainer/automation validation, not independent security approval.
 
 ## Boundaries
 
