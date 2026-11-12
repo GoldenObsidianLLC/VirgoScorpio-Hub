@@ -118,12 +118,12 @@ The 14 missing items and the two partial classifications remain release blockers
 
 ## 5. Production gate inventory
 
-The following table follows the 14 production-gate categories in `RELEASE-MANIFEST.json`. The PASS entries describe the bounded automated evidence observed in workflow #585; they do not broaden the preview's supported provider or production claims.
+The following table follows the 14 production-gate categories in `RELEASE-MANIFEST.json`. The PASS entries describe the bounded automated evidence observed in workflow #585; they do not broaden the preview's supported provider or production claims. These gate-specific dispositions are not a one-to-one restatement of the aggregate machine readiness classifier in section 4, so the table rows should not be summed to reproduce the 7 PASS / 2 PARTIAL / 1 BLOCKED / 14 MISSING_EVIDENCE snapshot.
 
 | # | Production gate | Current disposition | Evidence / remaining work |
 |---:|---|---|---|
 | 1 | Supported Node runtime, reviewed committed lockfile, clean `npm ci`, repeatable installation | **PARTIAL** | Supported Node 22/24 CI and isolated installation passed; qualified human dependency/license review remains open under #23. |
-| 2 | Fresh PostgreSQL migrations and idempotency; supported-upgrade acceptance | **PARTIAL** | Workflow #585 applied 18/18 migrations and skipped 18/18 on the idempotent second pass. A supported-upgrade fixture was not separately asserted in #585; do not infer upgrade acceptance from fresh migrations. Deployment-specific upgrade/restore acceptance remains open. |
+| 2 | Fresh PostgreSQL migration install and idempotency | **PASS — bounded CI fixture** | Workflow #585 applied 18/18 migrations and skipped 18/18 on the idempotent second pass. A supported-upgrade fixture was not separately asserted in #585; do not infer upgrade acceptance from fresh migrations. Deployment-specific upgrade/restore acceptance remains open. |
 | 3 | PostgreSQL transactions/concurrency, outbox, Memgraph outage/replay and reconciliation | **PASS — bounded CI fixture** | 93/93 live integration tests, zero skips; Memgraph outage replay and canonical rebuild passed. This does not establish production topology, capacity, HA or DR. |
 | 4 | Independent tenant isolation and authorization review | **MISSING** | [#14](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/14) remains OPEN / NOT PERFORMED. Maintainer-authored route inventories and regressions do not satisfy the independent reviewer contract. |
 | 5 | Real OIDC/SAML/email-provider and account-recovery validation | **MISSING** | Provider-backed identity, delivery, MFA recovery and account lifecycle acceptance remain unverified; see issue #15 and the authorized provider matrix under #13. |
