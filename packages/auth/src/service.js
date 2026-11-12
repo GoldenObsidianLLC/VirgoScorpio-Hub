@@ -472,7 +472,7 @@ function createIdentityService({ pool, env = process.env, clock = () => Date.now
       return { email, role: roleSlug, expiresAt, ...(env.NODE_ENV !== 'production' && env.VIRGOSCORPIO_HUB_EXPOSE_DEV_TOKENS === 'true' ? { token } : {}) };
     },
 
-    async acceptInvitation({ token, password, displayName }) {
+    async acceptInvitation({ token, password, displayName, requestId = null }) {
       if (typeof token !== 'string' || token.length < 32 || token.length > 200) { const error = new Error('Invitation is invalid or expired.'); error.statusCode = 400; error.code = 'ERR_VIRGOSCORPIO_HUB_INVITATION_INVALID'; throw error; }
       const client = await pool.connect();
       try {
@@ -481,13 +481,18 @@ function createIdentityService({ pool, env = process.env, clock = () => Date.now
           WHERE i.token_hash=$1 AND i.accepted_at IS NULL AND i.expires_at>now() FOR UPDATE`, [digest(token)]);
         if (!invite.rows[0]) { const error = new Error('Invitation is invalid or expired.'); error.statusCode = 400; error.code = 'ERR_VIRGOSCORPIO_HUB_INVITATION_INVALID'; throw error; }
         const data = invite.rows[0];
-        let user = await client.query("SELECT id,email,display_name,status FROM users WHERE lower(email)=lower($1) LIMIT 1", [data.email]);
+        let user = await client.query("SELECT id,email,display_name,status,email_verified_at,mfa_enabled FROM users WHERE lower(email)=lower($1) LIMIT 1", [data.email]);
         if (!user.rows[0]) {
           const passwordHash = await hashPassword(password);
-          user = await client.query("INSERT INTO users(email,display_name,password_hash,status,email_verified_at) VALUES($1,$2,$3,'active',now()) RETURNING id,email,display_name,status", [data.email, String(displayName || data.email).slice(0,180), passwordHash]);
+          user = await client.query("INSERT INTO users(email,display_name,password_hash,status,email_verified_at) VALUES($1,$2,$3,'active',now()) RETURNING id,email,display_name,status,email_verified_at,mfa_enabled", [data.email, String(displayName || data.email).slice(0,180), passwordHash]);
         } else if (user.rows[0].status !== 'active') { const error = new Error('This account is disabled. Contact the site administrator.'); error.statusCode = 403; error.code = 'ERR_VIRGOSCORPIO_HUB_ACCOUNT_DISABLED'; throw error; }
         await client.query('INSERT INTO site_memberships(site_id,user_id,role_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING', [data.site_id, user.rows[0].id, data.role_id]);
         await client.query('UPDATE site_invitations SET accepted_at=now() WHERE id=$1', [data.id]);
+        await client.query(
+          `INSERT INTO audit_events(site_id,actor_id,action,target_type,target_id,result,request_id,details)
+           VALUES($1,$2,'site.invitation_accepted','invitation',$3,'success',$4,$5::jsonb)`,
+          [data.site_id, user.rows[0].id, data.id, requestId, JSON.stringify({ role: data.role_slug })]
+        );
         await client.query('COMMIT');
         await notifyAuthorizationChange({ siteId: data.site_id, principalId: user.rows[0].id });
         return { user: safeUser(user.rows[0]), siteId: data.site_id, role: data.role_slug };

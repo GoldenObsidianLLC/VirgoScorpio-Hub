@@ -4,7 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { randomUUID } = require('node:crypto');
 const { createPostgresPool } = require('../../packages/db/src/postgres-store');
-const { createIdentityService, hashPassword } = require('../../packages/auth/src/service');
+const { createIdentityService, hashPassword, digest } = require('../../packages/auth/src/service');
 const { createApiServer } = require('../../apps/api/src/server');
 const { createRealtimeHub } = require('../../packages/realtime/src/event-hub');
 
@@ -449,6 +449,49 @@ test(
       assert.deepEqual(await membershipSideEffects(pool, siteB, attemptedInviteEmail), before);
     });
 
+    async function createSiteAInvitation(email, role) {
+      mailRecipients.push(email);
+      const response = await fetch(base + '/api/v1/sites/' + siteA + '/invitations', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ email, role }),
+      });
+      return { response, payload: await response.json() };
+    }
+
+    async function readSiteAInvitation(email) {
+      const [invite, mail] = await Promise.all([
+        pool.query(
+          'SELECT id,site_id,email,role_id,token_hash,expires_at,accepted_at FROM site_invitations WHERE site_id=$1 AND lower(email)=lower($2) ORDER BY created_at DESC LIMIT 1',
+          [siteA, email]
+        ),
+        pool.query(
+          "SELECT recipient,template,payload FROM mail_outbox WHERE recipient=$1 AND template='site-invitation' ORDER BY id DESC LIMIT 1",
+          [email]
+        ),
+      ]);
+      assert.equal(invite.rows.length, 1);
+      assert.equal(mail.rows.length, 1);
+      const inviteUrl = new URL(mail.rows[0].payload.inviteUrl);
+      const token = inviteUrl.searchParams.get('token');
+      assert.equal(Buffer.from(token || '', 'base64url').length, 32);
+      assert.equal(invite.rows[0].token_hash, digest(token), 'PostgreSQL stores only the SHA-256 token digest');
+      assert.notEqual(invite.rows[0].token_hash, token);
+      return { invitation: invite.rows[0], mail: mail.rows[0], token };
+    }
+
+    async function redeemInvitation(token) {
+      return fetch(base + '/api/v1/auth/invitations/accept', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          token,
+          password: 'Invited-Account-Password-2026',
+          displayName: 'Accepted Tenant Invitee',
+        }),
+      });
+    }
+
     await t.test('site A owner can create a site A invitation with isolated mail and audit effects', async () => {
       const invitedEmail = `site-a-invitation-${randomUUID()}@example.test`;
       mailRecipients.push(invitedEmail);
@@ -490,6 +533,201 @@ test(
       assert.equal(audit.rows[0].actor_id, actorA.id);
       assert.equal(audit.rows[0].target_type, 'invitation');
       assert.deepEqual(await membershipSideEffects(pool, siteB, attemptedInviteEmail), before);
+
+      const { invitation, token } = await readSiteAInvitation(invitedEmail);
+      const authorizationChangesBefore = authorizationChanges.length;
+      const accepted = await redeemInvitation(token);
+      assert.equal(accepted.status, 200);
+      const acceptedPayload = await accepted.json();
+      assert.equal(acceptedPayload.status, 'accepted');
+      assert.equal(acceptedPayload.siteId, siteA);
+      assert.equal(acceptedPayload.role, 'editor');
+      assert.equal(acceptedPayload.user.email, invitedEmail);
+      assert.equal(acceptedPayload.user.status, 'active');
+      assert.equal(acceptedPayload.user.emailVerified, true);
+      userIds.push(acceptedPayload.user.id);
+
+      const membership = await pool.query(
+        'SELECT m.role_id,u.status FROM site_memberships m JOIN users u ON u.id=m.user_id WHERE m.site_id=$1 AND m.user_id=$2',
+        [siteA, acceptedPayload.user.id]
+      );
+      assert.equal(membership.rows.length, 1);
+      assert.equal(membership.rows[0].role_id, roleIds.get('editor'));
+      assert.equal(membership.rows[0].status, 'active');
+      const consumed = await pool.query('SELECT accepted_at FROM site_invitations WHERE id=$1', [invitation.id]);
+      assert.ok(consumed.rows[0].accepted_at);
+
+      const acceptedAudit = await pool.query(
+        "SELECT site_id,actor_id,action,target_type,target_id,request_id,details FROM audit_events WHERE site_id=$1 AND action='site.invitation_accepted' AND target_id=$2",
+        [siteA, invitation.id]
+      );
+      assert.equal(acceptedAudit.rows.length, 1);
+      assert.equal(acceptedAudit.rows[0].actor_id, acceptedPayload.user.id);
+      assert.equal(acceptedAudit.rows[0].target_type, 'invitation');
+      assert.equal(acceptedAudit.rows[0].request_id, acceptedPayload.requestId);
+      assert.equal(acceptedAudit.rows[0].details.role, 'editor');
+      assert.equal(JSON.stringify(acceptedAudit.rows[0].details).includes(token), false);
+      assert.deepEqual(authorizationChanges.slice(authorizationChangesBefore), [
+        { siteId: siteA, principalId: acceptedPayload.user.id },
+      ]);
+
+      const replay = await redeemInvitation(token);
+      assert.equal(replay.status, 400);
+      assert.equal((await replay.json()).code, 'ERR_VIRGOSCORPIO_HUB_INVITATION_INVALID');
+      const [users, memberships] = await Promise.all([
+        pool.query('SELECT id FROM users WHERE lower(email)=lower($1)', [invitedEmail]),
+        pool.query('SELECT user_id FROM site_memberships WHERE site_id=$1 AND user_id=$2', [siteA, acceptedPayload.user.id]),
+      ]);
+      assert.equal(users.rowCount, 1);
+      assert.equal(memberships.rowCount, 1);
+    });
+
+    await t.test('an existing active account accepts only the invited site membership', async () => {
+      await pool.query('UPDATE users SET email_verified_at=now(),mfa_enabled=true WHERE id=$1', [targetB.id]);
+      const authorizationChangesBefore = authorizationChanges.length;
+      const created = await createSiteAInvitation(targetB.email, 'viewer');
+      assert.equal(created.response.status, 201);
+      const { token, invitation } = await readSiteAInvitation(targetB.email);
+
+      const accepted = await redeemInvitation(token);
+      assert.equal(accepted.status, 200);
+      const payload = await accepted.json();
+      assert.equal(payload.user.id, targetB.id);
+      assert.equal(payload.siteId, siteA);
+      assert.equal(payload.role, 'viewer');
+      assert.equal(payload.user.emailVerified, true);
+      assert.equal(payload.user.mfaEnabled, true, 'acceptance must preserve existing MFA configuration');
+
+      const memberships = await pool.query(
+        'SELECT m.site_id,r.slug AS role FROM site_memberships m JOIN roles r ON r.id=m.role_id WHERE m.user_id=$1 ORDER BY m.site_id,r.slug',
+        [targetB.id]
+      );
+      assert.equal(memberships.rows.length, 2);
+      assert.equal(memberships.rows.find(row => row.site_id === siteA)?.role, 'viewer');
+      assert.equal(memberships.rows.find(row => row.site_id === siteB)?.role, 'editor');
+      assert.deepEqual(authorizationChanges.slice(authorizationChangesBefore), [
+        { siteId: siteA, principalId: targetB.id },
+      ]);
+      const audit = await pool.query(
+        "SELECT actor_id,details FROM audit_events WHERE site_id=$1 AND action='site.invitation_accepted' AND target_id=$2",
+        [siteA, invitation.id]
+      );
+      assert.equal(audit.rows.length, 1);
+      assert.equal(audit.rows[0].actor_id, targetB.id);
+      assert.equal(audit.rows[0].details.role, 'viewer');
+    });
+
+    await t.test('a disabled existing account cannot consume an invitation or gain membership', async () => {
+      const disabledInvitee = await createUser('Disabled Invitation Target');
+      await pool.query("UPDATE users SET status='disabled' WHERE id=$1", [disabledInvitee.id]);
+      const authorizationChangesBefore = authorizationChanges.length;
+      const created = await createSiteAInvitation(disabledInvitee.email, 'author');
+      assert.equal(created.response.status, 201);
+      const { token, invitation } = await readSiteAInvitation(disabledInvitee.email);
+
+      const rejected = await redeemInvitation(token);
+      assert.equal(rejected.status, 403);
+      assert.equal((await rejected.json()).code, 'ERR_VIRGOSCORPIO_HUB_ACCOUNT_DISABLED');
+      const [pending, membership] = await Promise.all([
+        pool.query('SELECT accepted_at FROM site_invitations WHERE id=$1', [invitation.id]),
+        pool.query('SELECT 1 FROM site_memberships WHERE site_id=$1 AND user_id=$2', [siteA, disabledInvitee.id]),
+      ]);
+      assert.equal(pending.rows[0].accepted_at, null);
+      assert.equal(membership.rowCount, 0);
+      assert.equal(authorizationChanges.length, authorizationChangesBefore);
+    });
+
+    await t.test('an expired invitation is rejected without creating an account or membership', async () => {
+      const expiredEmail = 'expired-site-a-invite-' + randomUUID() + '@example.test';
+      const created = await createSiteAInvitation(expiredEmail, 'author');
+      assert.equal(created.response.status, 201);
+      const { token, invitation } = await readSiteAInvitation(expiredEmail);
+      await pool.query(
+        "UPDATE site_invitations SET expires_at=now()-interval '1 minute' WHERE id=$1",
+        [invitation.id]
+      );
+
+      const authorizationChangesBefore = authorizationChanges.length;
+      const rejected = await redeemInvitation(token);
+      assert.equal(rejected.status, 400);
+      assert.equal((await rejected.json()).code, 'ERR_VIRGOSCORPIO_HUB_INVITATION_INVALID');
+      const [users, membership, pending] = await Promise.all([
+        pool.query('SELECT id FROM users WHERE lower(email)=lower($1)', [expiredEmail]),
+        pool.query(
+          'SELECT 1 FROM site_memberships m JOIN users u ON u.id=m.user_id WHERE m.site_id=$1 AND lower(u.email)=lower($2)',
+          [siteA, expiredEmail]
+        ),
+        pool.query('SELECT accepted_at FROM site_invitations WHERE id=$1', [invitation.id]),
+      ]);
+      assert.equal(users.rowCount, 0);
+      assert.equal(membership.rowCount, 0);
+      assert.equal(pending.rows[0].accepted_at, null);
+      assert.equal(authorizationChanges.length, authorizationChangesBefore);
+    });
+
+    await t.test('concurrent redemption of one invitation produces exactly one accepted membership', async () => {
+      const invitedEmail = 'concurrent-site-a-invite-' + randomUUID() + '@example.test';
+      const created = await createSiteAInvitation(invitedEmail, 'editor');
+      assert.equal(created.response.status, 201);
+      const { token, invitation } = await readSiteAInvitation(invitedEmail);
+      const authorizationChangesBefore = authorizationChanges.length;
+
+      const attempts = await Promise.all([redeemInvitation(token), redeemInvitation(token)]);
+      const outcomes = await Promise.all(attempts.map(async response => ({
+        status: response.status,
+        payload: await response.json(),
+      })));
+      assert.deepEqual(outcomes.map(result => result.status).sort((a, b) => a - b), [200, 400]);
+      const accepted = outcomes.find(result => result.status === 200);
+      const rejected = outcomes.find(result => result.status === 400);
+      assert.equal(accepted.payload.status, 'accepted');
+      assert.equal(rejected.payload.code, 'ERR_VIRGOSCORPIO_HUB_INVITATION_INVALID');
+      userIds.push(accepted.payload.user.id);
+
+      const [users, memberships, consumed] = await Promise.all([
+        pool.query('SELECT id FROM users WHERE lower(email)=lower($1)', [invitedEmail]),
+        pool.query('SELECT user_id FROM site_memberships WHERE site_id=$1 AND user_id=$2', [siteA, accepted.payload.user.id]),
+        pool.query('SELECT accepted_at FROM site_invitations WHERE id=$1', [invitation.id]),
+      ]);
+      assert.equal(users.rowCount, 1);
+      assert.equal(memberships.rowCount, 1);
+      assert.ok(consumed.rows[0].accepted_at);
+      assert.deepEqual(authorizationChanges.slice(authorizationChangesBefore), [
+        { siteId: siteA, principalId: accepted.payload.user.id },
+      ]);
+      const audits = await pool.query(
+        "SELECT id,request_id FROM audit_events WHERE site_id=$1 AND action='site.invitation_accepted' AND target_id=$2",
+        [siteA, invitation.id]
+      );
+      assert.equal(audits.rowCount, 1);
+      assert.equal(audits.rows[0].request_id, accepted.payload.requestId);
+    });
+
+    await t.test('ordinary member addition and invitation creation cannot grant site-owner', async () => {
+      const ownerEscalationEmail = 'owner-escalation-attempt-' + randomUUID() + '@example.test';
+      mailRecipients.push(ownerEscalationEmail);
+      const beforeEscalation = await membershipSideEffects(pool, siteA, ownerEscalationEmail);
+
+      const add = await fetch(base + '/api/v1/sites/' + siteA + '/members', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ email: ownerEscalationEmail, role: 'site-owner' }),
+      });
+      assert.equal(add.status, 400);
+      assert.equal((await add.json()).code, 'ERR_VIRGOSCORPIO_HUB_INVALID_ROLE');
+
+      const invite = await fetch(base + '/api/v1/sites/' + siteA + '/invitations', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ email: ownerEscalationEmail, role: 'site-owner' }),
+      });
+      assert.equal(invite.status, 400);
+      assert.equal((await invite.json()).code, 'ERR_VIRGOSCORPIO_HUB_INVALID_ROLE');
+      assert.deepEqual(
+        await membershipSideEffects(pool, siteA, ownerEscalationEmail),
+        beforeEscalation,
+        'unsupported owner grants must fail before membership, invitation, mail, or audit side effects'
+      );
     });
 
     await t.test('concurrent owner removals serialize and preserve one active site owner', async () => {
