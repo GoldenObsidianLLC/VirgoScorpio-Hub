@@ -165,6 +165,73 @@ test('draft persistence is disabled when no database is configured', async () =>
   });
 });
 
+test('submit-review requires a site capability and same-site ownership for edit-own authors', async () => {
+  const siteId = '11111111-1111-4111-8111-111111111111';
+  const authorId = '22222222-2222-4222-8222-222222222222';
+  const ownContentId = '33333333-3333-4333-8333-333333333333';
+  const otherContentId = '44444444-4444-4444-8444-444444444444';
+  const records = new Map([
+    [ownContentId, { id: ownContentId, site_id: siteId, created_by: authorId, version: 1 }],
+    [otherContentId, { id: otherContentId, site_id: siteId, created_by: '55555555-5555-4555-8555-555555555555', version: 1 }],
+  ]);
+  const transitions = [];
+  const audits = [];
+  const identityService = {
+    async authenticate(token) {
+      if (token !== 'author-session-token') return null;
+      return {
+        sessionId: 'author-session',
+        user: { id: authorId, email: 'author@example.test', displayName: 'Author', status: 'active' },
+        memberships: [{ siteId, siteSlug: 'site-b', siteName: 'Site B', role: 'author', roles: ['author'], capabilities: ['content:read', 'content:submit-review', 'content:edit:own'] }],
+      };
+    },
+    async authorizeSite(userId, requestedSiteId, capability) {
+      if (userId !== authorId || requestedSiteId !== siteId) return false;
+      return ['content:read', 'content:submit-review', 'content:edit:own'].includes(capability);
+    },
+    async audit(event) { audits.push(event); },
+  };
+  const contentStore = {
+    async getById({ siteId: requestedSiteId, id }) {
+      if (requestedSiteId !== siteId) return null;
+      return records.get(id) || null;
+    },
+    async submitForReview(input) {
+      transitions.push(input);
+      return { id: input.id, site_id: siteId, status: 'in_review', version: 1, lock_version: 2 };
+    },
+  };
+
+  await withServer(async base => {
+    async function submit(contentId) {
+      const response = await fetch(`${base}/api/v1/pages/${contentId}/submit-review`, {
+        method: 'POST',
+        headers: {
+          authorization: 'Bearer author-session-token',
+          'x-virgoscorpio-hub-site-id': siteId,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ expectedVersion: 1 }),
+      });
+      return { response, payload: await response.json() };
+    }
+
+    const own = await submit(ownContentId);
+    assert.equal(own.response.status, 200);
+    assert.equal(own.payload.status, 'in_review');
+    assert.equal(transitions.length, 1);
+    assert.equal(transitions[0].id, ownContentId);
+    assert.equal(audits.length, 1);
+    assert.equal(audits[0].action, 'content.submit-review');
+
+    const other = await submit(otherContentId);
+    assert.equal(other.response.status, 403);
+    assert.equal(other.payload.code, 'ERR_VIRGOSCORPIO_HUB_FORBIDDEN');
+    assert.deepEqual(transitions.map(input => input.id), [ownContentId]);
+    assert.equal(audits.length, 1, 'denied ownership checks must not emit workflow audit events');
+  }, {}, { identityService, contentStore });
+});
+
 test('production startup is intentionally blocked', () => {
   assert.throws(() => createApiServer({ env: { NODE_ENV: 'production' } }), /not production-ready/);
 });

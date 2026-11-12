@@ -2,7 +2,7 @@
 
 **Date:** 12 November 2026
 
-**Status:** Test implementation and local validation complete; exact-head hosted outage/PostgreSQL/Playwright validation pending; human review pending.
+**Status:** Merged via PR #131 at main `0748f56e01421d13121ec08f7bc036579e5406835`; exact-head hosted Redis/PostgreSQL/Playwright validation complete; no formal review submission recorded.
 
 **Tracking:** [Issue #124](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/124).
 
@@ -27,8 +27,8 @@ Prove that after the exact disposable Redis 7.4 service is stopped and restarted
 - [x] Run syntax checks for the E2E spec and shared fixture.
 - [x] Run focused Redis reconnect/bridge/outage-guard unit tests: **20/20 passed**.
 - [x] Run `npm run check`: **594 tests, 591 passed, 0 failed, 3 Windows-specific skips**; artifact verification covered 235 required paths and syntax-checked 243 JavaScript files.
-- [ ] Execute the new real Redis outage/restart Playwright case in exact-head hosted PostgreSQL/Redis CI with zero skips.
-- [x] Reconcile current-main #579, merged F1.25, and F1.26 candidate/pending-hosted-validation status across implementation/product roadmaps, README/docs index, release scope/readiness/report, maintainer assurance policy, generated inventory, and this plan.
+- [x] Execute exact PR-head workflows #580/#581 and exact-main workflow #582: each PostgreSQL/Memgraph suite passed 92/92 with zero failures/skips; the Redis stop/restore multi-node Playwright scenario passed; Node 22/24 each passed 594/594; CodeQL, browser/accessibility 9/9, collaboration Playwright 4/4, fresh migrations, main-only signed provenance/SBOM and evidence consolidation passed. Main-only attestation is skipped by design on feature-branch events #580/#581 and passed on main #582.
+- [x] Reconcile current main #582, merged F1.26 PR #131, and F1.27 candidate status across implementation/product roadmaps, README/docs index, release scope/readiness/report, maintainer assurance policy, generated inventory, and this plan.
 - [ ] Obtain human review; the change is maintainer-led test evidence, not independent security approval.
 
 ## Local validation boundary

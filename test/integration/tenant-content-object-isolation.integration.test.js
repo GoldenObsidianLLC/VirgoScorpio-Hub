@@ -17,6 +17,7 @@ async function contentSideEffects(pool, siteId, contentId) {
     `SELECT ci.status, ci.version, ci.lock_version,
        (SELECT count(*)::int FROM content_revisions r WHERE r.content_id=ci.id) AS revision_count,
        (SELECT count(*)::int FROM workflow_events w WHERE w.site_id=ci.site_id AND w.content_id=ci.id) AS workflow_count,
+       (SELECT count(*)::int FROM audit_events a WHERE a.site_id=ci.site_id AND a.target_type='content' AND a.target_id=ci.id) AS audit_count,
        (SELECT count(*)::int FROM outbox_events o WHERE o.site_id=ci.site_id AND o.aggregate_id=ci.id) AS outbox_count,
        (SELECT count(*)::int FROM content_collaboration_documents d WHERE d.content_id=ci.id) AS collaboration_document_count,
        (SELECT count(*)::int FROM content_collaboration_operations op WHERE op.content_id=ci.id) AS collaboration_operation_count
@@ -38,8 +39,6 @@ test(
     const store = createPostgresStore({ pool });
     const siteIds = [];
     const userIds = [];
-    let roleId = null;
-    let editorRoleId = null;
     let server = null;
 
     const env = {
@@ -65,8 +64,6 @@ test(
         await pool.query('DELETE FROM auth_sessions WHERE user_id=ANY($1::uuid[])', [userIds]).catch(() => {});
         await pool.query('DELETE FROM users WHERE id=ANY($1::uuid[])', [userIds]).catch(() => {});
       }
-      if (roleId) await pool.query('DELETE FROM roles WHERE id=$1', [roleId]).catch(() => {});
-      if (editorRoleId) await pool.query('DELETE FROM roles WHERE id=$1', [editorRoleId]).catch(() => {});
       await pool.end();
     });
 
@@ -84,11 +81,16 @@ test(
     const siteB = siteBResult.rows[0].id;
     siteIds.push(siteB);
 
-    const roleResult = await pool.query(
-      'INSERT INTO roles(slug,label,capabilities) VALUES($1,$2,$3::jsonb) RETURNING id',
-      [`tenant-object-${randomUUID().slice(0, 10)}`, 'Tenant Object Test Administrator', JSON.stringify(['*'])]
+    const seededRoleResult = await pool.query(
+      "SELECT id,slug,capabilities FROM roles WHERE slug IN ('site-owner','editor','author')"
     );
-    roleId = roleResult.rows[0].id;
+    const seededRoles = new Map(seededRoleResult.rows.map(row => [row.slug, row]));
+    for (const required of ['site-owner', 'editor', 'author']) {
+      assert.ok(seededRoles.has(required), `the seeded ${required} role must exist`);
+    }
+    const ownerRoleId = seededRoles.get('site-owner').id;
+    const editorRoleId = seededRoles.get('editor').id;
+    const authorRoleId = seededRoles.get('author').id;
 
     const password = 'Isolation-Password-2026';
     const actorResult = await pool.query(
@@ -110,18 +112,9 @@ test(
     // The actor belongs only to B; the foreign content and its author belong to A.
     await pool.query(
       'INSERT INTO site_memberships(site_id,user_id,role_id) VALUES($1,$2,$3)',
-      [siteB, actor.id, roleId]
+      [siteB, actor.id, ownerRoleId]
     );
 
-    const editorRoleResult = await pool.query(
-      'INSERT INTO roles(slug,label,capabilities) VALUES($1,$2,$3::jsonb) RETURNING id',
-      [
-        `tenant-object-editor-${randomUUID().slice(0, 10)}`,
-        'Tenant Object Site B Editor',
-        JSON.stringify(['content:read', 'content:create', 'content:edit']),
-      ]
-    );
-    editorRoleId = editorRoleResult.rows[0].id;
     const editorPassword = 'Editor-Password-2026';
     const editorResult = await pool.query(
       `INSERT INTO users(email,display_name,password_hash,status)
@@ -137,6 +130,23 @@ test(
     await pool.query(
       'INSERT INTO site_memberships(site_id,user_id,role_id) VALUES($1,$2,$3)',
       [siteB, editor.id, editorRoleId]
+    );
+
+    const workflowAuthorPassword = 'Workflow-Author-Password-2026';
+    const workflowAuthorResult = await pool.query(
+      `INSERT INTO users(email,display_name,password_hash,status)
+       VALUES($1,$2,$3,'active') RETURNING id,email`,
+      [
+        `tenant-object-workflow-author-${randomUUID()}@example.test`,
+        'Site B Workflow Author',
+        await hashPassword(workflowAuthorPassword),
+      ]
+    );
+    const workflowAuthor = workflowAuthorResult.rows[0];
+    userIds.push(workflowAuthor.id);
+    await pool.query(
+      'INSERT INTO site_memberships(site_id,user_id,role_id) VALUES($1,$2,$3)',
+      [siteB, workflowAuthor.id, authorRoleId]
     );
 
     const document = {
@@ -196,6 +206,39 @@ test(
       authorId: actor.id,
       note: 'relationship positive control',
     });
+
+    const workflowAuthorDraft = await store.saveDraft({
+      siteId: siteB,
+      title: 'Site B Author-Owned Workflow Draft',
+      slug: 'site-b-author-workflow-' + randomUUID().slice(0, 8),
+      locale: 'en',
+      contentType: 'page',
+      document: {
+        schemaVersion: 1,
+        documentId: randomUUID(),
+        type: 'page',
+        title: 'Site B Author-Owned Workflow Draft',
+        children: [],
+      },
+      authorId: workflowAuthor.id,
+      note: 'F1.27 author workflow positive control',
+    });
+    const workflowOtherMemberDraft = await store.saveDraft({
+      siteId: siteB,
+      title: 'Site B Other Member Workflow Draft',
+      slug: 'site-b-other-member-workflow-' + randomUUID().slice(0, 8),
+      locale: 'en',
+      contentType: 'page',
+      document: {
+        schemaVersion: 1,
+        documentId: randomUUID(),
+        type: 'page',
+        title: 'Site B Other Member Workflow Draft',
+        children: [],
+      },
+      authorId: actor.id,
+      note: 'F1.27 author ownership denial control',
+    });
     const session = await identity.login({
       email: actor.email,
       password,
@@ -213,6 +256,21 @@ test(
     assert.equal(await identity.authorizeSite(editor.id, siteB, 'content:read'), true);
     assert.equal(await identity.authorizeSite(editor.id, siteB, 'site:manage'), false);
 
+    const workflowAuthorSession = await identity.login({
+      email: workflowAuthor.email,
+      password: workflowAuthorPassword,
+      ip: '127.0.0.1',
+      userAgent: 'tenant-object-workflow-author-test',
+    });
+    assert.equal(workflowAuthorSession.mfaRequired, false);
+    assert.equal(await identity.authorizeSite(workflowAuthor.id, siteB, 'content:submit-review'), true);
+    assert.equal(await identity.authorizeSite(workflowAuthor.id, siteB, 'content:edit:own'), true);
+    assert.equal(await identity.authorizeSite(workflowAuthor.id, siteB, 'content:edit'), false);
+    assert.equal(await identity.authorizeSite(workflowAuthor.id, siteB, 'content:approve'), false);
+    assert.equal(await identity.authorizeSite(editor.id, siteB, 'content:approve'), true);
+    assert.equal(await identity.authorizeSite(editor.id, siteB, 'content:publish'), false);
+    assert.equal(await identity.authorizeSite(actor.id, siteB, 'content:publish'), true);
+
     server = createApiServer({
       env,
       pool,
@@ -228,6 +286,18 @@ test(
     const base = `http://127.0.0.1:${server.address().port}`;
     const headers = { authorization: `Bearer ${session.token}`, 'x-virgoscorpio-hub-site-id': siteB };
     const editorHeaders = { authorization: `Bearer ${editorSession.token}`, 'x-virgoscorpio-hub-site-id': siteB };
+    const workflowAuthorHeaders = {
+      authorization: `Bearer ${workflowAuthorSession.token}`,
+      'x-virgoscorpio-hub-site-id': siteB,
+    };
+    async function workflowAction(requestHeaders, contentId, action, expectedVersion, extra = {}) {
+      const response = await fetch(base + `/api/v1/pages/${contentId}/${action}`, {
+        method: 'POST',
+        headers: { ...requestHeaders, 'content-type': 'application/json' },
+        body: JSON.stringify({ expectedVersion, ...extra }),
+      });
+      return { response, payload: await response.json() };
+    }
     const before = await contentSideEffects(pool, siteA, foreignContent.id);
     assert.ok(before, 'site A fixture must exist before adversarial requests');
     await t.test('relationship endpoints must belong to the selected site and valid same-site relationships still work', async () => {
@@ -605,6 +675,183 @@ test(
       ]);
       assert.equal(rows.rowCount, 0, 'a member without site:manage must not persist a registry definition');
       assert.equal(after.rows[0].count, before.rows[0].count, 'denied registry writes must have no definition-row side effects');
+    });
+
+    await t.test('editorial workflow actions enforce same-site role capabilities and author ownership before side effects', async () => {
+      async function assertTransitioned(contentId, before, expectedStatus, label) {
+        const after = await contentSideEffects(pool, siteB, contentId);
+        assert.equal(after.status, expectedStatus, label + ': status must match the accepted transition');
+        assert.equal(after.lock_version, before.lock_version + 1, label + ': content lock version must advance once');
+        assert.equal(after.workflow_count, before.workflow_count + 1, label + ': exactly one workflow event must be recorded');
+        assert.equal(after.outbox_count, before.outbox_count + 1, label + ': exactly one outbox event must be recorded');
+        assert.equal(after.audit_count, before.audit_count + 1, label + ': exactly one content audit event must be recorded');
+        return after;
+      }
+
+      async function assertDeniedWithoutSideEffects(requestHeaders, contentId, action, version, expectedCode, extra = {}) {
+        const before = await contentSideEffects(pool, siteB, contentId);
+        const denied = await workflowAction(requestHeaders, contentId, action, version, extra);
+        assert.equal(denied.response.status, 403, action + ' must be denied before workflow persistence');
+        assert.equal(denied.payload.code, expectedCode);
+        const after = await contentSideEffects(pool, siteB, contentId);
+        assert.deepEqual(after, before, action + ' denial must not change content, workflow, audit, outbox, or collaboration state');
+      }
+
+      // Authors may submit their own drafts, but a site-level submit-review
+      // capability must not let them move another member's content into review.
+      const authorBefore = await contentSideEffects(pool, siteB, workflowAuthorDraft.id);
+      const authorSubmit = await workflowAction(
+        workflowAuthorHeaders,
+        workflowAuthorDraft.id,
+        'submit-review',
+        workflowAuthorDraft.version
+      );
+      assert.equal(authorSubmit.response.status, 200);
+      assert.equal(authorSubmit.payload.status, 'in_review');
+      const authorInReview = await assertTransitioned(
+        workflowAuthorDraft.id,
+        authorBefore,
+        'in_review',
+        'author-owned submit-review'
+      );
+
+      await assertDeniedWithoutSideEffects(
+        workflowAuthorHeaders,
+        workflowOtherMemberDraft.id,
+        'submit-review',
+        workflowOtherMemberDraft.version,
+        'ERR_VIRGOSCORPIO_HUB_FORBIDDEN'
+      );
+
+      // The built-in editor role has site-wide content edit and review
+      // capabilities, so it can submit another member's same-site draft.
+      const otherBefore = await contentSideEffects(pool, siteB, workflowOtherMemberDraft.id);
+      const editorSubmit = await workflowAction(
+        editorHeaders,
+        workflowOtherMemberDraft.id,
+        'submit-review',
+        workflowOtherMemberDraft.version
+      );
+      assert.equal(editorSubmit.response.status, 200);
+      assert.equal(editorSubmit.payload.status, 'in_review');
+      const otherInReview = await assertTransitioned(
+        workflowOtherMemberDraft.id,
+        otherBefore,
+        'in_review',
+        'editor site-wide submit-review'
+      );
+
+      await assertDeniedWithoutSideEffects(
+        workflowAuthorHeaders,
+        workflowAuthorDraft.id,
+        'approve',
+        workflowAuthorDraft.version,
+        'ERR_VIRGOSCORPIO_HUB_FORBIDDEN'
+      );
+      await assertDeniedWithoutSideEffects(
+        workflowAuthorHeaders,
+        workflowAuthorDraft.id,
+        'reject',
+        workflowAuthorDraft.version,
+        'ERR_VIRGOSCORPIO_HUB_FORBIDDEN'
+      );
+
+      // Editors can approve/reject but cannot publish, schedule, archive or
+      // unpublish. Those operations remain site-owner capabilities.
+      const approved = await workflowAction(
+        editorHeaders,
+        workflowAuthorDraft.id,
+        'approve',
+        workflowAuthorDraft.version
+      );
+      assert.equal(approved.response.status, 200);
+      assert.equal(approved.payload.status, 'approved');
+      const authorApproved = await assertTransitioned(
+        workflowAuthorDraft.id,
+        authorInReview,
+        'approved',
+        'editor approval'
+      );
+
+      await assertDeniedWithoutSideEffects(
+        editorHeaders,
+        workflowAuthorDraft.id,
+        'publish',
+        workflowAuthorDraft.version,
+        'ERR_VIRGOSCORPIO_HUB_FORBIDDEN'
+      );
+      await assertDeniedWithoutSideEffects(
+        editorHeaders,
+        workflowAuthorDraft.id,
+        'schedule',
+        workflowAuthorDraft.version,
+        'ERR_VIRGOSCORPIO_HUB_FORBIDDEN',
+        { scheduledAt: new Date(Date.now() + 5 * 60_000).toISOString() }
+      );
+      await assertDeniedWithoutSideEffects(
+        editorHeaders,
+        workflowAuthorDraft.id,
+        'archive',
+        workflowAuthorDraft.version,
+        'ERR_VIRGOSCORPIO_HUB_FORBIDDEN'
+      );
+
+      const rejected = await workflowAction(
+        editorHeaders,
+        workflowOtherMemberDraft.id,
+        'reject',
+        workflowOtherMemberDraft.version
+      );
+      assert.equal(rejected.response.status, 200);
+      assert.equal(rejected.payload.status, 'draft');
+      const otherDraftAgain = await assertTransitioned(
+        workflowOtherMemberDraft.id,
+        otherInReview,
+        'draft',
+        'editor rejection'
+      );
+
+      const published = await workflowAction(
+        headers,
+        workflowAuthorDraft.id,
+        'publish',
+        workflowAuthorDraft.version
+      );
+      assert.equal(published.response.status, 200);
+      assert.equal(published.payload.status, 'published');
+      const authorPublished = await assertTransitioned(
+        workflowAuthorDraft.id,
+        authorApproved,
+        'published',
+        'site-owner publication'
+      );
+
+      await assertDeniedWithoutSideEffects(
+        editorHeaders,
+        workflowAuthorDraft.id,
+        'unpublish',
+        workflowAuthorDraft.version,
+        'ERR_VIRGOSCORPIO_HUB_FORBIDDEN'
+      );
+
+      const archived = await workflowAction(
+        headers,
+        workflowAuthorDraft.id,
+        'archive',
+        workflowAuthorDraft.version
+      );
+      assert.equal(archived.response.status, 200);
+      assert.equal(archived.payload.status, 'archived');
+      await assertTransitioned(
+        workflowAuthorDraft.id,
+        authorPublished,
+        'archived',
+        'site-owner archive'
+      );
+
+      // The editor-rejected draft remains a normal draft after its successful
+      // role-authorized transition, with no publication snapshot.
+      assert.equal(otherDraftAgain.status, 'draft');
     });
 
     const cases = [

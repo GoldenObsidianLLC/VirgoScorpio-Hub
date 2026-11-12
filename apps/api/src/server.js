@@ -1775,6 +1775,10 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
         const [, id, action] = workflowMatch; const expectedVersion = body.expectedVersion === undefined ? undefined : Number(body.expectedVersion); const note = body.note;
         const caps = { 'submit-review': 'content:submit-review', approve: 'content:approve', reject: 'content:approve', publish: 'content:publish', schedule: 'content:publish', archive: 'content:archive', unpublish: 'content:publish' };
         await requireCapability(actor, siteId, caps[action]);
+        if (action === 'submit-review') {
+          const current = await store.getById({ siteId, id });
+          await canEditContent(actor, siteId, current);
+        }
         const operations = {
           'submit-review': () => store.submitForReview({ siteId, id, actorId: actor.user.id, correlationId: requestId, expectedVersion, note }),
           approve: () => store.approve({ siteId, id, actorId: actor.user.id, correlationId: requestId, expectedVersion, note }),
