@@ -168,7 +168,7 @@
 
 ## ADR-022: CI release readiness is finalized after all exact-source producers complete
 
-**Status:** Accepted; implementation is available on the issue #134 branch and hosted exact-head CI validation is pending under [issue #134](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/134).
+**Status:** Accepted; implementation and exact-candidate hosted CI validation passed on the issue #134 branch. Human review and post-merge main validation remain pending under [issue #134](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/134).
 
 **Decision:** The Node.js 22/24 release-readiness reports are preliminary per-runtime diagnostics because those jobs complete before the PostgreSQL/Memgraph producer. The aggregate job is the only place that may create the canonical CI release-readiness snapshot. It must revalidate every required producer manifest and job identity against the same repository, workflow, run, attempt, event, head SHA and checked-out source SHA; validate the database evidence record and copied checksums; and verify the mainline attestation result when the event targets `main`. The two preliminary Node reports are retained under explicitly preliminary names. The final report may promote the PostgreSQL/Memgraph gate only after its exact-source evidence passes; all other gate dispositions are preserved. A single shared Markdown renderer is used by local and aggregate report generation.
 

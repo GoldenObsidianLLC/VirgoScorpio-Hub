@@ -167,7 +167,7 @@
     },
     "ciReleaseReadinessFinalization": {
       "issue": 134,
-      "status": "implemented-local-validation-passed-hosted-validation-pending-rebased-onto-current-main",
+      "status": "implemented-local-and-hosted-validation-passed-awaiting-review-and-postmerge-main-validation",
       "producerManifestSchemaVersion": 2,
       "sourceRevisionAtImplementationStart": "4a9ee181be5d9d46d94ed11a14de64b4dbbe9907",
       "localFocusedTests": {
@@ -200,9 +200,58 @@
           "vulnerabilities": 0
         }
       },
-      "hostedExactSourceValidation": "Pending on the PR candidate; do not treat this local result as exact-main acceptance.",
+      "hostedExactSourceValidation": "Passed for the exact branch head in successful push and pull_request workflows. The PR workflow finalized its synthetic merge revision; post-merge main validation remains required.",
       "productionCertified": false,
-      "rebasedOntoMainRevision": "858e1b35bae601939f4947e3d74584945e28e8e9"
+      "rebasedOntoMainRevision": "858e1b35bae601939f4947e3d74584945e28e8e9",
+      "hostedValidation": {
+        "status": "passed",
+        "branchHeadSha": "5959e3e7996f40406850dbf7bb910aef4ef1ee02",
+        "pushWorkflowRun": {
+          "id": 43365367600,
+          "event": "push",
+          "conclusion": "success",
+          "completedJobs": 7
+        },
+        "pullRequestWorkflowRun": {
+          "id": 43365715766,
+          "event": "pull_request",
+          "conclusion": "success",
+          "completedJobs": 7,
+          "syntheticMergeSha": "818dfccb42ed3fa6266b30c91fde572eff882e07"
+        },
+        "nodeMatrix": {
+          "node22": {
+            "hubTests": 600,
+            "enginexTests": 94,
+            "conclusion": "success"
+          },
+          "node24": {
+            "hubTests": 600,
+            "enginexTests": 94,
+            "conclusion": "success"
+          }
+        },
+        "postgresMemgraph": {
+          "tests": 93,
+          "passed": 93,
+          "failed": 0,
+          "skipped": 0,
+          "migrationsApplied": 18,
+          "idempotentSecondPassSkipped": 18
+        },
+        "canonicalFinalReadiness": {
+          "status": "FINALIZED_AFTER_PRODUCER_VALIDATION",
+          "pass": 8,
+          "partial": 2,
+          "blocked": 0,
+          "missingEvidence": 14,
+          "notRun": 0,
+          "readyForProduction": false,
+          "releaseClassification": "NOT_PRODUCTION_CERTIFIED"
+        },
+        "mainlineAttestation": "Skipped as expected on a non-main candidate branch; successful signing remains required after merge.",
+        "postMergeMainValidation": "Pending; rerun CI against the merged main SHA before accepting #134 or making release claims."
+      }
     }
   },
   "aiPrivacy": {
