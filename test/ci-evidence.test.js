@@ -14,6 +14,7 @@ const {
   WORKFLOW_FILE,
   compareSbomInventories,
   evaluateCiEvidence,
+  finalizeReleaseReadiness,
   renderMarkdown,
   stageEvidence,
   validateManifestDirectory,
@@ -60,6 +61,15 @@ function createFixtures(t, { npmVersion = EXPECTED_NPM_VERSION } = {}) {
     readyForProduction: false,
     releaseClassification: 'NOT_PRODUCTION_CERTIFIED',
     checks: readinessChecks,
+    evidenceGates: [
+      { id: 'postgres-memgraph-live', title: 'PostgreSQL/Memgraph', status: 'BLOCKED', evidencePath: 'artifacts/evidence/postgres-memgraph-live.json', details: 'Producer artifact not yet available.' },
+      { id: 'tenant-isolation-review', title: 'Independent tenant review', status: 'MISSING_EVIDENCE', evidencePath: 'artifacts/evidence/tenant-isolation-review.json', details: 'Independent review remains open.' },
+      { id: 'observability-production', title: 'Production observability', status: 'MISSING_EVIDENCE', evidencePath: 'artifacts/evidence/observability-production.json', details: 'Deployment evidence remains open.' },
+    ],
+    summary: { pass: 4, partial: 1, blocked: 1, missingEvidence: 2, notRun: 0 },
+    supplementalEvidence: [
+      { id: 'fresh-migrations', title: 'Fresh PostgreSQL migrations and idempotency', status: 'MISSING_EVIDENCE', details: 'Dedicated producer has not completed yet.' },
+    ],
   };
   const sbom = {
     bomFormat: 'CycloneDX',
@@ -473,15 +483,33 @@ test('rejects unknown manifest fields and non-object manifest roots', t => {
   const directory = path.join(artifactRoot, JOBS[0].artifactName);
   const manifestFile = path.join(directory, 'manifest.json');
   const manifest = JSON.parse(fs.readFileSync(manifestFile, 'utf8'));
-  manifest.unreviewedField = 'not allowed';
-  fs.writeFileSync(manifestFile, JSON.stringify(manifest, null, 2) + String.fromCharCode(10));
-  const unknownField = validateManifestDirectory(directory, {
+  const expectedManifest = {
     ...expected,
     workflowFile: WORKFLOW_FILE,
     jobKey: JOBS[0].key,
     jobName: JOBS[0].jobName,
     runtime: JOBS[0].runtime,
-  });
+  };
+  assert.equal(manifest.schemaVersion, 2);
+  assert.equal(manifest.product, 'VirgoScorpio Hub');
+  assert.equal(manifest.version, PRODUCT_VERSION);
+  assert.equal(validateManifestDirectory(directory, expectedManifest).valid, true);
+
+  for (const [field, value, pattern] of [
+    ['schemaVersion', 1, /Unsupported manifest schema version/i],
+    ['product', 'Different Product', /Manifest product mismatch/i],
+    ['version', '0.0.0', /Manifest product version mismatch/i],
+  ]) {
+    const modified = { ...manifest, [field]: value };
+    fs.writeFileSync(manifestFile, JSON.stringify(modified, null, 2) + String.fromCharCode(10));
+    const validation = validateManifestDirectory(directory, expectedManifest);
+    assert.equal(validation.valid, false);
+    assert.ok(validation.errors.some(error => pattern.test(error)), validation.errors.join('; '));
+  }
+
+  manifest.unreviewedField = 'not allowed';
+  fs.writeFileSync(manifestFile, JSON.stringify(manifest, null, 2) + String.fromCharCode(10));
+  const unknownField = validateManifestDirectory(directory, expectedManifest);
   assert.equal(unknownField.valid, false);
   assert.ok(unknownField.errors.some(error => /Unknown manifest field/.test(error)));
 
@@ -686,6 +714,167 @@ test('Markdown output escapes evidence text and labels revisions by event type',
   assert.ok(!markdown.includes(String.fromCharCode(10) + '| forged |'));
 });
 
+test('finalizes canonical readiness only after every exact-source producer and migration evidence pass', t => {
+  const { root, artifactRoot, jobApi } = createFixtures(t);
+  const config = JOBS.find(job => job.key === 'postgres-memgraph-integration');
+  const directory = path.join(artifactRoot, config.artifactName);
+  const apiJob = jobApi.find(job => job.name === config.jobName);
+  const validation = validateJobEvidence(config, directory, expected, apiJob);
+  assert.equal(validation.status, 'PASS', validation.errors.join('; '));
+  writePostgresMemgraphReleaseEvidence({ root, directory, expected, apiJob, validation });
+  const postgresEvidence = JSON.parse(fs.readFileSync(
+    path.join(root, 'artifacts/evidence/postgres-memgraph-live.json'), 'utf8'
+  ));
+
+  const finalized = finalizeReleaseReadiness({
+    root,
+    artifactRoot,
+    expected,
+    githubJobs: [...jobApi].reverse(),
+    postgresEvidence,
+    attestationStatus: 'skipped',
+    requireAttestation: false,
+    finalizedAt: '2026-11-13T01:00:00.000Z',
+  });
+
+  const report = finalized.report;
+  const databaseGate = report.evidenceGates.find(gate => gate.id === 'postgres-memgraph-live');
+  assert.equal(databaseGate.status, 'PASS');
+  assert.equal(databaseGate.details.includes(expected.mergeSha), true);
+  assert.equal(report.sourceRevision, expected.mergeSha);
+  assert.equal(report.generatedAt, '2026-11-13T01:00:00.000Z');
+  assert.equal(report.readyForProduction, false);
+  assert.equal(report.releaseClassification, 'NOT_PRODUCTION_CERTIFIED');
+  assert.equal(report.evidenceGates.find(gate => gate.id === 'tenant-isolation-review').status, 'MISSING_EVIDENCE');
+  assert.equal(report.summary.pass, 5);
+  assert.equal(report.summary.blocked, 0);
+  assert.equal(report.summary.missingEvidence, 2);
+  const migrationSupplement = report.supplementalEvidence.find(item => item.id === 'fresh-migrations');
+  assert.equal(migrationSupplement.status, 'PASS');
+  assert.equal(migrationSupplement.evidencePath, 'artifacts/evidence/postgres-memgraph/fresh-migrations.json');
+  assert.ok(migrationSupplement.details.includes('all 18/18 fresh migrations'));
+  assert.equal(report.ciFinalization.status, 'FINALIZED_AFTER_PRODUCER_VALIDATION');
+  assert.equal(report.ciFinalization.workflow.runId, expected.runId);
+  assert.equal(report.ciFinalization.workflow.runAttempt, expected.runAttempt);
+  assert.equal(report.ciFinalization.workflow.sourceRevision, expected.mergeSha);
+  assert.equal(report.ciFinalization.producers.length, JOBS.length);
+  assert.deepEqual(report.ciFinalization.producers.map(item => item.key), JOBS.map(item => item.key).sort());
+  assert.equal(report.ciFinalization.preliminaryReports.length, 4);
+  assert.ok(report.ciFinalization.preliminaryReports.every(item => /^[a-f0-9]{64}$/.test(item.sha256)));
+  assert.ok(finalized.markdown.includes('Finalized after exact-source producer validation'));
+});
+
+test('final readiness finalization fails closed for missing producer, wrong SHA, checksum drift, or missing required attestation', t => {
+  const build = () => {
+    const fixture = createFixtures(t);
+    const config = JOBS.find(job => job.key === 'postgres-memgraph-integration');
+    const directory = path.join(fixture.artifactRoot, config.artifactName);
+    const apiJob = fixture.jobApi.find(job => job.name === config.jobName);
+    const validation = validateJobEvidence(config, directory, expected, apiJob);
+    assert.equal(validation.status, 'PASS', validation.errors.join('; '));
+    writePostgresMemgraphReleaseEvidence({ root: fixture.root, directory, expected, apiJob, validation });
+    const postgresEvidence = JSON.parse(fs.readFileSync(
+      path.join(fixture.root, 'artifacts/evidence/postgres-memgraph-live.json'), 'utf8'
+    ));
+    return { ...fixture, postgresEvidence };
+  };
+
+  {
+    const fixture = build();
+    assert.throws(() => finalizeReleaseReadiness({
+      ...fixture, expected, githubJobs: fixture.jobApi.filter(job => job.name !== JOBS[4].jobName),
+      attestationStatus: 'skipped', requireAttestation: false,
+    }), /missing or duplicated producer/i);
+  }
+  {
+    const fixture = build();
+    const wrongAttempt = fixture.jobApi.map(job => job.name === JOBS[0].jobName
+      ? { ...job, run_attempt: expected.runAttempt - 1 } : job);
+    assert.throws(() => finalizeReleaseReadiness({
+      ...fixture, expected, githubJobs: wrongAttempt,
+      attestationStatus: 'skipped', requireAttestation: false,
+    }), /producer node-22\.23\.4 failed exact-source validation/i);
+  }
+  {
+    const fixture = build();
+    const manifestFile = path.join(fixture.artifactRoot, JOBS[0].artifactName, 'manifest.json');
+    const manifest = JSON.parse(fs.readFileSync(manifestFile, 'utf8'));
+    manifest.mergeSha = 'f'.repeat(40);
+    fs.writeFileSync(manifestFile, JSON.stringify(manifest, null, 2) + String.fromCharCode(10));
+    assert.throws(() => finalizeReleaseReadiness({
+      ...fixture, expected, githubJobs: fixture.jobApi,
+      attestationStatus: 'skipped', requireAttestation: false,
+    }), /producer node-22\.23\.4 failed exact-source validation/i);
+  }
+  {
+    const fixture = build();
+    const failedJobs = fixture.jobApi.map(job => job.name === JOBS[1].jobName
+      ? { ...job, conclusion: 'failure' } : job);
+    assert.throws(() => finalizeReleaseReadiness({
+      ...fixture, expected, githubJobs: failedJobs,
+      attestationStatus: 'skipped', requireAttestation: false,
+    }), /producer node-24\.22\.1 failed exact-source validation/i);
+  }
+  {
+    const fixture = build();
+    assert.throws(() => finalizeReleaseReadiness({
+      ...fixture, expected, githubJobs: fixture.jobApi,
+      postgresEvidence: { ...fixture.postgresEvidence, sourceRevision: 'f'.repeat(40) },
+      attestationStatus: 'skipped', requireAttestation: false,
+    }), /database evidence.*source revision/i);
+  }
+  {
+    const fixture = build();
+    const directory = path.join(fixture.artifactRoot, JOBS[1].artifactName);
+    const readinessFile = path.join(directory, 'files', 'artifacts', 'release-readiness.json');
+    const readiness = JSON.parse(fs.readFileSync(readinessFile, 'utf8'));
+    readiness.evidenceGates[1].status = 'PASS';
+    readiness.summary.pass += 1;
+    readiness.summary.missingEvidence -= 1;
+    const bytes = Buffer.from(JSON.stringify(readiness, null, 2) + String.fromCharCode(10));
+    fs.writeFileSync(readinessFile, bytes);
+    const manifestFile = path.join(directory, 'manifest.json');
+    const manifest = JSON.parse(fs.readFileSync(manifestFile, 'utf8'));
+    const artifact = manifest.artifacts.find(item => item.path === 'files/artifacts/release-readiness.json');
+    artifact.sizeBytes = bytes.length;
+    artifact.sha256 = crypto.createHash('sha256').update(bytes).digest('hex');
+    fs.writeFileSync(manifestFile, JSON.stringify(manifest, null, 2) + String.fromCharCode(10));
+    assert.throws(() => finalizeReleaseReadiness({
+      ...fixture, expected, githubJobs: fixture.jobApi,
+      attestationStatus: 'skipped', requireAttestation: false,
+    }), /Node 22 and Node 24 preliminary reports disagree/i);
+  }
+  {
+    const fixture = build();
+    const copiedMigration = path.join(fixture.root, 'artifacts/evidence/postgres-memgraph/fresh-migrations.json');
+    fs.appendFileSync(copiedMigration, ' ');
+    assert.throws(() => finalizeReleaseReadiness({
+      ...fixture, expected, githubJobs: fixture.jobApi,
+      attestationStatus: 'skipped', requireAttestation: false,
+    }), /copied database producer artifact failed/i);
+  }
+  {
+    const fixture = build();
+    const readiness = path.join(fixture.artifactRoot, JOBS[0].artifactName, 'files', 'artifacts', 'release-readiness.json');
+    fs.appendFileSync(readiness, ' ');
+    assert.throws(() => finalizeReleaseReadiness({
+      ...fixture, expected, githubJobs: fixture.jobApi,
+      attestationStatus: 'skipped', requireAttestation: false,
+    }), /manifest/i);
+  }
+  {
+    const fixture = build();
+    assert.throws(() => finalizeReleaseReadiness({
+      ...fixture,
+      expected: { ...expected, eventName: 'push' },
+      githubJobs: fixture.jobApi,
+      postgresEvidence: fixture.postgresEvidence,
+      attestationStatus: 'skipped',
+      requireAttestation: true,
+    }), /signed.*attestation/i);
+  }
+});
+
 test('rejects symlink artifacts when the platform permits creating them', t => {
   const { artifactRoot, jobApi, runApi } = createFixtures(t);
   const directory = path.join(artifactRoot, JOBS[0].artifactName, 'files');
@@ -703,4 +892,16 @@ test('rejects symlink artifacts when the platform permits creating them', t => {
   const nodeJob = report.jobs.find(job => job.key === JOBS[0].key);
   assert.equal(nodeJob.status, 'BLOCKED');
   assert.ok(nodeJob.errors.some(error => /symbolic link/i.test(error)));
+});
+
+test('uploads consolidated CI diagnostics even when fail-closed aggregation exits unsuccessfully', () => {
+  const workflow = fs.readFileSync(path.join(__dirname, '..', '.github', 'workflows', 'ci.yml'), 'utf8');
+  const uploadStepStart = workflow.indexOf('- name: Upload consolidated CI evidence report');
+  assert.notEqual(uploadStepStart, -1, 'The aggregate report upload step must exist.');
+  const uploadStep = workflow.slice(uploadStepStart, uploadStepStart + 240);
+  assert.ok(
+    uploadStep.includes('if: always()'),
+    'The consolidated diagnostics must upload even when the aggregator fails closed.',
+  );
+  assert.match(workflow, /if-no-files-found: warn/);
 });
