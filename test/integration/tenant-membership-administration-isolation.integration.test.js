@@ -827,6 +827,124 @@ test(
       );
     });
 
+    await t.test('direct membership audit failures roll back and safe retries remain correlated', async () => {
+      const auditTarget = await createUser('Membership Audit Atomicity Target');
+      const suffix = randomUUID().replace(/-/g, '');
+      const functionName = 'test_member_audit_fail_' + suffix;
+      const triggerName = 'test_member_audit_fail_' + suffix;
+      const requestBase = 'membership-audit-' + suffix;
+      const invalidationsBefore = authorizationChanges.length;
+
+      async function installFailureTrigger() {
+        await pool.query(
+          "CREATE FUNCTION " + functionName + "() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN " +
+          "IF NEW.action IN ('site.member_added','site.member_removed') THEN " +
+          "RAISE EXCEPTION 'simulated membership audit persistence failure'; END IF; RETURN NEW; END $$"
+        );
+        await pool.query("CREATE TRIGGER " + triggerName + " BEFORE INSERT ON audit_events FOR EACH ROW EXECUTE FUNCTION " + functionName + "()");
+      }
+      async function removeFailureTrigger() {
+        await pool.query("DROP TRIGGER IF EXISTS " + triggerName + " ON audit_events");
+        await pool.query("DROP FUNCTION IF EXISTS " + functionName + "()");
+      }
+
+      try {
+        await installFailureTrigger();
+        await assert.rejects(identity.addMember({
+          siteId: siteA, email: auditTarget.email, roleSlug: 'viewer',
+          actorId: actorA.id, requestId: requestBase + '-add-failed',
+        }), /simulated membership audit persistence failure/);
+        const [membership, audit] = await Promise.all([
+          pool.query('SELECT 1 FROM site_memberships WHERE site_id=$1 AND user_id=$2', [siteA, auditTarget.id]),
+          pool.query("SELECT 1 FROM audit_events WHERE site_id=$1 AND action='site.member_added' AND target_id=$2", [siteA, auditTarget.id]),
+        ]);
+        assert.equal(membership.rowCount, 0, 'failed audit insert must roll back the membership addition');
+        assert.equal(audit.rowCount, 0, 'failed addition must not leave an audit row');
+        assert.equal(authorizationChanges.length, invalidationsBefore, 'rollback must not publish authorization invalidation');
+      } finally {
+        await removeFailureTrigger();
+      }
+
+      const addedRequestId = requestBase + '-add-retry';
+      await identity.addMember({
+        siteId: siteA, email: auditTarget.email, roleSlug: 'viewer',
+        actorId: actorA.id, requestId: addedRequestId,
+      });
+      let addedAudit = await pool.query(
+        "SELECT site_id,actor_id,action,target_type,target_id,request_id,details FROM audit_events WHERE site_id=$1 AND action='site.member_added' AND target_id=$2",
+        [siteA, auditTarget.id],
+      );
+      assert.equal(addedAudit.rowCount, 1, 'successful retry must write exactly one addition audit row');
+      assert.equal(addedAudit.rows[0].site_id, siteA);
+      assert.equal(addedAudit.rows[0].actor_id, actorA.id);
+      assert.equal(addedAudit.rows[0].action, 'site.member_added');
+      assert.equal(addedAudit.rows[0].target_type, 'user');
+      assert.equal(addedAudit.rows[0].target_id, auditTarget.id);
+      assert.equal(addedAudit.rows[0].request_id, addedRequestId);
+      assert.deepEqual(addedAudit.rows[0].details, { role: 'viewer' });
+      assert.deepEqual(authorizationChanges.slice(invalidationsBefore), [{ siteId: siteA, principalId: auditTarget.id }]);
+
+      await identity.addMember({
+        siteId: siteA, email: auditTarget.email, roleSlug: 'viewer',
+        actorId: actorA.id, requestId: requestBase + '-add-noop',
+      });
+      addedAudit = await pool.query(
+        "SELECT 1 FROM audit_events WHERE site_id=$1 AND action='site.member_added' AND target_id=$2",
+        [siteA, auditTarget.id],
+      );
+      assert.equal(addedAudit.rowCount, 1, 'no-op addition must not add another audit row');
+      assert.equal(authorizationChanges.length, invalidationsBefore + 1, 'no-op addition must not publish another invalidation');
+
+      const invalidationsBeforeRemoval = authorizationChanges.length;
+      try {
+        await installFailureTrigger();
+        await assert.rejects(identity.removeMember({
+          siteId: siteA, userId: auditTarget.id, actorId: actorA.id,
+          requestId: requestBase + '-remove-failed',
+        }), /simulated membership audit persistence failure/);
+        const [membership, audit] = await Promise.all([
+          pool.query('SELECT 1 FROM site_memberships WHERE site_id=$1 AND user_id=$2', [siteA, auditTarget.id]),
+          pool.query("SELECT 1 FROM audit_events WHERE site_id=$1 AND action='site.member_removed' AND target_id=$2", [siteA, auditTarget.id]),
+        ]);
+        assert.equal(membership.rowCount, 1, 'failed audit insert must roll back the membership removal');
+        assert.equal(audit.rowCount, 0, 'failed removal must not leave an audit row');
+        assert.equal(authorizationChanges.length, invalidationsBeforeRemoval, 'rollback must not publish authorization invalidation');
+      } finally {
+        await removeFailureTrigger();
+      }
+
+      const removedRequestId = requestBase + '-remove-retry';
+      await identity.removeMember({
+        siteId: siteA, userId: auditTarget.id, actorId: actorA.id,
+        requestId: removedRequestId,
+      });
+      const removedAudit = await pool.query(
+        "SELECT site_id,actor_id,action,target_type,target_id,request_id,details FROM audit_events WHERE site_id=$1 AND action='site.member_removed' AND target_id=$2",
+        [siteA, auditTarget.id],
+      );
+      assert.equal(removedAudit.rowCount, 1, 'successful retry must write exactly one removal audit row');
+      assert.equal(removedAudit.rows[0].site_id, siteA);
+      assert.equal(removedAudit.rows[0].actor_id, actorA.id);
+      assert.equal(removedAudit.rows[0].action, 'site.member_removed');
+      assert.equal(removedAudit.rows[0].target_type, 'user');
+      assert.equal(removedAudit.rows[0].target_id, auditTarget.id);
+      assert.equal(removedAudit.rows[0].request_id, removedRequestId);
+      assert.deepEqual(removedAudit.rows[0].details, {});
+      assert.deepEqual(authorizationChanges.slice(invalidationsBeforeRemoval), [{ siteId: siteA, principalId: auditTarget.id }]);
+
+      const invalidationsAfterRemoval = authorizationChanges.length;
+      await identity.removeMember({
+        siteId: siteA, userId: auditTarget.id, actorId: actorA.id,
+        requestId: requestBase + '-remove-noop',
+      });
+      const finalAudit = await pool.query(
+        "SELECT 1 FROM audit_events WHERE site_id=$1 AND action='site.member_removed' AND target_id=$2",
+        [siteA, auditTarget.id],
+      );
+      assert.equal(finalAudit.rowCount, 1, 'no-op removal must not add another audit row');
+      assert.equal(authorizationChanges.length, invalidationsAfterRemoval, 'no-op removal must not publish another invalidation');
+    });
+
     await t.test('concurrent owner removals serialize and preserve one active site owner', async () => {
       const lockClient = await pool.connect();
       let removalResultsPromise = Promise.resolve([]);

@@ -148,7 +148,10 @@ test('invitation acceptance audits transactionally with request correlation and 
     assert.deepEqual(scenario.auditValues[0], [
       siteId,
       userId,
+      'site.invitation_accepted',
+      'invitation',
       invitationId,
+      'success',
       requestId,
       JSON.stringify({ role: 'editor' }),
     ]);
@@ -174,6 +177,8 @@ test('identity service emits scoped authorization invalidations after membership
   const sessionId = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
   const changes = [];
   const lockedSites = [];
+  const membershipAuditValues = [];
+  const transactionEvents = [];
   const pool = {
     async query(sql) {
       if (sql.includes('UPDATE auth_sessions')) return { rowCount: 1, rows: [{ id: sessionId, user_id: userId }] };
@@ -185,8 +190,15 @@ test('identity service emits scoped authorization invalidations after membership
     },
     async connect() {
       return {
-        async query(sql) {
-          if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') return { rowCount: 0, rows: [] };
+        async query(sql, values = []) {
+          if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') {
+            transactionEvents.push(sql);
+            return { rowCount: 0, rows: [] };
+          }
+          if (sql.includes('SELECT id,email,display_name,status FROM users')) return { rowCount: 1, rows: [{ id: userId, email: 'member@example.test', display_name: 'Member', status: 'active' }] };
+          if (sql.includes('SELECT id FROM roles')) return { rowCount: 1, rows: [{ id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd' }] };
+          if (sql.includes('INSERT INTO site_memberships')) return { rowCount: 1, rows: [{ user_id: userId }] };
+          if (sql.includes('INSERT INTO audit_events')) { membershipAuditValues.push(values); return { rowCount: 1, rows: [] }; }
           if (sql.includes('SELECT id FROM sites WHERE id=$1 FOR UPDATE')) {
             lockedSites.push(siteId);
             return { rowCount: 1, rows: [{ id: siteId }] };
@@ -199,12 +211,30 @@ test('identity service emits scoped authorization invalidations after membership
       };
     }
   };
-  const identity = createIdentityService({ pool, env: {}, onAuthorizationChange: async change => changes.push(change) });
+  const identity = createIdentityService({
+    pool,
+    env: {},
+    onAuthorizationChange: async change => {
+      transactionEvents.push('INVALIDATE');
+      changes.push(change);
+    },
+  });
 
   assert.deepEqual(await identity.revokeSession({ userId, sessionId }), { revoked: true });
   assert.deepEqual(await identity.logout('opaque-session-token'), { revoked: true });
-  await identity.addMember({ siteId, email: 'member@example.test', roleSlug: 'editor' });
-  await identity.removeMember({ siteId, userId });
+  const transactionEventsBeforeMembership = transactionEvents.length;
+  const membershipRequestId = 'request-membership-admin-123';
+  await identity.addMember({ siteId, email: 'member@example.test', roleSlug: 'editor', actorId: userId, requestId: membershipRequestId });
+  await identity.removeMember({ siteId, userId, actorId: userId, requestId: membershipRequestId });
+  assert.deepEqual(membershipAuditValues, [
+    [siteId, userId, 'site.member_added', 'user', userId, 'success', membershipRequestId, JSON.stringify({ role: 'editor' })],
+    [siteId, userId, 'site.member_removed', 'user', userId, 'success', membershipRequestId, '{}'],
+  ]);
+  assert.deepEqual(
+    transactionEvents.slice(transactionEventsBeforeMembership),
+    ['BEGIN', 'COMMIT', 'INVALIDATE', 'BEGIN', 'COMMIT', 'INVALIDATE'],
+    'each membership invalidation must be published only after the matching transaction commits',
+  );
   assert.deepEqual(lockedSites, [siteId], 'membership removal serializes against changes for the same site');
   assert.deepEqual(changes, [
     { principalId: userId, sessionId },

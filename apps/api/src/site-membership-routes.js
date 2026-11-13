@@ -51,15 +51,8 @@ async function handleSiteMembershipRoute(ctx) {
       siteId,
       email: body.email,
       roleSlug: body.role,
-    });
-    await identity.audit({
-      siteId,
       actorId: actor.user.id,
-      action: 'site.member_added',
-      targetType: 'user',
-      targetId: member.id,
       requestId,
-      details: { role: body.role },
     });
 
     return sendJson(res, 201, { member, requestId });
@@ -73,13 +66,10 @@ async function handleSiteMembershipRoute(ctx) {
     const [, routeSiteId, userId] = memberMatch;
     const siteId = await resolveRouteSite(routeSiteId);
     await requireCapability(actor, siteId, 'site:manage');
-    await identity.removeMember({ siteId, userId });
-    await identity.audit({
+    await identity.removeMember({
       siteId,
+      userId,
       actorId: actor.user.id,
-      action: 'site.member_removed',
-      targetType: 'user',
-      targetId: userId,
       requestId,
     });
 

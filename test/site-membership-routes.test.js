@@ -136,7 +136,7 @@ test('site selector reconciliation rejects conflicting context before capability
   assert.deepEqual(ctx.events.map(event => event.type), ['readJson', 'siteIdFor']);
 });
 
-test('member addition uses the bounded body reader and audits the assigned role', async () => {
+test('member addition passes actor and request correlation to the transactional identity service', async () => {
   const ctx = createContext({
     path: `/api/v1/sites/${SITE_ID}/members`,
     method: 'POST',
@@ -149,7 +149,6 @@ test('member addition uses the bounded body reader and audits the assigned role'
     'siteIdFor',
     'requireCapability',
     'addMember',
-    'audit',
     'sendJson',
   ]);
   assert.equal(ctx.events[0].maxBytes, 16_384);
@@ -163,20 +162,13 @@ test('member addition uses the bounded body reader and audits the assigned role'
     siteId: SITE_ID,
     email: 'member@example.test',
     roleSlug: 'editor',
-  });
-  assert.deepEqual(ctx.events[4].input, {
-    siteId: SITE_ID,
     actorId: ACTOR_ID,
-    action: 'site.member_added',
-    targetType: 'user',
-    targetId: TARGET_ID,
     requestId: REQUEST_ID,
-    details: { role: 'editor' },
   });
   assert.equal(ctx.res.payload.statusCode, 201);
 });
 
-test('member removal is site-capability guarded and audited after persistence', async () => {
+test('member removal passes actor and request correlation to the transactional identity service', async () => {
   const ctx = createContext({
     path: `/api/v1/sites/${SITE_ID}/members/${TARGET_ID}`,
     method: 'DELETE',
@@ -187,12 +179,14 @@ test('member removal is site-capability guarded and audited after persistence', 
     'siteIdFor',
     'requireCapability',
     'removeMember',
-    'audit',
     'sendJson',
   ]);
-  assert.deepEqual(ctx.events[2].input, { siteId: SITE_ID, userId: TARGET_ID });
-  assert.equal(ctx.events[3].input.action, 'site.member_removed');
-  assert.equal(ctx.events[3].input.targetId, TARGET_ID);
+  assert.deepEqual(ctx.events[2].input, {
+    siteId: SITE_ID,
+    userId: TARGET_ID,
+    actorId: ACTOR_ID,
+    requestId: REQUEST_ID,
+  });
   assert.deepEqual(ctx.res.payload.body, { removed: true, requestId: REQUEST_ID });
 });
 
