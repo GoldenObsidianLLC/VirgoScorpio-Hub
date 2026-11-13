@@ -176,6 +176,7 @@ Start at **[the documentation index](docs/README.md)**.
 | Document | Purpose |
 |---|---|
 | [Architecture](docs/ARCHITECTURE.md) | Application/package map, data flow, and boundaries. |
+| [Architecture decisions](docs/ARCHITECTURE-DECISIONS.md) | Recorded architecture contracts and trade-offs, including ADR-022 for post-producer CI release-readiness finalization. |
 | [VirgoScorpio Hub Manifesto](VIRGOSCORPIO-HUB-MANIFESTO.md) | Project mission and human-AI symbiosis vision. |
 | [Engineering Principles](docs/VIRGOSCORPIO-HUB-PRINCIPLES.md) | Human agency, consent, accountability and engineering constraints. |
 | [Real-Time Foundation 1](docs/REALTIME-FOUNDATION-F1.md) | Developer-preview presence and event streaming foundation, with limitations. |

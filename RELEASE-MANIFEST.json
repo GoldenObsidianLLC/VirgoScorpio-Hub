@@ -101,7 +101,8 @@
       "Hosted CI executed on main commit 489325585d57fe95f961c36a597faa7065848c7f (workflow run 41949722725): all six checks passed, including Node.js 22.23.4 and 24.22.1 (461/461 Hub tests and 94/94 EnginEx tests per runtime), dedicated PostgreSQL/Memgraph integration (65/65), fresh migrations 18/18 plus idempotent re-entry, browser/accessibility smoke (9/9), CodeQL execution and consolidated revision-bound evidence. The current formal production gate remains NO-GO with 14 missing evidence items.",
       "release-readiness JSON/Markdown report and fail-closed readiness command",
       "VS Code Dev Container, preflight checks, strict live integration test runner and blocker-to-test instructions are included in this candidate workspace",
-      "Hub 0.6.2 candidate PR #68 passed hosted push run #259 and PR run #260; all six CI jobs per run passed on Node.js 22.23.4/24.22.1, live PostgreSQL/Memgraph (65/65), fresh migrations (18/18 plus idempotent re-entry), browser smoke (9/9), CodeQL and consolidated evidence. Release readiness remains NO-GO with 14 missing evidence items; PR remains open/unmerged."
+      "Hub 0.6.2 candidate PR #68 passed hosted push run #259 and PR run #260; all six CI jobs per run passed on Node.js 22.23.4/24.22.1, live PostgreSQL/Memgraph (65/65), fresh migrations (18/18 plus idempotent re-entry), browser smoke (9/9), CodeQL and consolidated evidence. Release readiness remains NO-GO with 14 missing evidence items; PR remains open/unmerged.",
+      "Post-producer CI release-readiness finalization: schema-v2 producer manifests bind product/version, job, workflow, run/attempt and exact source SHA; the aggregate job validates all producers before promoting only exact-source PostgreSQL/Memgraph and fresh-migration evidence."
     ]
   },
   "validation": {
@@ -162,6 +163,94 @@
         "partial": 2,
         "blocked": 1,
         "missingEvidence": 14
+      }
+    },
+    "ciReleaseReadinessFinalization": {
+      "issue": 134,
+      "status": "implemented-local-and-hosted-validation-passed-awaiting-review-and-postmerge-main-validation",
+      "producerManifestSchemaVersion": 2,
+      "sourceRevisionAtImplementationStart": "4a9ee181be5d9d46d94ed11a14de64b4dbbe9907",
+      "localFocusedTests": {
+        "tests": 27,
+        "passed": 26,
+        "failed": 0,
+        "skipped": 1
+      },
+      "fullLocalValidation": {
+        "node": "26.12.1",
+        "hubTests": {
+          "tests": 600,
+          "passed": 597,
+          "failed": 0,
+          "skipped": 3
+        },
+        "enginex": {
+          "version": "7.0.0",
+          "tests": 94,
+          "passed": 91,
+          "failed": 0,
+          "skipped": 3
+        },
+        "artifactCheck": {
+          "requiredPaths": 235,
+          "javascriptFilesSyntaxChecked": 245
+        },
+        "npmAuditHighThreshold": {
+          "passed": true,
+          "vulnerabilities": 0
+        }
+      },
+      "hostedExactSourceValidation": "Passed for the exact branch head in successful push and pull_request workflows. The PR workflow finalized its synthetic merge revision; post-merge main validation remains required.",
+      "productionCertified": false,
+      "rebasedOntoMainRevision": "858e1b35bae601939f4947e3d74584945e28e8e9",
+      "hostedValidation": {
+        "status": "passed",
+        "branchHeadSha": "5959e3e7996f40406850dbf7bb910aef4ef1ee02",
+        "pushWorkflowRun": {
+          "id": 43365367600,
+          "event": "push",
+          "conclusion": "success",
+          "completedJobs": 7
+        },
+        "pullRequestWorkflowRun": {
+          "id": 43365715766,
+          "event": "pull_request",
+          "conclusion": "success",
+          "completedJobs": 7,
+          "syntheticMergeSha": "818dfccb42ed3fa6266b30c91fde572eff882e07"
+        },
+        "nodeMatrix": {
+          "node22": {
+            "hubTests": 600,
+            "enginexTests": 94,
+            "conclusion": "success"
+          },
+          "node24": {
+            "hubTests": 600,
+            "enginexTests": 94,
+            "conclusion": "success"
+          }
+        },
+        "postgresMemgraph": {
+          "tests": 93,
+          "passed": 93,
+          "failed": 0,
+          "skipped": 0,
+          "migrationsApplied": 18,
+          "idempotentSecondPassSkipped": 18
+        },
+        "canonicalFinalReadiness": {
+          "status": "FINALIZED_AFTER_PRODUCER_VALIDATION",
+          "pass": 8,
+          "partial": 2,
+          "blocked": 0,
+          "missingEvidence": 14,
+          "notRun": 0,
+          "readyForProduction": false,
+          "releaseClassification": "NOT_PRODUCTION_CERTIFIED"
+        },
+        "mainlineAttestation": "Skipped as expected on a non-main candidate branch; successful signing remains required after merge.",
+        "postMergeMainValidation": "Pending; rerun CI against the merged main SHA before accepting #134 or making release claims."
       }
     }
   },

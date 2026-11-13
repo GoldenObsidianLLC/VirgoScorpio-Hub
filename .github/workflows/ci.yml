@@ -625,6 +625,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           GITHUB_API_URL: ${{ github.api_url }}
+          VIRGOSCORPIO_HUB_CI_ATTESTATION_RESULT: ${{ needs.attest-supply-chain.result }}
           VIRGOSCORPIO_HUB_CI_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: node scripts/ci-evidence.js aggregate
       - name: Upload consolidated CI evidence report
@@ -636,6 +637,12 @@ jobs:
           path: |
             artifacts/release-readiness-ci.json
             artifacts/release-readiness-ci.md
+            artifacts/release-readiness.json
+            artifacts/release-readiness.md
+            artifacts/release-readiness-preliminary-node-22.23.4.json
+            artifacts/release-readiness-preliminary-node-22.23.4.md
+            artifacts/release-readiness-preliminary-node-24.22.1.json
+            artifacts/release-readiness-preliminary-node-24.22.1.md
             artifacts/evidence/postgres-memgraph/integration-live.json
             artifacts/evidence/postgres-memgraph/integration-tests.tap.log
             artifacts/evidence/postgres-memgraph/integration-migrations.log

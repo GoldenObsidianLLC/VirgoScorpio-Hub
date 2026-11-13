@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const { PRODUCT_VERSION } = require('../packages/domain/src/version');
+const { renderReleaseReadinessMarkdown } = require('./release-readiness-report');
 const {
   hasNoHighAuditFindings,
   hasSuccessfulPlaywrightSummary,
@@ -246,7 +247,9 @@ function buildManifest(metadata, artifacts) {
   if (!/^\d+$/.test(metadata.runId)) throw new Error('CI run ID must be numeric.');
   if (!Number.isInteger(metadata.runAttempt) || metadata.runAttempt < 1) throw new Error('CI run attempt must be a positive integer.');
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
+    product: 'VirgoScorpio Hub',
+    version: PRODUCT_VERSION,
     repository: metadata.repository,
     workflow: metadata.workflow,
     workflowFile: WORKFLOW_FILE,
@@ -313,8 +316,10 @@ function validateManifestDirectory(directory, expected) {
     return { valid: false, errors: ['Manifest is missing or unreadable: ' + error.message], manifest: null, artifacts: [] };
   }
 
-  if (manifest.schemaVersion !== 1) errors.push('Unsupported manifest schema version.');
-  const allowedFields = new Set(['schemaVersion', 'repository', 'workflow', 'workflowFile', 'eventName', 'runId', 'runAttempt', 'headSha', 'mergeSha', 'jobKey', 'jobName', 'runtime', 'generatedAt', 'artifacts']);
+  if (manifest.schemaVersion !== 2) errors.push('Unsupported manifest schema version.');
+  if (manifest.product !== 'VirgoScorpio Hub') errors.push('Manifest product mismatch.');
+  if (manifest.version !== PRODUCT_VERSION) errors.push('Manifest product version mismatch.');
+  const allowedFields = new Set(['schemaVersion', 'product', 'version', 'repository', 'workflow', 'workflowFile', 'eventName', 'runId', 'runAttempt', 'headSha', 'mergeSha', 'jobKey', 'jobName', 'runtime', 'generatedAt', 'artifacts']);
   for (const field of Object.keys(manifest)) {
     if (!allowedFields.has(field)) errors.push('Unknown manifest field: ' + field + '.');
   }
@@ -543,6 +548,43 @@ function ensureEvidenceDirectory(root, relativeDirectory) {
   return current;
 }
 
+function writeAtomicEvidenceFile({ root, targetRelativePath, content }) {
+  if (typeof content !== 'string') throw new TypeError('Atomic evidence content must be a string.');
+  const targetParts = validateRelativePath(targetRelativePath);
+  const outputDirectory = ensureEvidenceDirectory(root, path.posix.dirname(targetRelativePath));
+  const absoluteRoot = path.resolve(root);
+  const targetPath = path.join(absoluteRoot, ...targetParts);
+  if (!isWithin(absoluteRoot, targetPath)) throw new Error('Atomic evidence target resolves outside the repository.');
+  if (fs.existsSync(targetPath)) {
+    const existing = fs.lstatSync(targetPath);
+    if (!existing.isFile() && !existing.isSymbolicLink()) {
+      throw new Error('Atomic evidence target must be a regular file or a replaceable symlink.');
+    }
+  }
+
+  const temporaryPath = path.join(outputDirectory,
+    '.' + path.basename(targetPath) + '-' + crypto.randomUUID() + '.tmp');
+  try {
+    const descriptor = fs.openSync(temporaryPath, 'wx', 0o600);
+    try {
+      if (!fs.fstatSync(descriptor).isFile()) {
+        throw new Error('Atomic evidence staging target must be a regular file.');
+      }
+      fs.writeFileSync(descriptor, content, 'utf8');
+      fs.fsyncSync(descriptor);
+    } finally {
+      fs.closeSync(descriptor);
+    }
+    // Same-directory rename atomically replaces an existing file/symlink.
+    // It never opens or follows the previous destination.
+    fs.renameSync(temporaryPath, targetPath);
+  } catch (error) {
+    fs.rmSync(temporaryPath, { force: true });
+    throw error;
+  }
+  return targetRelativePath;
+}
+
 function copyVerifiedEvidenceFile({ sourceDirectory, sourceRelativePath, root, targetRelativePath, expectedSha256 }) {
   const sourcePath = resolveRegularPath(sourceDirectory, sourceRelativePath);
   const targetParts = validateRelativePath(targetRelativePath);
@@ -663,35 +705,11 @@ function writePostgresMemgraphReleaseEvidence({ root, directory, expected, apiJo
     },
   };
 
-  const outputDirectory = ensureEvidenceDirectory(root, 'artifacts/evidence');
-  const outputPath = path.join(outputDirectory, 'postgres-memgraph-live.json');
-  // Stage into an exclusive same-directory file before the atomic replace.
-  // rename replaces the destination entry (including a symlink) instead of
-  // following it, and keeps the previously committed historical record intact
-  // until every producer input has passed validation and the new file is fsynced.
-  const temporaryPath = path.join(outputDirectory, '.postgres-memgraph-live-' + crypto.randomUUID() + '.tmp');
-  try {
-    const outputDescriptor = fs.openSync(temporaryPath, 'wx', 0o600);
-    try {
-      if (!fs.fstatSync(outputDescriptor).isFile()) {
-        throw new Error('Formal PostgreSQL/Memgraph evidence staging target must be a regular file.');
-      }
-      const serializedEvidence = JSON.stringify(evidence, null, 2) + '\n';
-
-      // The Actions REST response is used for validation only and is not
-      // serialized. Attestation values come from fixed schema constants,
-      // workflow environment identity, and local producer artifacts whose
-      // manifest and SHA-256 inventory were verified above.
-      fs.writeFileSync(outputDescriptor, serializedEvidence, 'utf8');
-      fs.fsyncSync(outputDescriptor);
-    } finally {
-      fs.closeSync(outputDescriptor);
-    }
-    fs.renameSync(temporaryPath, outputPath);
-  } catch (error) {
-    fs.rmSync(temporaryPath, { force: true });
-    throw error;
-  }
+  writeAtomicEvidenceFile({
+    root,
+    targetRelativePath: 'artifacts/evidence/postgres-memgraph-live.json',
+    content: JSON.stringify(evidence, null, 2) + String.fromCharCode(10),
+  });
   return evidence;
 }
 
@@ -948,6 +966,355 @@ function expectedMetadataFromEnvironment(env, root) {
   };
 }
 
+function summarizeReleaseReadiness(report) {
+  const statuses = [...report.checks, ...report.evidenceGates].map(item => item.status);
+  const summary = { pass: 0, partial: 0, blocked: 0, missingEvidence: 0, notRun: 0 };
+  for (const status of statuses) {
+    if (status === 'PASS') summary.pass += 1;
+    else if (status === 'PARTIAL') summary.partial += 1;
+    else if (status === 'MISSING_EVIDENCE') summary.missingEvidence += 1;
+    else if (status === 'NOT_RUN') summary.notRun += 1;
+    else if (status === 'BLOCKED') summary.blocked += 1;
+    else throw new Error('Final release readiness contains an unknown gate status.');
+  }
+  report.summary = summary;
+  report.readyForProduction = statuses.length > 0 && statuses.every(status => status === 'PASS');
+  report.releaseClassification = report.readyForProduction
+    ? 'PRODUCTION_RELEASE_GATES_PASSED'
+    : 'NOT_PRODUCTION_CERTIFIED';
+}
+
+function requireReadinessSnapshot(value, runtime, expected) {
+  if (!value || typeof value !== 'object' || Array.isArray(value) ||
+      value.schemaVersion !== 1 || value.product !== 'VirgoScorpio Hub' ||
+      value.version !== PRODUCT_VERSION ||
+      String(value.sourceRevision || '').toLowerCase() !== expected.mergeSha.toLowerCase() ||
+      value.readyForProduction !== false ||
+      value.releaseClassification !== 'NOT_PRODUCTION_CERTIFIED' ||
+      value.host?.node !== runtime ||
+      !value.sourceTree || value.sourceTree.clean !== true ||
+      !Array.isArray(value.sourceTree.blockingPaths) || value.sourceTree.blockingPaths.length !== 0 ||
+      !Array.isArray(value.checks) || !value.checks.length ||
+      !Array.isArray(value.evidenceGates) || !value.evidenceGates.length ||
+      !Array.isArray(value.supplementalEvidence) || !value.summary) {
+    throw new Error('Preliminary ' + runtime + ' release-readiness snapshot is incomplete or not bound to the exact source revision.');
+  }
+
+  const checkIds = value.checks.map(check => check?.id);
+  const gateIds = value.evidenceGates.map(gate => gate?.id);
+  if (checkIds.some(id => typeof id !== 'string' || !id) ||
+      new Set(checkIds).size !== checkIds.length ||
+      gateIds.some(id => typeof id !== 'string' || !id) ||
+      new Set(gateIds).size !== gateIds.length) {
+    throw new Error('Preliminary ' + runtime + ' release-readiness snapshot contains missing or duplicated gate IDs.');
+  }
+
+  const normalized = JSON.parse(JSON.stringify(value));
+  summarizeReleaseReadiness(normalized);
+  for (const key of ['pass', 'partial', 'blocked', 'missingEvidence', 'notRun']) {
+    if (!Number.isInteger(value.summary[key]) || value.summary[key] !== normalized.summary[key]) {
+      throw new Error('Preliminary ' + runtime + ' release-readiness summary does not match its gate dispositions.');
+    }
+  }
+  if (normalized.readyForProduction !== value.readyForProduction ||
+      normalized.releaseClassification !== value.releaseClassification) {
+    throw new Error('Preliminary ' + runtime + ' release-readiness decision contradicts its gate dispositions.');
+  }
+  return value;
+}
+
+function verifyPostgresMemgraphReleaseRecord({ root, evidence, expected, manifestSha256 }) {
+  const ci = evidence?.ciEvidence;
+  const integration = evidence?.results?.integration;
+  const migrations = evidence?.results?.migrations;
+  if (!evidence || evidence.schemaVersion !== 1 ||
+      evidence.product !== 'VirgoScorpio Hub' || evidence.version !== PRODUCT_VERSION ||
+      evidence.status !== 'passed' ||
+      String(evidence.sourceRevision || '').toLowerCase() !== expected.mergeSha.toLowerCase() ||
+      typeof evidence.executedAt !== 'string' || Number.isNaN(Date.parse(evidence.executedAt)) ||
+      typeof evidence.command !== 'string' || !evidence.command.trim() ||
+      typeof evidence.environment !== 'string' || !evidence.environment.trim()) {
+    throw new Error('Database evidence is missing or its source revision/status does not match this release.');
+  }
+  if (!ci || ci.repository !== expected.repository ||
+      ci.workflow !== expected.workflow || ci.workflowFile !== WORKFLOW_FILE ||
+      ci.eventName !== expected.eventName ||
+      String(ci.runId ?? '') !== String(expected.runId) ||
+      ci.runAttempt !== expected.runAttempt ||
+      String(ci.headSha || '').toLowerCase() !== expected.headSha.toLowerCase() ||
+      String(ci.sourceRevision || '').toLowerCase() !== expected.mergeSha.toLowerCase() ||
+      ci.jobName !== 'PostgreSQL and Memgraph integration' ||
+      ci.manifestPath !== 'artifacts/evidence/postgres-memgraph-ci-manifest.json' ||
+      ci.manifestSha256 !== manifestSha256) {
+    throw new Error('Database evidence CI identity or producer manifest checksum does not match the exact workflow run/attempt/source.');
+  }
+  if (!integration || !Number.isInteger(integration.tests) || integration.tests < 1 ||
+      integration.passed !== integration.tests || integration.failed !== 0 ||
+      integration.skipped !== 0 || integration.todo !== 0) {
+    throw new Error('Database evidence does not contain a positive zero-failure, zero-skip live integration result.');
+  }
+  if (!migrations || migrations.migrationCount !== 18 ||
+      typeof migrations.firstPass !== 'string' || !/18\/18 migrations applied/i.test(migrations.firstPass) ||
+      typeof migrations.secondPass !== 'string' || !/18\/18 migrations skipped/i.test(migrations.secondPass) ||
+      typeof migrations.cleanup !== 'string' || !/disposable database dropped/i.test(migrations.cleanup)) {
+    throw new Error('Database evidence does not prove the fresh 18-migration install, idempotent second pass, and disposable database cleanup.');
+  }
+
+  const requiredArtifacts = [
+    'artifacts/evidence/postgres-memgraph-ci-manifest.json',
+    'artifacts/evidence/postgres-memgraph/integration-live.json',
+    'artifacts/evidence/postgres-memgraph/integration-tests.tap.log',
+    'artifacts/evidence/postgres-memgraph/fresh-migrations.json',
+  ];
+  if (!Array.isArray(evidence.artifacts) ||
+      requiredArtifacts.some(item => !evidence.artifacts.includes(item))) {
+    throw new Error('Database evidence is missing required retained, checksum-verified supporting artifact references.');
+  }
+
+  const migrationPath = path.join(root, 'artifacts', 'evidence', 'postgres-memgraph', 'fresh-migrations.json');
+  const livePath = path.join(root, 'artifacts', 'evidence', 'postgres-memgraph', 'integration-live.json');
+  const manifestPath = path.join(root, 'artifacts', 'evidence', 'postgres-memgraph-ci-manifest.json');
+  for (const file of [migrationPath, livePath, manifestPath]) {
+    const relative = path.relative(path.resolve(root), path.resolve(file));
+    if (!relative || relative.startsWith('..' + path.sep) || path.isAbsolute(relative) ||
+        !fs.existsSync(file) || !fs.lstatSync(file).isFile() || fs.lstatSync(file).isSymbolicLink()) {
+      throw new Error('Database evidence supporting file is missing or is not a regular file inside the repository.');
+    }
+  }
+  if (sha256File(manifestPath) !== manifestSha256) {
+    throw new Error('Copied database producer manifest checksum does not match the final readiness record.');
+  }
+  const producerManifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  if (!producerManifest || producerManifest.schemaVersion !== 2 ||
+      producerManifest.product !== 'VirgoScorpio Hub' || producerManifest.version !== PRODUCT_VERSION ||
+      producerManifest.repository !== expected.repository ||
+      producerManifest.workflow !== expected.workflow ||
+      producerManifest.workflowFile !== WORKFLOW_FILE ||
+      producerManifest.eventName !== expected.eventName ||
+      String(producerManifest.runId ?? '') !== String(expected.runId) ||
+      producerManifest.runAttempt !== expected.runAttempt ||
+      String(producerManifest.headSha || '').toLowerCase() !== expected.headSha.toLowerCase() ||
+      String(producerManifest.mergeSha || '').toLowerCase() !== expected.mergeSha.toLowerCase() ||
+      producerManifest.jobKey !== 'postgres-memgraph-integration' ||
+      producerManifest.jobName !== 'PostgreSQL and Memgraph integration' ||
+      typeof producerManifest.generatedAt !== 'string' ||
+      !Number.isFinite(Date.parse(producerManifest.generatedAt)) ||
+      !Array.isArray(producerManifest.artifacts) ||
+      producerManifest.generatedAt !== evidence.executedAt) {
+    throw new Error('Copied database producer manifest is not bound to the exact expected workflow/source identity.');
+  }
+  for (const artifact of producerManifest.artifacts) {
+    const parts = validateRelativePath(artifact.path);
+    if (parts.length < 4 || parts[0] !== 'files' || parts[1] !== 'artifacts' || parts[2] !== 'evidence' ||
+        !Number.isSafeInteger(artifact.sizeBytes) || artifact.sizeBytes < 0 ||
+        !/^[a-f0-9]{64}$/.test(String(artifact.sha256 || ''))) {
+      throw new Error('Copied database producer manifest contains an invalid artifact reference.');
+    }
+    const artifactName = parts.slice(3).join('/');
+    const targetRelative = 'artifacts/evidence/postgres-memgraph/' + artifactName;
+    if (!evidence.artifacts.includes(targetRelative)) {
+      throw new Error('Formal database evidence omits a checksum-bound copied producer artifact.');
+    }
+    const copiedPath = resolveRegularPath(root, targetRelative);
+    const copiedStat = fs.lstatSync(copiedPath);
+    if (copiedStat.size !== artifact.sizeBytes || sha256File(copiedPath) !== artifact.sha256) {
+      throw new Error('Copied database producer artifact failed its recorded size or SHA-256 check.');
+    }
+  }
+  const migrationEvidence = JSON.parse(fs.readFileSync(migrationPath, 'utf8'));
+  if (!isFreshMigrationEvidence(migrationEvidence, 18, PRODUCT_VERSION, expected.mergeSha)) {
+    throw new Error('Copied database migration evidence failed exact-source and idempotency re-validation.');
+  }
+  const live = JSON.parse(fs.readFileSync(livePath, 'utf8'));
+  if (live.status !== 'PASS' || live.node !== 'v22.23.4' ||
+      live.tests !== integration.tests || live.passed !== integration.passed ||
+      live.failed !== 0 || live.skipped !== 0 || live.todo !== 0) {
+    throw new Error('Copied live database evidence does not match the validated zero-skip final record.');
+  }
+}
+
+function finalizeReleaseReadiness({
+  root,
+  artifactRoot,
+  expected,
+  githubJobs,
+  postgresEvidence,
+  attestationStatus,
+  requireAttestation,
+  finalizedAt = new Date().toISOString(),
+}) {
+  if (!expected || !/^[0-9a-f]{40}$/i.test(String(expected.mergeSha || '')) ||
+      !/^[0-9a-f]{40}$/i.test(String(expected.headSha || '')) ||
+      !expected.repository || !expected.workflow || !expected.eventName ||
+      !/^[0-9]+$/.test(String(expected.runId || '')) ||
+      !Number.isSafeInteger(expected.runAttempt) || expected.runAttempt < 1) {
+    throw new Error('Final readiness requires a complete exact-source workflow/run/attempt identity.');
+  }
+  if (Number.isNaN(Date.parse(finalizedAt))) {
+    throw new Error('Final readiness timestamp is invalid.');
+  }
+  if (requireAttestation && attestationStatus !== 'success') {
+    throw new Error('Signed dependency attestation is required and must succeed before final readiness is emitted.');
+  }
+  if (!['success', 'skipped'].includes(attestationStatus)) {
+    throw new Error('Signed dependency attestation job failed or has an unknown status.');
+  }
+  if (requireAttestation && expected.eventName === 'pull_request') {
+    throw new Error('A pull-request run cannot require or claim mainline signed dependency attestation.');
+  }
+  if (!Array.isArray(githubJobs)) {
+    throw new Error('GitHub Actions producer-job inventory is unavailable.');
+  }
+
+  const validations = new Map();
+  const producerMetadata = [];
+  for (const config of JOBS) {
+    const matchingJobs = githubJobs.filter(job => job?.name === config.jobName);
+    if (matchingJobs.length !== 1) {
+      throw new Error('Missing or duplicated producer job: ' + config.key + '.');
+    }
+    const directory = path.join(artifactRoot, config.artifactName);
+    const validation = validateJobEvidence(config, directory, expected, matchingJobs[0]);
+    if (validation.status !== 'PASS') {
+      throw new Error('Producer ' + config.key + ' failed exact-source validation: ' + validation.errors.join(' '));
+    }
+    const manifestSha256 = sha256File(path.join(directory, 'manifest.json'));
+    if (!/^[a-f0-9]{64}$/.test(manifestSha256)) {
+      throw new Error('Producer ' + config.key + ' manifest checksum is invalid.');
+    }
+    validations.set(config.key, { config, directory, validation, manifestSha256 });
+    producerMetadata.push({
+      key: config.key,
+      jobName: config.jobName,
+      runtime: config.runtime,
+      status: 'PASS',
+      artifactCount: validation.artifactCount,
+      manifestSha256,
+    });
+  }
+
+  const nodeReports = {};
+  for (const key of ['node-22.23.4', 'node-24.22.1']) {
+    const producer = validations.get(key);
+    const readinessBytes = readEvidenceFile(producer.directory, 'artifacts/release-readiness.json');
+    const readiness = requireReadinessSnapshot(JSON.parse(readinessBytes.toString('utf8')), producer.config.runtime, expected);
+    nodeReports[key] = readiness;
+  }
+  const node22 = nodeReports['node-22.23.4'];
+  const node24 = nodeReports['node-24.22.1'];
+  const dispositionSnapshot = items => items
+    .map(item => [item.id, item.status])
+    .sort((left, right) => left[0].localeCompare(right[0]));
+  for (const collection of ['checks', 'evidenceGates', 'supplementalEvidence']) {
+    if (JSON.stringify(dispositionSnapshot(node22[collection])) !==
+        JSON.stringify(dispositionSnapshot(node24[collection]))) {
+      throw new Error('Node 22 and Node 24 preliminary reports disagree on ' +
+        collection + ' identities or dispositions.');
+    }
+  }
+
+  const databaseProducer = validations.get('postgres-memgraph-integration');
+  verifyPostgresMemgraphReleaseRecord({
+    root,
+    evidence: postgresEvidence,
+    expected,
+    manifestSha256: databaseProducer.manifestSha256,
+  });
+
+  const report = JSON.parse(JSON.stringify(node22));
+  const databaseGates = report.evidenceGates.filter(gate => gate.id === 'postgres-memgraph-live');
+  if (databaseGates.length !== 1) {
+    throw new Error('Preliminary release-readiness report must contain exactly one postgres-memgraph-live gate.');
+  }
+  const databaseGate = databaseGates[0];
+  if (!['BLOCKED', 'MISSING_EVIDENCE', 'PASS'].includes(databaseGate.status)) {
+    throw new Error('Preliminary database gate has an unexpected status and cannot be finalized safely.');
+  }
+  databaseGate.status = 'PASS';
+  databaseGate.evidencePath = 'artifacts/evidence/postgres-memgraph-live.json';
+  databaseGate.details = 'Exact-source revision ' + expected.mergeSha + ' was validated in GitHub Actions workflow run ' + expected.runId +
+    ' attempt ' + expected.runAttempt + ' passed ' + postgresEvidence.results.integration.passed +
+    '/' + postgresEvidence.results.integration.tests +
+    ' live PostgreSQL/Memgraph tests with zero failures/skips; 18/18 fresh migrations applied and ' +
+    '18/18 skipped on the idempotent second pass. Producer manifest SHA-256: ' +
+    databaseProducer.manifestSha256 + '.';
+
+  const migrationSupplementals = report.supplementalEvidence
+    .filter(item => item.id === 'fresh-migrations');
+  if (migrationSupplementals.length !== 1) {
+    throw new Error('Preliminary readiness report must contain exactly one fresh-migrations supplemental evidence row.');
+  }
+  migrationSupplementals[0].status = 'PASS';
+  migrationSupplementals[0].evidencePath = 'artifacts/evidence/postgres-memgraph/fresh-migrations.json';
+  migrationSupplementals[0].details = 'Exact-source PostgreSQL producer evidence passed all 18/18 fresh migrations, 18/18 idempotent second-pass skips, and disposable database cleanup. Producer manifest SHA-256: ' +
+    databaseProducer.manifestSha256 + '.';
+
+  // Retain the original per-runtime snapshots as diagnostics. Their original
+  // checksums are taken from the validated producer manifests, never recomputed
+  // from a mutable or unverified post-copy file.
+  const preliminaryReports = [];
+  for (const key of ['node-22.23.4', 'node-24.22.1']) {
+    const producer = validations.get(key);
+    const runtimeVersion = producer.config.runtime.replace(/^v/, '');
+    for (const extension of ['json', 'md']) {
+      const sourceRelativePath = 'files/artifacts/release-readiness.' + extension;
+      const artifact = producer.validation.artifacts.find(item => item.path === sourceRelativePath);
+      if (!artifact) {
+        throw new Error('Preliminary ' + producer.config.runtime + ' report file is missing from its verified manifest: ' + extension + '.');
+      }
+      const targetRelativePath = 'artifacts/release-readiness-preliminary-node-' + runtimeVersion + '.' + extension;
+      copyVerifiedEvidenceFile({
+        sourceDirectory: producer.directory,
+        sourceRelativePath,
+        root,
+        targetRelativePath,
+        expectedSha256: artifact.sha256,
+      });
+      preliminaryReports.push({
+        runtime: producer.config.runtime,
+        path: targetRelativePath,
+        sha256: sha256File(path.join(root, ...targetRelativePath.split('/'))),
+      });
+    }
+  }
+
+  report.generatedAt = finalizedAt;
+  report.ciFinalization = {
+    schemaVersion: 1,
+    status: 'FINALIZED_AFTER_PRODUCER_VALIDATION',
+    generatedAt: finalizedAt,
+    workflow: {
+      repository: expected.repository,
+      workflow: expected.workflow,
+      workflowFile: WORKFLOW_FILE,
+      eventName: expected.eventName,
+      runId: String(expected.runId),
+      runAttempt: expected.runAttempt,
+      headSha: expected.headSha.toLowerCase(),
+      sourceRevision: expected.mergeSha.toLowerCase(),
+    },
+    attestation: {
+      required: Boolean(requireAttestation),
+      jobStatus: attestationStatus,
+    },
+    producers: producerMetadata.sort((left, right) => left.key.localeCompare(right.key)),
+    preliminaryReports,
+    postgresMemgraphEvidence: {
+      path: 'artifacts/evidence/postgres-memgraph-live.json',
+      sourceRevision: postgresEvidence.sourceRevision,
+      manifestSha256: databaseProducer.manifestSha256,
+      integrationTests: postgresEvidence.results.integration.tests,
+      migrations: postgresEvidence.results.migrations.migrationCount,
+    },
+  };
+  summarizeReleaseReadiness(report);
+  return {
+    report,
+    markdown: renderReleaseReadinessMarkdown(report),
+    preliminaryReports,
+  };
+}
+
 async function main() {
   const command = process.argv[2];
   const root = path.resolve(__dirname, '..');
@@ -1053,10 +1420,93 @@ async function main() {
       details: 'A unique, successful, exact-attempt PostgreSQL/Memgraph producer job is required to generate formal release evidence.',
     });
   }
+  const finalReadinessEligible = !apiError &&
+    report.ciStatus === 'PASS' &&
+    report.postgresMemgraphEvidence?.status === 'PASS';
+  if (finalReadinessEligible) {
+    try {
+      const postgresEvidence = JSON.parse(fs.readFileSync(
+        path.join(root, 'artifacts/evidence/postgres-memgraph-live.json'), 'utf8'
+      ));
+      const attestationStatus = process.env.VIRGOSCORPIO_HUB_CI_ATTESTATION_RESULT;
+      const requireAttestation = process.env.GITHUB_REF === 'refs/heads/main' &&
+        process.env.GITHUB_EVENT_NAME !== 'pull_request';
+      const finalized = finalizeReleaseReadiness({
+        root,
+        artifactRoot,
+        expected,
+        githubJobs: jobs,
+        postgresEvidence,
+        attestationStatus,
+        requireAttestation,
+      });
+      writeAtomicEvidenceFile({
+        root,
+        targetRelativePath: 'artifacts/release-readiness.json',
+        content: JSON.stringify(finalized.report, null, 2) + String.fromCharCode(10),
+      });
+      writeAtomicEvidenceFile({
+        root,
+        targetRelativePath: 'artifacts/release-readiness.md',
+        content: finalized.markdown,
+      });
+      report.finalReleaseReadiness = {
+        status: 'PASS',
+        path: 'artifacts/release-readiness.json',
+        markdownPath: 'artifacts/release-readiness.md',
+        sourceRevision: finalized.report.sourceRevision,
+        generatedAt: finalized.report.generatedAt,
+        summary: finalized.report.summary,
+        readyForProduction: finalized.report.readyForProduction,
+        releaseClassification: finalized.report.releaseClassification,
+        preliminaryReports: finalized.preliminaryReports,
+        producerCount: finalized.report.ciFinalization.producers.length,
+        attestation: finalized.report.ciFinalization.attestation,
+      };
+      report.checks.push({
+        id: 'final-release-readiness',
+        status: 'PASS',
+        details: 'Canonical release-readiness JSON and Markdown were finalized after all exact-source producers, database migrations, checksums, run/attempt identities, and required attestation status were validated. Production certification remains a separate gate decision.',
+      });
+      console.log('FINAL RELEASE READINESS: ' + finalized.report.releaseClassification);
+    } catch (error) {
+      report.ciStatus = 'BLOCKED';
+      report.finalReleaseReadiness = {
+        status: 'BLOCKED',
+        path: 'artifacts/release-readiness.json',
+        sourceRevision: expected.mergeSha || null,
+      };
+      report.checks.push({
+        id: 'final-release-readiness',
+        status: 'BLOCKED',
+        details: 'Post-aggregation final readiness could not be completed because one or more producer, attestation, exact-source, or checksum contracts failed.',
+      });
+      console.error('Final release readiness blocked: ' + String(error.message || error));
+    }
+  } else {
+    report.finalReleaseReadiness = {
+      status: 'BLOCKED',
+      path: 'artifacts/release-readiness.json',
+      sourceRevision: expected.mergeSha || null,
+    };
+    report.checks.push({
+      id: 'final-release-readiness',
+      status: 'BLOCKED',
+      details: 'All producer jobs and exact-source PostgreSQL/Memgraph evidence must pass before the canonical readiness report is finalized.',
+    });
+  }
   const outputDirectory = path.join(root, 'artifacts');
   fs.mkdirSync(outputDirectory, { recursive: true });
-  fs.writeFileSync(path.join(outputDirectory, 'release-readiness-ci.json'), JSON.stringify(report, null, 2) + '\n');
-  fs.writeFileSync(path.join(outputDirectory, 'release-readiness-ci.md'), renderMarkdown(report));
+  writeAtomicEvidenceFile({
+    root,
+    targetRelativePath: 'artifacts/release-readiness-ci.json',
+    content: JSON.stringify(report, null, 2) + String.fromCharCode(10),
+  });
+  writeAtomicEvidenceFile({
+    root,
+    targetRelativePath: 'artifacts/release-readiness-ci.md',
+    content: renderMarkdown(report),
+  });
   console.log('CI EVIDENCE: ' + report.ciStatus);
   console.log('PRODUCTION CERTIFICATION: NO');
   if (report.ciStatus !== 'PASS') {
@@ -1085,10 +1535,12 @@ module.exports = {
   compareSbomInventories,
   copyEvidenceFiles,
   evaluateCiEvidence,
+  finalizeReleaseReadiness,
   renderMarkdown,
   sha256File,
   stageEvidence,
   validateJobEvidence,
   validateManifestDirectory,
+  writeAtomicEvidenceFile,
   writePostgresMemgraphReleaseEvidence,
 };
