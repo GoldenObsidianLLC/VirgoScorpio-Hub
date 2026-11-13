@@ -139,35 +139,37 @@
     "gitleaks": "Gitleaks working-tree and all locally fetched Git refs scans both exited 0 with empty JSON findings on 2026-10-31; verify published remote refs before every release.",
     "releaseReadinessRedisEnvironment": "Regression-tested: release:readiness now forwards only approved local Redis/Memurai endpoints to VIRGOSCORPIO_HUB_TEST_REDIS_URL and enables the Redis integration suites; remote, malformed, and absent endpoints leave live Redis tests disabled.",
     "mainlineEvidence": {
-      "sourceRevision": "36220abf4ebcc629fa616961879f5a2ffe1f847d",
-      "workflowRun": 472,
-      "workflowRunId": 42535903899,
+      "sourceRevision": "d991f7f9e995afc8884108949dbbbfeef21c66a2",
+      "workflowRun": 596,
+      "workflowRunId": 43378967768,
+      "workflowEvent": "push",
+      "runAttempt": 1,
       "workflowConclusion": "success",
-      "completedJobs": 6,
-      "hubTestsPerRuntime": 566,
+      "completedJobs": 7,
+      "hubTestsPerRuntime": 600,
       "enginexTestsPerRuntime": 94,
-      "requiredPaths": 230,
-      "javascriptFilesSyntaxChecked": 236,
-      "livePostgresMemgraph": 79,
+      "livePostgresMemgraph": 93,
       "migrationsApplied": 18,
       "idempotentSecondPass": 18,
-      "playwrightSmoke": 9,
-      "npmAuditVulnerabilities": 0,
-      "sbomComponentsPerRuntime": 177,
-      "sbomDependenciesPerRuntime": 178,
-      "serviceLessIntegrationSkippedPerRuntime": 33,
+      "sbomComponentsPerRuntime": 200,
+      "sbomDependenciesPerRuntime": 201,
+      "serviceLessIntegrationSkippedPerRuntime": 34,
       "serviceLessIntegrationStatus": "PARTIAL",
+      "attestationStatus": "success",
       "readyForProduction": false,
+      "releaseClassification": "NOT_PRODUCTION_CERTIFIED",
+      "finalizationStatus": "FINALIZED_AFTER_PRODUCER_VALIDATION",
       "readiness": {
-        "pass": 7,
+        "pass": 8,
         "partial": 2,
-        "blocked": 1,
-        "missingEvidence": 14
+        "blocked": 0,
+        "missingEvidence": 14,
+        "notRun": 0
       }
     },
     "ciReleaseReadinessFinalization": {
       "issue": 134,
-      "status": "implemented-local-and-hosted-validation-passed-awaiting-review-and-postmerge-main-validation",
+      "status": "merged-to-main-and-exact-main-validation-passed",
       "producerManifestSchemaVersion": 2,
       "sourceRevisionAtImplementationStart": "4a9ee181be5d9d46d94ed11a14de64b4dbbe9907",
       "localFocusedTests": {
@@ -200,7 +202,7 @@
           "vulnerabilities": 0
         }
       },
-      "hostedExactSourceValidation": "Passed for the exact branch head in successful push and pull_request workflows. The PR workflow finalized its synthetic merge revision; post-merge main validation remains required.",
+      "hostedExactSourceValidation": "Passed on the exact candidate branch head in successful push and pull_request workflows; final merge was subsequently validated on exact main SHA d991f7f9e995afc8884108949dbbbfeef21c66a2 by successful workflow #596 (7/7 jobs).",
       "productionCertified": false,
       "rebasedOntoMainRevision": "858e1b35bae601939f4947e3d74584945e28e8e9",
       "hostedValidation": {
@@ -251,6 +253,120 @@
         },
         "mainlineAttestation": "Skipped as expected on a non-main candidate branch; successful signing remains required after merge.",
         "postMergeMainValidation": "Pending; rerun CI against the merged main SHA before accepting #134 or making release claims."
+      },
+      "pullRequest": {
+        "number": 136,
+        "url": "https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/136",
+        "mergedAt": "2026-11-13T06:28:38Z",
+        "mergeCommitSha": "d991f7f9e995afc8884108949dbbbfeef21c66a2"
+      },
+      "postMergeMainValidation": "Passed on exact merged main revision d991f7f9e995afc8884108949dbbbfeef21c66a2: workflow #596 / run 43378967768, attempt 1, all 7 jobs successful; mainline attestation required and successful.",
+      "postMergeMainValidationDetails": {
+        "workflow": "VirgoScorpio Hub CI",
+        "workflowFile": ".github/workflows/ci.yml",
+        "event": "push",
+        "run": 596,
+        "runId": 43378967768,
+        "attempt": 1,
+        "sourceRevision": "d991f7f9e995afc8884108949dbbbfeef21c66a2",
+        "conclusion": "success",
+        "completedJobs": 7,
+        "hubTestsPerRuntime": 600,
+        "enginexTestsPerRuntime": 94,
+        "postgresMemgraph": {
+          "tests": 93,
+          "passed": 93,
+          "failed": 0,
+          "skipped": 0
+        },
+        "migrations": {
+          "firstPassApplied": 18,
+          "secondPassSkipped": 18
+        },
+        "attestation": {
+          "required": true,
+          "jobStatus": "success"
+        }
+      },
+      "canonicalFinalReadiness": {
+        "status": "FINALIZED_AFTER_PRODUCER_VALIDATION",
+        "pass": 8,
+        "partial": 2,
+        "blocked": 0,
+        "missingEvidence": 14,
+        "notRun": 0,
+        "readyForProduction": false,
+        "releaseClassification": "NOT_PRODUCTION_CERTIFIED",
+        "generatedAt": "2026-11-13T06:31:33.387Z"
+      },
+      "requiredProducerCount": 5,
+      "requiredProducerManifests": [
+        {
+          "key": "browser-and-accessibility",
+          "status": "PASS",
+          "manifestSha256": "b952512883042e5da659124ee4ef1a23f9d1741406bd38656d915100b54bb79f"
+        },
+        {
+          "key": "node-22.23.4",
+          "status": "PASS",
+          "manifestSha256": "2fe60b0bde373cfad76c7197c3339cdb4e4c06444547c464125d43d747125352"
+        },
+        {
+          "key": "node-24.22.1",
+          "status": "PASS",
+          "manifestSha256": "fd2551da0fde232860d31f675ed5854359ee94371d606d257faa9dd3bf630999"
+        },
+        {
+          "key": "postgres-memgraph-integration",
+          "status": "PASS",
+          "manifestSha256": "134953016bbc558434bead58ed3bcac2cee3f46a060a515d9284bb462122ddb9"
+        },
+        {
+          "key": "security-static-analysis",
+          "status": "PASS",
+          "manifestSha256": "f647bcc0ad75b514f0b6fa87dcc78f88cbb12ebba6c911dbf6a6c3d79835bb17"
+        }
+      ],
+      "mainlineAttestation": {
+        "required": true,
+        "jobStatus": "success"
+      },
+      "canonicalArtifact": {
+        "artifactId": 14015409523,
+        "name": "virgoscorpio_hub-release-readiness-ci",
+        "sha256": "5d9b88206c1a67ccdd7181f5a0bd7db3851684eb45ac69e4950ef790a19251bb",
+        "expiresAt": "2027-02-11T06:28:40Z"
+      },
+      "supplyChainAttestationArtifact": {
+        "artifactId": 14015762451,
+        "sha256": "c042eb0443201ef78d46041f492ef5aa5b10e730caf0d0e5582dcb4e2ad7988e8"
+      }
+    },
+    "historicalMainlineEvidence": {
+      "sourceRevision": "36220abf4ebcc629fa616961879f5a2ffe1f847d",
+      "workflowRun": 472,
+      "workflowRunId": 42535903899,
+      "workflowConclusion": "success",
+      "completedJobs": 6,
+      "hubTestsPerRuntime": 566,
+      "enginexTestsPerRuntime": 94,
+      "requiredPaths": 230,
+      "javascriptFilesSyntaxChecked": 236,
+      "livePostgresMemgraph": 79,
+      "migrationsApplied": 18,
+      "idempotentSecondPass": 18,
+      "playwrightSmoke": 9,
+      "npmAuditVulnerabilities": 0,
+      "sbomComponentsPerRuntime": 177,
+      "sbomDependenciesPerRuntime": 178,
+      "serviceLessIntegrationSkippedPerRuntime": 33,
+      "serviceLessIntegrationStatus": "PARTIAL",
+      "readyForProduction": false,
+      "readiness": {
+        "pass": 7,
+        "partial": 2,
+        "blocked": 1,
+        "missingEvidence": 14
       }
     }
   },
