@@ -53,6 +53,137 @@ test('ordinary membership and invitation APIs cannot grant the site-owner role',
   assert.deepEqual(queries, [], 'unsupported owner grants must fail before PostgreSQL side effects');
 });
 
+test('site creation writes its owner membership and correlated audit in one transaction', async t => {
+  const actorId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const siteId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+  const ownerRoleId = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+  const requestId = 'request-site-create-123';
+  const site = { id: siteId, slug: 'atomic-site', name: 'Atomic Site', default_locale: 'en' };
+
+  async function runScenario({ allowed = true, failAudit = false, auditUniqueViolation = false, duplicateSlug = false } = {}) {
+    const events = [];
+    const pool = {
+      async query(sql) {
+        throw new Error('Site creation must use its dedicated transaction client: ' + sql);
+      },
+      async connect() {
+        return {
+          async query(sql, values = []) {
+            if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') {
+              events.push(sql);
+              return { rowCount: 0, rows: [] };
+            }
+            if (sql.includes('FROM site_memberships m JOIN roles r') && sql.includes("r.capabilities @>")) {
+              events.push('CHECK_SITE_MANAGE');
+              return { rowCount: allowed ? 1 : 0, rows: allowed ? [{}] : [] };
+            }
+            if (sql.includes('INSERT INTO sites(slug,name)')) {
+              events.push('INSERT_SITE');
+              if (duplicateSlug) throw Object.assign(new Error('duplicate site slug'), { code: '23505' });
+              assert.deepEqual(values, ['atomic-site', 'Atomic Site']);
+              return { rowCount: 1, rows: [site] };
+            }
+            if (sql.includes("SELECT id FROM roles WHERE slug='site-owner'")) {
+              events.push('SELECT_SITE_OWNER_ROLE');
+              return { rowCount: 1, rows: [{ id: ownerRoleId }] };
+            }
+            if (sql.includes('INSERT INTO site_memberships(site_id,user_id,role_id)')) {
+              events.push('INSERT_OWNER_MEMBERSHIP');
+              assert.deepEqual(values, [siteId, actorId, ownerRoleId]);
+              return { rowCount: 1, rows: [] };
+            }
+            if (sql.includes('INSERT INTO audit_events')) {
+              events.push('INSERT_SITE_AUDIT');
+              if (failAudit) {
+                const error = new Error('simulated site creation audit failure');
+                if (auditUniqueViolation) error.code = '23505';
+                throw error;
+              }
+              assert.deepEqual(values, [
+                siteId,
+                actorId,
+                'site.created',
+                'site',
+                siteId,
+                'success',
+                requestId,
+                '{}',
+              ]);
+              return { rowCount: 1, rows: [] };
+            }
+            throw new Error('Unexpected site-creation transaction query: ' + sql);
+          },
+          release() { events.push('RELEASE'); },
+        };
+      },
+    };
+    const identity = createIdentityService({ pool, env: {} });
+    return {
+      events,
+      create: () => identity.createSite({ actorId, slug: 'atomic-site', name: ' Atomic Site ', requestId }),
+    };
+  }
+
+  await t.test('commits the site, owner membership and audit together', async () => {
+    const scenario = await runScenario();
+    assert.deepEqual(await scenario.create(), site);
+    assert.deepEqual(scenario.events, [
+      'BEGIN',
+      'CHECK_SITE_MANAGE',
+      'INSERT_SITE',
+      'SELECT_SITE_OWNER_ROLE',
+      'INSERT_OWNER_MEMBERSHIP',
+      'INSERT_SITE_AUDIT',
+      'COMMIT',
+      'RELEASE',
+    ]);
+  });
+
+  await t.test('rolls the new site and owner membership back when audit persistence fails', async () => {
+    const scenario = await runScenario({ failAudit: true });
+    await assert.rejects(scenario.create(), /simulated site creation audit failure/);
+    assert.deepEqual(scenario.events, [
+      'BEGIN',
+      'CHECK_SITE_MANAGE',
+      'INSERT_SITE',
+      'SELECT_SITE_OWNER_ROLE',
+      'INSERT_OWNER_MEMBERSHIP',
+      'INSERT_SITE_AUDIT',
+      'ROLLBACK',
+      'RELEASE',
+    ]);
+    assert.equal(scenario.events.includes('COMMIT'), false);
+  });
+
+  await t.test('denies an actor without site management before inserting a site or audit', async () => {
+    const scenario = await runScenario({ allowed: false });
+    await assert.rejects(
+      scenario.create(),
+      error => error.statusCode === 403 && error.code === 'ERR_VIRGOSCORPIO_HUB_FORBIDDEN',
+    );
+    assert.deepEqual(scenario.events, ['BEGIN', 'CHECK_SITE_MANAGE', 'ROLLBACK', 'RELEASE']);
+  });
+
+  await t.test('preserves audit unique-violation codes instead of misclassifying them as site slug conflicts', async () => {
+    const scenario = await runScenario({ failAudit: true, auditUniqueViolation: true });
+    await assert.rejects(
+      scenario.create(),
+      error => error.code === '23505' && error.statusCode === undefined,
+    );
+    assert.equal(scenario.events.includes('ROLLBACK'), true);
+    assert.equal(scenario.events.includes('COMMIT'), false);
+  });
+
+  await t.test('preserves duplicate-slug conflict mapping through rollback', async () => {
+    const scenario = await runScenario({ duplicateSlug: true });
+    await assert.rejects(
+      scenario.create(),
+      error => error.statusCode === 409 && error.code === 'ERR_VIRGOSCORPIO_HUB_SITE_SLUG_EXISTS',
+    );
+    assert.deepEqual(scenario.events, ['BEGIN', 'CHECK_SITE_MANAGE', 'INSERT_SITE', 'ROLLBACK', 'RELEASE']);
+  });
+});
+
 test('invitation acceptance audits transactionally with request correlation and post-commit invalidation', async t => {
   const userId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
   const siteId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';

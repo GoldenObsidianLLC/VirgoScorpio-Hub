@@ -221,6 +221,89 @@ test(
       authorization: `Bearer ${sessionA.token}`,
       'content-type': 'application/json',
     };
+    await t.test('site creation rolls back its owner membership when the correlated audit insert fails', async () => {
+      const suffix = randomUUID().replace(/-/g, '');
+      const siteSlug = 'tenant-create-audit-' + suffix.slice(0, 12);
+      const requestId = 'site-create-' + suffix.slice(0, 24);
+      const functionName = 'test_site_create_audit_fail_' + suffix;
+      const triggerName = 'test_site_create_audit_fail_' + suffix;
+
+      async function installFailureTrigger() {
+        await pool.query(
+          "CREATE FUNCTION " + functionName + "() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN " +
+          "IF NEW.action = 'site.created' THEN " +
+          "RAISE EXCEPTION 'simulated site creation audit persistence failure'; END IF; RETURN NEW; END $$"
+        );
+        await pool.query("CREATE TRIGGER " + triggerName + " BEFORE INSERT ON audit_events FOR EACH ROW EXECUTE FUNCTION " + functionName + "()");
+      }
+      async function removeFailureTrigger() {
+        await pool.query("DROP TRIGGER IF EXISTS " + triggerName + " ON audit_events");
+        await pool.query("DROP FUNCTION IF EXISTS " + functionName + "()");
+      }
+
+      try {
+        await installFailureTrigger();
+        const failed = await fetch(base + '/api/v1/sites', {
+          method: 'POST',
+          headers: { ...headers, 'x-request-id': requestId },
+          body: JSON.stringify({ slug: siteSlug, name: 'Atomic Site Creation' }),
+        });
+        assert.equal(failed.status, 500, 'audit persistence failure must fail site creation');
+        const [failedSite, failedMembership, failedAudit] = await Promise.all([
+          pool.query('SELECT id FROM sites WHERE slug=$1', [siteSlug]),
+          pool.query(
+            `SELECT m.user_id FROM site_memberships m JOIN sites s ON s.id=m.site_id WHERE s.slug=$1`,
+            [siteSlug],
+          ),
+          pool.query("SELECT id FROM audit_events WHERE action='site.created' AND request_id=$1", [requestId]),
+        ]);
+        assert.equal(failedSite.rowCount, 0, 'failed site creation must roll back the site row');
+        assert.equal(failedMembership.rowCount, 0, 'failed site creation must roll back the initial owner membership');
+        assert.equal(failedAudit.rowCount, 0, 'failed site creation must not leave an audit record');
+      } finally {
+        await removeFailureTrigger();
+        const residualSite = await pool.query('SELECT id FROM sites WHERE slug=$1', [siteSlug]);
+        if (residualSite.rows[0]) siteIds.push(residualSite.rows[0].id);
+      }
+
+      const retry = await fetch(base + '/api/v1/sites', {
+        method: 'POST',
+        headers: { ...headers, 'x-request-id': requestId },
+        body: JSON.stringify({ slug: siteSlug, name: 'Atomic Site Creation' }),
+      });
+      assert.equal(retry.status, 201, 'retry after removing the injected failure must succeed');
+      const payload = await retry.json();
+      assert.equal(payload.site.slug, siteSlug);
+      assert.equal(payload.requestId, requestId);
+      siteIds.push(payload.site.id);
+
+      const [createdSite, ownerMembership, audit] = await Promise.all([
+        pool.query('SELECT id,slug,name FROM sites WHERE slug=$1', [siteSlug]),
+        pool.query(
+          `SELECT m.user_id,r.slug AS role FROM site_memberships m JOIN roles r ON r.id=m.role_id WHERE m.site_id=$1`,
+          [payload.site.id],
+        ),
+        pool.query(
+          `SELECT site_id,actor_id,action,target_type,target_id,request_id,details
+             FROM audit_events WHERE site_id=$1 AND action='site.created' AND request_id=$2`,
+          [payload.site.id, requestId],
+        ),
+      ]);
+      assert.equal(createdSite.rowCount, 1, 'retry must create exactly one site');
+      assert.equal(createdSite.rows[0].id, payload.site.id);
+      assert.equal(ownerMembership.rowCount, 1, 'retry must create exactly one initial membership');
+      assert.equal(ownerMembership.rows[0].user_id, actorA.id);
+      assert.equal(ownerMembership.rows[0].role, 'site-owner');
+      assert.equal(audit.rowCount, 1, 'retry must persist exactly one correlated site-created audit row');
+      assert.equal(audit.rows[0].site_id, payload.site.id);
+      assert.equal(audit.rows[0].actor_id, actorA.id);
+      assert.equal(audit.rows[0].action, 'site.created');
+      assert.equal(audit.rows[0].target_type, 'site');
+      assert.equal(audit.rows[0].target_id, payload.site.id);
+      assert.equal(audit.rows[0].request_id, requestId);
+      assert.deepEqual(audit.rows[0].details, {});
+    });
+
     const attemptedInviteEmail = `cross-site-invite-${randomUUID()}@example.test`;
     mailRecipients.push(attemptedInviteEmail);
     const before = await membershipSideEffects(pool, siteB, attemptedInviteEmail);
