@@ -2,7 +2,7 @@
 
 > **Current decision: PRODUCTION NO-GO / NOT_PRODUCTION_CERTIFIED.** This snapshot records exact-main CI evidence; it does not authorize release, publication, deployment, or a SemVer increment.
 
-Current `main` is `d991f7f9e995afc8884108949dbbbfeef21c66a2`, merge of [PR #136](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/136). Exact-main [workflow #596](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43378967768) (run `43378967768`, attempt 1, push) completed successfully with **7/7 jobs**. The authoritative `artifacts/release-readiness.json` and Markdown snapshot were generated at `2026-11-13T06:31:33.387Z` after required producer validation; GitHub recorded the overall workflow completed successfully at `2026-11-13T06:31:36Z`.
+Current `main` is `2b3771446bf448931ce822ea6e476697a6ea263f`, the PR #137 documentation reconciliation merge following the PR #136 release-readiness finalizer. Exact-main [workflow #599](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43495281163) (run ID `43495281163`, attempt 1, push) completed successfully with **7/7 jobs**. The authoritative readiness snapshot was generated at `2026-11-13T19:49:42.765Z`; GitHub recorded workflow completion at `2026-11-13T19:49:46Z`.
 
 | Readiness classification | Count |
 |---|---:|
@@ -50,7 +50,7 @@ The historical pre-merge issue #23 candidate was maintained on branch security/d
 
 Current `main` includes PR #116 at exact merge commit `eb156b7620929ae94421caf69b4ddb92ed679812`. Exact-mainline [workflow #517](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/42855470069) passed all six required jobs on that SHA: Node.js 22.23.4, Node.js 24.22.1, PostgreSQL/Memgraph integration, browser/accessibility smoke, CodeQL and consolidated evidence. The source-bound live database/graph suite passed **81/81, zero failures, zero skips**, including the PR #116 same-slug two-site custom-content-type registry/record regression. F1.20 issue #113 remains CLOSED / ACCEPTED for the restricted developer-preview reliability scope.
 
-The current maintainer-generated tenant inventory declares 27 flow families, 78 route patterns, 21 implementation/source files and 41 referenced test files. PR #116 merged the schema/query anchors and targeted live custom-content-type A/B regression. These artifacts are review-preparation and drift-detection aids; they are not proof of complete route discovery or independent security acceptance.
+The current maintainer-generated tenant inventory declares 27 flow families, 78 route patterns, 21 implementation/source files and 42 referenced test files. PR #116 merged the schema/query anchors and targeted live custom-content-type A/B regression. These artifacts are review-preparation and drift-detection aids; they are not proof of complete route discovery or independent security acceptance.
 
 The cloud-connection maintainer regression added Site A/B listing isolation, foreign-ID test/disable denial, selector-conflict rejection and unchanged-row checks. It was merged through PR #118 at the 10 November main SHA c7653bb433ae8b363925d13babf239e64b2b5125, closing issue #117. Exact PR-head workflow #42878000787 and exact post-merge workflow #522 passed all six required jobs on that historical revision. The focused local PostgreSQL test passed 2/2 and the full local PostgreSQL/Memgraph/Redis runner passed 81/81, zero failures and zero skips. These are targeted maintainer regressions only; issue #14 remains OPEN / NOT PERFORMED and issue #25 remains open.
 

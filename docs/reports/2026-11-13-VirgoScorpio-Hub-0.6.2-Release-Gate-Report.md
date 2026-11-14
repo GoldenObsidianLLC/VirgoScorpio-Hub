@@ -4,9 +4,9 @@
 **Repository:** `GoldenObsidianLLC/VirgoScorpio-Hub` (public GitHub source repository)
 **Package:** `virgoscorpio-hub@0.6.2` (`private: true`; unreleased)
 **Decision:** **PRODUCTION NO-GO — `NOT_PRODUCTION_CERTIFIED`**
-**Current source:** `main` at `d991f7f9e995afc8884108949dbbbfeef21c66a2`
-**Merged implementation:** [PR #136](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/136)
-**Exact-main CI:** [Workflow #596](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43378967768) — run `43378967768`, attempt 1
+**Current source:** `main` at `2b3771446bf448931ce822ea6e476697a6ea263f`
+**Mainline documentation reconciliation:** [PR #137](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/137); release-readiness finalizer implementation: [PR #136](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/136)
+**Exact-main CI:** [Workflow #599](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43495281163) — run `43495281163`, attempt 1
 
 > This report separates successful engineering/CI evidence from production acceptance. A passing build, a signed attestation, or maintainer-authored tests do not replace independent review, live provider qualification, human legal review, deployment rehearsals, accessibility acceptance, or release-owner approval.
 
@@ -38,13 +38,13 @@ The formal readiness artifact reports `readyForProduction: false` and `releaseCl
 |---|---|
 | Repository | `GoldenObsidianLLC/VirgoScorpio-Hub` |
 | Branch | `main` |
-| Source revision | `d991f7f9e995afc8884108949dbbbfeef21c66a2` |
-| Merge | [PR #136](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/136), merged 13 November 2026 at 06:28:38 UTC |
-| Merge commit | `d991f7f9e995afc8884108949dbbbfeef21c66a2` |
+| Source revision | `2b3771446bf448931ce822ea6e476697a6ea263f` |
+| Mainline documentation reconciliation | [PR #137](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/137), merged 13 November 2026 at 19:46:02 UTC |
+| Merge commit | `2b3771446bf448931ce822ea6e476697a6ea263f` |
 | Workflow | VirgoScorpio Hub CI, `.github/workflows/ci.yml` |
-| Event / run / attempt | `push` / `43378967768` / `1` |
+| Event / run / attempt | `push` / `43495281163` / `1` |
 | Workflow conclusion | **completed / success**, 7 of 7 jobs successful |
-| Workflow completion | 13 November 2026 at 06:31:36 UTC |
+| Workflow completion | 13 November 2026 at 19:49:46 UTC |
 | Node matrix | 22.23.4 and 24.22.1 |
 | EnginEx | 7.0.0, pinned submodule commit `d99e021f55664f006b5e65b4a58202f9c7bc4f4b` |
 | Lockfile SHA-256 | `8f3786bcfcd03d0b63761c7107e4d757ae5b45171ba2f6c086ff38c027c8b086` |
@@ -97,26 +97,32 @@ PR #136 implements the finalization design recorded in ADR-022:
 
 | Producer | Workflow job | Manifest SHA-256 | Result |
 |---|---|---|---|
-| Browser/accessibility | Browser editor and accessibility smoke tests | `b952512883042e5da659124ee4ef1a23f9d1741406bd38656d915100b54bb79f` | PASS |
-| Node.js 22.23.4 | Unit, security and dependency checks | `2fe60b0bde373cfad76c7197c3339cdb4e4c06444547c464125d43d747125352` | PASS |
-| Node.js 24.22.1 | Unit, security and dependency checks | `fd2551da0fde232860d31f675ed5854359ee94371d606d257faa9dd3bf630999` | PASS |
-| PostgreSQL/Memgraph | Live integration and fresh migrations | `134953016bbc558434bead58ed3bcac2cee3f46a060a515d9284bb462122ddb9` | PASS |
-| CodeQL/static analysis | CodeQL security analysis | `f647bcc0ad75b514f0b6fa87dcc78f88cbb12ebba6c911dbf6a6c3d79835bb17` | PASS |
+| Browser/accessibility | Browser editor and accessibility smoke tests | `6bac758d0ecaaa2a3286b2a8b29ca3de426db618166d38faa41cb00d240ec4bc` | PASS |
+| Node.js 22.23.4 | Unit, security and dependency checks | `7355986122721e44c4c724fb1712a34e3411d8395eb7e312e535072fb318815f` | PASS |
+| Node.js 24.22.1 | Unit, security and dependency checks | `33eb60bdbb54f38fe862fd11a2c02a2aa578760b0c22cf576030f56fcfd9efb5` | PASS |
+| PostgreSQL/Memgraph | Live integration and fresh migrations | `3dcc7a540e1bf0ba431b34f4893e76a1f827f13c8920c700849b70855383af73` | PASS |
+| CodeQL/static analysis | CodeQL security analysis | `ba8789bdc33cf9ceaf1a569181cdb6f0f54497ce2b8a1f6b37b139227b2b7dee` | PASS |
 
 Four preliminary Node report files were retained separately. Their checksums are preserved under `ciFinalization.preliminaryReports` in the canonical JSON; they are not authoritative readiness reports.
 
-The canonical readiness artifact was generated at `2026-11-13T06:31:33.387Z`, while the evidence-consolidation job itself was still running. The artifact correctly records its validated producer evidence and successful attestation, and does not assert the overall workflow conclusion. GitHub subsequently recorded the overall workflow as completed/success at `2026-11-13T06:31:36Z`, with all seven jobs successful. The completed workflow status is therefore confirmed by the GitHub Actions run record, not inferred from the artifact's generation-time state.
+The canonical readiness artifact was generated at `2026-11-13T19:49:42.765Z`, while the evidence-consolidation job itself was still running. The artifact correctly records its validated producer evidence and successful attestation, and does not assert the overall workflow conclusion. GitHub subsequently recorded the overall workflow as completed/success at `2026-11-13T19:49:46Z`, with all seven jobs successful. The completed workflow status is therefore confirmed by the GitHub Actions run record, not inferred from the artifact's generation-time state.
 
 ### Canonical artifact identity and retention
 
 | Artifact | ID | Archive SHA-256 | Expires |
 |---|---:|---|---|
-| Release readiness | `14015409523` | `5d9b88206c1a67ccdd7181f5a0bd7db3851684eb45ac69e4950ef790a19251bb` | 11 February 2027 |
-| Mainline supply-chain attestations | `14015762451` | `c042eb0443201ef78d46041f492ef5aa5b10e730caf0d0e5582dcb4e2ad7988e8` | 11 February 2027 |
-| PostgreSQL/Memgraph producer evidence | `14015951895` | `a0160cf6f4a4b332794e0338cf3198d96d1373122e92f3b02f32c3c6d4e7ba75` | 11 February 2027 |
-| Browser evidence | `14015223775` | `d8cadb5bfa76293d5e1200cc49581727077b17ad8023190e2c758d5907f2ba45` | 11 February 2027 |
+| Release readiness | `14072066484` | `e76372997326ee6a7c5fa253e39093e5e8a90af8170be2f8a8e5f285ba952922` | 11 February 2027 |
+| Mainline supply-chain attestations | `14070724805` | `6017cc88a8859a26a7dd0e837f0070e702bd6aff4a6d919edc9cdec3395baf49` | 11 February 2027 |
+| PostgreSQL/Memgraph producer evidence | `14070669511` | `4c6dffea43410744ea0bcfa2392094f58862869cd0486c0c37a74d39f16300ac` | 11 February 2027 |
+| Browser evidence | `14071847044` | `6eec20f7bcf97fb24fe5e9c4778e75cc4e0eb29b197bfa96dca8becd32746aeb` | 11 February 2027 |
+| Node.js 22 CI evidence | `14070814412` | `2a25e15c273a009ba22c44071a10819513287c0ee42bfc28db5fe81aaa401200` | 11 February 2027 |
+| Node.js 24 CI evidence | `14069959537` | `e7035c40bf74b56c68e7e2bbb32e86b98865ee4d12fe93154376656ac534a598` | 11 February 2027 |
+| Node.js 22 dependency/SBOM evidence | `14071757395` | `4ca1472103278ba652cc8ea9a256581850b9190f94d70492fc043a8f419f90a5` | 11 February 2027 |
+| Node.js 24 dependency/SBOM evidence | `14069874829` | `5ec56b565ebf95a21d3b19f6ceb80aa242931253ed07475134f6352f5473afaa` | 11 February 2027 |
+| Node.js 22 live-integration evidence | `14071972143` | `a6cc80a09f4110882561154615d8291bdbed646f490ee24c570797847bca602c` | 11 February 2027 |
+| CodeQL/static-analysis evidence | `14071082393` | `ec7989bc51c6876f55b093f60c7b4d990843a36154bc088569524343025bc543` | 11 February 2027 |
 
-These artifact records belong to workflow run `43378967768`, attempt 1, source `d991f7f9e995afc8884108949dbbbfeef21c66a2`. The final readiness archive digest is the canonical artifact archive checksum, not a claim that all inner files share that digest.
+These artifact records belong to workflow run `43495281163`, attempt 1, source `2b3771446bf448931ce822ea6e476697a6ea263f`. The final readiness archive digest is the canonical artifact archive checksum, not a claim that all inner files share that digest. Node.js 22 producer artifact `14070814412` has archive SHA-256 `2a25e15c273a009ba22c44071a10819513287c0ee42bfc28db5fe81aaa401200`; Node.js 24 producer artifact `14069959537` has archive SHA-256 `e7035c40bf74b56c68e7e2bbb32e86b98865ee4d12fe93154376656ac534a598`.
 
 ## 5. Readiness checks
 
@@ -211,19 +217,19 @@ Do not infer a production-ready state from green CI, the passing bounded Postgre
 2. Continue the next bounded maintainer-led tenant/security increment under #124 only after inspecting the exact current-main authorization and tenant-resolution seams and selecting one testable gap. Keep the work branch isolated from the dirty primary checkout and require exact-source hosted PostgreSQL/Memgraph evidence.
 3. Preserve independent-review gaps #14/#25 and human dependency acceptance #23 as separate gates. Do not present maintainer regressions as independent sign-off.
 
-### Recommended next code increment — F1.28 (maintainer-led; not yet implemented)
+### F1.28 implementation candidate ? transactional direct membership audit (issue #139; not merged)
 
-The exact-main source review identified a concrete audit-integrity gap in the existing membership administration flow:
+The source review identified a consistency gap: direct membership addition/removal and their audit events were separate commits. The isolated candidate branch `security/f1-28-membership-audit-atomicity-2026-11-13` implements the following bounded change:
 
-- `site-membership-routes.js` invokes `identity.addMember()` or `identity.removeMember()`, then writes `identity.audit()` as a second operation.
-- `packages/auth/src/service.js` currently inserts a member in auto-commit mode; member removal commits its existing per-site last-owner lock and delete transaction before route-level audit is written.
-- If the separate audit write fails, membership state can change without its corresponding audit event. Invitation acceptance already demonstrates the stronger pattern: membership and audit are written in one PostgreSQL transaction, with authorization invalidation after commit.
+- The existing `withTransaction(pool, work)` utility now owns client acquisition, commit/rollback, and release for direct add/remove and invitation acceptance. A shared `insertAuditEvent(queryable, input)` helper accepts either the pool or transaction client and centralizes parameterized audit-event insertion.
+- `identity.addMember()` now inserts membership and `site.member_added` in one transaction. `identity.removeMember()` keeps the existing per-site `FOR UPDATE` last-active-owner guard and now inserts `site.member_removed` before the same transaction commits.
+- The routes pass the authenticated actor ID and request ID into the service; duplicate route-level add/remove audit writes are removed. Invitation acceptance remains atomic and now reuses the shared helper.
+- Authorization invalidation remains post-commit and occurs only after an actual membership transition. A duplicate add or absent-member removal is a no-op with no audit row or invalidation.
+- A live PostgreSQL regression injects audit-trigger failures for add and remove, checks rollback/no-invalidation, then retries and checks the single correlated audit record and post-commit invalidation.
 
-**F1.28 proposal:** make direct member-add and member-remove state changes and their `site.member_added` / `site.member_removed` audit events atomic in `packages/auth/src/service.js`. Reuse a transaction-aware audit insertion helper, pass the existing authenticated actor ID and request ID into the identity service operation, and remove duplicate route-level audit writes. Preserve site-selector reconciliation, `site:manage` authorization before identity-store access, the existing per-site `FOR UPDATE` last-owner guard, current response/error contracts, and post-commit-only authorization invalidation. Define idempotent no-op add/remove behavior explicitly so an audit event never claims a state transition that did not occur. No new route, migration, schema, dependency, provider contract, or SemVer change is expected.
+**Exact PR-head hosted validation:** Candidate commit `8bb09868f9cc2940d5a3e750b8075acb082c89e0` passed both the [push workflow](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43530952655) and [pull-request workflow](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43531015133). In each run, the Node.js 22.23.4/24.22.1 matrices passed 600/600 Hub tests and 94/94 EnginEx tests per runtime; browser/accessibility smoke, CodeQL, the PostgreSQL/Memgraph job (94/94, zero skips, including the F1.28 failure-injection regression), and candidate evidence consolidation passed. The PostgreSQL job applied 18 fresh migrations and verified 18 idempotent re-entry skips; the PR run's PostgreSQL collaboration Playwright scenario passed 4/4. Both Node jobs reported zero npm audit vulnerabilities. The mainline-only attestation job was skipped as expected on this non-main branch; the mainline attestation remains the separate exact-main #599 evidence.\n\nLocal validation: `npm run check` passed 600 tests (597 passed, zero failures, three Windows-specific skips), covering 235 required paths and 245 JavaScript files. The focused live PostgreSQL tenant-membership integration file passed 20/20 with zero skips, including rollback/retry, invitation rollback, cross-site checks and last-owner serialization. The regenerated inventory lists 27 flow families, 78 route patterns, 21 source files and 42 test references; `npm audit --audit-level=high` found zero vulnerabilities. A broader local `npm run test:integration:live` run executed 94 tests with zero skips and returned 93 pass / 1 fail: the sole failure was the separate Redis-outage recovery scenario timing out while waiting for both bridges and the presence client to reconnect within 45 seconds. The F1.28 membership scenario passed locally, and the exact-head hosted push and PR integration runs both passed the complete 94/94 suite.
 
-**Required tests before merge:** inject an audit insert failure and prove add/remove state rolls back; retry succeeds with exactly one state transition and one audit event; verify invalidation is emitted only after commit; retain last-owner concurrent-removal serialization and cross-site isolation; retain authorization-denial/no-side-effect tests; and verify duplicate/no-op requests do not create misleading transition events. Execute the dedicated tests with the hosted disposable PostgreSQL/Memgraph services because the Windows local checkout has no `node_modules` or dedicated PostgreSQL service at this time.
-
-This is maintainer-led engineering under [issue #124](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/124), not independent tenant/security approval. Independent reviews #14/#25 remain separate OPEN production gates.
+Tracking: [issue #139](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/139), child of [tenant-isolation hardening #124](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/124). This is a maintainer implementation candidate, not independent review. Issues #14 and #25 remain OPEN / NOT PERFORMED; the 14 production evidence gates remain outstanding. No API contract, schema, migration, dependency, provider, lockfile or package-version change is intended. Package 0.6.2 remains private/unreleased; production remains NO-GO.
 
 ## 11. Source files and evidence pointers
 

@@ -8,6 +8,7 @@ const PASSWORD_MAX = 128;
 const SESSION_TTL_HOURS = 12;
 const { generateTotpSecret, verifyTotp, totpUri, encryptSecret, decryptSecret, generateRecoveryCodes } = require('./totp');
 const { createSessionService } = require('./session-service');
+const { withTransaction } = require('../../db/src/transaction');
 
 function digest(value) { return createHash('sha256').update(String(value)).digest('hex'); }
 function safeEqualText(a, b) {
@@ -56,6 +57,23 @@ function configuredPublicBase(env) {
   let parsed; try { parsed = new URL(raw); } catch { throw authError(500, 'ERR_VIRGOSCORPIO_HUB_PUBLIC_BASE_URL_INVALID', 'PUBLIC_BASE_URL is invalid.'); }
   if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password || parsed.search || parsed.hash || (env.NODE_ENV === 'production' && parsed.protocol !== 'https:')) throw authError(500, 'ERR_VIRGOSCORPIO_HUB_PUBLIC_BASE_URL_INVALID', 'PUBLIC_BASE_URL must be an absolute HTTP(S) origin; production requires HTTPS.');
   return parsed.origin;
+}
+
+async function insertAuditEvent(queryable, {
+  siteId = null,
+  actorId = null,
+  action,
+  targetType = null,
+  targetId = null,
+  result = 'success',
+  requestId = null,
+  details = {},
+} = {}) {
+  await queryable.query(
+    'INSERT INTO audit_events(site_id,actor_id,action,target_type,target_id,result,request_id,details) ' +
+    'VALUES($1,$2,$3,$4,$5,$6,$7,$8::jsonb)',
+    [siteId, actorId, action, targetType, targetId, result, requestId, JSON.stringify(details)],
+  );
 }
 
 function createIdentityService({ pool, env = process.env, clock = () => Date.now(), onAuthorizationChange = async () => {} } = {}) {
@@ -419,22 +437,37 @@ function createIdentityService({ pool, env = process.env, clock = () => Date.now
       return result.rows.map(row => ({ id: row.id, email: row.email, displayName: row.display_name, status: row.status, role: row.role, joinedAt: row.created_at }));
     },
 
-    async addMember({ siteId, email: inputEmail, roleSlug }) {
+    async addMember({ siteId, email: inputEmail, roleSlug, actorId = null, requestId = null }) {
       const email = normalizeEmail(inputEmail);
       if (!email) { const error = new Error('A valid email address is required.'); error.statusCode = 400; error.code = 'ERR_VIRGOSCORPIO_HUB_INVALID_EMAIL'; throw error; }
       if (!['editor','author','viewer'].includes(roleSlug)) { const error = new Error('Members may be assigned editor, author, or viewer roles using this endpoint.'); error.statusCode = 400; error.code = 'ERR_VIRGOSCORPIO_HUB_INVALID_ROLE'; throw error; }
-      const user = await pool.query("SELECT id,email,display_name,status FROM users WHERE lower(email)=$1 AND status='active'", [email]);
-      if (!user.rows[0]) { const error = new Error('No active account exists for that email. Create an invitation instead.'); error.statusCode = 404; error.code = 'ERR_VIRGOSCORPIO_HUB_USER_NOT_FOUND'; throw error; }
-      const role = await pool.query('SELECT id FROM roles WHERE slug=$1', [roleSlug]);
-      const membership = await pool.query('INSERT INTO site_memberships(site_id,user_id,role_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING RETURNING user_id', [siteId, user.rows[0].id, role.rows[0].id]);
-      if (membership.rowCount > 0) await notifyAuthorizationChange({ siteId, principalId: user.rows[0].id });
-      return safeUser(user.rows[0]);
+
+      const { user, membership } = await withTransaction(pool, async client => {
+        const userResult = await client.query("SELECT id,email,display_name,status FROM users WHERE lower(email)=$1 AND status='active'", [email]);
+        if (!userResult.rows[0]) { const error = new Error('No active account exists for that email. Create an invitation instead.'); error.statusCode = 404; error.code = 'ERR_VIRGOSCORPIO_HUB_USER_NOT_FOUND'; throw error; }
+        const role = await client.query('SELECT id FROM roles WHERE slug=$1', [roleSlug]);
+        if (!role.rows[0]) throw authError(500, 'ERR_VIRGOSCORPIO_HUB_ROLE_CONFIG', 'The requested member role is not configured.');
+        const membershipResult = await client.query('INSERT INTO site_memberships(site_id,user_id,role_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING RETURNING user_id', [siteId, userResult.rows[0].id, role.rows[0].id]);
+        if (membershipResult.rowCount > 0) {
+          await insertAuditEvent(client, {
+            siteId,
+            actorId,
+            action: 'site.member_added',
+            targetType: 'user',
+            targetId: userResult.rows[0].id,
+            requestId,
+            details: { role: roleSlug },
+          });
+        }
+        return { user: userResult.rows[0], membership: membershipResult };
+      });
+
+      if (membership.rowCount > 0) await notifyAuthorizationChange({ siteId, principalId: user.id });
+      return safeUser(user);
     },
 
-    async removeMember({ siteId, userId }) {
-      const client = await pool.connect();
-      try {
-        await client.query('BEGIN');
+    async removeMember({ siteId, userId, actorId = null, requestId = null }) {
+      const removed = await withTransaction(pool, async client => {
         // Serialize membership removals per site. Without this row lock, two active
         // owners can concurrently observe a count of two and remove each other.
         await client.query('SELECT id FROM sites WHERE id=$1 FOR UPDATE', [siteId]);
@@ -443,11 +476,21 @@ function createIdentityService({ pool, env = process.env, clock = () => Date.now
           const owners = await client.query(`SELECT count(*)::integer AS count FROM site_memberships m JOIN roles r ON r.id=m.role_id JOIN users u ON u.id=m.user_id WHERE m.site_id=$1 AND r.slug='site-owner' AND u.status='active'`, [siteId]);
           if (owners.rows[0].count <= 1) { const error = new Error('The last active site owner cannot be removed.'); error.statusCode = 409; error.code = 'ERR_VIRGOSCORPIO_HUB_LAST_OWNER'; throw error; }
         }
-        const removed = await client.query('DELETE FROM site_memberships WHERE site_id=$1 AND user_id=$2 RETURNING user_id', [siteId, userId]);
-        await client.query('COMMIT');
-        if (removed.rowCount > 0) await notifyAuthorizationChange({ siteId, principalId: userId });
-      } catch (error) { await client.query('ROLLBACK').catch(() => {}); throw error; }
-      finally { client.release(); }
+        const removedResult = await client.query('DELETE FROM site_memberships WHERE site_id=$1 AND user_id=$2 RETURNING user_id', [siteId, userId]);
+        if (removedResult.rowCount > 0) {
+          await insertAuditEvent(client, {
+            siteId,
+            actorId,
+            action: 'site.member_removed',
+            targetType: 'user',
+            targetId: userId,
+            requestId,
+          });
+        }
+        return removedResult;
+      });
+
+      if (removed.rowCount > 0) await notifyAuthorizationChange({ siteId, principalId: userId });
     },
 
     async createInvitation({ siteId, email: inputEmail, roleSlug, invitedBy }) {
@@ -474,38 +517,37 @@ function createIdentityService({ pool, env = process.env, clock = () => Date.now
 
     async acceptInvitation({ token, password, displayName, requestId = null }) {
       if (typeof token !== 'string' || token.length < 32 || token.length > 200) { const error = new Error('Invitation is invalid or expired.'); error.statusCode = 400; error.code = 'ERR_VIRGOSCORPIO_HUB_INVITATION_INVALID'; throw error; }
-      const client = await pool.connect();
-      try {
-        await client.query('BEGIN');
+
+      const accepted = await withTransaction(pool, async client => {
         const invite = await client.query(`SELECT i.*,r.slug AS role_slug FROM site_invitations i JOIN roles r ON r.id=i.role_id
           WHERE i.token_hash=$1 AND i.accepted_at IS NULL AND i.expires_at>now() FOR UPDATE`, [digest(token)]);
         if (!invite.rows[0]) { const error = new Error('Invitation is invalid or expired.'); error.statusCode = 400; error.code = 'ERR_VIRGOSCORPIO_HUB_INVITATION_INVALID'; throw error; }
         const data = invite.rows[0];
-        let user = await client.query("SELECT id,email,display_name,status,email_verified_at,mfa_enabled FROM users WHERE lower(email)=lower($1) LIMIT 1", [data.email]);
+        let user = await client.query(`SELECT id,email,display_name,status,email_verified_at,mfa_enabled FROM users WHERE lower(email)=lower($1) LIMIT 1`, [data.email]);
         if (!user.rows[0]) {
           const passwordHash = await hashPassword(password);
-          user = await client.query("INSERT INTO users(email,display_name,password_hash,status,email_verified_at) VALUES($1,$2,$3,'active',now()) RETURNING id,email,display_name,status,email_verified_at,mfa_enabled", [data.email, String(displayName || data.email).slice(0,180), passwordHash]);
+          user = await client.query(`INSERT INTO users(email,display_name,password_hash,status,email_verified_at) VALUES($1,$2,$3,'active',now()) RETURNING id,email,display_name,status,email_verified_at,mfa_enabled`, [data.email, String(displayName || data.email).slice(0,180), passwordHash]);
         } else if (user.rows[0].status !== 'active') { const error = new Error('This account is disabled. Contact the site administrator.'); error.statusCode = 403; error.code = 'ERR_VIRGOSCORPIO_HUB_ACCOUNT_DISABLED'; throw error; }
         await client.query('INSERT INTO site_memberships(site_id,user_id,role_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING', [data.site_id, user.rows[0].id, data.role_id]);
         await client.query('UPDATE site_invitations SET accepted_at=now() WHERE id=$1', [data.id]);
-        await client.query(
-          `INSERT INTO audit_events(site_id,actor_id,action,target_type,target_id,result,request_id,details)
-           VALUES($1,$2,'site.invitation_accepted','invitation',$3,'success',$4,$5::jsonb)`,
-          [data.site_id, user.rows[0].id, data.id, requestId, JSON.stringify({ role: data.role_slug })]
-        );
-        await client.query('COMMIT');
-        await notifyAuthorizationChange({ siteId: data.site_id, principalId: user.rows[0].id });
+        await insertAuditEvent(client, {
+          siteId: data.site_id,
+          actorId: user.rows[0].id,
+          action: 'site.invitation_accepted',
+          targetType: 'invitation',
+          targetId: data.id,
+          requestId,
+          details: { role: data.role_slug },
+        });
         return { user: safeUser(user.rows[0]), siteId: data.site_id, role: data.role_slug };
-      } catch (error) { await client.query('ROLLBACK').catch(() => {}); throw error; }
-      finally { client.release(); }
+      });
+
+      await notifyAuthorizationChange({ siteId: accepted.siteId, principalId: accepted.user.id });
+      return accepted;
     },
 
-    async audit({ siteId = null, actorId = null, action, targetType = null, targetId = null, result = 'success', requestId = null, details = {} }) {
-      await pool.query(
-        `INSERT INTO audit_events(site_id,actor_id,action,target_type,target_id,result,request_id,details)
-         VALUES($1,$2,$3,$4,$5,$6,$7,$8::jsonb)`,
-        [siteId, actorId, action, targetType, targetId, result, requestId, JSON.stringify(details)]
-      );
+    async audit(input) {
+      await insertAuditEvent(pool, input);
     }
   });
 }

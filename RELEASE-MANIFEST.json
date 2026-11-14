@@ -139,9 +139,9 @@
     "gitleaks": "Gitleaks working-tree and all locally fetched Git refs scans both exited 0 with empty JSON findings on 2026-10-31; verify published remote refs before every release.",
     "releaseReadinessRedisEnvironment": "Regression-tested: release:readiness now forwards only approved local Redis/Memurai endpoints to VIRGOSCORPIO_HUB_TEST_REDIS_URL and enables the Redis integration suites; remote, malformed, and absent endpoints leave live Redis tests disabled.",
     "mainlineEvidence": {
-      "sourceRevision": "d991f7f9e995afc8884108949dbbbfeef21c66a2",
-      "workflowRun": 596,
-      "workflowRunId": 43378967768,
+      "sourceRevision": "2b3771446bf448931ce822ea6e476697a6ea263f",
+      "workflowRun": 599,
+      "workflowRunId": 43495281163,
       "workflowEvent": "push",
       "runAttempt": 1,
       "workflowConclusion": "success",
@@ -151,8 +151,6 @@
       "livePostgresMemgraph": 93,
       "migrationsApplied": 18,
       "idempotentSecondPass": 18,
-      "sbomComponentsPerRuntime": 200,
-      "sbomDependenciesPerRuntime": 201,
       "serviceLessIntegrationSkippedPerRuntime": 34,
       "serviceLessIntegrationStatus": "PARTIAL",
       "attestationStatus": "success",
@@ -165,6 +163,27 @@
         "blocked": 0,
         "missingEvidence": 14,
         "notRun": 0
+      },
+      "sourceMergePullRequest": 137,
+      "finalizerImplementationPullRequest": 136,
+      "producerManifestChecksums": {
+        "browserAndAccessibility": "6bac758d0ecaaa2a3286b2a8b29ca3de426db618166d38faa41cb00d240ec4bc",
+        "node22": "7355986122721e44c4c724fb1712a34e3411d8395eb7e312e535072fb318815f",
+        "node24": "33eb60bdbb54f38fe862fd11a2c02a2aa578760b0c22cf576030f56fcfd9efb5",
+        "postgresMemgraph": "3dcc7a540e1bf0ba431b34f4893e76a1f827f13c8920c700849b70855383af73",
+        "codeql": "ba8789bdc33cf9ceaf1a569181cdb6f0f54497ce2b8a1f6b37b139227b2b7dee"
+      },
+      "artifactIds": {
+        "releaseReadiness": 14072066484,
+        "attestation": 14070724805,
+        "postgresMemgraph": 14070669511,
+        "browser": 14071847044,
+        "node22": 14070814412,
+        "node24": 14069959537,
+        "liveIntegrationNode22": 14071972143,
+        "dependencyEvidenceNode22": 14071757395,
+        "dependencyEvidenceNode24": 14069874829,
+        "securityStaticAnalysis": 14071082393
       }
     },
     "ciReleaseReadinessFinalization": {
@@ -1144,30 +1163,35 @@
     "localValidationSummary": "PASS: 202 required paths, 211 JavaScript files syntax-checked; 461 unit tests (458 passed, 0 failed, 3 Windows/platform-specific skips); focused AI route/API/context suites 45/45; package-lock audit 0 vulnerabilities."
   },
   "latestMainEvidence": {
-    "reviewedAt": "2026-11-12",
+    "reviewedAt": "2026-11-13",
     "version": "0.6.2",
-    "commit": "4a9ee181be5d9d46d94ed11a14de64b4dbbe9907",
+    "commit": "2b3771446bf448931ce822ea6e476697a6ea263f",
     "pullRequest": {
-      "number": 132,
-      "url": "https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/132",
-      "mergedAt": "2026-11-12T17:10:22Z",
-      "mergeCommit": "4a9ee181be5d9d46d94ed11a14de64b4dbbe9907"
+      "number": 137,
+      "title": "docs(release): reconcile mainline status and evidence snapshots",
+      "mergedAt": "2026-11-13T19:46:02Z",
+      "mergeCommit": "2b3771446bf448931ce822ea6e476697a6ea263f"
     },
     "workflow": {
-      "runId": 43266581120,
-      "runNumber": 585,
-      "url": "https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43266581120",
+      "name": "VirgoScorpio Hub CI",
+      "workflowFile": ".github/workflows/ci.yml",
+      "runId": 43495281163,
+      "runNumber": 599,
+      "url": "https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43495281163",
+      "event": "push",
+      "attempt": 1,
+      "completedAt": "2026-11-13T19:49:46Z",
       "completedChecks": 7,
       "successfulChecks": 7
     },
     "results": {
       "node22HubTests": {
-        "passed": 595,
+        "passed": 600,
         "failed": 0,
         "skipped": 0
       },
       "node24HubTests": {
-        "passed": 595,
+        "passed": 600,
         "failed": 0,
         "skipped": 0
       },
@@ -1186,44 +1210,79 @@
         "idempotentSecondPass": 18,
         "disposableDatabaseDropped": true
       },
-      "playwrightSmoke": {
-        "passed": 9,
-        "failed": 0,
-        "skipped": 0
+      "browserAccessibilitySmoke": "PASS",
+      "codeql": "PASS",
+      "mainlineAttestation": "PASS",
+      "producerManifests": {
+        "browserAndAccessibility": "6bac758d0ecaaa2a3286b2a8b29ca3de426db618166d38faa41cb00d240ec4bc",
+        "node22": "7355986122721e44c4c724fb1712a34e3411d8395eb7e312e535072fb318815f",
+        "node24": "33eb60bdbb54f38fe862fd11a2c02a2aa578760b0c22cf576030f56fcfd9efb5",
+        "postgresMemgraph": "3dcc7a540e1bf0ba431b34f4893e76a1f827f13c8920c700849b70855383af73",
+        "codeql": "ba8789bdc33cf9ceaf1a569181cdb6f0f54497ce2b8a1f6b37b139227b2b7dee"
+      }
+    },
+    "artifacts": {
+      "releaseReadiness": {
+        "id": 14072066484,
+        "archiveSha256": "e76372997326ee6a7c5fa253e39093e5e8a90af8170be2f8a8e5f285ba952922",
+        "expiresAt": "2027-02-11T19:46:07Z"
       },
-      "codeql": "Exact-main workflow job passed; automated analysis is not an independent security assessment.",
-      "dependencyAudit": {
-        "highOrCriticalVulnerabilities": 0
+      "attestation": {
+        "id": 14070724805,
+        "archiveSha256": "6017cc88a8859a26a7dd0e837f0070e702bd6aff4a6d919edc9cdec3395baf49",
+        "expiresAt": "2027-02-11T19:46:07Z"
       },
-      "sbom": {
-        "node22Components": 200,
-        "node22Dependencies": 201,
-        "node24Components": 200,
-        "node24Dependencies": 201,
-        "sameLockfile": true,
-        "lockfileSha256": "8f3786bcfcd03d0b63761c7107e4d757ae5b45171ba2f6c086ff38c027c8b086",
-        "normalizedComponentAndDependencyGraphParity": "PASS",
-        "disposition": "14 components have LGPL license terms; no component lacks an identified license expression. Qualified human license/distribution review remains open."
+      "postgresMemgraph": {
+        "id": 14070669511,
+        "archiveSha256": "4c6dffea43410744ea0bcfa2392094f58862869cd0486c0c37a74d39f16300ac",
+        "expiresAt": "2027-02-11T19:46:07Z"
       },
-      "requiredPaths": 235,
-      "javascriptSyntaxChecked": 243,
-      "serviceLessIntegration": {
-        "skippedPerRuntime": 34,
-        "status": "PARTIAL",
-        "countedAsLivePass": false
+      "browser": {
+        "id": 14071847044,
+        "archiveSha256": "6eec20f7bcf97fb24fe5e9c4778e75cc4e0eb29b197bfa96dca8becd32746aeb",
+        "expiresAt": "2027-02-11T19:46:07Z"
       },
-      "liveIntegrationDetails": {
-        "supportedUpgradeFixture": "Not separately asserted in this workflow snapshot; do not infer from fresh migrations.",
-        "memgraphOutageReplay": "PASS",
-        "canonicalGraphRebuild": "PASS"
+      "node22": {
+        "id": 14070814412,
+        "archiveSha256": "2a25e15c273a009ba22c44071a10819513287c0ee42bfc28db5fe81aaa401200",
+        "expiresAt": "2027-02-11T19:46:07Z"
+      },
+      "node24": {
+        "id": 14069959537,
+        "archiveSha256": "e7035c40bf74b56c68e7e2bbb32e86b98865ee4d12fe93154376656ac534a598",
+        "expiresAt": "2027-02-11T19:46:07Z"
+      },
+      "liveIntegrationNode22": {
+        "id": 14071972143,
+        "name": "virgoscorpio_hub-live-integration-node-22.23.4",
+        "archiveSha256": "a6cc80a09f4110882561154615d8291bdbed646f490ee24c570797847bca602c",
+        "expiresAt": "2027-02-11T19:46:07Z"
+      },
+      "dependencyEvidenceNode22": {
+        "id": 14071757395,
+        "name": "virgoscorpio_hub-dependency-evidence-node-22.23.4",
+        "archiveSha256": "4ca1472103278ba652cc8ea9a256581850b9190f94d70492fc043a8f419f90a5",
+        "expiresAt": "2027-02-11T19:46:07Z"
+      },
+      "dependencyEvidenceNode24": {
+        "id": 14069874829,
+        "name": "virgoscorpio_hub-dependency-evidence-node-24.22.1",
+        "archiveSha256": "5ec56b565ebf95a21d3b19f6ceb80aa242931253ed07475134f6352f5473afaa",
+        "expiresAt": "2027-02-11T19:46:07Z"
+      },
+      "securityStaticAnalysis": {
+        "id": 14071082393,
+        "name": "virgoscorpio_hub-ci-evidence-security-static-analysis",
+        "archiveSha256": "ec7989bc51c6876f55b093f60c7b4d990843a36154bc088569524343025bc543",
+        "expiresAt": "2027-02-11T19:46:07Z"
       }
     },
     "readiness": {
       "classification": "NOT_PRODUCTION_CERTIFIED",
       "readyForProduction": false,
-      "pass": 7,
+      "pass": 8,
       "partial": 2,
-      "blocked": 1,
+      "blocked": 0,
       "missingEvidence": 14,
       "notRun": 0,
       "decision": "NO_GO"
@@ -1231,7 +1290,8 @@
     "release": {
       "gitHubReleasePublished": false,
       "releaseTagFound": false,
-      "mainBranchProtected": false
+      "packagePublished": false,
+      "productionDeploymentAuthorized": false
     }
   },
   "libraryRouteRefactor": {

@@ -8,8 +8,8 @@ Maintainer-prepared route, capability, data-access, and regression-test navigati
 
 - Status: MAINTAINER_PREPARED_NOT_INDEPENDENTLY_REVIEWED.
 - Generated from the current working-tree implementation anchors and the catalog at docs/security/tenant-isolation-route-inventory.catalog.json.
-- Implementation-source digest: 062e5af6cccdc1fdcb2705f5c2b46fc2b0fbf5b18109161ee0fd5163df2055d9 across 21 files.
-- Referenced-test digest: 1d49969507b16a5e16f1b73ffa224c4362f03b68d73443a423283617689ff6c2 across 42 files.
+- Implementation-source digest: 346849459e53a01610445fbaf82e8684490481b4c317f35b303e807c26f976e2 across 21 files.
+- Referenced-test digest: a778631c3c2c6223a2ab90fb40b6186b8cd9a2891d2ac9959eb380cb46b45617 across 42 files.
 - Inventory size: 27 route/flow families, 78 declared route patterns, 21 source files, and 42 test files.
 - Regenerate with npm run security:tenant-inventory; CI checks freshness with node scripts/generate-tenant-isolation-route-inventory.js --check.
 
@@ -113,7 +113,7 @@ Tests: test/content-type-routes.test.js, test/collaboration-api.test.js, test/re
 - Capabilities/controls: site:manage
 - Data-access boundary: site_memberships; users; invitations; mail/outbox; audit events; authorization invalidation; transactional invitation-acceptance audit
 - Side effects: Add/remove membership; Create invitation; Mail delivery intent; Audit and session/realtime authorization invalidation; Consume invitation and create membership in one PostgreSQL transaction; Site-scoped invitation-acceptance audit; Post-commit authorization invalidation
-- Source: apps/api/src/site-membership-routes.js (lines 33, 68, 89); apps/api/src/server.js (lines 1796)
+- Source: apps/api/src/site-membership-routes.js (lines 33, 61, 79); apps/api/src/server.js (lines 1796)
 - Test references: test/site-membership-routes.test.js, test/integration/tenant-membership-administration-isolation.integration.test.js, test/auth-security.test.js
 - Coverage characterization: **maintainer-role-matrix-membership-lifecycle-sse-and-invitation-acceptance-fault-recovery-hosted-main-validated**. Merged F1.21/F1.22 maintainer regressions cover concurrent last-owner removal, owner/editor/author/viewer capability matrix, disabled-user and cross-site denials, membership add/remove lifecycle, authenticated in-process SSE revocation, and selector-conflict/no-side-effect snapshots. F1.23 merged in PR #128 at main 7b3fe3f857bd20bf5d56bcc31a2044a89ffcfbb3; exact-main #570 passed 90/90 live PostgreSQL/Memgraph integration. F1.24 merged in PR #129 at main 5929a53a1c551a2fe43bc38e61cb63dbecec52f5; exact PR-head #572/#573 and exact-main #574 passed 91/91 live PostgreSQL/Memgraph integration, including acceptance-audit trigger failure, transaction rollback, token-digest preservation, no invalidation and same-token retry. Workflow #574 passed all seven mainline jobs including Node 22/24, CodeQL, browser/accessibility, collaboration Playwright and signed attestation. This is maintainer/automation evidence, not independent tenant review. Local Windows PostgreSQL integration requires a disposable DATABASE_URL. Cross-node Redis outage/failover and independent reviews #14/#25 remain unfinished.
 
