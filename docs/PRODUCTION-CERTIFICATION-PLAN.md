@@ -1,27 +1,20 @@
 # VirgoScorpio Hub 0.5.1 — Production Certification Execution Plan
 
-> **Status refresh — 1 November 2026:** this document remains the procedural certification plan, not a current evidence snapshot. Its original baseline paragraph and counts refer to the 31 October/PR #12 state and are historical. Use the [1 November project status report](reports/2026-11-01-VirgoScorpio-Hub-0.5.1-Project-Status-Report.md) for the latest PR #36 candidate results, blockers, open CodeQL findings and issue state. The independent/provider/operations gates remain open; production remains NO-GO.
+> **Status refresh - 14 November 2026:** this document remains the procedural certification plan, not a current evidence snapshot. Its original 0.5.1 baseline and 31 October/PR #12 counts are historical. Current `main` is `e4712202d3d29c5517e335df658ce5f6d72a25cb` following merged PR #140; exact-main [workflow #603](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43535587342) passed all seven jobs. The current release-gate report records **8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE**, `readyForProduction: false`, and `NOT_PRODUCTION_CERTIFIED`. Package 0.6.2 remains private/unreleased and production remains NO-GO. Use the [14 November release-gate report](reports/2026-11-14-VirgoScorpio-Hub-0.6.2-Release-Gate-Report.md) and the [current release manifest](../RELEASE-MANIFEST.json) for current status.
 
-> **Decision: NO-GO.** This plan organizes the 13 missing formal evidence gates and the one partial dependency-review check recorded in the 2026-10-31 readiness snapshot. It is a work plan, not evidence that any gate has passed.
+> **Decision: NO-GO.** The workstream sequence below was originally organized around the 13 missing formal evidence gates and one partial dependency-review check in the 31 October 2026 snapshot. Those counts are historical; the current 14 November 2026 snapshot is 8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE. This remains a work plan, not evidence that any gate has passed.
 
 ## 1. Baseline and operating rules
 
-The latest retained readiness snapshot reports 9 pass, 1 partial, 0 blocked, 13 missing evidence, and 0 not run. The report was generated on 2026-10-31 at `f4d78c6037a658006e72785d9bcc403b3508ec6d`, before its evidence-reporting change was squash-merged. The resulting main commit is `81e31b235a846c291d3d100eb33c08bf0ecd86cf`. PR #12 checks and the post-merge main workflow passed all five CI jobs, including the supported Node.js matrix, PostgreSQL/Memgraph integration, browser smoke, and CodeQL. Those results validate the tested source/CI paths; they do not close the independent or provider evidence gates below.
+The latest retained readiness snapshot from 31 October 2026 reported 9 pass, 1 partial, 0 blocked, 13 missing evidence, and 0 not run. The report was generated on 31 October at `f4d78c6037a658006e72785d9bcc403b3508ec6d`, before its evidence-reporting change was squash-merged. The resulting historical main commit is `81e31b235a846c291d3d100eb33c08bf0ecd86cf`. PR #12 checks and the post-merge main workflow passed all five CI jobs, including the supported Node.js matrix, PostgreSQL/Memgraph integration, browser smoke, and CodeQL. Those results validate only the tested historical source/CI paths; they do not close the independent or provider evidence gates below.
 
-The readiness report and evidence format remain authoritative:
+The current readiness contract and retained evidence are documented in:
 - [Readiness assessment](RELEASE_READINESS.md)
-- [Latest human-readable report](../artifacts/release-readiness.md)
-- [Latest machine-readable report](../artifacts/release-readiness.json)
+- [Current human-readable release-gate report](reports/2026-11-14-VirgoScorpio-Hub-0.6.2-Release-Gate-Report.md)
+- [Current machine-readable release manifest](../RELEASE-MANIFEST.json)
 - [Evidence format](RELEASE-EVIDENCE.md)
 - [Security model and reporting boundaries](SECURITY.md)
 
-Rules for this work:
-1. Evidence must identify the exact candidate commit, environment, provider/service versions, procedure, result, reviewer, date, and retained artifact paths. Redact credentials, personal data, tokens, and sensitive provider responses.
-2. A test definition, adapter interface, mock, unit test, green CI run, or local smoke test is not live-provider or independent-review evidence.
-3. Reviewers must be independent of the implementation being reviewed. An implementer may prepare evidence, but must not self-approve an independent gate.
-4. A gate may be excluded only by an explicit release-scope decision and corresponding product/configuration changes that disable or remove the excluded capability. Do not mark an untested capability as passed or quietly waive a gate.
-5. Keep public issues at the level of scope, process, and remediation status. Share exploit details and sensitive evidence only through the repository's security-reporting process.
-6. Keep the release classification `NOT_PRODUCTION_CERTIFIED` and `readyForProduction: false` until all in-scope gates have accepted evidence and the release owner signs off.
 
 ## 2. Workstream sequence
 
