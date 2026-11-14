@@ -558,8 +558,8 @@ function createIdentityService({ pool, env = process.env, clock = () => Date.now
       return accepted;
     },
 
-    async audit(input) {
-      await insertAuditEvent(pool, input);
+    async audit(input, { queryable = pool } = {}) {
+      await insertAuditEvent(queryable, input);
     }
   });
 }
