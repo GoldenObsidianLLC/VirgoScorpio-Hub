@@ -465,6 +465,200 @@ test(
         { event_type: 'taxonomy.delete', aggregate_version: updated.version + 1, site_id: siteB, actor_id: actor.id, classification: 'site-private', payload_site_id: siteB, payload_status: 'deleted', hasCorrelation: true },
       ]);
     });
+    await t.test('taxonomy mutation and outbox writes roll back when the correlated audit insert fails', async () => {
+      const suffix = randomUUID().replace(/-/g, '');
+      const functionName = 'test_taxonomy_audit_fail_' + suffix;
+      const slug = 'taxonomy-audit-' + suffix.slice(0, 16);
+      const requestIds = Object.fromEntries(
+        ['conflict','invalidCreate','create','duplicate','invalidUpdate','stale','update','delete']
+          .map(kind => [kind, 'tax-' + kind + '-' + suffix.slice(0, 18)]),
+      );
+      const siteAControl = await pool.query(
+        'INSERT INTO taxonomy_terms(site_id,taxonomy,slug,label,metadata) VALUES($1,$2,$3,$4,$5::jsonb) RETURNING id,label,version',
+        [siteA, 'category', slug, 'Site A Control', '{}'],
+      );
+
+      async function withAuditFailure(action, operation) {
+        await pool.query(
+          "CREATE FUNCTION " + functionName + "() RETURNS trigger LANGUAGE plpgsql AS 'BEGIN " +
+          "IF NEW.action = ''" + action + "'' AND NEW.site_id = ''" + siteB + "''::uuid THEN " +
+          "RAISE EXCEPTION ''simulated taxonomy audit persistence failure''; END IF; RETURN NEW; END'",
+        );
+        await pool.query(
+          "CREATE TRIGGER " + functionName + " BEFORE INSERT ON audit_events FOR EACH ROW EXECUTE FUNCTION " + functionName + "()",
+        );
+        try {
+          await operation();
+        } finally {
+          await pool.query("DROP TRIGGER IF EXISTS " + functionName + " ON audit_events");
+          await pool.query("DROP FUNCTION IF EXISTS " + functionName + "()");
+        }
+      }
+
+      const outboxFor = termId => pool.query(
+        "SELECT event_type,aggregate_version,site_id,actor_id,correlation_id,classification,payload->>'status' AS status FROM outbox_events WHERE aggregate_type='taxonomy-term' AND aggregate_id=$1 ORDER BY aggregate_version,event_type",
+        [termId],
+      );
+      const auditFor = (action, requestId) => pool.query(
+        'SELECT site_id,actor_id,action,target_type,target_id,request_id,details FROM audit_events WHERE site_id=$1 AND action=$2 AND request_id=$3',
+        [siteB, action, requestId],
+      );
+      const create = (requestId, siteSelector) => fetch(base + '/api/v1/sites/' + siteB + '/terms', {
+        method: 'POST',
+        headers: { ...headers, 'content-type': 'application/json', 'x-request-id': requestId },
+        body: JSON.stringify({ ...(siteSelector ? { siteId: siteSelector } : {}), taxonomy: 'category', slug, label: 'Site B Taxonomy', metadata: { source: 'F1.31' } }),
+      });
+
+      const conflict = await create(requestIds.conflict, siteA);
+      assert.equal(conflict.status, 400);
+      assert.equal((await conflict.json()).code, 'ERR_VIRGOSCORPIO_HUB_SITE_CONTEXT_MISMATCH');
+      assert.equal((await pool.query('SELECT id FROM taxonomy_terms WHERE site_id=$1 AND slug=$2', [siteB, slug])).rowCount, 0);
+      assert.equal((await auditFor('taxonomy.created', requestIds.conflict)).rowCount, 0);
+      assert.equal((await pool.query('SELECT id FROM outbox_events WHERE site_id=$1 AND correlation_id=$2', [siteB, requestIds.conflict])).rowCount, 0);
+
+      const invalidCreate = await fetch(base + '/api/v1/sites/' + siteB + '/terms', {
+        method: 'POST',
+        headers: { ...headers, 'content-type': 'application/json', 'x-request-id': requestIds.invalidCreate },
+        body: JSON.stringify({ taxonomy: 'category', slug, label: '   ' }),
+      });
+      assert.equal(invalidCreate.status, 400);
+      assert.equal((await invalidCreate.json()).code, 'ERR_VIRGOSCORPIO_HUB_TAXONOMY_INVALID');
+      assert.equal((await auditFor('taxonomy.created', requestIds.invalidCreate)).rowCount, 0);
+      assert.equal((await pool.query('SELECT id FROM outbox_events WHERE site_id=$1 AND correlation_id=$2', [siteB, requestIds.invalidCreate])).rowCount, 0);
+
+      await withAuditFailure('taxonomy.created', async () => {
+        const failed = await create(requestIds.create);
+        assert.equal(failed.status, 500);
+        await failed.json();
+        const [term, outbox, audit] = await Promise.all([
+          pool.query('SELECT id FROM taxonomy_terms WHERE site_id=$1 AND slug=$2', [siteB, slug]),
+          pool.query('SELECT id FROM outbox_events WHERE site_id=$1 AND correlation_id=$2', [siteB, requestIds.create]),
+          auditFor('taxonomy.created', requestIds.create),
+        ]);
+        assert.equal(term.rowCount, 0, 'failed create rolls back term');
+        assert.equal(outbox.rowCount, 0, 'failed create rolls back outbox');
+        assert.equal(audit.rowCount, 0, 'failed create leaves no audit');
+      });
+
+      const createdResponse = await create(requestIds.create);
+      assert.equal(createdResponse.status, 201);
+      const created = (await createdResponse.json()).term;
+      assert.ok(created.id);
+      const createAudit = await auditFor('taxonomy.created', requestIds.create);
+      assert.equal(createAudit.rowCount, 1);
+      assert.equal(createAudit.rows[0].actor_id, actor.id);
+      assert.equal(createAudit.rows[0].target_type, 'taxonomy-term');
+      assert.equal(createAudit.rows[0].target_id, created.id);
+      assert.equal(createAudit.rows[0].request_id, requestIds.create);
+      assert.deepEqual(createAudit.rows[0].details, { taxonomy: 'category', slug });
+      const createOutbox = await outboxFor(created.id);
+      assert.equal(createOutbox.rowCount, 1);
+      assert.equal(createOutbox.rows[0].event_type, 'taxonomy.upsert');
+      assert.equal(createOutbox.rows[0].site_id, siteB);
+      assert.equal(createOutbox.rows[0].actor_id, actor.id);
+      assert.equal(createOutbox.rows[0].correlation_id, requestIds.create);
+      assert.equal(createOutbox.rows[0].classification, 'site-private');
+      assert.equal(createOutbox.rows[0].status, 'active');
+
+      const duplicate = await create(requestIds.duplicate);
+      assert.equal(duplicate.status, 409);
+      assert.equal((await duplicate.json()).code, 'ERR_VIRGOSCORPIO_HUB_TAXONOMY_CONFLICT');
+      assert.equal((await pool.query('SELECT id FROM taxonomy_terms WHERE site_id=$1 AND slug=$2', [siteB, slug])).rowCount, 1);
+      assert.equal((await outboxFor(created.id)).rowCount, 1);
+      assert.equal((await auditFor('taxonomy.created', requestIds.duplicate)).rowCount, 0);
+
+      const update = (requestId, expectedVersion, label) => fetch(base + '/api/v1/sites/' + siteB + '/terms/' + created.id, {
+        method: 'PUT',
+        headers: { ...headers, 'content-type': 'application/json', 'x-request-id': requestId },
+        body: JSON.stringify({ expectedVersion, label }),
+      });
+      const invalidUpdate = await update(requestIds.invalidUpdate, created.version, '   ');
+      assert.equal(invalidUpdate.status, 400);
+      assert.equal((await invalidUpdate.json()).code, 'ERR_VIRGOSCORPIO_HUB_TAXONOMY_INVALID');
+      assert.equal((await auditFor('taxonomy.updated', requestIds.invalidUpdate)).rowCount, 0);
+      assert.equal((await outboxFor(created.id)).rowCount, 1);
+
+      const stale = await update(requestIds.stale, 99, 'Must Not Persist');
+      assert.equal(stale.status, 409);
+      assert.equal((await stale.json()).code, 'ERR_VIRGOSCORPIO_HUB_VERSION_CONFLICT');
+      assert.equal((await auditFor('taxonomy.updated', requestIds.stale)).rowCount, 0);
+      assert.equal((await outboxFor(created.id)).rowCount, 1);
+      const unchanged = await pool.query('SELECT label,version FROM taxonomy_terms WHERE site_id=$1 AND id=$2', [siteB, created.id]);
+      assert.equal(unchanged.rows[0].label, 'Site B Taxonomy');
+      assert.equal(unchanged.rows[0].version, created.version);
+
+      await withAuditFailure('taxonomy.updated', async () => {
+        const failed = await update(requestIds.update, created.version, 'Site B Taxonomy Updated');
+        assert.equal(failed.status, 500);
+        await failed.json();
+        const [term, outbox, audit] = await Promise.all([
+          pool.query('SELECT label,version,deleted_at FROM taxonomy_terms WHERE site_id=$1 AND id=$2', [siteB, created.id]),
+          outboxFor(created.id),
+          auditFor('taxonomy.updated', requestIds.update),
+        ]);
+        assert.equal(term.rows[0].label, 'Site B Taxonomy');
+        assert.equal(term.rows[0].version, created.version);
+        assert.equal(term.rows[0].deleted_at, null);
+        assert.equal(outbox.rowCount, 1, 'failed update rolls back outbox');
+        assert.equal(audit.rowCount, 0, 'failed update leaves no audit');
+      });
+
+      const updatedResponse = await update(requestIds.update, created.version, 'Site B Taxonomy Updated');
+      assert.equal(updatedResponse.status, 200);
+      const updated = (await updatedResponse.json()).term;
+      assert.equal(updated.version, created.version + 1);
+      const updateAudit = await auditFor('taxonomy.updated', requestIds.update);
+      assert.equal(updateAudit.rowCount, 1);
+      assert.equal(updateAudit.rows[0].target_id, created.id);
+      assert.equal(updateAudit.rows[0].actor_id, actor.id);
+      assert.equal(updateAudit.rows[0].request_id, requestIds.update);
+      const updateOutbox = await outboxFor(created.id);
+      assert.equal(updateOutbox.rowCount, 2);
+      assert.equal(updateOutbox.rows[1].event_type, 'taxonomy.upsert');
+      assert.equal(updateOutbox.rows[1].aggregate_version, updated.version);
+      assert.equal(updateOutbox.rows[1].correlation_id, requestIds.update);
+
+      const remove = requestId => fetch(base + '/api/v1/sites/' + siteB + '/terms/' + created.id, {
+        method: 'DELETE',
+        headers: { ...headers, 'x-request-id': requestId },
+      });
+      await withAuditFailure('taxonomy.deleted', async () => {
+        const failed = await remove(requestIds.delete);
+        assert.equal(failed.status, 500);
+        await failed.json();
+        const [term, outbox, audit] = await Promise.all([
+          pool.query('SELECT version,deleted_at FROM taxonomy_terms WHERE site_id=$1 AND id=$2', [siteB, created.id]),
+          outboxFor(created.id),
+          auditFor('taxonomy.deleted', requestIds.delete),
+        ]);
+        assert.equal(term.rows[0].version, updated.version);
+        assert.equal(term.rows[0].deleted_at, null);
+        assert.equal(outbox.rowCount, 2, 'failed delete rolls back outbox');
+        assert.equal(audit.rowCount, 0, 'failed delete leaves no audit');
+      });
+
+      const deletedResponse = await remove(requestIds.delete);
+      assert.equal(deletedResponse.status, 200);
+      const deleted = await pool.query('SELECT version,deleted_at FROM taxonomy_terms WHERE site_id=$1 AND id=$2', [siteB, created.id]);
+      assert.equal(deleted.rows[0].version, updated.version + 1);
+      assert.ok(deleted.rows[0].deleted_at);
+      const deleteAudit = await auditFor('taxonomy.deleted', requestIds.delete);
+      assert.equal(deleteAudit.rowCount, 1);
+      assert.equal(deleteAudit.rows[0].target_id, created.id);
+      assert.equal(deleteAudit.rows[0].actor_id, actor.id);
+      assert.equal(deleteAudit.rows[0].request_id, requestIds.delete);
+      const deleteOutbox = await outboxFor(created.id);
+      assert.equal(deleteOutbox.rowCount, 3);
+      assert.equal(deleteOutbox.rows[2].event_type, 'taxonomy.delete');
+      assert.equal(deleteOutbox.rows[2].aggregate_version, updated.version + 1);
+      assert.equal(deleteOutbox.rows[2].correlation_id, requestIds.delete);
+
+      const siteAAfter = await pool.query('SELECT id,label,version,deleted_at FROM taxonomy_terms WHERE site_id=$1 AND id=$2', [siteA, siteAControl.rows[0].id]);
+      assert.equal(siteAAfter.rowCount, 1);
+      assert.equal(siteAAfter.rows[0].label, 'Site A Control');
+      assert.equal(siteAAfter.rows[0].version, siteAControl.rows[0].version);
+      assert.equal(siteAAfter.rows[0].deleted_at, null);
+    });
     await t.test('custom content type registry and records remain isolated between sites with the same slug', async () => {
       const slug = 'tenant-portfolio-' + randomUUID().slice(0, 8);
       const siteALabel = 'Site A Private Portfolio Definition';
