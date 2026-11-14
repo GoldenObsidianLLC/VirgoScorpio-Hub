@@ -304,6 +304,135 @@ test(
       assert.deepEqual(audit.rows[0].details, {});
     });
 
+    await t.test('site design-system update rolls back when its correlated audit insert fails', async () => {
+      const suffix = randomUUID().replace(/-/g, '');
+      const requestId = 'design-system-audit-' + suffix.slice(0, 24);
+      const functionName = 'test_design_system_audit_fail_' + suffix;
+      const triggerName = 'test_design_system_audit_fail_' + suffix;
+      const originalTokens = { colors: { brand: '#112233' } };
+      const updatedTokens = { colors: { brand: '#445566' } };
+      const siteBTokens = { colors: { brand: '#778899' } };
+
+      await pool.query(
+        'INSERT INTO site_design_systems(site_id,version,tokens,updated_by) VALUES($1,1,$2::jsonb,$3)',
+        [siteA, JSON.stringify(originalTokens), actorA.id],
+      );
+      await pool.query(
+        'INSERT INTO site_design_systems(site_id,version,tokens,updated_by) VALUES($1,7,$2::jsonb,$3)',
+        [siteB, JSON.stringify(siteBTokens), actorB.id],
+      );
+
+      async function installFailureTrigger() {
+        await pool.query(
+          "CREATE FUNCTION " + functionName + "() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN " +
+          "IF NEW.action = 'design_system.updated' AND NEW.site_id = '" + siteA + "'::uuid THEN " +
+          "RAISE EXCEPTION 'simulated design-system audit persistence failure'; END IF; RETURN NEW; END $$"
+        );
+        await pool.query(
+          "CREATE TRIGGER " + triggerName + " BEFORE INSERT ON audit_events FOR EACH ROW EXECUTE FUNCTION " + functionName + "()"
+        );
+      }
+      async function removeFailureTrigger() {
+        await pool.query("DROP TRIGGER IF EXISTS " + triggerName + " ON audit_events");
+        await pool.query("DROP FUNCTION IF EXISTS " + functionName + "()");
+      }
+
+      const route = base + '/api/v1/sites/' + siteA + '/design-system';
+      const update = () => fetch(route, {
+        method: 'PUT',
+        headers: { ...headers, 'x-request-id': requestId },
+        body: JSON.stringify({ expectedVersion: 1, tokens: updatedTokens }),
+      });
+      const rejectedRequestIds = [
+        'design-system-selector-' + suffix.slice(0, 20),
+        'design-system-version-' + suffix.slice(0, 20),
+      ];
+      const selectorRejected = await fetch(route, {
+        method: 'PUT',
+        headers: { ...headers, 'x-request-id': rejectedRequestIds[0] },
+        body: JSON.stringify({ siteId: siteB, expectedVersion: 1, tokens: updatedTokens }),
+      });
+      assert.equal(selectorRejected.status, 400, 'conflicting site selectors must be rejected before mutation');
+      assert.equal((await selectorRejected.json()).code, 'ERR_VIRGOSCORPIO_HUB_SITE_CONTEXT_MISMATCH');
+
+      const versionRejected = await fetch(route, {
+        method: 'PUT',
+        headers: { ...headers, 'x-request-id': rejectedRequestIds[1] },
+        body: JSON.stringify({ expectedVersion: 99, tokens: updatedTokens }),
+      });
+      assert.equal(versionRejected.status, 409, 'stale design-system versions must be rejected before mutation');
+      assert.equal((await versionRejected.json()).code, 'ERR_VIRGOSCORPIO_HUB_VERSION_CONFLICT');
+
+      const [rejectedAudit, unchangedSiteA] = await Promise.all([
+        pool.query(
+          'SELECT request_id FROM audit_events WHERE site_id=$1 AND action=$2 AND request_id=ANY($3::text[])',
+          [siteA, 'design_system.updated', rejectedRequestIds],
+        ),
+        pool.query('SELECT version,tokens FROM site_design_systems WHERE site_id=$1', [siteA]),
+      ]);
+      assert.equal(rejectedAudit.rowCount, 0, 'rejected selector/version requests must not emit audit events');
+      assert.equal(unchangedSiteA.rows[0].version, 1, 'rejected updates must preserve the current Site A version');
+      assert.deepEqual(unchangedSiteA.rows[0].tokens, originalTokens);
+
+
+      try {
+        await installFailureTrigger();
+        const failed = await update();
+        assert.equal(failed.status, 500, 'audit persistence failure must fail the design-system update');
+
+        const [siteAAfterFailure, siteBAfterFailure, failedAudit] = await Promise.all([
+          pool.query('SELECT version,tokens,updated_by FROM site_design_systems WHERE site_id=$1', [siteA]),
+          pool.query('SELECT version,tokens,updated_by FROM site_design_systems WHERE site_id=$1', [siteB]),
+          pool.query(
+            "SELECT id FROM audit_events WHERE site_id=$1 AND action='design_system.updated' AND request_id=$2",
+            [siteA, requestId],
+          ),
+        ]);
+        assert.equal(siteAAfterFailure.rowCount, 1, 'the pre-existing Site A design system must remain present');
+        assert.equal(siteAAfterFailure.rows[0].version, 1, 'the failed update must not increment the Site A version');
+        assert.deepEqual(siteAAfterFailure.rows[0].tokens, originalTokens, 'the failed update must preserve Site A tokens');
+        assert.equal(siteAAfterFailure.rows[0].updated_by, actorA.id);
+        assert.equal(siteBAfterFailure.rowCount, 1, 'the Site B design system must remain present');
+        assert.equal(siteBAfterFailure.rows[0].version, 7, 'the failed Site A update must not change the Site B version');
+        assert.deepEqual(siteBAfterFailure.rows[0].tokens, siteBTokens, 'the failed Site A update must not change Site B tokens');
+        assert.equal(siteBAfterFailure.rows[0].updated_by, actorB.id);
+        assert.equal(failedAudit.rowCount, 0, 'a failed update must not leave a correlated audit event');
+      } finally {
+        await removeFailureTrigger();
+      }
+
+      const retry = await update();
+      assert.equal(retry.status, 200, 'retry after removing the injected failure must succeed');
+      const payload = await retry.json();
+      assert.equal(payload.requestId, requestId);
+      assert.equal(payload.designSystem.version, 2);
+      assert.deepEqual(payload.designSystem.tokens, updatedTokens);
+
+      const [siteAAfterRetry, siteBAfterRetry, audit] = await Promise.all([
+        pool.query('SELECT version,tokens,updated_by FROM site_design_systems WHERE site_id=$1', [siteA]),
+        pool.query('SELECT version,tokens,updated_by FROM site_design_systems WHERE site_id=$1', [siteB]),
+        pool.query(
+          `SELECT site_id,actor_id,action,target_type,target_id,request_id,details
+             FROM audit_events WHERE site_id=$1 AND action='design_system.updated' AND request_id=$2`,
+          [siteA, requestId],
+        ),
+      ]);
+      assert.equal(siteAAfterRetry.rowCount, 1);
+      assert.equal(siteAAfterRetry.rows[0].version, 2, 'the successful retry must increment the Site A version exactly once');
+      assert.deepEqual(siteAAfterRetry.rows[0].tokens, updatedTokens);
+      assert.equal(siteAAfterRetry.rows[0].updated_by, actorA.id);
+      assert.equal(siteBAfterRetry.rows[0].version, 7, 'the retry must remain scoped to Site A');
+      assert.deepEqual(siteBAfterRetry.rows[0].tokens, siteBTokens);
+      assert.equal(audit.rowCount, 1, 'the retry must persist exactly one correlated audit event');
+      assert.equal(audit.rows[0].site_id, siteA);
+      assert.equal(audit.rows[0].actor_id, actorA.id);
+      assert.equal(audit.rows[0].action, 'design_system.updated');
+      assert.equal(audit.rows[0].target_type, 'design_system');
+      assert.equal(audit.rows[0].target_id, null);
+      assert.equal(audit.rows[0].request_id, requestId);
+      assert.deepEqual(audit.rows[0].details, { version: 2 });
+    });
+
     const attemptedInviteEmail = `cross-site-invite-${randomUUID()}@example.test`;
     mailRecipients.push(attemptedInviteEmail);
     const before = await membershipSideEffects(pool, siteB, attemptedInviteEmail);

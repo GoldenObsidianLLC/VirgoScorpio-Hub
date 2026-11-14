@@ -7,6 +7,7 @@ const { randomUUID, timingSafeEqual } = require('node:crypto');
 const { loadEnvFile } = require('../../../scripts/load-env');
 const { createAIService } = require('../../../packages/ai/src/service');
 const { createPostgresPool, createPostgresStore, extractPageText } = require('../../../packages/db/src/postgres-store');
+const { withTransaction } = require('../../../packages/db/src/transaction');
 const { parseAIContextContentIds, buildAIPageContext, MAX_AI_CONTEXT_CHARS } = require('../../../packages/ai/src/context-assembler');
 const { createAITaskStore } = require('../../../packages/db/src/ai-task-store');
 const { createIdentityService } = require('../../../packages/auth/src/service');
@@ -1342,17 +1343,20 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
         }
         const body = await readJson(req, Math.min(maxBody, 64_000)); await reconcileRouteSiteContext(siteId, body); const validation = validateDesignTokens(body.tokens || {});
         if (!validation.valid) throw fail(422, 'ERR_VIRGOSCORPIO_HUB_DESIGN_TOKENS_INVALID', 'Design tokens failed validation.', validation.errors);
-        const client = await localPool.connect();
-        try {
-          await client.query('BEGIN');
+        const designSystem = await withTransaction(localPool, async client => {
           const current = await client.query('SELECT version FROM site_design_systems WHERE site_id=$1 FOR UPDATE', [siteId]);
           const version = current.rows[0]?.version || 0; const expected = body.expectedVersion === undefined ? version : Number(body.expectedVersion);
           if (!Number.isInteger(expected) || expected !== version) throw fail(409, 'ERR_VIRGOSCORPIO_HUB_VERSION_CONFLICT', 'The design system changed since it was loaded.', { expectedVersion: expected, currentVersion: version });
           const saved = await client.query(`INSERT INTO site_design_systems(site_id,version,tokens,updated_by,updated_at) VALUES($1,1,$2::jsonb,$3,now())
             ON CONFLICT(site_id) DO UPDATE SET version=site_design_systems.version+1,tokens=EXCLUDED.tokens,updated_by=EXCLUDED.updated_by,updated_at=now() RETURNING version,tokens,updated_at`, [siteId, JSON.stringify(body.tokens || {}), actor.user.id]);
-          await client.query('COMMIT'); await identity?.audit({ siteId, actorId: actor.user.id, action: 'design_system.updated', targetType: 'design_system', requestId, details: { version: saved.rows[0].version } });
-          return sendJson(res, 200, { designSystem: saved.rows[0], requestId });
-        } catch (error) { await client.query('ROLLBACK').catch(() => {}); throw error; } finally { client.release(); }
+          const updated = saved.rows[0];
+          await identity?.audit(
+            { siteId, actorId: actor.user.id, action: 'design_system.updated', targetType: 'design_system', requestId, details: { version: updated.version } },
+            { queryable: client },
+          );
+          return updated;
+        });
+        return sendJson(res, 200, { designSystem, requestId });
       }
 
       const reusableCollectionMatch = url.pathname.match(/^\/api\/v1\/sites\/([0-9a-f-]{36})\/reusable-components$/i);
