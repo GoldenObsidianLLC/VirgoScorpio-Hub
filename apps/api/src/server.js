@@ -1441,8 +1441,8 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
             const result = await client.query('INSERT INTO taxonomy_terms(site_id,taxonomy,slug,label,metadata) VALUES($1,$2,$3,$4,$5::jsonb) RETURNING id,site_id,taxonomy,slug,label,version,metadata', [siteId, taxonomy, slug, body.label.trim(), JSON.stringify(metadata)]);
             const term = result.rows[0];
             await writeTaxonomyOutboxEvent(client, { term, status: 'active', actorId: actor.user.id, correlationId: requestId });
+            if (identity && actor.user.id) await identity.audit({ siteId, actorId: actor.user.id, action: 'taxonomy.created', targetType: 'taxonomy-term', targetId: term.id, requestId, details: { taxonomy, slug } }, { queryable: client });
             await client.query('COMMIT');
-            if (identity && actor.user.id) await identity.audit({ siteId, actorId: actor.user.id, action: 'taxonomy.created', targetType: 'taxonomy-term', targetId: term.id, requestId, details: { taxonomy, slug } });
             return sendJson(res, 201, { term, requestId });
           } catch (error) { await client.query('ROLLBACK').catch(() => {}); if (error.code === '23505') throw fail(409, 'ERR_VIRGOSCORPIO_HUB_TAXONOMY_CONFLICT', 'A term with this slug already exists in the taxonomy.'); throw error; }
           finally { client.release(); }
@@ -1464,15 +1464,15 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
             const updated = await client.query('UPDATE taxonomy_terms SET slug=$3,label=$4,metadata=$5::jsonb,version=version+1 WHERE site_id=$1 AND id=$2 RETURNING id,site_id,taxonomy,slug,label,version,metadata', [siteId, termId, slug, label.trim(), JSON.stringify(metadata)]);
             const term = updated.rows[0];
             await writeTaxonomyOutboxEvent(client, { term, status: 'active', actorId: actor.user.id, correlationId: requestId });
+            if (identity && actor.user.id) await identity.audit({ siteId, actorId: actor.user.id, action: 'taxonomy.updated', targetType: 'taxonomy-term', targetId: term.id, requestId }, { queryable: client });
             await client.query('COMMIT');
-            if (identity && actor.user.id) await identity.audit({ siteId, actorId: actor.user.id, action: 'taxonomy.updated', targetType: 'taxonomy-term', targetId: term.id, requestId });
             return sendJson(res, 200, { term, requestId });
           }
           const updated = await client.query('UPDATE taxonomy_terms SET version=version+1,deleted_at=now() WHERE site_id=$1 AND id=$2 RETURNING id,site_id,taxonomy,slug,label,version,metadata', [siteId, termId]);
           const term = updated.rows[0];
           await writeTaxonomyOutboxEvent(client, { term, status: 'deleted', actorId: actor.user.id, correlationId: requestId });
+          if (identity && actor.user.id) await identity.audit({ siteId, actorId: actor.user.id, action: 'taxonomy.deleted', targetType: 'taxonomy-term', targetId: term.id, requestId }, { queryable: client });
           await client.query('COMMIT');
-          if (identity && actor.user.id) await identity.audit({ siteId, actorId: actor.user.id, action: 'taxonomy.deleted', targetType: 'taxonomy-term', targetId: term.id, requestId });
           return sendJson(res, 200, { deleted: true, termId, requestId });
         } catch (error) { await client.query('ROLLBACK').catch(() => {}); if (error.code === '23505') throw fail(409, 'ERR_VIRGOSCORPIO_HUB_TAXONOMY_CONFLICT', 'A term with this slug already exists.'); throw error; }
         finally { client.release(); }
