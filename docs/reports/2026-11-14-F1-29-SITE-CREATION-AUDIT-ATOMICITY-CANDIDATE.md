@@ -4,8 +4,10 @@
 **Issue:** [#141 — Make site creation audit writes transactional](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/141)
 **Parent:** [#124 — Maintainer-led tenant-isolation hardening](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/124)
 **Branch:** `security/f1-29-site-creation-audit-atomicity-2026-11-14`
+**Candidate commit:** `7a0f170dc4b704ac7f45a7e2100ffbe70c98c325`
+**PR:** [#142 — F1.29](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/142), OPEN
 **Base main SHA:** `e4712202d3d29c5517e335df658ce5f6d72a25cb`
-**Disposition:** Implemented locally; not merged; hosted CI pending; independent review not performed.
+**Disposition:** Implemented and hosted-CI validated on candidate commit `7a0f170dc4b704ac7f45a7e2100ffbe70c98c325`; PR #142 remains open and unmerged; human/independent review not performed.
 
 ## Finding
 
@@ -33,9 +35,17 @@ The live PostgreSQL test installs a temporary trigger that fails only for `site.
 
 The final full `npm run check` passed **607 tests, 604 passed, 0 failed, 3 platform-specific skips**. `node scripts/verify.js` passed with 235 required paths and 246 JavaScript files syntax-checked. The tenant inventory is current (27 families, 78 route patterns, 21 source files, 42 test references; source SHA-256 `1a830cfea7eded8647e49e6aec7da1d8e5ca85028d21a3e46f5ff70a4e89d2be`). `npm audit --audit-level=high` reported zero vulnerabilities; `git diff --check` passed.
 
+## Hosted candidate CI results
+
+Both exact-head candidate workflows completed successfully on commit `7a0f170dc4b704ac7f45a7e2100ffbe70c98c325`: [push workflow #43558785306](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43558785306) and [PR workflow #43558883401](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43558883401). Each workflow concluded successfully with all functional jobs passing; the mainline-only dependency/SBOM attestation job was skipped as expected on a non-main branch.
+
+The exact PR workflow passed **607/607 Hub tests on Node.js 22.23.4**, **607/607 on Node.js 24.22.1**, and **94/94 EnginEx tests** on each runtime. The live PostgreSQL/Memgraph integration suite passed **95/95, zero failures and zero skips**, and explicitly executed the F1.29 site-creation audit-trigger rollback/retry regression. Fresh migrations passed (18 applied plus 18 idempotent second-pass skips). Browser editor/accessibility smoke, CodeQL, and candidate evidence consolidation passed. Both Node jobs reported zero vulnerabilities from their dependency audits. The integration workflow also exercised the configured Redis outage/recovery and Memgraph outage/rebuild scenarios.
+
+GitHub has no submitted review, review decision or review request on PR #142. These results are exact-source maintainer/automation validation, not independent security approval.
+
 ## Boundaries and remaining acceptance
 
-This is maintainer-authored implementation and test evidence only. It is not an independent tenant-isolation or platform security assessment. The candidate has not yet been pushed, so no hosted PR/push CI exists for this change; hosted validation remains a required acceptance step. Issue #141 remains OPEN pending review, hosted validation and eventual merge. Parent #124 remains OPEN.
+This is maintainer-authored implementation and test evidence only. It is not an independent tenant-isolation or platform security assessment. Hosted CI has passed for the exact candidate SHA, but no human review or independent security assessment has occurred. PR #142 and issue #141 remain OPEN pending review and authorized merge. Parent #124 remains OPEN.
 
 Independent tenant review #14 and platform security assessment #25 remain OPEN / NOT PERFORMED. The current mainline readiness record remains exact-main workflow #603 with **8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE**, `readyForProduction: false`, and `NOT_PRODUCTION_CERTIFIED`. F1.29 candidate results are not mainline release evidence and must not be copied into `RELEASE-MANIFEST.json`.
 
