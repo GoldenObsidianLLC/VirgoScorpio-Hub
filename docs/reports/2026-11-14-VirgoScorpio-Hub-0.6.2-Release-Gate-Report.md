@@ -38,88 +38,90 @@ The artifact reports `readyForProduction: false` and `releaseClassification: NOT
 
 | Field | Verified value |
 |---|---|
-| Repository | `GoldenObsidianLLC/VirgoScorpio-Hub` |
-| Branch | `main` |
-| Source revision | `debd9890b94b55dd3b9496d80f49a9a7c00615fb` |
-| Feature merge | [PR #142](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/142), F1.29 |
-| Merge time | 14 November 2026 at 16:27:43 UTC |
-| Workflow | VirgoScorpio Hub CI — `.github/workflows/ci.yml` |
-| Event / run / attempt | `push` / `43615723391` (#609) / `1` |
-| Workflow conclusion | **completed / success**, 7 of 7 jobs successful |
-| Workflow completion | 14 November 2026 at 16:30:50 UTC |
+| Repository | GoldenObsidianLLC/VirgoScorpio-Hub |
+| Branch | main |
+| Source revision | `67e9440b9c543e69a46bba8cbb25a9d2329f3502` |
+| Feature merge | [PR #144](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/144), F1.30 design-system mutation/audit atomicity |
+| Merge time | 14 November 2026 at 19:52:48 UTC |
+| Feature issue | [#143](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/143), CLOSED |
+| Workflow | VirgoScorpio Hub CI, `.github/workflows/ci.yml` |
+| Event / run / attempt | push / 43634472737 (#612) / 1 |
+| Workflow conclusion | completed / success, 7 of 7 jobs successful |
+| Workflow completion | 14 November 2026 at 19:56:11 UTC |
 | Node matrix | 22.23.4 and 24.22.1 |
 | EnginEx | 7.0.0, pinned submodule commit `d99e021f55664f006b5e65b4a58202f9c7bc4f4b` |
-| `package-lock.json` SHA-256 | `8f3786bcfcd03d0b63761c7107e4d757ae5b45171ba2f6c086ff38c027c8b086` |
+| package-lock.json SHA-256 | `8f3786bcfcd03d0b63761c7107e4d757ae5b45171ba2f6c086ff38c027c8b086` |
 
-GitHub records no formal review submission or inline review thread for PR #142. Merge and green automated checks are maintainer/automation evidence, not independent review.
+GitHub records no formal review submission or inline review thread for PR #144. The merge was recorded by the repository account. This is maintainer implementation and automation evidence, not independent review or approval. Independent tenant-isolation review #14 and platform security assessment #25 remain OPEN / NOT PERFORMED.
 
 ## 3. Exact-main CI results
 
-All seven jobs passed on the exact main SHA:
+All seven mainline jobs passed on the exact main SHA:
 
 | Job | Result | Verified evidence and qualification |
 |---|---|---|
-| Unit, security and dependency checks — Node.js 22.23.4 | **PASS** | 607/607 Hub tests; 94/94 EnginEx tests; no failures or skips |
-| Unit, security and dependency checks — Node.js 24.22.1 | **PASS** | 607/607 Hub tests; 94/94 EnginEx tests; no failures or skips |
-| PostgreSQL and Memgraph integration | **PASS** | 95/95 live integration tests; zero failures/skips; includes the F1.29 site/audit rollback-retry regression |
-| Browser editor and accessibility smoke | **PASS** | Automated browser smoke completed; this is not full manual WCAG or assistive-technology acceptance |
-| CodeQL security analysis | **PASS** | Automated analysis completed; human finding disposition and independent security review remain separate |
-| Signed dependency lockfile/SBOM attestations | **PASS** | Mainline signing was required and succeeded for this exact source; no human license/dependency approval is implied |
-| Post-producer evidence consolidation | **PASS** | Five required producer manifests were checked for schema, exact source/run/attempt identity and checksums before readiness finalization |
+| Unit, security and dependency checks — Node.js 22.23.4 | PASS | 608/608 Hub tests; 94/94 EnginEx tests; zero failures/skips |
+| Unit, security and dependency checks — Node.js 24.22.1 | PASS | 608/608 Hub tests; 94/94 EnginEx tests; zero failures/skips |
+| PostgreSQL and Memgraph integration | PASS | 96/96 live integration tests; zero failures/skips; includes F1.30 audit-trigger rollback/retry and rejected selector/version cases |
+| Browser editor and accessibility smoke | PASS | Playwright editor/collaboration smoke passed 9/9; this is not full manual WCAG or assistive-technology acceptance |
+| CodeQL security analysis | PASS | Automated analysis completed; human finding disposition and independent security review remain separate |
+| Signed dependency lockfile/SBOM attestations | PASS | Mainline signing was required and succeeded for this exact source; no human license/dependency approval is implied |
+| Post-producer evidence consolidation | PASS | Five exact-source producer manifests were schema, source/run/attempt and checksum validated before readiness finalization |
 
-### Test, migration, and supply-chain detail
+### Test, migration and supply-chain detail
 
-The hosted database job used disposable GitHub Actions PostgreSQL 18 and Memgraph services. No production credentials or production data were used.
+The hosted database job used disposable GitHub Actions PostgreSQL and Memgraph services. No production credentials or production data were used.
 
 | Validation | Result |
 |---|---:|
-| PostgreSQL/Memgraph live integration | **95 passed / 0 failed / 0 skipped** |
-| Fresh PostgreSQL migrations, first pass | **18/18 applied** |
-| Migration re-entry, second pass | **18/18 idempotently skipped** |
-| Hub tests, Node.js 22.23.4 | **607/607** |
-| Hub tests, Node.js 24.22.1 | **607/607** |
-| EnginEx 7.0.0 tests, each runtime | **94/94** |
-| `npm audit --audit-level=high` | **0 vulnerabilities** |
-| `npm audit --omit=dev --audit-level=high` | **0 vulnerabilities** |
-| CycloneDX SBOM | **1.5; 200 components and 201 dependency records per runtime** |
+| PostgreSQL/Memgraph live integration | 96 passed / 0 failed / 0 skipped |
+| Fresh PostgreSQL migrations, first pass | 18/18 applied |
+| Migration re-entry, second pass | 18/18 idempotently skipped |
+| Hub tests, Node.js 22.23.4 | 608/608 |
+| Hub tests, Node.js 24.22.1 | 608/608 |
+| EnginEx 7.0.0 tests, each runtime | 94/94 |
+| Playwright editor/collaboration smoke | 9 passed / 0 failed / 0 skipped |
+| npm audit --audit-level=high | 0 vulnerabilities |
+| npm audit --omit=dev --audit-level=high | 0 vulnerabilities |
+| CycloneDX SBOM | 1.5; 200 components and 201 dependency records per runtime |
 
-The hosted integration log executed the F1.29 audit-trigger failure case. It verifies that failure to persist `site.created` cannot leave the new site and initial owner membership committed without the audit row. The suite also retains the existing PostgreSQL transaction/concurrency, Redis outage/recovery, Memgraph projection recovery and graph-rebuild checks. PostgreSQL remains authoritative; Memgraph is a rebuildable projection; Redis Pub/Sub remains ephemeral, with database-backed reauthorization/fallbacks retained for security-sensitive behavior.
+The hosted integration log executed the F1.30 audit-trigger failure case. It verifies that failure to persist design_system.updated cannot leave the site_design_systems mutation committed without its correlated audit row; retry commits once, and conflicting selector/version requests do not create an audit side effect. PostgreSQL remains authoritative; Memgraph is a rebuildable projection; Redis Pub/Sub remains ephemeral, with database-backed reauthorization/fallbacks retained for security-sensitive behavior.
 
-The generated SBOMs and lockfile are source-bound CI evidence, not human dependency/license approval. Lockfile SHA-256 is recorded above. The Node 22 and Node 24 SBOMs were produced in the exact-main run; the human review required by #23 is still outstanding.
+The generated SBOMs and lockfile are exact-source CI evidence, not human dependency/license approval. The Node 22 and Node 24 SBOMs were produced in workflow #612. The human review required by issue #23 remains outstanding; fourteen components carry LGPL terms requiring qualified license/distribution review.
 
 ## 4. Canonical readiness finalization and retained artifacts
 
-The finalizer validated five required producer manifests and produced the canonical `artifacts/release-readiness.json` and Markdown report for source `debd9890b94b55dd3b9496d80f49a9a7c00615fb`.
+The finalizer validated five required producer manifests and produced the canonical artifacts/release-readiness.json and Markdown report for source `67e9440b9c543e69a46bba8cbb25a9d2329f3502`.
 
-- Canonical readiness generation: `2026-11-14T16:30:45.519Z`.
-- The artifact snapshot was generated while the evidence-consolidation job still reported `in_progress`; GitHub subsequently recorded the overall workflow as `completed / success` at `2026-11-14T16:30:50Z`. The completed workflow conclusion is confirmed by the Actions run record, not inferred from the artifact's generation-time status.
-- Aggregate readiness: **8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN**.
-- `readyForProduction: false`; `releaseClassification: NOT_PRODUCTION_CERTIFIED`.
+- Canonical readiness generation: `2026-11-14T19:56:06.325Z`.
+- The artifact snapshot was generated while evidence consolidation still reported in_progress; GitHub subsequently recorded the workflow as completed/success at `2026-11-14T19:56:11Z`.
+- Aggregate readiness: 8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN.
+- readyForProduction: false; releaseClassification: NOT_PRODUCTION_CERTIFIED.
 - Mainline supply-chain attestation was required and passed.
 
-The two PARTIAL classifications must remain distinct:
+The two PARTIAL classifications remain distinct:
 
-1. Human dependency/lockfile/license review is not complete. Reproducible installation, audit, SBOM generation, CodeQL, and signed attestations do not substitute for that review.
-2. The separate service-less readiness diagnostic skipped 34 integration tests per runtime because no live services were attached to that diagnostic invocation. Those skips are not passes. The separate exact-source hosted PostgreSQL/Memgraph producer passed 95/95 with zero skips.
+1. Human dependency/lockfile/license review is not complete. Reproducible installation, audit, SBOM generation, CodeQL and signed attestations do not substitute for that review.
+2. The separate service-less readiness diagnostic skipped 34 integration tests per runtime because no live services were attached to that diagnostic invocation. Those skips are not passes. The separate exact-source PostgreSQL/Memgraph producer passed 96/96 with zero skips.
 
 ### Exact-run artifact records
 
-All listed artifacts belong to workflow run `43615723391`, attempt 1, and expire on 12 February 2027 at 16:27:46 UTC.
+All listed artifacts belong to workflow run 43634472737 (#612), attempt 1, and expire on 12 February 2027 at 19:52:51 UTC.
 
 | Evidence | Artifact ID | Archive SHA-256 |
 |---|---:|---|
-| Canonical release readiness | `14121454049` | `07e6d64d7f134a418350f98f6f2e1bdd137159a2bc9a0be44d0715485fbdba7e` |
-| PostgreSQL/Memgraph producer | `14122506161` | `f23b9572b9578e6c57718cc841e045cb0ea5d545e4a32d4e5485634be66faf84` |
-| Mainline supply-chain attestations | `14122366478` | `a66014b5b2828022a6cdbbe2d807eecceba317601dcf1405df372a700d673313` |
-| Node.js 22 CI evidence | `14122132232` | `ae368766ecd15c3d3d0d216722ff7ee808703ece879679a265c1b18a00d78f93` |
-| Node.js 24 CI evidence | `14122411164` | `2ef2f7623feb233eec32029f7ab97b1c005f0b70d9818286d43c46a2f9306bd5` |
-| Browser/accessibility evidence | `14121861878` | `cbd3543f81604aaaacbb8dbed4ed3e96d39931a0bdc6f3f9b71f02d101c535ea` |
-| CodeQL/static-analysis evidence | `14121727500` | `a5007bb7726ce1a86cf4fb2c8607f59b1bd0f3483a4e44aee55a44b1d57dccd7` |
-| Node.js 24 dependency/SBOM evidence | `14122580865` | `9a5f15fccc6be4758485928494bd9ebdcd211fb5de2a338154a48863433825cc` |
-| Node.js 22 dependency/SBOM evidence | `14122266626` | `c1807d9f746ee4cf6b0b6cdc31b1b40c42a135bae6ad7c970da7037a0eec5dec` |
-| Node.js 22 live-integration evidence | `14122376427` | `7563b13d3f454fe64e7980ff4a59c61c528077c60497058b225252496bccc339` |
+| Canonical release readiness | 14130165264 | `552cff6fdb9e08c19e2660dd0b909d46d01a6b550248ea82490a0988c03dfc29` |
+| PostgreSQL/Memgraph producer | 14129980661 | `4485ba3e732427e5e399a0a3a554ca962b93a3e67fab013dd1b6d64949db437b` |
+| Mainline supply-chain attestations | 14129202354 | `7e163b8899111ceef95673bd7f4ba5771039d2064bba41e955f4d2754a58b4e3` |
+| Node.js 22 CI evidence | 14129985070 | `238f0b5c1ce1d4d321e3dcf901a3eb6048371de412c43eb61db86427d47fef85` |
+| Node.js 24 CI evidence | 14129820782 | `ed9bad34d586ea337b85012b090ebbe4f77eae341fd0508fab4ebe7b8493dff3` |
+| Browser/accessibility evidence | 14129586801 | `151d4a17f89fd5cd689e0044c77f31de1f69b66452326e9313e626a0a9f8f62c` |
+| CodeQL/static-analysis evidence | 14129461431 | `3e1fa49ad2b631a84090fb220ea48aa5f30825e3f7fa1ff55c89f1e29e6cd090` |
+| Node.js 24 dependency/SBOM evidence | 14129895615 | `baf8df4b3434e424d518b394f767f86f390328ed65984dfc931f9e611ca726e6` |
+| Node.js 22 dependency/SBOM evidence | 14129536211 | `1a1ace4c7347cdec3667af6b0558643b15113d4d2009307fe1f79b12ded26bfa` |
+| Node.js 22 live-integration evidence | 14129845974 | `238e617977ce4bac63a17c8437899ffb59aa05436afffd2bf9a0e2e429eb1928` |
 
-Artifact URLs and source-bound job manifests are retained by GitHub Actions. Refresh these references from a new exact-main run before any later release decision; artifacts are subject to retention expiry.
+The final readiness archive and source-bound job manifests are retained by GitHub Actions. Refresh these references from a new exact-main run before any later release decision; artifacts are subject to retention expiry.
 
 ## 5. Fourteen missing production evidence gates
 
@@ -235,9 +237,9 @@ F1.30 strengthens mainline transactional audit consistency but does not close in
 
 ## 12. Source files and evidence pointers
 
-- Canonical exact-main readiness: `virgoscorpio_hub-release-readiness-ci` artifact from workflow run `43615723391`; archive SHA-256 `07e6d64d7f134a418350f98f6f2e1bdd137159a2bc9a0be44d0715485fbdba7e`.
-- Live database producer: artifact `14122506161`; archive SHA-256 `f23b9572b9578e6c57718cc841e045cb0ea5d545e4a32d4e5485634be66faf84`.
-- Mainline supply-chain attestations: artifact `14122366478`; archive SHA-256 `a66014b5b2828022a6cdbbe2d807eecceba317601dcf1405df372a700d673313`.
+- Canonical exact-main readiness: artifact 14130165264 from workflow run 43634472737 (#612); archive SHA-256 `552cff6fdb9e08c19e2660dd0b909d46d01a6b550248ea82490a0988c03dfc29`.
+- Live database producer: artifact 14129980661; archive SHA-256 `4485ba3e732427e5e399a0a3a554ca962b93a3e67fab013dd1b6d64949db437b`.
+- Mainline supply-chain attestations: artifact 14129202354; archive SHA-256 `7e163b8899111ceef95673bd7f4ba5771039d2064bba41e955f4d2754a58b4e3`.
 - Exact-source implementation: `apps/api/src/server.js`, `packages/auth/src/service.js`, and the tenant/site integration tests.
 - Tenant navigation inventory: `artifacts/security/tenant-isolation-route-inventory.json` and `docs/security/TENANT-ISOLATION-ROUTE-CAPABILITY-MAP-2026-11-14.md`.
 - CI finalization architecture: [ADR-022](../ARCHITECTURE-DECISIONS.md#adr-022-ci-release-readiness-is-finalized-after-all-exact-source-producers-complete).
