@@ -4,6 +4,10 @@ All notable project-level changes should be recorded here. This changelog does n
 
 ## 0.6.2 (unreleased patch candidate)
 
+### Direct membership audit atomicity (F1.28; PR #140 merged 14 November 2026)
+
+- Make direct site-member additions/removals and their `site.member_added` / `site.member_removed` audit events atomic in PostgreSQL. Reuse the existing transaction helper and shared parameterized audit insert path; pass the authenticated actor and request ID from routes into the identity service. Preserve site/capability checks, the per-site last-active-owner lock and HTTP contracts. Publish authorization invalidation only after commit and only for actual membership transitions; no-op operations emit no audit event or invalidation. Add live PostgreSQL failure-injection coverage for rollback, safe retry and event correlation. Exact-main workflow #603 passed 94/94 live PostgreSQL/Memgraph integration tests with zero skips. This is maintainer/automation evidence, not independent security acceptance; reviews #14/#25 remain open. No API, schema, migration, dependency, provider, lockfile or SemVer change; 0.6.2 remains unreleased.
+
 ### Editorial workflow author ownership (F1.27; PR #132 merged 12 November 2026)
 
 - Reuse the existing `canEditContent` authorization helper in the `submit-review` workflow action after the site-level `content:submit-review` capability check. Authors may submit their own drafts but cannot submit another same-site member's content; site-wide editor and owner behavior remains unchanged. Add database-free API coverage and a seeded-role PostgreSQL matrix that verifies denied actions leave content, workflow, audit, outbox and collaboration state unchanged. Exact-main workflow #585 passed 93/93 live PostgreSQL/Memgraph tests with zero skips. This is a compatible authorization correction within the unreleased 0.6.2 candidate; no route contract, schema, migration, dependency, provider, lockfile or SemVer change. Maintainer/automation evidence only; independent reviews remain open.

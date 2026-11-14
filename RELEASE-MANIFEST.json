@@ -1163,24 +1163,24 @@
     "localValidationSummary": "PASS: 202 required paths, 211 JavaScript files syntax-checked; 461 unit tests (458 passed, 0 failed, 3 Windows/platform-specific skips); focused AI route/API/context suites 45/45; package-lock audit 0 vulnerabilities."
   },
   "latestMainEvidence": {
-    "reviewedAt": "2026-11-13",
+    "reviewedAt": "2026-11-14",
     "version": "0.6.2",
-    "commit": "2b3771446bf448931ce822ea6e476697a6ea263f",
+    "commit": "e4712202d3d29c5517e335df658ce5f6d72a25cb",
     "pullRequest": {
-      "number": 137,
-      "title": "docs(release): reconcile mainline status and evidence snapshots",
-      "mergedAt": "2026-11-13T19:46:02Z",
-      "mergeCommit": "2b3771446bf448931ce822ea6e476697a6ea263f"
+      "number": 140,
+      "title": "fix(auth): make direct membership audit events atomic (F1.28)",
+      "mergedAt": "2026-11-14T00:38:51Z",
+      "mergeCommit": "e4712202d3d29c5517e335df658ce5f6d72a25cb"
     },
     "workflow": {
       "name": "VirgoScorpio Hub CI",
       "workflowFile": ".github/workflows/ci.yml",
-      "runId": 43495281163,
-      "runNumber": 599,
-      "url": "https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43495281163",
+      "runId": 43535587342,
+      "runNumber": 603,
+      "url": "https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43535587342",
       "event": "push",
       "attempt": 1,
-      "completedAt": "2026-11-13T19:49:46Z",
+      "completedAt": "2026-11-14T00:42:00Z",
       "completedChecks": 7,
       "successfulChecks": 7
     },
@@ -1201,7 +1201,7 @@
         "skipped": 0
       },
       "livePostgresMemgraph": {
-        "passed": 93,
+        "passed": 94,
         "failed": 0,
         "skipped": 0
       },
@@ -1210,71 +1210,77 @@
         "idempotentSecondPass": 18,
         "disposableDatabaseDropped": true
       },
+      "collaborationPlaywright": {
+        "passed": 4,
+        "failed": 0,
+        "skipped": 0
+      },
       "browserAccessibilitySmoke": "PASS",
       "codeql": "PASS",
       "mainlineAttestation": "PASS",
+      "evidenceConsolidation": "PASS",
       "producerManifests": {
-        "browserAndAccessibility": "6bac758d0ecaaa2a3286b2a8b29ca3de426db618166d38faa41cb00d240ec4bc",
-        "node22": "7355986122721e44c4c724fb1712a34e3411d8395eb7e312e535072fb318815f",
-        "node24": "33eb60bdbb54f38fe862fd11a2c02a2aa578760b0c22cf576030f56fcfd9efb5",
-        "postgresMemgraph": "3dcc7a540e1bf0ba431b34f4893e76a1f827f13c8920c700849b70855383af73",
-        "codeql": "ba8789bdc33cf9ceaf1a569181cdb6f0f54497ce2b8a1f6b37b139227b2b7dee"
+        "browserAndAccessibility": "ba9bc2c5d2334554fdf3456c1701ef3bcd077574748baf797ebcd3e9dc7ed58f",
+        "node22": "3451e50ff40ce6d2d237e55ed8d8fe06b3c0739d156636d12b15d2673f4dec69",
+        "node24": "2b122d5269d71bedc267e60b0ad8b3e9f81238e1166883a868ddc30f4d85885f",
+        "postgresMemgraph": "481fc4e008e64f24fe5ec8301dda4027188f25fa47b2f5a10bdc4518470032b8",
+        "codeql": "3c8c6d757a1b06a45e6d4398fd42baf66a3271ff705679f741b4081e81950728"
       }
     },
     "artifacts": {
       "releaseReadiness": {
-        "id": 14072066484,
-        "archiveSha256": "e76372997326ee6a7c5fa253e39093e5e8a90af8170be2f8a8e5f285ba952922",
-        "expiresAt": "2027-02-11T19:46:07Z"
+        "id": 14088309908,
+        "archiveSha256": "b5de22b630db0f80c693b4bec9e1ccc62474b67e02d8b47a1ead79e846a7fa9a",
+        "expiresAt": "2027-02-12T00:38:54Z"
       },
       "attestation": {
-        "id": 14070724805,
-        "archiveSha256": "6017cc88a8859a26a7dd0e837f0070e702bd6aff4a6d919edc9cdec3395baf49",
-        "expiresAt": "2027-02-11T19:46:07Z"
+        "id": 14089840127,
+        "archiveSha256": "b9dcf2045c1a23b43f53ca852ac6aa76803402064604c40f44c59a1d2d4524af",
+        "expiresAt": "2027-02-12T00:38:54Z"
       },
       "postgresMemgraph": {
-        "id": 14070669511,
-        "archiveSha256": "4c6dffea43410744ea0bcfa2392094f58862869cd0486c0c37a74d39f16300ac",
-        "expiresAt": "2027-02-11T19:46:07Z"
+        "id": 14089516502,
+        "archiveSha256": "1b5799815ad55dfcb87ceac4dff2d5cfcf4467b1803f6848ed2bb0b428ee8200",
+        "expiresAt": "2027-02-12T00:38:54Z"
       },
       "browser": {
-        "id": 14071847044,
-        "archiveSha256": "6eec20f7bcf97fb24fe5e9c4778e75cc4e0eb29b197bfa96dca8becd32746aeb",
-        "expiresAt": "2027-02-11T19:46:07Z"
+        "id": 14088914189,
+        "archiveSha256": "01a405d93d44719a3f062a3224b3619cf715c37abca6a1b1501615e9da9fa95d",
+        "expiresAt": "2027-02-12T00:38:54Z"
       },
       "node22": {
-        "id": 14070814412,
-        "archiveSha256": "2a25e15c273a009ba22c44071a10819513287c0ee42bfc28db5fe81aaa401200",
-        "expiresAt": "2027-02-11T19:46:07Z"
+        "id": 14088269965,
+        "archiveSha256": "059b06f85027538ca207bd8bc2775199829bed6b4ea8a09e82d2ee1a821a6691",
+        "expiresAt": "2027-02-12T00:38:54Z"
       },
       "node24": {
-        "id": 14069959537,
-        "archiveSha256": "e7035c40bf74b56c68e7e2bbb32e86b98865ee4d12fe93154376656ac534a598",
-        "expiresAt": "2027-02-11T19:46:07Z"
+        "id": 14089133679,
+        "archiveSha256": "df6d4a09d77a858b80eab65fe6e956b4be52d6cf53c5efef9ed725779c430726",
+        "expiresAt": "2027-02-12T00:38:54Z"
       },
       "liveIntegrationNode22": {
-        "id": 14071972143,
+        "id": 14089800597,
         "name": "virgoscorpio_hub-live-integration-node-22.23.4",
-        "archiveSha256": "a6cc80a09f4110882561154615d8291bdbed646f490ee24c570797847bca602c",
-        "expiresAt": "2027-02-11T19:46:07Z"
+        "archiveSha256": "9d106fd4ed329864ad5764361040fdd62788dcc81caba8192e3b4d8dc892e5a9",
+        "expiresAt": "2027-02-12T00:38:54Z"
       },
       "dependencyEvidenceNode22": {
-        "id": 14071757395,
+        "id": 14089730261,
         "name": "virgoscorpio_hub-dependency-evidence-node-22.23.4",
-        "archiveSha256": "4ca1472103278ba652cc8ea9a256581850b9190f94d70492fc043a8f419f90a5",
-        "expiresAt": "2027-02-11T19:46:07Z"
+        "archiveSha256": "02d49a635bd291516dd6bef1cc3a70c297d573118bbdbb2e0d7957c783eb4d94",
+        "expiresAt": "2027-02-12T00:38:54Z"
       },
       "dependencyEvidenceNode24": {
-        "id": 14069874829,
+        "id": 14089093676,
         "name": "virgoscorpio_hub-dependency-evidence-node-24.22.1",
-        "archiveSha256": "5ec56b565ebf95a21d3b19f6ceb80aa242931253ed07475134f6352f5473afaa",
-        "expiresAt": "2027-02-11T19:46:07Z"
+        "archiveSha256": "79b7b9231291e652416c5dd720f38311f4c4c7e7fbd41f4d3f6e40fd687eb820",
+        "expiresAt": "2027-02-12T00:38:54Z"
       },
       "securityStaticAnalysis": {
-        "id": 14071082393,
+        "id": 14089900251,
         "name": "virgoscorpio_hub-ci-evidence-security-static-analysis",
-        "archiveSha256": "ec7989bc51c6876f55b093f60c7b4d990843a36154bc088569524343025bc543",
-        "expiresAt": "2027-02-11T19:46:07Z"
+        "archiveSha256": "e2c78c4a3587dda1bef631d7014aa20350162f42cb00cb0db40e6ca5190038c2",
+        "expiresAt": "2027-02-12T00:38:54Z"
       }
     },
     "readiness": {

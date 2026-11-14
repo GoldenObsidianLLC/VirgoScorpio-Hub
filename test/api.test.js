@@ -47,6 +47,19 @@ test('API requires bearer token', async () => {
   });
 });
 
+test('developer token is denied from site creation before request-body parsing', async () => {
+  await withServer(async base => {
+    const response = await fetch(base + '/api/v1/sites', {
+      method: 'POST',
+      headers: { authorization: 'Bearer test-secret-token', 'content-type': 'application/json' },
+      body: '{invalid-json',
+    });
+    const payload = await response.json();
+    assert.equal(response.status, 403);
+    assert.equal(payload.code, 'ERR_VIRGOSCORPIO_HUB_FORBIDDEN');
+  });
+});
+
 test('page-draft endpoint returns validated proposal, not a published record', async () => {
   await withServer(async base => {
     const res = await fetch(`${base}/api/v1/ai/page-draft`, {

@@ -7,7 +7,7 @@ const crypto = require('node:crypto');
 const ROOT = path.resolve(__dirname, '..');
 const CATALOG_PATH = path.join(ROOT, 'docs/security/tenant-isolation-route-inventory.catalog.json');
 const JSON_OUTPUT = path.join(ROOT, 'artifacts/security/tenant-isolation-route-inventory.json');
-const MARKDOWN_OUTPUT = path.join(ROOT, 'docs/security/TENANT-ISOLATION-ROUTE-CAPABILITY-MAP-2026-11-10.md');
+const MARKDOWN_OUTPUT = path.join(ROOT, 'docs/security/TENANT-ISOLATION-ROUTE-CAPABILITY-MAP-2026-11-14.md');
 const METHOD_CODES = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD', 'WORKER', 'SERVICE', 'CLI']);
 
 function repoFile(relativePath) {

@@ -1,25 +1,44 @@
 # VirgoScorpio Hub Release Evidence Contract
-## Current mainline evidence snapshot — 13 November 2026 (0.6.2, PR #137 merged)
+## Current mainline evidence snapshot - 14 November 2026 (0.6.2, PR #140 merged)
 
-Current `main`: `2b3771446bf448931ce822ea6e476697a6ea263f`, documentation reconciliation merge [PR #137](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/137), following the PR #136 release-readiness finalizer implementation. Exact-main push [workflow #599](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43495281163) completed successfully on this exact source SHA (run ID `43495281163`, attempt 1): all seven jobs passed. The mainline finalizer generated the canonical release-readiness artifact only after validating the five required producer manifests, exact job/run/attempt/source identities, the PostgreSQL/Memgraph evidence record and producer checksums. The required mainline dependency/SBOM attestation job succeeded. The final readiness summary is **8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN**; `readyForProduction` is false and the classification is `NOT_PRODUCTION_CERTIFIED`.
+Current `main`: `e4712202d3d29c5517e335df658ce5f6d72a25cb`, merge commit for [PR #140](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/140), merged 14 November 2026 at 00:38:51 UTC. F1.28 is recorded in [issue #139](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/139) (CLOSED); maintainer-led hardening parent [#124](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/124) remains OPEN. GitHub records no formal review submission on PR #140. This is maintainer/automation evidence only.
 
-The Node.js 22.23.4 and 24.22.1 matrices each passed **600/600 Hub** tests and **94/94 EnginEx 7.0.0** tests, with no failures or skips. The dedicated PostgreSQL/Memgraph job passed **93/93** live integration tests with zero failures/skips; all **18/18** fresh migrations applied and **18/18** were skipped on the idempotent second pass. Browser/accessibility smoke, CodeQL, signed dependency/SBOM attestation and evidence consolidation passed. Automated browser smoke is not full manual WCAG or assistive-technology acceptance; CodeQL and attestation are not independent security or legal approval. PR #136 has no formal review submission; describe these results as maintainer/automation evidence only.
+Exact-main push [workflow #603](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43535587342) completed successfully on this exact source SHA at 00:42:00 UTC (run ID `43535587342`, attempt 1): all seven jobs passed. The finalizer generated the canonical release-readiness artifact only after validating all five producer manifests, exact job/run/attempt/source identities, PostgreSQL/Memgraph evidence and checksums. Mainline dependency/SBOM attestation passed. Readiness is **8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN**; `readyForProduction` is false and the classification is `NOT_PRODUCTION_CERTIFIED`. Production remains **NO-GO**.
 
-Run-bound artifact: `virgoscorpio_hub-release-readiness-ci` (artifact ID `14072066484`), archive SHA-256 `e76372997326ee6a7c5fa253e39093e5e8a90af8170be2f8a8e5f285ba952922`, expires `2027-02-11T19:46:07Z`. Signed supply-chain attestation bundle artifact ID `14070724805`, archive SHA-256 `6017cc88a8859a26a7dd0e837f0070e702bd6aff4a6d919edc9cdec3395baf49`. PostgreSQL/Memgraph producer artifact ID `14070669511`, archive SHA-256 `4c6dffea43410744ea0bcfa2392094f58862869cd0486c0c37a74d39f16300ac`. Browser evidence artifact ID `14071847044`, archive SHA-256 `6eec20f7bcf97fb24fe5e9c4778e75cc4e0eb29b197bfa96dca8becd32746aeb`. Node.js 22 evidence artifact ID `14070814412`, archive SHA-256 `2a25e15c273a009ba22c44071a10819513287c0ee42bfc28db5fe81aaa401200`. Node.js 24 evidence artifact ID `14069959537`, archive SHA-256 `e7035c40bf74b56c68e7e2bbb32e86b98865ee4d12fe93154376656ac534a598`. Additional run-bound artifacts: Node.js 22 live integration ID `14071972143` (SHA-256 `a6cc80a09f4110882561154615d8291bdbed646f490ee24c570797847bca602c`); Node.js 22 dependency/SBOM ID `14071757395` (SHA-256 `4ca1472103278ba652cc8ea9a256581850b9190f94d70492fc043a8f419f90a5`); Node.js 24 dependency/SBOM ID `14069874829` (SHA-256 `5ec56b565ebf95a21d3b19f6ceb80aa242931253ed07475134f6352f5473afaa`); and CodeQL/static-analysis ID `14071082393` (SHA-256 `ec7989bc51c6876f55b093f60c7b4d990843a36154bc088569524343025bc543`). All ten returned artifacts are unexpired and expire 11 February 2027. All artifacts are bound to workflow run `43495281163`, attempt 1, source SHA `2b3771446bf448931ce822ea6e476697a6ea263f`. Verify individual artifact retention against GitHub before a future release decision.
+Node.js 22.23.4 and 24.22.1 each passed **600/600 Hub** tests and **94/94 EnginEx 7.0.0** tests, with zero failures or skips. The dedicated PostgreSQL/Memgraph suite passed **94/94** live integration tests with zero failures/skips; all **18/18** fresh migrations applied and **18/18** were skipped on the idempotent second pass. The PostgreSQL-backed collaboration Playwright scenario passed **4/4**. Browser/accessibility smoke, CodeQL, signed dependency/SBOM attestation and evidence consolidation passed. Automated browser smoke is not full manual WCAG or assistive-technology acceptance; CodeQL and attestation are not independent security or legal approval.
 
-The canonical JSON/Markdown readiness snapshot was generated at `2026-11-13T19:49:42.765Z` while the evidence-consolidation job was still running. GitHub later recorded that workflow as completed/success at `2026-11-13T19:49:46Z`, with all 7/7 jobs successful. The artifact therefore records validated producer evidence and attestation state; the overall workflow conclusion is independently confirmed by the final GitHub Actions run result. It does not claim production certification.
+The two PARTIAL classifications remain the human lockfile/dependency review and the service-less integration diagnostic (34 skipped tests per runtime). Those skips are not counted as live integration passes. Independent tenant review #14 and platform security assessment #25 remain OPEN / NOT PERFORMED; dependency/license review #23 remains OPEN / PARTIAL. Fourteen production evidence gates remain missing. Package 0.6.2 stays private and unreleased; no tag, GitHub Release, npm publication, deployment or SemVer increment is authorized.
 
 ### Finalizer producer manifest checksums
 
 | Producer | Job | Manifest SHA-256 | Result |
 |---|---|---|---|
-| Browser/accessibility | Browser editor and accessibility smoke tests | `6bac758d0ecaaa2a3286b2a8b29ca3de426db618166d38faa41cb00d240ec4bc` | PASS |
-| Node.js 22.23.4 | Unit, security and dependency checks | `7355986122721e44c4c724fb1712a34e3411d8395eb7e312e535072fb318815f` | PASS |
-| Node.js 24.22.1 | Unit, security and dependency checks | `33eb60bdbb54f38fe862fd11a2c02a2aa578760b0c22cf576030f56fcfd9efb5` | PASS |
-| PostgreSQL/Memgraph | Live integration and fresh migrations | `3dcc7a540e1bf0ba431b34f4893e76a1f827f13c8920c700849b70855383af73` | PASS |
-| CodeQL/static analysis | CodeQL security analysis | `ba8789bdc33cf9ceaf1a569181cdb6f0f54497ce2b8a1f6b37b139227b2b7dee` | PASS |
+| Browser/accessibility | Browser editor and accessibility smoke tests | `ba9bc2c5d2334554fdf3456c1701ef3bcd077574748baf797ebcd3e9dc7ed58f` | PASS |
+| Node.js 22.23.4 | Unit, security and dependency checks | `3451e50ff40ce6d2d237e55ed8d8fe06b3c0739d156636d12b15d2673f4dec69` | PASS |
+| Node.js 24.22.1 | Unit, security and dependency checks | `2b122d5269d71bedc267e60b0ad8b3e9f81238e1166883a868ddc30f4d85885f` | PASS |
+| PostgreSQL/Memgraph | Live integration and fresh migrations | `481fc4e008e64f24fe5ec8301dda4027188f25fa47b2f5a10bdc4518470032b8` | PASS |
+| CodeQL/static analysis | CodeQL security analysis | `3c8c6d757a1b06a45e6d4398fd42baf66a3271ff705679f741b4081e81950728` | PASS |
 
-Four preliminary per-runtime reports are retained separately and are not the canonical final artifact. Their SHA-256 values are recorded in `artifacts/release-readiness.json` under `ciFinalization.preliminaryReports`; the preliminary Node reports must not be used as authoritative readiness snapshots.
+### Run-bound artifact inventory
+
+| Artifact | GitHub artifact ID | Archive SHA-256 | Expires |
+|---|---:|---|---|
+| Release readiness | `14088309908` | `b5de22b630db0f80c693b4bec9e1ccc62474b67e02d8b47a1ead79e846a7fa9a` | 12 February 2027 |
+| Mainline supply-chain attestation | `14089840127` | `b9dcf2045c1a23b43f53ca852ac6aa76803402064604c40f44c59a1d2d4524af` | 12 February 2027 |
+| PostgreSQL/Memgraph producer evidence | `14089516502` | `1b5799815ad55dfcb87ceac4dff2d5cfcf4467b1803f6848ed2bb0b428ee8200` | 12 February 2027 |
+| Browser/accessibility evidence | `14088914189` | `01a405d93d44719a3f062a3224b3619cf715c37abca6a1b1501615e9da9fa95d` | 12 February 2027 |
+| Node.js 22 CI evidence | `14088269965` | `059b06f85027538ca207bd8bc2775199829bed6b4ea8a09e82d2ee1a821a6691` | 12 February 2027 |
+| Node.js 24 CI evidence | `14089133679` | `df6d4a09d77a858b80eab65fe6e956b4be52d6cf53c5efef9ed725779c430726` | 12 February 2027 |
+| Node.js 22 live-integration evidence | `14089800597` | `9d106fd4ed329864ad5764361040fdd62788dcc81caba8192e3b4d8dc892e5a9` | 12 February 2027 |
+| Node.js 22 dependency/SBOM evidence | `14089730261` | `02d49a635bd291516dd6bef1cc3a70c297d573118bbdbb2e0d7957c783eb4d94` | 12 February 2027 |
+| Node.js 24 dependency/SBOM evidence | `14089093676` | `79b7b9231291e652416c5dd720f38311f4c4c7e7fbd41f4d3f6e40fd687eb820` | 12 February 2027 |
+| CodeQL/static-analysis evidence | `14089900251` | `e2c78c4a3587dda1bef631d7014aa20350162f42cb00cb0db40e6ca5190038c2` | 12 February 2027 |
+
+All ten returned artifacts were unexpired when inventoried and are bound to workflow run `43535587342`, attempt 1, source SHA `e4712202d3d29c5517e335df658ce5f6d72a25cb`. Their recorded expiry is `2027-02-12T00:38:54Z`; recheck retention with GitHub before a later release decision. Archive hashes identify each uploaded ZIP, not the inner files.
+
+The canonical readiness JSON/Markdown artifact was generated at `2026-11-14T00:41:56.686Z` while the evidence-consolidation job was still running. GitHub later recorded the workflow as completed/success at `2026-11-14T00:42:00Z`, with all seven jobs successful. The artifact records validated producer evidence; the completed workflow conclusion is independently confirmed by the final GitHub Actions run record.
+
+See the [current 0.6.2 release-gate report](reports/2026-11-14-VirgoScorpio-Hub-0.6.2-Release-Gate-Report.md) and the root [release manifest](../RELEASE-MANIFEST.json) for the consolidated current snapshot. The release-readiness CI artifact is retained as a workflow artifact and is not checked into the source tree.
 
 ## Historical mainline evidence snapshot — 11 November 2026 (0.6.2, PR #122 merged)
 

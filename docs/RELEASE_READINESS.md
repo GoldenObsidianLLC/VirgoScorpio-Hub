@@ -1,8 +1,9 @@
-# VirgoScorpio Hub 0.6.2 — authoritative mainline readiness (13 November 2026)
+
+# VirgoScorpio Hub 0.6.2 - authoritative mainline readiness (14 November 2026)
 
 > **Current decision: PRODUCTION NO-GO / NOT_PRODUCTION_CERTIFIED.** This snapshot records exact-main CI evidence; it does not authorize release, publication, deployment, or a SemVer increment.
 
-Current `main` is `2b3771446bf448931ce822ea6e476697a6ea263f`, the PR #137 documentation reconciliation merge following the PR #136 release-readiness finalizer. Exact-main [workflow #599](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43495281163) (run ID `43495281163`, attempt 1, push) completed successfully with **7/7 jobs**. The authoritative readiness snapshot was generated at `2026-11-13T19:49:42.765Z`; GitHub recorded workflow completion at `2026-11-13T19:49:46Z`.
+Current `main` is `e4712202d3d29c5517e335df658ce5f6d72a25cb`, the merge commit for [PR #140](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/140), which merged F1.28 direct membership/audit atomicity at 2026-11-14 00:38:51 UTC. Exact-main [workflow #603](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43535587342) (run ID `43535587342`, attempt 1, push) completed successfully with **7/7 jobs** at 2026-11-14 00:42:00 UTC. GitHub records no formal review submission on PR #140; this is maintainer/automation evidence only.
 
 | Readiness classification | Count |
 |---|---:|
@@ -12,11 +13,15 @@ Current `main` is `2b3771446bf448931ce822ea6e476697a6ea263f`, the PR #137 docume
 | MISSING_EVIDENCE | 14 |
 | NOT_RUN | 0 |
 
-The 5 required exact-source producers (browser/accessibility, Node.js 22, Node.js 24, PostgreSQL/Memgraph, and CodeQL/static analysis) and the required mainline lockfile/SBOM attestation passed. Node.js 22.23.4 and 24.22.1 each passed 600/600 Hub tests and 94/94 EnginEx 7.0.0 tests. Live PostgreSQL/Memgraph integration passed 93/93 with zero failures/skips; 18/18 fresh migrations applied and all 18 were skipped on the idempotent second pass. The two PARTIAL classifications are the incomplete human lockfile/dependency review and the service-less integration run (34 skipped tests); skipped tests do not count as live passes. Automated browser smoke and CodeQL do not establish manual accessibility or independent security approval.
+The five required exact-source producers (browser/accessibility, Node.js 22, Node.js 24, PostgreSQL/Memgraph, and CodeQL/static analysis) passed, and the required mainline lockfile/SBOM attestation succeeded. Node.js 22.23.4 and 24.22.1 each passed 600/600 Hub tests and 94/94 EnginEx 7.0.0 tests with zero failures/skips. Live PostgreSQL/Memgraph integration passed 94/94 with zero failures/skips, including the F1.28 audit-failure rollback/retry regression; 18/18 fresh migrations applied and 18/18 were skipped on the idempotent second pass. PostgreSQL-backed collaboration Playwright passed 4/4. Browser/accessibility smoke, CodeQL, evidence consolidation and signed mainline attestation passed.
 
-The 14 missing evidence gates are enumerated in the [13 November release-gate report](reports/2026-11-13-VirgoScorpio-Hub-0.6.2-Release-Gate-Report.md). Independent tenant review #14 and independent security assessment #25 remain OPEN / NOT PERFORMED; supply-chain review #23, load/restore #24, operations/release ownership #26, authorized scope #13, and governance #32 remain open. Issues #15–#22 are closed as not planned for the 0.6.2 preview, which is not evidence that those capabilities have been qualified.
+The two PARTIAL classifications are (1) incomplete human lockfile/dependency/license review and (2) the service-less integration diagnostic (34 skipped tests per runtime). Those skips are not live integration passes. Automated browser smoke and CodeQL do not establish manual accessibility or independent security approval.
 
-PR #136 has no formal review submission. Treat its merge, CI, CodeQL and attestations as maintainer/automation evidence, not independent approval. Package `virgoscorpio-hub@0.6.2` remains `private: true` and unreleased. The GitHub source repository is public. No tag, GitHub Release, npm publication, production deployment or SemVer increment is authorized.
+The 14 missing evidence gates are `tenant-isolation-review`, `identity-provider-e2e`, `clamav-corpus`, `cloud-live-providers`, `stripe-live-lifecycle`, `browser-accessibility`, `commerce-parity-acceptance`, `community-parity-acceptance`, `plugin-container-isolation`, `dependency-sbom-codeql`, `load-backup-restore`, `independent-security-review`, `operations-release-approval`, and `observability-production`. Independent tenant review #14 and platform security assessment #25 remain OPEN / NOT PERFORMED; supply-chain review #23 remains OPEN / PARTIAL; authorized scope #13, load/restore #24, operations/release ownership #26 and governance #32 remain open.
+
+The exact-source artifact inventory and all readiness limitations are recorded in the [14 November release-gate report](reports/2026-11-14-VirgoScorpio-Hub-0.6.2-Release-Gate-Report.md), the [release evidence contract](RELEASE-EVIDENCE.md), and the root [release manifest](../RELEASE-MANIFEST.json).
+
+Package `virgoscorpio-hub@0.6.2` remains `private: true` and unreleased. The GitHub source repository is public. No tag, GitHub Release, npm publication, production deployment or SemVer increment is authorized.
 
 ## Historical candidate implementation note — post-producer readiness finalization (12 November 2026)
 

@@ -1328,8 +1328,7 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
       if (req.method === 'POST' && url.pathname === '/api/v1/sites') {
         if (actor.isDeveloper) throw fail(403, 'ERR_VIRGOSCORPIO_HUB_FORBIDDEN', 'Site creation requires an authenticated site owner.');
         const body = await readJson(req, Math.min(maxBody, 16_384));
-        const site = await identity.createSite({ actorId: actor.user.id, slug: normalizeSlug(body.slug), name: body.name });
-        await identity.audit({ siteId: site.id, actorId: actor.user.id, action: 'site.created', targetType: 'site', targetId: site.id, requestId });
+        const site = await identity.createSite({ actorId: actor.user.id, slug: normalizeSlug(body.slug), name: body.name, requestId });
         return sendJson(res, 201, { site, requestId });
       }
 

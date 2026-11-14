@@ -46,7 +46,7 @@ test('tenant-isolation route inventory is generated, source-anchored and current
 
 test('generated inventory explicitly preserves the independent-review boundary', () => {
   const inventory = JSON.parse(fs.readFileSync(inventoryPath, 'utf8'));
-  const markdown = fs.readFileSync(path.join(root, 'docs/security/TENANT-ISOLATION-ROUTE-CAPABILITY-MAP-2026-11-07.md'), 'utf8');
+  const markdown = fs.readFileSync(path.join(root, 'docs/security/TENANT-ISOLATION-ROUTE-CAPABILITY-MAP-2026-11-14.md'), 'utf8');
   assert.match(markdown, /NOT AN INDEPENDENT REVIEW/);
   assert.match(markdown, /Issue #14 remains OPEN \/ NOT PERFORMED/);
   assert.match(markdown, /artifacts\/evidence\/tenant-isolation-review\.json/);

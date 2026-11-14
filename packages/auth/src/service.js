@@ -414,20 +414,32 @@ function createIdentityService({ pool, env = process.env, clock = () => Date.now
       ));
     },
 
-    async createSite({ actorId, slug, name }) {
+    async createSite({ actorId, slug, name, requestId = null }) {
       if (!/^[a-z0-9][a-z0-9-]{0,62}$/.test(String(slug || ''))) { const error = new Error('Site slug must use lowercase letters, numbers, and hyphens.'); error.statusCode = 400; error.code = 'ERR_VIRGOSCORPIO_HUB_INVALID_SITE_SLUG'; throw error; }
       if (typeof name !== 'string' || !name.trim() || name.length > 180) { const error = new Error('Site name must be 1–180 characters.'); error.statusCode = 400; error.code = 'ERR_VIRGOSCORPIO_HUB_INVALID_SITE_NAME'; throw error; }
-      const client = await pool.connect();
-      try {
-        await client.query('BEGIN');
-        const allowed = await client.query(`SELECT 1 FROM site_memberships m JOIN roles r ON r.id=m.role_id WHERE m.user_id=$1 AND r.capabilities @> '["site:manage"]'::jsonb LIMIT 1`, [actorId]);
+      return withTransaction(pool, async client => {
+        const allowed = await client.query("SELECT 1 FROM site_memberships m JOIN roles r ON r.id=m.role_id WHERE m.user_id=$1 AND r.capabilities @> '[\"site:manage\"]'::jsonb LIMIT 1", [actorId]);
         if (!allowed.rows[0]) { const error = new Error('At least one existing site-owner membership is required to create another site.'); error.statusCode = 403; error.code = 'ERR_VIRGOSCORPIO_HUB_FORBIDDEN'; throw error; }
-        const site = await client.query('INSERT INTO sites(slug,name) VALUES($1,$2) RETURNING id,slug,name,default_locale', [slug, name.trim()]);
+        let site;
+        try {
+          site = await client.query('INSERT INTO sites(slug,name) VALUES($1,$2) RETURNING id,slug,name,default_locale', [slug, name.trim()]);
+        } catch (error) {
+          if (error.code === '23505') { error.statusCode = 409; error.code = 'ERR_VIRGOSCORPIO_HUB_SITE_SLUG_EXISTS'; }
+          throw error;
+        }
         const role = await client.query("SELECT id FROM roles WHERE slug='site-owner'");
+        if (!role.rows[0]) throw new Error('Required site-owner role is missing; run migrations first.');
         await client.query('INSERT INTO site_memberships(site_id,user_id,role_id) VALUES($1,$2,$3)', [site.rows[0].id, actorId, role.rows[0].id]);
-        await client.query('COMMIT'); return site.rows[0];
-      } catch (error) { await client.query('ROLLBACK').catch(() => {}); if (error.code === '23505') { error.statusCode = 409; error.code = 'ERR_VIRGOSCORPIO_HUB_SITE_SLUG_EXISTS'; } throw error; }
-      finally { client.release(); }
+        await insertAuditEvent(client, {
+          siteId: site.rows[0].id,
+          actorId,
+          action: 'site.created',
+          targetType: 'site',
+          targetId: site.rows[0].id,
+          requestId,
+        });
+        return site.rows[0];
+      });
     },
 
     async listMembers({ siteId }) {
