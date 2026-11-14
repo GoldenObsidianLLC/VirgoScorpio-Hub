@@ -4,15 +4,15 @@
 **Repository:** `GoldenObsidianLLC/VirgoScorpio-Hub` (public source repository)
 **Package:** `virgoscorpio-hub@0.6.2` (`private: true`; unreleased and not publishable)
 **Decision:** **PRODUCTION NO-GO — `NOT_PRODUCTION_CERTIFIED`**
-**Exact main source:** `debd9890b94b55dd3b9496d80f49a9a7c00615fb`
-**Latest mainline feature:** [PR #142](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/142), F1.29 site-creation audit atomicity; merged 14 November 2026 at 16:27:43 UTC; [issue #141](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/141) CLOSED
-**Exact-main CI:** [Workflow #609](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43615723391), run `43615723391`, attempt 1; completed successfully at 16:30:50 UTC
+**Exact main source:** 67e9440b9c543e69a46bba8cbb25a9d2329f3502
+**Latest mainline feature:** [PR #144](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/144), F1.30 design-system mutation/audit atomicity; merged 14 November 2026 at 19:52:48 UTC; [issue #143](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/143) CLOSED
+**Exact-main CI:** [Workflow #612](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43634472737), run 43634472737, attempt 1; completed successfully at 19:56:11 UTC
 
 > This report distinguishes verified engineering evidence from production acceptance. Passing tests, automated security analysis, SBOM generation, signed provenance, and maintainer-authored regressions do not replace independent review, live provider qualification, accessibility acceptance, operational rehearsal, governance approval, or release-owner sign-off.
 
 ## 1. Executive decision
 
-VirgoScorpio Hub 0.6.2 remains an **unreleased, non-production developer preview**. The latest merged change, F1.29, makes site creation, initial owner membership, and its correlated `site.created` audit event atomic. Exact-main workflow #609 validated the merged source at `debd9890b94b55dd3b9496d80f49a9a7c00615fb`; all seven jobs completed successfully.
+VirgoScorpio Hub 0.6.2 remains an **unreleased, non-production developer preview**. The latest merged change, F1.30, makes the site design-system mutation and correlated design_system.updated audit event atomic. Exact-main workflow #612 validated main 67e9440b9c543e69a46bba8cbb25a9d2329f3502; all seven jobs completed successfully. GitHub records no formal review submission on PR #144; this is maintainer/automation evidence, not independent approval.
 
 The canonical, exact-source readiness artifact reports:
 
@@ -28,7 +28,7 @@ The artifact reports `readyForProduction: false` and `releaseClassification: NOT
 
 ### Release boundary
 
-- Package version remains **0.6.2**. No SemVer increment is warranted for the compatible F1.29 fix, F1.30 candidate, documentation refresh, or CI evidence.
+- Package version remains **0.6.2**. No SemVer increment is warranted for the compatible F1.29 and F1.30 fixes, documentation refresh, or CI evidence.
 - The GitHub source repository is public; `package.json` keeps the npm package `private: true`. The package has not been published.
 - No release tag, GitHub Release, npm publication, customer/production-data use, hosted production service, or production deployment is authorized.
 - The recommended posture remains isolated, self-hosted, non-production developer preview using synthetic/non-sensitive data.
@@ -194,29 +194,44 @@ F1.29 addressed a source-confirmed commit gap in `POST /api/v1/sites`: the site 
 
 PR #142 merged this change to `main` at `debd9890b94b55dd3b9496d80f49a9a7c00615fb`; issue #141 is CLOSED. Exact-main workflow #609 passed all seven jobs, including 607/607 Hub tests on both Node 22 and Node 24, 94/94 EnginEx tests on both, and 95/95 live PostgreSQL/Memgraph integration tests with zero skips. The hosted suite applied all 18 fresh migrations and verified 18 idempotent re-entry skips, browser/accessibility smoke, CodeQL, signed mainline supply-chain attestation, and exact-source evidence consolidation. GitHub records no formal PR review submission; this remains maintainer implementation and automated evidence, not independent assurance.
 
-## 10. F1.30 — Design-system mutation/audit atomicity (active maintainer candidate; issue #143)
+## 10. F1.30 — Design-system mutation/audit atomicity (merged mainline; issue #143 closed)
 
-F1.30 addresses a separate source-confirmed gap: the site design-system update wrote the `site_design_systems` mutation in a transaction, then called `identity.audit()` through the service pool after the transaction committed. An audit insert failure could therefore return an error while leaving the design-system version/tokens changed without the corresponding event.
+F1.30 corrected a transaction-boundary gap in the site design-system update path. Previously the route committed the site_design_systems upsert and only then called identity.audit() through the service pool. An audit insert failure could return an error while leaving design-system version/tokens changed without the correlated event.
 
-The active worktree is based on `debd9890b94b55dd3b9496d80f49a9a7c00615fb` on branch `security/f1-30-site-audit-side-effects-2026-11-14`, tracked by issue #143 under parent #124. The implementation reuses `withTransaction(localPool, work)` and extends `identity.audit(input, { queryable })` with a pool-backed default, preserving existing callers. The design-system update now supplies its transaction client as the audit queryable, placing the mutation and `design_system.updated` event in one transaction. Existing optimistic-version locking, selector/capability checks, response shape, and site scoping are preserved. No migration or public route contract is added.
+The route now reuses withTransaction(pool, work) for the row lock, optimistic-version check, upsert and design_system.updated audit insert. identity.audit(input, { queryable }) accepts the transaction client while preserving the pool-backed default for all existing callers. The response is returned after commit. Site capability checks, selectors, token validation, version-conflict behavior, request correlation, response shape and site scoping remain intact. No migration, schema, API contract, dependency, provider, lockfile, package version or SemVer change.
 
-### Local candidate validation
+PR #144 merged on 14 November 2026 at 19:52:48 UTC. Merge commit and current main: 67e9440b9c543e69a46bba8cbb25a9d2329f3502. Issue #143 is closed. GitHub records no formal PR review submission or requested reviewers; this is not independent approval. Independent tenant review #14 and platform security review #25 remain OPEN / NOT PERFORMED.
 
-- `node --test test/identity-audit-queryable.test.js`: **1/1 passed**; explicit transaction queryable is used, and the one-argument API remains pool-backed.
-- Dedicated disposable PostgreSQL integration: **22/22 passed, zero failures/skips**. All **18/18** migrations applied on first pass; a second pass skipped all **18/18** idempotently.
-- The new trigger-failure regression returns an error for Site A, verifies Site A and Site B design-system rows/versions/tokens remain unchanged and no correlated audit row is committed, then verifies a safe retry increments once and writes exactly one correlated event.
-- A clean full `npm run check` completed on the local Windows host: **608 tests, 605 passed, 0 failed, 3 Windows-specific skips**; repository verification passed **235 required paths and 246 JavaScript files**. Two subsequent full-suite reruns intermittently failed in unrelated loopback HTTP tests with Undici `fetch failed` / `Error: bad port`; the oversized-body test passed three isolated reruns, and the billing webhook file passed 9/9 in isolation. The host TCP dynamic-port range is configured as 1024–61440, overlapping Fetch-reserved ports; the exact failing port was not captured, so this is a suspected local fixture/environment interaction, not a confirmed root cause. No OS socket configuration was changed.
-- Tenant-isolation inventory: **27 flow families, 78 route patterns, 21 implementation files and 43 test references**; generator freshness check passed (source digest `17ea7e28df88db0caf5f29bb9ec41a908b86d411d2ef92526c5ff6c183181899`).
-- `npm audit --audit-level=high`: **0 vulnerabilities**; `git diff --check`: PASS.
+### Local validation
 
-This is a local maintainer candidate only. No F1.30 candidate PR or exact-head hosted workflow has been created yet; independent review has not occurred. The local full-suite re-run flake is isolated to unrelated dynamic loopback HTTP tests on Windows/Node.js 26.12.1; F1.30 unit and PostgreSQL tests pass directly. Exact-head hosted Node.js 22/24 workflows remain the required candidate gate. Do not count F1.30 as mainline release evidence, populate independent-review evidence, close #14/#25, or update the canonical release manifest with candidate results. No schema, migration, route/API contract, provider, dependency, lockfile, package-version or SemVer change is intended.
+- Identity audit explicit-queryable/default-pool unit: 1/1 passed.
+
+- Disposable PostgreSQL tenant integration: 22/22 passed, zero skips; 18 fresh migrations applied and 18 idempotently skipped on re-entry. Trigger failure rolled back the Site A mutation, preserved Site B and wrote no audit row; retry incremented once and created exactly one correlated event. Conflicting selectors and stale expected versions created no audit side effect.
+
+- One clean local npm run check passed 608 tests (605 passed, zero failures, three Windows-specific skips); repository verification covered 235 paths and 246 JavaScript files. Two later full-suite reruns intermittently hit Undici fetch failed / Error: bad port in unrelated Windows/Node 26.12.1 loopback tests. Affected body-limit test passed three isolated reruns; billing-webhook suite passed 9/9 isolated. Exact port was not captured; root cause remains unconfirmed.
+
+- Full and production npm audit: zero vulnerabilities. Markdown: 441 internal links, zero broken. Tenant inventory: 27 families, 78 route patterns, 21 source files, 43 test references; generator freshness passed.
+
+### Exact-head candidate workflows
+
+Push workflow #43632988846 and PR workflow #43633214435 passed on candidate commit ba3aaa5ea01edf4f76a694ce9728c2ff2791401e. Node 22/24 each passed 608/608 Hub and 94/94 EnginEx tests; PostgreSQL/Memgraph passed 96/96 with zero skips; migrations, Playwright, CodeQL and evidence consolidation passed. The branch-only attestation job skipped as designed.
+
+### Post-merge exact-main validation
+
+Exact-main workflow #612 (run 43634472737, attempt 1) completed successfully at 19:56:11 UTC on 67e9440b9c543e69a46bba8cbb25a9d2329f3502. All seven jobs passed: Node 22.23.4/24.22.1 each 608/608 Hub and 94/94 EnginEx; PostgreSQL/Memgraph 96/96, zero skips, including the F1.30 failure-injection; 18/18 fresh migrations plus 18/18 idempotent re-entry; Playwright editor/collaboration smoke 9/9; CodeQL; signed mainline SBOM/provenance attestation; exact-source evidence finalization.
+
+The mainline CycloneDX 1.5 SBOM contains 200 components and 201 dependency records. Lockfile SHA-256: 8f3786bcfcd03d0b63761c7107e4d757ae5b45171ba2f6c086ff38c027c8b086. Node 22 SBOM SHA-256: c10642773b4a33097df28a03c15496152293ba8efb91d80df49ee235c83b96a7. Fourteen components contain LGPL terms and still require qualified human license/distribution review. Producer-manifest hashes, artifact IDs and archive digests are retained in RELEASE-MANIFEST.json.
+
+F1.30 strengthens mainline transactional audit consistency but does not close independent security, supply-chain, provider, accessibility-acceptance, operational or governance gates. Readiness remains 8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE, readyForProduction false, NOT_PRODUCTION_CERTIFIED. Package 0.6.2 remains private/unreleased; production remains NO-GO.
 
 ## 11. Recommended next work
 
-1. Complete F1.30 documentation/inventory reconciliation, keep unrelated KaTeX and EnginEx submodule working-tree edits out of the candidate commit, and verify the final diff.
-2. Push the F1.30 branch, open a PR linked to #143/#124, and require exact-head push/PR workflows to pass the Node matrix, PostgreSQL/Memgraph failure-injection suite, browser/accessibility, CodeQL, and evidence consolidation. Keep human review as a separate gate.
-3. Advance independent tenant review #14 and platform security review #25 through qualified assessors; retain human dependency review #23 and load/restore #24 as separate priorities.
-4. Keep operations/release approval #26, governance #32, and scope approval #13 open until the authorized owners record decisions. Do not publish or deploy.
+1. Advance independent tenant-isolation review #14 and platform security assessment #25 through qualified assessors; maintainer tests and CI do not replace those reviews.
+
+2. Complete human dependency/license review #23, including the 14 LGPL-bearing SBOM components, and retain the separate load/backup/restore gate #24.
+
+3. Obtain authorized decisions for scope #13, operations/release approval #26 and governance #32. Keep 0.6.2 private/unreleased; do not publish or deploy.
+
 
 ## 12. Source files and evidence pointers
 
@@ -230,4 +245,4 @@ This is a local maintainer candidate only. No F1.30 candidate PR or exact-head h
 - Implementation continuity: [implementation roadmap](../IMPLEMENTATION-ROADMAP.md).
 - Maintainer-only security policy: [maintainer-led security assurance](../security/MAINTAINER-LED-SECURITY-ASSURANCE.md).
 
-**Prepared from exact-main workflow #609 and its retained artifacts, plus explicitly separated local-only F1.30 candidate results.** Refresh this report against a new exact-main source SHA and workflow before making any later release decision.
+**Prepared from exact-main workflow #612 and its retained artifacts, plus the separately identified F1.30 local validation and exact-head candidate workflows.** This report is current for main source 67e9440b9c543e69a46bba8cbb25a9d2329f3502; refresh it against the next verified exact-main source and workflow before a later release decision.
