@@ -1575,12 +1575,21 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
         if (body.allowExternalContent && env.AI_ALLOW_EXTERNAL_CONTENT !== 'true') throw fail(409, 'ERR_VIRGOSCORPIO_HUB_AI_EXTERNAL_APPROVAL_REQUIRED', 'Set AI_ALLOW_EXTERNAL_CONTENT=true in deployment configuration before enabling external content processing for a site.');
         const globalAllow = new Set(String(env.AI_ALLOWED_PROVIDERS || 'mock').split(',').map(item => item.trim()).filter(Boolean));
         if (allowedProviders.some(provider => !globalAllow.has(provider))) throw fail(409, 'ERR_VIRGOSCORPIO_HUB_AI_PROVIDER_GLOBAL_POLICY', 'A site policy cannot grant a provider that the global deployment allowlist excludes.');
-        const updated = await localPool.query(`INSERT INTO site_ai_policies(site_id,enabled,allow_external_content,allowed_providers,max_data_classification,daily_request_limit,daily_input_chars_limit,require_human_review,updated_by,updated_at)
-          VALUES($1,$2,$3,$4::jsonb,$5,$6,$7,true,$8,now())
-          ON CONFLICT(site_id) DO UPDATE SET enabled=EXCLUDED.enabled,allow_external_content=EXCLUDED.allow_external_content,allowed_providers=EXCLUDED.allowed_providers,max_data_classification=EXCLUDED.max_data_classification,daily_request_limit=EXCLUDED.daily_request_limit,daily_input_chars_limit=EXCLUDED.daily_input_chars_limit,require_human_review=true,updated_by=EXCLUDED.updated_by,updated_at=now()
-          RETURNING site_id,enabled,allow_external_content,allowed_providers,max_data_classification,daily_request_limit,daily_input_chars_limit,require_human_review,updated_by,updated_at`, [siteId, body.enabled, body.allowExternalContent, JSON.stringify(allowedProviders), body.maxDataClassification, dailyRequests, dailyChars, actor.user.id || null]);
-        if (identity && actor.user.id) await identity.audit({ siteId, actorId: actor.user.id, action: 'ai.policy_updated', targetType: 'ai-policy', requestId, details: { enabled: body.enabled, allowedProviders, maxDataClassification: body.maxDataClassification } });
-        return sendJson(res, 200, { policy: updated.rows[0], requestId });
+        const updated = await withTransaction(localPool, async client => {
+          const result = await client.query(`INSERT INTO site_ai_policies(site_id,enabled,allow_external_content,allowed_providers,max_data_classification,daily_request_limit,daily_input_chars_limit,require_human_review,updated_by,updated_at)
+            VALUES($1,$2,$3,$4::jsonb,$5,$6,$7,true,$8,now())
+            ON CONFLICT(site_id) DO UPDATE SET enabled=EXCLUDED.enabled,allow_external_content=EXCLUDED.allow_external_content,allowed_providers=EXCLUDED.allowed_providers,max_data_classification=EXCLUDED.max_data_classification,daily_request_limit=EXCLUDED.daily_request_limit,daily_input_chars_limit=EXCLUDED.daily_input_chars_limit,require_human_review=true,updated_by=EXCLUDED.updated_by,updated_at=now()
+            RETURNING site_id,enabled,allow_external_content,allowed_providers,max_data_classification,daily_request_limit,daily_input_chars_limit,require_human_review,updated_by,updated_at`, [siteId, body.enabled, body.allowExternalContent, JSON.stringify(allowedProviders), body.maxDataClassification, dailyRequests, dailyChars, actor.user.id || null]);
+          const policy = result.rows[0];
+          if (identity && actor.user.id) {
+            await identity.audit(
+              { siteId, actorId: actor.user.id, action: 'ai.policy_updated', targetType: 'ai-policy', requestId, details: { enabled: body.enabled, allowedProviders, maxDataClassification: body.maxDataClassification } },
+              { queryable: client },
+            );
+          }
+          return policy;
+        });
+        return sendJson(res, 200, { policy: updated, requestId });
       }
 
       if (req.method === 'POST' && url.pathname === '/api/v1/ai/page-draft') {

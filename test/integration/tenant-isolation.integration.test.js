@@ -24,6 +24,7 @@ test(
     const userIds = [];
     let roleId = null;
     let cloudRoleId = null;
+    let aiPolicyRoleId = null;
     let server = null;
 
     const env = {
@@ -32,6 +33,8 @@ test(
       DATABASE_URL: process.env.DATABASE_URL,
       REQUIRE_VERIFIED_EMAIL: 'false',
       AI_PROVIDER: 'mock',
+      AI_ALLOWED_PROVIDERS: 'mock',
+      AI_ALLOW_EXTERNAL_CONTENT: 'false',
     };
     // Ensure the development-token shortcut is not enabled in this API test.
     delete env.VIRGOSCORPIO_HUB_API_TOKEN;
@@ -58,6 +61,9 @@ test(
       }
       if (cloudRoleId) {
         await pool.query('DELETE FROM roles WHERE id = $1', [cloudRoleId]).catch(() => {});
+      }
+      if (aiPolicyRoleId) {
+        await pool.query('DELETE FROM roles WHERE id = $1', [aiPolicyRoleId]).catch(() => {});
       }
       await pool.end();
     });
@@ -313,6 +319,211 @@ test(
       assert.equal(payload.code, 'ERR_VIRGOSCORPIO_HUB_SITE_CONTEXT_MISMATCH');
     }
     assert.deepEqual(await configurationSnapshot(), configurationBefore, 'selector mismatches must not create or mutate tenant configuration records');
+
+    await t.test('site AI policy update and correlated audit commit or roll back together', async () => {
+      const suffix = randomUUID().replace(/-/g, '');
+      const requestIds = Object.fromEntries(
+        ['siteMismatch', 'forbidden', 'invalid', 'providerBlocked', 'externalBlocked', 'auditFailure', 'retry']
+          .map(kind => [kind, 'ai-policy-' + kind + '-' + suffix.slice(0, 16)]),
+      );
+      const policyBody = {
+        enabled: false,
+        allowExternalContent: false,
+        allowedProviders: ['mock'],
+        maxDataClassification: 'confidential',
+        dailyRequestLimit: 250,
+        dailyInputCharsLimit: 500000,
+        requireHumanReview: true,
+      };
+      const seedPolicy = async ({ siteId, enabled, classification, dailyRequests, dailyChars, updatedBy }) => {
+        await pool.query(
+          `INSERT INTO site_ai_policies(
+             site_id,enabled,allow_external_content,allowed_providers,
+             max_data_classification,daily_request_limit,daily_input_chars_limit,
+             require_human_review,updated_by
+           ) VALUES($1,$2,false,'["mock"]'::jsonb,$3,$4,$5,true,$6)`,
+          [siteId, enabled, classification, dailyRequests, dailyChars, updatedBy],
+        );
+      };
+      const policySnapshot = async siteId => {
+        const result = await pool.query(
+          `SELECT site_id,enabled,allow_external_content,allowed_providers,
+                  max_data_classification,daily_request_limit,daily_input_chars_limit,
+                  require_human_review,updated_by,updated_at
+             FROM site_ai_policies
+            WHERE site_id=$1`,
+          [siteId],
+        );
+        return result.rows[0] || null;
+      };
+      const auditFor = async requestId => pool.query(
+        `SELECT site_id,actor_id,action,target_type,target_id,result,request_id,details
+           FROM audit_events
+          WHERE site_id=$1 AND action='ai.policy_updated' AND request_id=$2`,
+        [siteB, requestId],
+      );
+      const putPolicy = (requestId, body, headers = authHeaders) => fetch(
+        base + '/api/v1/sites/' + siteB + '/ai-policy',
+        {
+          method: 'PUT',
+          headers: { ...headers, 'content-type': 'application/json', 'x-request-id': requestId },
+          body: JSON.stringify(body),
+        },
+      );
+
+      await seedPolicy({
+        siteId: siteA,
+        enabled: true,
+        classification: 'public',
+        dailyRequests: 40,
+        dailyChars: 6000,
+        updatedBy: authorId,
+      });
+      await seedPolicy({
+        siteId: siteB,
+        enabled: true,
+        classification: 'internal',
+        dailyRequests: 20,
+        dailyChars: 3000,
+        updatedBy: actor.id,
+      });
+      const siteAControl = await policySnapshot(siteA);
+      const siteBBaseline = await policySnapshot(siteB);
+      assert.ok(siteAControl);
+      assert.ok(siteBBaseline);
+
+      const limitedRole = await pool.query(
+        'INSERT INTO roles(slug,label,capabilities) VALUES($1,$2,$3::jsonb) RETURNING id',
+        ['tenant-ai-policy-read-' + suffix.slice(0, 10), 'Tenant AI Policy Read Only', JSON.stringify(['content:read'])],
+      );
+      aiPolicyRoleId = limitedRole.rows[0].id;
+      const limitedActorResult = await pool.query(
+        `INSERT INTO users(email,display_name,password_hash,status)
+         VALUES($1,$2,$3,'active') RETURNING id,email`,
+        ['tenant-ai-policy-read-' + suffix + '@example.test', 'Tenant AI Policy Read Only', await hashPassword(password)],
+      );
+      const limitedActor = limitedActorResult.rows[0];
+      userIds.push(limitedActor.id);
+      await pool.query(
+        'INSERT INTO site_memberships(site_id,user_id,role_id) VALUES($1,$2,$3)',
+        [siteB, limitedActor.id, aiPolicyRoleId],
+      );
+      const limitedSession = await identity.login({
+        email: limitedActor.email,
+        password,
+        ip: '127.0.0.1',
+        userAgent: 'tenant-ai-policy-read-only-test',
+      });
+      assert.equal(limitedSession.mfaRequired, false);
+
+      try {
+        const siteMismatch = await putPolicy(requestIds.siteMismatch, { ...policyBody, siteId: siteA });
+        assert.equal(siteMismatch.status, 400);
+        assert.equal((await siteMismatch.json()).code, 'ERR_VIRGOSCORPIO_HUB_SITE_CONTEXT_MISMATCH');
+
+        const forbidden = await putPolicy(requestIds.forbidden, policyBody, {
+          authorization: 'Bearer ' + limitedSession.token,
+        });
+        assert.equal(forbidden.status, 403, 'a site member without site:manage cannot update AI governance');
+
+        const invalid = await putPolicy(requestIds.invalid, { ...policyBody, dailyRequestLimit: 0 });
+        assert.equal(invalid.status, 400);
+        assert.equal((await invalid.json()).code, 'ERR_VIRGOSCORPIO_HUB_AI_POLICY_INVALID');
+
+        const providerBlocked = await putPolicy(requestIds.providerBlocked, {
+          ...policyBody,
+          allowedProviders: ['openai-responses'],
+        });
+        assert.equal(providerBlocked.status, 409);
+        assert.equal((await providerBlocked.json()).code, 'ERR_VIRGOSCORPIO_HUB_AI_PROVIDER_GLOBAL_POLICY');
+
+        const externalBlocked = await putPolicy(requestIds.externalBlocked, {
+          ...policyBody,
+          allowExternalContent: true,
+        });
+        assert.equal(externalBlocked.status, 409);
+        assert.equal((await externalBlocked.json()).code, 'ERR_VIRGOSCORPIO_HUB_AI_EXTERNAL_APPROVAL_REQUIRED');
+
+        assert.deepEqual(await policySnapshot(siteB), siteBBaseline, 'rejected policy updates must preserve the Site B policy');
+        assert.deepEqual(await policySnapshot(siteA), siteAControl, 'rejected Site B policy updates must preserve the Site A control');
+        const rejectedAudit = await pool.query(
+          "SELECT request_id FROM audit_events WHERE site_id=$1 AND action='ai.policy_updated' AND request_id=ANY($2::text[])",
+          [siteB, [requestIds.siteMismatch, requestIds.forbidden, requestIds.invalid, requestIds.providerBlocked, requestIds.externalBlocked]],
+        );
+        assert.equal(rejectedAudit.rowCount, 0, 'rejected policy updates must not create audit events');
+
+        const functionName = 'test_ai_policy_audit_fn_' + suffix;
+        const triggerName = 'test_ai_policy_audit_tr_' + suffix;
+        try {
+          await pool.query(
+            `CREATE FUNCTION "${functionName}"() RETURNS trigger LANGUAGE plpgsql AS $audit$
+             BEGIN
+               IF NEW.action = 'ai.policy_updated' AND NEW.site_id = '${siteB}'::uuid THEN
+                 RAISE EXCEPTION 'simulated AI policy audit persistence failure';
+               END IF;
+               RETURN NEW;
+             END;
+             $audit$`,
+          );
+          await pool.query(
+            `CREATE TRIGGER "${triggerName}" BEFORE INSERT ON audit_events
+             FOR EACH ROW EXECUTE FUNCTION "${functionName}"()`,
+          );
+
+          const failed = await putPolicy(requestIds.auditFailure, policyBody);
+          assert.equal(failed.status, 500);
+          await failed.json();
+          assert.deepEqual(
+            await policySnapshot(siteB),
+            siteBBaseline,
+            'failed ai.policy_updated persistence must roll back the Site B policy upsert',
+          );
+          assert.deepEqual(
+            await policySnapshot(siteA),
+            siteAControl,
+            'Site A policy must remain unchanged during Site B audit failure injection',
+          );
+          assert.equal((await auditFor(requestIds.auditFailure)).rowCount, 0);
+        } finally {
+          await pool.query(`DROP TRIGGER IF EXISTS "${triggerName}" ON audit_events`).catch(() => {});
+          await pool.query(`DROP FUNCTION IF EXISTS "${functionName}"()`).catch(() => {});
+        }
+
+        const retried = await putPolicy(requestIds.retry, policyBody);
+        assert.equal(retried.status, 200);
+        const responsePolicy = (await retried.json()).policy;
+        assert.equal(responsePolicy.site_id, siteB);
+        assert.equal(responsePolicy.enabled, false);
+        assert.equal(responsePolicy.allow_external_content, false);
+        assert.deepEqual(responsePolicy.allowed_providers, ['mock']);
+        assert.equal(responsePolicy.max_data_classification, 'confidential');
+        assert.equal(responsePolicy.daily_request_limit, 250);
+        assert.equal(responsePolicy.daily_input_chars_limit, 500000);
+        assert.equal(responsePolicy.require_human_review, true);
+        assert.equal(responsePolicy.updated_by, actor.id);
+
+        const retryAudit = await auditFor(requestIds.retry);
+        assert.equal(retryAudit.rowCount, 1);
+        assert.equal(retryAudit.rows[0].site_id, siteB);
+        assert.equal(retryAudit.rows[0].actor_id, actor.id);
+        assert.equal(retryAudit.rows[0].action, 'ai.policy_updated');
+        assert.equal(retryAudit.rows[0].target_type, 'ai-policy');
+        assert.equal(retryAudit.rows[0].target_id, null);
+        assert.equal(retryAudit.rows[0].request_id, requestIds.retry);
+        assert.deepEqual(retryAudit.rows[0].details, {
+          enabled: false,
+          allowedProviders: ['mock'],
+          maxDataClassification: 'confidential',
+        });
+
+        assert.deepEqual(await policySnapshot(siteA), siteAControl, 'successful Site B policy update must not mutate Site A');
+      } finally {
+        await pool.query(
+          "DELETE FROM audit_events WHERE site_id=ANY($1::uuid[]) AND request_id=ANY($2::text[])",
+          [[siteA, siteB], Object.values(requestIds)],
+        );
+      }
+    });
 
     await t.test('cloud connection IDs and selector conflicts remain tenant-scoped for a least-privilege cloud manager', async () => {
       const cloudRoleResult = await pool.query(
