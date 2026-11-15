@@ -1510,8 +1510,8 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
               "INSERT INTO outbox_events(aggregate_type,aggregate_id,aggregate_version,event_type,payload,site_id,actor_id,correlation_id,classification) VALUES('relationship',$1,$2,'relationship.upsert',$3::jsonb,$4,$5,$6,'site-private') ON CONFLICT(aggregate_type,aggregate_id,aggregate_version,event_type) DO NOTHING",
               [rel.id, rel.version, JSON.stringify({ relationshipId: rel.id, siteId, sourceId: rel.source_id, targetId: rel.target_id, sourceType, targetType, kind: rel.kind, version: rel.version }), siteId, actor.user.id || null, requestId || null]
             );
+            if (identity && actor.user.id) await identity.audit({ siteId, actorId: actor.user.id, action: 'relationship.created', targetType: 'relationship', targetId: rel.id, requestId, details: { kind: rel.kind } }, { queryable: client });
             await client.query('COMMIT');
-            if (identity && actor.user.id) await identity.audit({ siteId, actorId: actor.user.id, action: 'relationship.created', targetType: 'relationship', targetId: rel.id, requestId, details: { kind: rel.kind } });
             return sendJson(res, 201, { relationship: rel, requestId });
           } catch (error) { await client.query('ROLLBACK').catch(() => {}); if (error.code === '23505') throw fail(409, 'ERR_VIRGOSCORPIO_HUB_RELATIONSHIP_EXISTS', 'This relationship already exists.'); throw error; }
           finally { client.release(); }
@@ -1529,8 +1529,8 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
             "INSERT INTO outbox_events(aggregate_type,aggregate_id,aggregate_version,event_type,payload,site_id,actor_id,correlation_id,classification) VALUES('relationship',$1,$2,'relationship.delete',$3::jsonb,$4,$5,$6,'site-private') ON CONFLICT(aggregate_type,aggregate_id,aggregate_version,event_type) DO NOTHING",
             [rel.id, version, JSON.stringify({ relationshipId: rel.id, siteId, sourceId: rel.source_id, targetId: rel.target_id, sourceType: src.rows[0]?.node_type || 'content', targetType: dst.rows[0]?.node_type || (rel.kind === 'HAS_TERM' ? 'term' : 'content'), kind: rel.kind, version }), siteId, actor.user.id || null, requestId || null]
           );
+          if (identity && actor.user.id) await identity.audit({ siteId, actorId: actor.user.id, action: 'relationship.deleted', targetType: 'relationship', targetId: rel.id, requestId }, { queryable: client });
           await client.query('COMMIT');
-          if (identity && actor.user.id) await identity.audit({ siteId, actorId: actor.user.id, action: 'relationship.deleted', targetType: 'relationship', targetId: rel.id, requestId });
           return sendJson(res, 200, { deleted: true, relationshipId, requestId });
         } catch (error) { await client.query('ROLLBACK').catch(() => {}); throw error; }
         finally { client.release(); }

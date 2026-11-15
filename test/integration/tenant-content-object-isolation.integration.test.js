@@ -28,6 +28,38 @@ async function contentSideEffects(pool, siteId, contentId) {
   return result.rows[0] || null;
 }
 
+/**
+ * Inject a failure for one audit action in one site without affecting other writes.
+ * The trigger is always removed so this fault cannot leak into later integration cases.
+ */
+async function withAuditInsertFailure(pool, { action, siteId }, operation) {
+  const functionName = 'test_audit_insert_failure_' + randomUUID().replace(/-/g, '');
+  const actionLiteral = String(action).replace(/'/g, "''");
+  const siteIdLiteral = String(siteId).replace(/'/g, "''");
+
+  await pool.query(
+    `CREATE FUNCTION "${functionName}"() RETURNS trigger LANGUAGE plpgsql AS $audit$
+     BEGIN
+       IF NEW.action = '${actionLiteral}' AND NEW.site_id = '${siteIdLiteral}'::uuid THEN
+         RAISE EXCEPTION 'simulated audit persistence failure';
+       END IF;
+       RETURN NEW;
+     END;
+     $audit$`,
+  );
+
+  try {
+    await pool.query(
+      `CREATE TRIGGER "${functionName}" BEFORE INSERT ON audit_events
+       FOR EACH ROW EXECUTE FUNCTION "${functionName}"()`,
+    );
+    await operation();
+  } finally {
+    await pool.query(`DROP TRIGGER IF EXISTS "${functionName}" ON audit_events`).catch(() => {});
+    await pool.query(`DROP FUNCTION IF EXISTS "${functionName}"()`).catch(() => {});
+  }
+}
+
 test(
   'tenant isolation: a site B member cannot read, restore, publish, or collaborate on a site A content ID',
   { skip: !enabled },
@@ -44,6 +76,8 @@ test(
     const env = {
       ...process.env,
       NODE_ENV: 'test',
+      // Keep unrelated global request throttling from masking tenant-isolation assertions.
+      RATE_LIMIT_MAX_REQUESTS: '1000',
       DATABASE_URL: process.env.DATABASE_URL,
       REQUIRE_VERIFIED_EMAIL: 'false',
       AI_PROVIDER: 'mock',
@@ -379,6 +413,243 @@ test(
           await pool.query(
             'DELETE FROM content_relationships WHERE site_id=$1 AND id=ANY($2::uuid[])',
             [siteB, relationshipIds]
+          );
+        }
+      }
+    });
+
+    await t.test('relationship mutation and outbox writes roll back when the correlated audit insert fails', async () => {
+      const suffix = randomUUID().replace(/-/g, '');
+      const requestIds = Object.fromEntries(
+        ['crossSite', 'invalidType', 'invalidMetadata', 'create', 'duplicate', 'delete']
+          .map(kind => [kind, 'rel-' + kind + '-' + suffix.slice(0, 18)]),
+      );
+      const relationshipPayload = {
+        sourceId: ownContent.id,
+        targetId: ownContentTarget.id,
+        kind: 'RELATED_TO',
+        metadata: { source: 'F1.32' },
+      };
+      const create = (requestId, overrides = {}) => fetch(base + '/api/v1/sites/' + siteB + '/relationships', {
+        method: 'POST',
+        headers: { ...headers, 'content-type': 'application/json', 'x-request-id': requestId },
+        body: JSON.stringify({ ...relationshipPayload, ...overrides }),
+      });
+      const remove = (relationshipId, requestId) => fetch(base + '/api/v1/sites/' + siteB + '/relationships/' + relationshipId, {
+        method: 'DELETE',
+        headers: { ...headers, 'x-request-id': requestId },
+      });
+      const auditFor = (action, requestId) => pool.query(
+        'SELECT site_id,actor_id,action,target_type,target_id,request_id,details FROM audit_events WHERE site_id=$1 AND action=$2 AND request_id=$3',
+        [siteB, action, requestId],
+      );
+      const outboxFor = relationshipId => pool.query(
+        `SELECT event_type,aggregate_version,site_id,actor_id,correlation_id,classification,
+           payload->>'siteId' AS payload_site_id
+         FROM outbox_events
+         WHERE aggregate_type='relationship' AND aggregate_id=$1
+         ORDER BY aggregate_version,event_type`,
+        [relationshipId],
+      );
+
+      let siteAControl = null;
+      try {
+        const siteAControlTarget = await store.saveDraft({
+          siteId: siteA,
+          title: 'Site A Relationship Audit Control',
+          slug: 'site-a-relationship-audit-' + suffix.slice(0, 8),
+          locale: 'en',
+          contentType: 'page',
+          document: {
+            schemaVersion: 1,
+            documentId: randomUUID(),
+            type: 'page',
+            title: 'Site A Relationship Audit Control',
+            children: [],
+          },
+          authorId,
+          note: 'F1.32 cross-site rollback control',
+        });
+        const controlResult = await pool.query(
+          `INSERT INTO content_relationships(site_id,source_id,target_id,kind,metadata)
+           VALUES($1,$2,$3,'RELATED_TO',$4::jsonb)
+           RETURNING id,version,deleted_at`,
+          [siteA, foreignContent.id, siteAControlTarget.id, JSON.stringify({ fixture: 'F1.32 control' })],
+        );
+        siteAControl = controlResult.rows[0];
+
+        const crossSite = await create(requestIds.crossSite, {
+          targetId: foreignContent.id,
+        });
+        assert.equal(crossSite.status, 404);
+        assert.equal((await crossSite.json()).code, 'ERR_VIRGOSCORPIO_HUB_RELATIONSHIP_ENDPOINT_NOT_FOUND');
+        assert.equal((await pool.query(
+          'SELECT id FROM content_relationships WHERE site_id=$1 AND source_id=$2 AND target_id=$3 AND kind=$4',
+          [siteB, ownContent.id, foreignContent.id, 'RELATED_TO'],
+        )).rowCount, 0, 'cross-site endpoint attempts must not persist');
+        assert.equal((await pool.query(
+          "SELECT id FROM outbox_events WHERE site_id=$1 AND correlation_id=$2 AND aggregate_type='relationship'",
+          [siteB, requestIds.crossSite],
+        )).rowCount, 0, 'cross-site endpoint attempts must not emit outbox events');
+        assert.equal((await auditFor('relationship.created', requestIds.crossSite)).rowCount, 0);
+
+        const invalidType = await create(requestIds.invalidType, { kind: 'HAS_TERM' });
+        assert.equal(invalidType.status, 422);
+        assert.equal((await invalidType.json()).code, 'ERR_VIRGOSCORPIO_HUB_RELATIONSHIP_TYPE');
+        assert.equal((await auditFor('relationship.created', requestIds.invalidType)).rowCount, 0);
+        assert.equal((await pool.query(
+          'SELECT id FROM outbox_events WHERE site_id=$1 AND correlation_id=$2',
+          [siteB, requestIds.invalidType],
+        )).rowCount, 0);
+
+        const invalidMetadata = await create(requestIds.invalidMetadata, { metadata: [] });
+        assert.equal(invalidMetadata.status, 400);
+        assert.equal((await invalidMetadata.json()).code, 'ERR_VIRGOSCORPIO_HUB_RELATIONSHIP_METADATA');
+        assert.equal((await auditFor('relationship.created', requestIds.invalidMetadata)).rowCount, 0);
+        assert.equal((await pool.query(
+          'SELECT id FROM outbox_events WHERE site_id=$1 AND correlation_id=$2',
+          [siteB, requestIds.invalidMetadata],
+        )).rowCount, 0);
+
+        await withAuditInsertFailure(pool, { action: 'relationship.created', siteId: siteB }, async () => {
+          const failed = await create(requestIds.create);
+          assert.equal(failed.status, 500);
+          await failed.json();
+          const [relationship, outbox, audit] = await Promise.all([
+            pool.query(
+              'SELECT id FROM content_relationships WHERE site_id=$1 AND source_id=$2 AND target_id=$3 AND kind=$4 AND deleted_at IS NULL',
+              [siteB, ownContent.id, ownContentTarget.id, 'RELATED_TO'],
+            ),
+            pool.query(
+              "SELECT id FROM outbox_events WHERE site_id=$1 AND correlation_id=$2 AND aggregate_type='relationship'",
+              [siteB, requestIds.create],
+            ),
+            auditFor('relationship.created', requestIds.create),
+          ]);
+          assert.equal(relationship.rowCount, 0, 'failed create rolls back the relationship');
+          assert.equal(outbox.rowCount, 0, 'failed create rolls back the outbox event');
+          assert.equal(audit.rowCount, 0, 'failed create leaves no audit event');
+        });
+
+        const createdResponse = await create(requestIds.create);
+        assert.equal(createdResponse.status, 201);
+        const created = (await createdResponse.json()).relationship;
+        assert.ok(created.id);
+        assert.equal(created.site_id, siteB);
+        assert.equal(created.version, 1);
+
+        const createAudit = await auditFor('relationship.created', requestIds.create);
+        assert.equal(createAudit.rowCount, 1);
+        assert.equal(createAudit.rows[0].actor_id, actor.id);
+        assert.equal(createAudit.rows[0].target_type, 'relationship');
+        assert.equal(createAudit.rows[0].target_id, created.id);
+        assert.equal(createAudit.rows[0].request_id, requestIds.create);
+        assert.deepEqual(createAudit.rows[0].details, { kind: 'RELATED_TO' });
+
+        const createOutbox = await outboxFor(created.id);
+        assert.equal(createOutbox.rowCount, 1);
+        assert.equal(createOutbox.rows[0].event_type, 'relationship.upsert');
+        assert.equal(createOutbox.rows[0].aggregate_version, created.version);
+        assert.equal(createOutbox.rows[0].site_id, siteB);
+        assert.equal(createOutbox.rows[0].actor_id, actor.id);
+        assert.equal(createOutbox.rows[0].correlation_id, requestIds.create);
+        assert.equal(createOutbox.rows[0].classification, 'site-private');
+        assert.equal(createOutbox.rows[0].payload_site_id, siteB);
+
+        const duplicate = await create(requestIds.duplicate);
+        assert.equal(duplicate.status, 409);
+        assert.equal((await duplicate.json()).code, 'ERR_VIRGOSCORPIO_HUB_RELATIONSHIP_EXISTS');
+        assert.equal((await outboxFor(created.id)).rowCount, 1, 'duplicate create adds no outbox event');
+        assert.equal((await auditFor('relationship.created', requestIds.duplicate)).rowCount, 0);
+
+        await withAuditInsertFailure(pool, { action: 'relationship.deleted', siteId: siteB }, async () => {
+          const failed = await remove(created.id, requestIds.delete);
+          assert.equal(failed.status, 500);
+          await failed.json();
+          const [relationship, outbox, audit] = await Promise.all([
+            pool.query(
+              'SELECT version,deleted_at FROM content_relationships WHERE site_id=$1 AND id=$2',
+              [siteB, created.id],
+            ),
+            outboxFor(created.id),
+            auditFor('relationship.deleted', requestIds.delete),
+          ]);
+          assert.equal(relationship.rows[0].version, created.version);
+          assert.equal(relationship.rows[0].deleted_at, null, 'failed delete preserves the active relationship');
+          assert.equal(outbox.rowCount, 1, 'failed delete rolls back its outbox event');
+          assert.equal(audit.rowCount, 0, 'failed delete leaves no audit event');
+        });
+
+        const deletedResponse = await remove(created.id, requestIds.delete);
+        assert.equal(deletedResponse.status, 200);
+        const deleted = await pool.query(
+          'SELECT version,deleted_at FROM content_relationships WHERE site_id=$1 AND id=$2',
+          [siteB, created.id],
+        );
+        assert.equal(deleted.rows[0].version, created.version + 1);
+        assert.ok(deleted.rows[0].deleted_at);
+
+        const deleteAudit = await auditFor('relationship.deleted', requestIds.delete);
+        assert.equal(deleteAudit.rowCount, 1);
+        assert.equal(deleteAudit.rows[0].actor_id, actor.id);
+        assert.equal(deleteAudit.rows[0].target_type, 'relationship');
+        assert.equal(deleteAudit.rows[0].target_id, created.id);
+        assert.equal(deleteAudit.rows[0].request_id, requestIds.delete);
+
+        const deleteOutbox = await outboxFor(created.id);
+        assert.equal(deleteOutbox.rowCount, 2);
+        assert.equal(deleteOutbox.rows[1].event_type, 'relationship.delete');
+        assert.equal(deleteOutbox.rows[1].aggregate_version, created.version + 1);
+        assert.equal(deleteOutbox.rows[1].site_id, siteB);
+        assert.equal(deleteOutbox.rows[1].actor_id, actor.id);
+        assert.equal(deleteOutbox.rows[1].correlation_id, requestIds.delete);
+        assert.equal(deleteOutbox.rows[1].classification, 'site-private');
+        assert.equal(deleteOutbox.rows[1].payload_site_id, siteB);
+
+        const siteAAfter = await pool.query(
+          'SELECT id,version,deleted_at FROM content_relationships WHERE site_id=$1 AND id=$2',
+          [siteA, siteAControl.id],
+        );
+        assert.equal(siteAAfter.rowCount, 1);
+        assert.equal(siteAAfter.rows[0].version, siteAControl.version);
+        assert.equal(siteAAfter.rows[0].deleted_at, null);
+        assert.equal((await pool.query(
+          "SELECT id FROM outbox_events WHERE aggregate_type='relationship' AND aggregate_id=$1",
+          [siteAControl.id],
+        )).rowCount, 0);
+        assert.equal((await pool.query(
+          "SELECT id FROM audit_events WHERE site_id=$1 AND target_id=$2 AND action IN ('relationship.created','relationship.deleted')",
+          [siteA, siteAControl.id],
+        )).rowCount, 0);
+      } finally {
+        const siteBRows = await pool.query(
+          'SELECT id FROM content_relationships WHERE site_id=$1 AND source_id=$2 AND target_id=$3 AND kind=$4',
+          [siteB, ownContent.id, ownContentTarget.id, 'RELATED_TO'],
+        );
+        const relationshipIds = [
+          ...siteBRows.rows.map(row => row.id),
+          ...(siteAControl?.id ? [siteAControl.id] : []),
+        ];
+        if (relationshipIds.length) {
+          await pool.query(
+            "DELETE FROM outbox_events WHERE aggregate_type='relationship' AND aggregate_id=ANY($1::uuid[])",
+            [relationshipIds],
+          );
+        }
+        await pool.query(
+          'DELETE FROM audit_events WHERE site_id=ANY($1::uuid[]) AND request_id=ANY($2::text[])',
+          [[siteA, siteB], Object.values(requestIds)],
+        );
+        if (siteBRows.rowCount) {
+          await pool.query(
+            'DELETE FROM content_relationships WHERE site_id=$1 AND id=ANY($2::uuid[])',
+            [siteB, siteBRows.rows.map(row => row.id)],
+          );
+        }
+        if (siteAControl?.id) {
+          await pool.query(
+            'DELETE FROM content_relationships WHERE site_id=$1 AND id=$2',
+            [siteA, siteAControl.id],
           );
         }
       }
