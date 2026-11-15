@@ -3,7 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { randomUUID } = require('node:crypto');
-const { createPostgresPool } = require('../../packages/db/src/postgres-store');
+const { createPostgresPool, createPostgresStore } = require('../../packages/db/src/postgres-store');
 const { createIdentityService, hashPassword } = require('../../packages/auth/src/service');
 const { createApiServer } = require('../../apps/api/src/server');
 
@@ -523,6 +523,132 @@ test(
           [[siteA, siteB], Object.values(requestIds)],
         );
       }
+    });
+
+    await t.test('editorial workflow transition and correlated audit commit or roll back together', async t => {
+      const store = createPostgresStore({ pool });
+      const suffix = randomUUID().replace(/-/g, '');
+      const siteAContent = await store.saveDraft({
+        siteId: siteA,
+        title: 'Site A editorial control',
+        slug: 'site-a-editorial-' + suffix.slice(0, 12),
+        locale: 'en',
+        contentType: 'page',
+        authorId,
+        document: { schemaVersion: 1, documentId: randomUUID(), type: 'page', title: 'Site A editorial control', children: [{ id: 'site-a-heading', type: 'widget.heading', props: { text: 'Site A control' }, children: [] }] },
+        note: 'F1.34 cross-site control fixture',
+      });
+      const siteBContent = await store.saveDraft({
+        siteId: siteB,
+        title: 'Site B editorial candidate',
+        slug: 'site-b-editorial-' + suffix.slice(0, 12),
+        locale: 'en',
+        contentType: 'page',
+        authorId: actor.id,
+        document: { schemaVersion: 1, documentId: randomUUID(), type: 'page', title: 'Site B editorial candidate', children: [{ id: 'site-b-heading', type: 'widget.heading', props: { text: 'Site B candidate' }, children: [] }] },
+        note: 'F1.34 transactional audit fixture',
+      });
+      const failureRequestId = 'content-workflow-failure-' + suffix.slice(0, 12);
+      const retryRequestId = 'content-workflow-retry-' + suffix.slice(0, 12);
+      t.after(async () => {
+        await pool.query(
+          "DELETE FROM audit_events WHERE site_id=ANY($1::uuid[]) AND request_id=ANY($2::text[])",
+          [[siteA, siteB], [failureRequestId, retryRequestId]],
+        );
+        await pool.query(
+          "DELETE FROM outbox_events WHERE aggregate_type='content' AND aggregate_id=ANY($1::uuid[])",
+          [[siteAContent.id, siteBContent.id]],
+        );
+      });
+      const contentSnapshot = async (siteId, contentId) => {
+        const [content, workflow, outbox] = await Promise.all([
+          pool.query('SELECT id,site_id,status,version,lock_version FROM content_items WHERE site_id=$1 AND id=$2', [siteId, contentId]),
+          pool.query('SELECT count(*)::integer AS count FROM workflow_events WHERE site_id=$1 AND content_id=$2', [siteId, contentId]),
+          pool.query("SELECT count(*)::integer AS count FROM outbox_events WHERE site_id=$1 AND aggregate_type='content' AND aggregate_id=$2", [siteId, contentId]),
+        ]);
+        return {
+          content: content.rows[0] || null,
+          workflowCount: workflow.rows[0].count,
+          outboxCount: outbox.rows[0].count,
+        };
+      };
+      const auditFor = requestId => pool.query(
+        "SELECT site_id,actor_id,action,target_type,target_id,result,request_id,details FROM audit_events WHERE site_id=$1 AND action='content.submit-review' AND request_id=$2",
+        [siteB, requestId],
+      );
+      const transitionRequest = requestId => fetch(
+        base + '/api/v1/pages/' + siteBContent.id + '/submit-review',
+        {
+          method: 'POST',
+          headers: { ...authHeaders, 'content-type': 'application/json', 'x-virgoscorpio-hub-site-id': siteB, 'x-request-id': requestId },
+          body: JSON.stringify({ expectedVersion: 1, note: 'F1.34 review submission' }),
+        },
+      );
+
+      const siteBBaseline = await contentSnapshot(siteB, siteBContent.id);
+      const siteAControl = await contentSnapshot(siteA, siteAContent.id);
+      assert.equal(siteBBaseline.content.status, 'draft');
+      assert.equal(siteAControl.content.status, 'draft');
+
+      const functionName = 'test_content_workflow_audit_fn_' + suffix;
+      const triggerName = 'test_content_workflow_audit_tr_' + suffix;
+      try {
+        await pool.query(
+          `CREATE FUNCTION "${functionName}"() RETURNS trigger LANGUAGE plpgsql AS $audit$
+           BEGIN
+             IF NEW.action = 'content.submit-review' AND NEW.site_id = '${siteB}'::uuid THEN
+               RAISE EXCEPTION 'simulated editorial workflow audit persistence failure';
+             END IF;
+             RETURN NEW;
+           END;
+           $audit$`,
+        );
+        await pool.query(
+          `CREATE TRIGGER "${triggerName}" BEFORE INSERT ON audit_events
+           FOR EACH ROW EXECUTE FUNCTION "${functionName}"()`,
+        );
+
+        const failed = await transitionRequest(failureRequestId);
+        assert.equal(failed.status, 500);
+        await failed.json();
+        assert.deepEqual(await contentSnapshot(siteB, siteBContent.id), siteBBaseline,
+          'audit failure must roll back content state, workflow event and outbox event');
+        assert.deepEqual(await contentSnapshot(siteA, siteAContent.id), siteAControl,
+          'Site A control state must remain unchanged during Site B audit failure');
+        assert.equal((await auditFor(failureRequestId)).rowCount, 0);
+      } finally {
+        await pool.query(`DROP TRIGGER IF EXISTS "${triggerName}" ON audit_events`).catch(() => {});
+        await pool.query(`DROP FUNCTION IF EXISTS "${functionName}"()`).catch(() => {});
+      }
+
+      const retried = await transitionRequest(retryRequestId);
+      assert.equal(retried.status, 200);
+      const payload = await retried.json();
+      assert.equal(payload.status, 'in_review');
+      assert.equal(payload.content.status, 'in_review');
+      const afterRetry = await contentSnapshot(siteB, siteBContent.id);
+      assert.equal(afterRetry.content.status, 'in_review');
+      assert.equal(afterRetry.content.version, 1);
+      assert.equal(afterRetry.content.lock_version, siteBBaseline.content.lock_version + 1);
+      assert.equal(afterRetry.workflowCount, siteBBaseline.workflowCount + 1);
+      assert.equal(afterRetry.outboxCount, siteBBaseline.outboxCount + 1);
+      assert.deepEqual(await contentSnapshot(siteA, siteAContent.id), siteAControl,
+        'a successful Site B retry must not mutate Site A');
+      const retryAudit = await auditFor(retryRequestId);
+      assert.equal(retryAudit.rowCount, 1);
+      assert.equal(retryAudit.rows[0].site_id, siteB);
+      assert.equal(retryAudit.rows[0].actor_id, actor.id);
+      assert.equal(retryAudit.rows[0].action, 'content.submit-review');
+      assert.equal(retryAudit.rows[0].target_type, 'content');
+      assert.equal(retryAudit.rows[0].target_id, siteBContent.id);
+      assert.equal(retryAudit.rows[0].request_id, retryRequestId);
+      assert.deepEqual(retryAudit.rows[0].details, { version: 1, status: 'in_review' });
+
+      await pool.query(
+        "DELETE FROM audit_events WHERE site_id=ANY($1::uuid[]) AND request_id=ANY($2::text[])",
+        [[siteA, siteB], [failureRequestId, retryRequestId]],
+      );
+      await pool.query("DELETE FROM outbox_events WHERE aggregate_type='content' AND aggregate_id=ANY($1::uuid[])", [[siteAContent.id, siteBContent.id]]);
     });
 
     await t.test('cloud connection IDs and selector conflicts remain tenant-scoped for a least-privilege cloud manager', async () => {

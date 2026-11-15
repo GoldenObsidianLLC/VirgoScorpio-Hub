@@ -8,7 +8,7 @@
   "generatedBy": "scripts/generate-tenant-isolation-route-inventory.js",
   "sourceTree": {
     "fileCount": 21,
-    "sha256": "41e10c2834ce4cffba8b6537eb9297ce19bf3a29df42470422a37457298f3ec6",
+    "sha256": "9ea97ab18be6b3026db48bb9fa9fc9fc438a342eb40d36d0e198fbc23f2932d1",
     "files": [
       "apps/api/src/ai-task-routes.js",
       "apps/api/src/auth-routes.js",
@@ -35,7 +35,7 @@
   },
   "testTree": {
     "fileCount": 43,
-    "sha256": "62ba455a6fde029a88d581e3ba2766787946d5e037c979fac54418461ff80d10",
+    "sha256": "8729c74f098afe6ca544f06f65623889b041bcd31037b3916c16d105c40af03e",
     "files": [
       "test/ai-queue-worker.test.js",
       "test/ai-task-queue.test.js",
@@ -441,7 +441,7 @@
             {
               "anchor": "const siteMembershipHandled = await handleSiteMembershipRoute({",
               "lines": [
-                1808
+                1822
               ]
             }
           ]
@@ -630,19 +630,19 @@
             {
               "anchor": "async getById({ siteId, id })",
               "lines": [
-                536
+                547
               ]
             },
             {
               "anchor": "async getByIdForOwner({ siteId, id, actorId })",
               "lines": [
-                544
+                555
               ]
             },
             {
               "anchor": "async listContent({ siteId, status = null, contentType = null, limit = 50, offset = 0, actorId = null })",
               "lines": [
-                554
+                565
               ]
             }
           ]
@@ -1515,19 +1515,19 @@
             {
               "anchor": "url.pathname === '/api/v1/plugins'",
               "lines": [
-                1824
+                1838
               ]
             },
             {
               "anchor": "url.pathname === '/api/v1/plugins/register'",
               "lines": [
-                1830
+                1844
               ]
             },
             {
               "anchor": "const pluginActionMatch",
               "lines": [
-                1859
+                1873
               ]
             }
           ]
@@ -1798,7 +1798,7 @@
             {
               "anchor": "upgradePath = url.pathname",
               "lines": [
-                1971
+                1985
               ]
             },
             {

@@ -1791,17 +1791,31 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
           const current = await store.getById({ siteId, id });
           await canEditContent(actor, siteId, current);
         }
+        const onTransition = identity && actor.user.id
+          ? async ({ queryable, result }) => identity.audit(
+            { siteId, actorId: actor.user.id, action: `content.${action}`, targetType: 'content', targetId: id, requestId, details: { version: result.version, status: result.status } },
+            { queryable },
+          )
+          : undefined;
+        const transitionInput = {
+          siteId,
+          id,
+          actorId: actor.user.id,
+          correlationId: requestId,
+          expectedVersion,
+          note,
+          onTransition,
+        };
         const operations = {
-          'submit-review': () => store.submitForReview({ siteId, id, actorId: actor.user.id, correlationId: requestId, expectedVersion, note }),
-          approve: () => store.approve({ siteId, id, actorId: actor.user.id, correlationId: requestId, expectedVersion, note }),
-          reject: () => store.rejectReview({ siteId, id, actorId: actor.user.id, correlationId: requestId, expectedVersion, note }),
-          publish: () => store.publishContent({ siteId, id, actorId: actor.user.id, correlationId: requestId, expectedVersion, note }),
-          schedule: () => store.scheduleContent({ siteId, id, actorId: actor.user.id, correlationId: requestId, expectedVersion, scheduledAt: body.scheduledAt, note }),
-          archive: () => store.archiveContent({ siteId, id, actorId: actor.user.id, correlationId: requestId, expectedVersion, note }),
-          unpublish: () => store.unpublishContent({ siteId, id, actorId: actor.user.id, correlationId: requestId, expectedVersion, note })
+          'submit-review': () => store.submitForReview(transitionInput),
+          approve: () => store.approve(transitionInput),
+          reject: () => store.rejectReview(transitionInput),
+          publish: () => store.publishContent(transitionInput),
+          schedule: () => store.scheduleContent({ ...transitionInput, scheduledAt: body.scheduledAt }),
+          archive: () => store.archiveContent(transitionInput),
+          unpublish: () => store.unpublishContent(transitionInput)
         };
         const result = await operations[action]();
-        if (identity && actor.user.id) await identity.audit({ siteId, actorId: actor.user.id, action: `content.${action}`, targetType: 'content', targetId: id, requestId, details: { version: result.version, status: result.status } });
         return sendJson(res, 200, { status: result.status, content: result, requestId });
       }
 

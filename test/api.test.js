@@ -211,7 +211,11 @@ test('submit-review requires a site capability and same-site ownership for edit-
     },
     async submitForReview(input) {
       transitions.push(input);
-      return { id: input.id, site_id: siteId, status: 'in_review', version: 1, lock_version: 2 };
+      const result = { id: input.id, site_id: siteId, status: 'in_review', version: 1, lock_version: 2 };
+      if (input.onTransition) {
+        await input.onTransition({ queryable: { transaction: 'test' }, result, previous: records.get(input.id), action: 'submitted_for_review' });
+      }
+      return result;
     },
   };
 
