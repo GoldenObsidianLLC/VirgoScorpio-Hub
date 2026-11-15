@@ -16,16 +16,13 @@
 
 </div>
 
-> **Project status — 14 November 2026 (main #612; F1.30 PR #144 merged):** VirgoScorpio Hub **0.6.2** remains an unreleased, non-production developer preview; the npm package remains private: true. Main is 67e9440b9c543e69a46bba8cbb25a9d2329f3502, merged through [PR #144](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/144) at 19:52:48 UTC. Exact-main [workflow #612](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43634472737) completed all 7 jobs successfully at 19:56:11 UTC: Node.js 22.23.4 and 24.22.1 each passed 608/608 Hub tests and 94/94 EnginEx tests; PostgreSQL/Memgraph integration passed 96/96 with zero skips; 18/18 fresh migrations applied and 18/18 were idempotently skipped on re-entry; Playwright editor/collaboration smoke passed 9/9; CodeQL, signed mainline dependency/SBOM attestation and exact-source evidence consolidation passed. The finalizer validated five producer manifests.
-
-PR #144 contains F1.30 design-system mutation/audit atomicity. GitHub records no formal PR review submission; this is maintainer implementation and automation evidence, not independent review. Independent tenant review #14 and platform security review #25 remain OPEN / NOT PERFORMED; dependency/license review #23 remains OPEN / PARTIAL.
-
-The canonical readiness result remains **8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE**, with readyForProduction: false and NOT_PRODUCTION_CERTIFIED. The PARTIAL items are human dependency/lockfile/license review and the service-less integration diagnostic (34 skipped tests per runtime; these are not live passes). F1.30 is merged mainline engineering evidence; it does not satisfy independent review, production-provider, operational, accessibility-acceptance or governance gates.
-
-Package version remains **0.6.2**. No SemVer increment, release tag, GitHub Release, npm publication, production-data use or deployment is authorized. Production remains **NO-GO / NOT_PRODUCTION_CERTIFIED**.
-
-See the [current 0.6.2 full release-gate report](docs/reports/2026-11-14-VirgoScorpio-Hub-0.6.2-Release-Gate-Report.md) for exact-source artifact digests, all 14 missing production gates, issue dispositions and the maintainer/independent-review boundary.
-
+> **Project status — 15 November 2026 (F1.36 merged; main #661):** VirgoScorpio Hub 0.6.2 remains a private, unreleased, non-production developer preview. F1.36 firewall-rule and security-event atomicity merged through [PR #160](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/160) at main SHA 460eff191d84fe422ed4ac15260a8fd6d9100d77; issue #159 is CLOSED. Exact-main [workflow #661](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43759090734) completed all seven jobs successfully: Node.js 22.23.4 and 24.22.1 each passed 619/619 Hub tests and 94/94 EnginEx tests; PostgreSQL/Memgraph integration passed 101/101 with zero skips, including the firewall mutation/audit rollback/retry regression; 18/18 fresh migrations applied and 18/18 idempotently skipped on re-entry; Playwright browser/editor smoke passed 9/9; PostgreSQL-backed collaboration passed 4/4; CodeQL, signed mainline attestations and exact-source evidence consolidation passed.
+>
+> The canonical readiness result remains **8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN**, with readyForProduction false and NOT_PRODUCTION_CERTIFIED. Independent tenant review #14 and platform security assessment #25 remain OPEN / NOT PERFORMED; dependency/license review #23 remains OPEN / PARTIAL. Production remains **NO-GO**.
+>
+> F1.36 is merged maintainer engineering evidence, not independent review or production certification. GitHub records no formal review submission for PR #160. The change preserves the existing transaction boundary and site security checks; it introduces no schema, migration, dependency, public API, package version or SemVer change.
+>
+> Package version remains **0.6.2**. No SemVer increment, release tag, GitHub Release, npm publication, production-data use or deployment is authorized. See the [current 0.6.2 full release-gate report](docs/reports/2026-11-15-VirgoScorpio-Hub-0.6.2-Release-Gate-Report.md), the [F1.36 merge and mainline validation report](docs/reports/2026-11-15-F1-36-FIREWALL-RULE-AUDIT-ATOMICITY-REPORT.md), and the [documentation index](docs/README.md).
 ## Table of contents
 
 - [Overview](#overview)

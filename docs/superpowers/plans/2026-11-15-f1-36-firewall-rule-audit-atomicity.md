@@ -4,6 +4,8 @@
 
 **Goal:** Make site-scoped firewall-rule create/delete mutations atomic with correlated security events and delay cache invalidation until commit.
 
+**Completion:** Merged through PR #160 at main SHA 460eff191d84fe422ed4ac15260a8fd6d9100d77; issue #159 CLOSED; exact-main workflow #661 passed 7/7 jobs.
+
 **Architecture:** Reuse `packages/db/src/transaction.js` and the existing `site_security_events` table. Keep all database writes on the transaction client; clear the in-memory firewall cache after commit, outside the transaction.
 
 **Tech Stack:** Node.js CommonJS, node:test, PostgreSQL.
@@ -39,11 +41,11 @@
 - Use existing `withTransaction(localPool, work)`; do not add a new abstraction.
 - Event schema: `site_security_events(site_id,request_id,event_type,severity,actor_id,details)`.
 
-- [ ] Write tests for POST/DELETE successful transactional query ordering and cache invalidation after COMMIT.
-- [ ] Write tests for create/delete event-write failure rollback and no cache invalidation.
-- [ ] Verify tests fail for the current split-write/create-only-event behavior.
-- [ ] Implement transaction-backed mutation/event pairs and post-commit cache invalidation.
-- [ ] Run focused route tests.
+- [x] Write tests for POST/DELETE successful transactional query ordering and cache invalidation after COMMIT.
+- [x] Write tests for create/delete event-write failure rollback and no cache invalidation.
+- [x] Verify tests fail for the current split-write/create-only-event behavior.
+- [x] Implement transaction-backed mutation/event pairs and post-commit cache invalidation.
+- [x] Run focused route tests.
 
 ### Task 2: PostgreSQL failure-injection and tenant regression
 
@@ -54,12 +56,12 @@
 - Use `createPostgresPool`, disposable UUID site/user fixtures, and the existing `node:test` integration enablement convention.
 - Install narrowly scoped temporary PostgreSQL triggers on `site_security_events`; remove all triggers/functions in teardown.
 
-- [ ] Inject create-event failure and assert no rule/event persists.
-- [ ] Retry create and assert one rule/one event.
-- [ ] Inject delete-event failure and assert rule remains/no event.
-- [ ] Retry delete and assert rule removed/one event.
-- [ ] Prove cross-site and missing-rule deletes do not mutate state or invalidate cache.
-- [ ] Run the integration test against a real disposable PostgreSQL database.
+- [x] Inject create-event failure and assert no rule/event persists.
+- [x] Retry create and assert one rule/one event.
+- [x] Inject delete-event failure and assert rule remains/no event.
+- [x] Retry delete and assert rule removed/one event.
+- [x] Prove cross-site and missing-rule deletes do not mutate state or invalidate cache.
+- [x] Run the integration test against a real disposable PostgreSQL database in exact-head hosted CI (101/101 live tests; F1.36 trigger-based rollback/retry subtest passed).
 
 ### Task 3: Repository documentation and roadmap reconciliation
 
@@ -71,14 +73,14 @@
 - Modify: `docs/RELEASE_READINESS.md`, `docs/RELEASE-EVIDENCE.md`, `RELEASE-MANIFEST.json`, and current dated release report only when their current snapshot needs reconciliation.
 - Modify: parent issue #124 description after issue #159 exists.
 
-- [ ] Preserve immutable #658 baseline details and distinguish source SHA, workflow number/ID, and runtime F1.35 code baseline from docs-only PR #158.
-- [ ] Record F1.36 candidate/merge evidence only after it exists; do not invent a workflow result, artifact digest, producer pass or certification.
-- [ ] Keep readiness counts/gates, package version, NOT_PRODUCTION_CERTIFIED and NO-GO unchanged.
-- [ ] Check for contradictory current-status references across affected Markdown and JSON.
+- [x] Preserve immutable #658 baseline details and distinguish source SHA, workflow number/ID, and runtime F1.35 code baseline from docs-only PR #158.
+- [x] Record F1.36 candidate/merge evidence only after it exists; do not invent a workflow result, artifact digest, producer pass or certification.
+- [x] Keep readiness counts/gates, package version, NOT_PRODUCTION_CERTIFIED and NO-GO unchanged.
+- [x] Check for contradictory current-status references across affected Markdown and JSON.
 
 ### Task 4: Verification and handoff
 
-- [ ] Run focused unit tests and full `npm run check`.
-- [ ] Run PostgreSQL/Memgraph integration with zero unintended skips, migrations and browser/CodeQL/evidence workflows where available.
-- [ ] Review diff for site scope, parameterized queries, transaction boundaries, cache timing, unnecessary refactors and SemVer drift.
-- [ ] Commit, push and open a PR; do not merge or request review without explicit follow-up.
+- [x] Run focused unit tests and full `npm run check`.
+- [x] Run PostgreSQL/Memgraph integration with zero unintended skips, migrations and browser/CodeQL/evidence workflows where available (exact-head push #659 / PR #660).
+- [x] Review diff for site scope, parameterized queries, transaction boundaries, cache timing, unnecessary refactors and SemVer drift.
+- [x] Commit, push and open PR #160; leave it unmerged and do not request independent review without explicit follow-up.
