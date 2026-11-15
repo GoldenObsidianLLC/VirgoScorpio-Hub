@@ -151,7 +151,7 @@ function createPostgresStore({ pool }) {
   }
 
   const store = {
-    async saveDraft({ siteId, id, title, slug, locale = 'en', contentType = 'page', document, authorId = null, expectedVersion, note = null, correlationId = null }) {
+    async saveDraft({ siteId, id, title, slug, locale = 'en', contentType = 'page', document, authorId = null, expectedVersion, note = null, correlationId = null, onDraftSaved }) {
       const client = await pool.connect();
       try {
         await client.query('BEGIN');
@@ -163,22 +163,32 @@ function createPostgresStore({ pool }) {
         const version = old ? old.version + 1 : 1;
         let committedRow;
         if (old) {
-          const result = await client.query(
-            `UPDATE content_items SET title=$3,slug=$4,locale=$5,content_type=$6,status='draft',body=$7::jsonb,schema_version=$8,version=$9,
-               updated_by=$10,updated_at=now(),scheduled_at=NULL,reviewed_by=NULL,reviewed_at=NULL,
-               search_vector=to_tsvector('simple',$3 || ' ' || $11),lock_version=lock_version+1
-             WHERE id=$1 AND site_id=$2 RETURNING id,site_id,title,slug,locale,content_type,status,version,lock_version,body,published_version,updated_at`,
-            [contentId, siteId, title, slug, locale, contentType, JSON.stringify(document), document.schemaVersion || 1, version, authorId, extractPageText(document)]
-          );
-          committedRow = result.rows[0];
+          try {
+            const result = await client.query(
+              `UPDATE content_items SET title=$3,slug=$4,locale=$5,content_type=$6,status='draft',body=$7::jsonb,schema_version=$8,version=$9,
+                 updated_by=$10,updated_at=now(),scheduled_at=NULL,reviewed_by=NULL,reviewed_at=NULL,
+                 search_vector=to_tsvector('simple',$3 || ' ' || $11),lock_version=lock_version+1
+               WHERE id=$1 AND site_id=$2 RETURNING id,site_id,title,slug,locale,content_type,status,version,lock_version,body,published_version,updated_at`,
+              [contentId, siteId, title, slug, locale, contentType, JSON.stringify(document), document.schemaVersion || 1, version, authorId, extractPageText(document)]
+            );
+            committedRow = result.rows[0];
+          } catch (error) {
+            if (error.code === '23505') throw conflict('That content route is already in use.', 'ERR_VIRGOSCORPIO_HUB_ROUTE_CONFLICT');
+            throw error;
+          }
         } else {
-          const result = await client.query(
-            `INSERT INTO content_items(id,site_id,content_type,slug,locale,title,status,body,schema_version,version,created_by,updated_by,search_vector)
-             VALUES($1,$2,$3,$4,$5,$6,'draft',$7::jsonb,$8,$9,$10,$10,to_tsvector('simple',$6 || ' ' || $11))
-             RETURNING id,site_id,title,slug,locale,content_type,status,version,lock_version,body,published_version,updated_at`,
-            [contentId, siteId, contentType, slug, locale, title, JSON.stringify(document), document.schemaVersion || 1, version, authorId, extractPageText(document)]
-          );
-          committedRow = result.rows[0];
+          try {
+            const result = await client.query(
+              `INSERT INTO content_items(id,site_id,content_type,slug,locale,title,status,body,schema_version,version,created_by,updated_by,search_vector)
+               VALUES($1,$2,$3,$4,$5,$6,'draft',$7::jsonb,$8,$9,$10,$10,to_tsvector('simple',$6 || ' ' || $11))
+               RETURNING id,site_id,title,slug,locale,content_type,status,version,lock_version,body,published_version,updated_at`,
+              [contentId, siteId, contentType, slug, locale, title, JSON.stringify(document), document.schemaVersion || 1, version, authorId, extractPageText(document)]
+            );
+            committedRow = result.rows[0];
+          } catch (error) {
+            if (error.code === '23505') throw conflict('That content route is already in use.', 'ERR_VIRGOSCORPIO_HUB_ROUTE_CONFLICT');
+            throw error;
+          }
         }
         await checkpointCollaboration(client, committedRow.id, { initial: !old });
         await client.query(
@@ -187,8 +197,9 @@ function createPostgresStore({ pool }) {
         );
         await writeWorkflow(client, { siteId, id: committedRow.id, version, action: 'draft_saved', fromStatus: old?.status || null, toStatus: 'draft', actorId: authorId, note });
         await writeOutbox(client, { id: committedRow.id, siteId, version, aggregateVersion: committedRow.lock_version, eventType: 'content.upsert', payload: { contentType, slug, locale, status: 'draft', title }, actorId: authorId, correlationId });
+        if (typeof onDraftSaved === 'function') await onDraftSaved({ queryable: client, result: committedRow, previous: old || null });
         await client.query('COMMIT'); return committedRow;
-      } catch (error) { await client.query('ROLLBACK').catch(() => {}); if (error.code === '23505') throw conflict('That content route is already in use.', 'ERR_VIRGOSCORPIO_HUB_ROUTE_CONFLICT'); throw error; }
+      } catch (error) { await client.query('ROLLBACK').catch(() => {}); throw error; }
       finally { client.release(); }
     },
 

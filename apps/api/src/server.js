@@ -1677,8 +1677,13 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
         const body = await readJson(req, maxBody); const safe = validateSaveDraftBody(body); const siteId = await siteIdFor({ req, url, body: safe, actor });
         if (safe.id) { const current = await store.getById({ siteId, id: safe.id }); await canEditContent(actor, siteId, current); }
         else await requireCapability(actor, siteId, 'content:create');
-        const saved = await store.saveDraft({ siteId, id: safe.id, title: safe.document.title, slug: safe.slug, locale: safe.locale, contentType: 'page', document: safe.document, authorId: actor.user.id, expectedVersion: safe.expectedVersion, note: safe.note, correlationId: requestId });
-        if (identity && actor.user.id) await identity.audit({ siteId, actorId: actor.user.id, action: 'content.draft_saved', targetType: 'content', targetId: saved.id, requestId, details: { version: saved.version } });
+        const onDraftSaved = identity && actor.user.id
+          ? async ({ queryable, result }) => identity.audit(
+            { siteId, actorId: actor.user.id, action: 'content.draft_saved', targetType: 'content', targetId: result.id, requestId, details: { version: result.version } },
+            { queryable },
+          )
+          : undefined;
+        const saved = await store.saveDraft({ siteId, id: safe.id, title: safe.document.title, slug: safe.slug, locale: safe.locale, contentType: 'page', document: safe.document, authorId: actor.user.id, expectedVersion: safe.expectedVersion, note: safe.note, correlationId: requestId, onDraftSaved });
         return sendJson(res, 201, { status: 'draft', persisted: true, published: Boolean(saved.published_version), content: saved, requestId });
       }
 

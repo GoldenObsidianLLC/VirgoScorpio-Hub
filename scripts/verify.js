@@ -21,7 +21,7 @@ const required = [
   'docs/reports/2026-11-06-OUTBOX-PRODUCER-AUDIT.md',
   'scripts/generate-tenant-isolation-route-inventory.js', 'docs/security/tenant-isolation-route-inventory.catalog.json', 'docs/security/TENANT-ISOLATION-ROUTE-CAPABILITY-MAP-2026-11-07.md', 'docs/security/TENANT-ISOLATION-ROUTE-CAPABILITY-MAP-2026-11-14.md', 'artifacts/security/tenant-isolation-route-inventory.json', 'test/tenant-route-inventory.test.js', 'docs/assessors/TENANT-ISOLATION-ASSESSMENT-BRIEF.md',
   'packages/graph/src/memgraph-store.js', 'packages/graph/src/rebuild-projection.js', 'apps/api/src/server.js', 'apps/api/src/platform-routes.js', 'apps/api/src/commerce-routes.js', 'apps/api/src/library-routes.js', 'apps/api/src/request-validation.js', 'apps/api/src/auth-routes.js', 'apps/api/src/ai-task-routes.js', 'test/ai-task-routes.test.js', 'apps/api/src/site-membership-routes.js', 'test/site-membership-routes.test.js', 'apps/api/src/content-type-routes.js', 'test/content-type-routes.test.js', 'apps/api/src/auth-cookies.js', 'apps/mcp/src/server.mjs', 'test/auth-cookies.test.js', 'test/commerce-routes.test.js', 'test/library-routes.test.js', 'test/request-validation.test.js',
-  'apps/admin/index.html', 'apps/admin/platform.html', 'apps/admin/assets/platform.js', 'apps/admin/assets/platform.css', 'vendor/enginex/package.json'
+  'apps/admin/index.html', 'apps/admin/platform.html', 'apps/admin/assets/platform.js', 'apps/admin/assets/platform.css', 'test/content-draft-audit.test.js', 'test/content-draft-audit-route.test.js', 'test/integration/content-draft-audit.integration.test.js', 'vendor/enginex/package.json'
 ];
 const missing = required.filter(file => !fs.existsSync(path.join(root, file)));
 if (missing.length) {
