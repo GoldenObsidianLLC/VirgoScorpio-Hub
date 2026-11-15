@@ -18,15 +18,16 @@ The package remains at **0.6.2**. This scope/documentation reconciliation is not
 
 ## 2. Candidate and evidence baseline
 
-The full current exact-main readiness matrix, evidence hashes, artifact inventory, open production gates and F1.34 merge evidence are maintained in the [15 November 2026 release-gate report](reports/2026-11-15-VirgoScorpio-Hub-0.6.2-Release-Gate-Report.md).
+The full current exact-main readiness matrix, evidence hashes, artifact inventory, open production gates, F1.34 merge evidence and F1.35 candidate scope are maintained in the [15 November 2026 release-gate report](reports/2026-11-15-VirgoScorpio-Hub-0.6.2-Release-Gate-Report.md).
 
 | Field | Current value |
 |---|---|
 | Repository | `GoldenObsidianLLC/VirgoScorpio-Hub` |
 | Version | `0.6.2` |
 | Package state | Unreleased candidate; `private: true` in package metadata |
-| Current main baseline | 9c868e0f949e2c7d18f768a12b8f4e86b6591306 (F1.34 PR #154 merge; exact-main workflow #643 passed all seven jobs) |
-| Runtime code baseline | 9c868e0f949e2c7d18f768a12b8f4e86b6591306 (F1.34 editorial workflow transitions and correlated audits are atomic across seven actions; PR #154 merged; exact-main workflow #643 passed all seven jobs) |
+| Current main baseline | c7047881d79af654a7b85bdf2e7e7e63fc741de8 (documentation-only PR #155 merge after F1.34; exact-main workflow #646 passed all seven jobs) |
+| Runtime code baseline | 9c868e0f949e2c7d18f768a12b8f4e86b6591306 (F1.34 editorial workflow transitions and correlated audits are atomic across seven actions; PR #154 merged; validated by exact-main workflow #646 after documentation-only PR #155) |
+| Current maintainer candidate | F1.35 / [issue #156](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/156), unmerged branch security/f1-35-audit-gap-review-2026-11-15 from main c7047881d79af654a7b85bdf2e7e7e63fc741de8 | Plugin registration/upsert and approve, security-review, activate and disable now use the existing transaction/audit queryable seam; lifecycle validation locks the site-scoped row with SELECT FOR UPDATE. Local npm run check passed 609/612 tests (zero failures, 3 Windows-specific skips); exact-head hosted validation and live PostgreSQL/Memgraph remain pending. No independent review or production qualification is claimed. |
 | Manifest release state | `EXPANDED_DEVELOPER_PREVIEW_NOT_PRODUCTION_CERTIFIED` |
 | Semantic version change | None; remains 0.6.2 |
 | Runtime minimum | Node.js `>=22.23.4` |
@@ -34,8 +35,8 @@ The full current exact-main readiness matrix, evidence hashes, artifact inventor
 | CI runtime matrix | Node.js 22.23.4 and 24.22.1 on Ubuntu 24.04 |
 | CI services | PostgreSQL 18, Memgraph 3.13.1, Redis 7.4, Chromium |
 | Vendored renderer | EnginEx 7.0.0, pinned submodule commit `d99e021f55664f006b5e65b4a58202f9c7bc4f4b` |
-| Mainline workflow | [#643](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43692705776), current main 9c868e0f949e2c7d18f768a12b8f4e86b6591306; all seven jobs passed, including 100/100 live DB/graph integration, Node 22/24 612/612 Hub and 94/94 EnginEx tests, Playwright smoke 9/9, collaboration Playwright 4/4, CodeQL, fresh migrations (18 applied / 18 idempotent second pass), signed mainline attestation and exact-source evidence finalization. Readiness remains 8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE, NOT_PRODUCTION_CERTIFIED. |
-| Runtime code workflow | [#643](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43692705776), runtime code SHA above; all seven jobs passed, including F1.34 editorial workflow audit rollback/retry, 100/100 live PostgreSQL/Memgraph, Node 22/24 matrix, Playwright, collaboration Playwright, CodeQL, signed mainline attestation and evidence consolidation. |
+| Mainline workflow | [#646](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43703478252), current main c7047881d79af654a7b85bdf2e7e7e63fc741de8; all seven jobs passed, including 100/100 live DB/graph integration, Node 22/24 612/612 Hub and 94/94 EnginEx tests, Playwright smoke 9/9, collaboration Playwright 4/4, CodeQL, fresh migrations (18 applied / 18 idempotent second pass), signed mainline attestation and exact-source evidence finalization. Readiness remains 8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE, NOT_PRODUCTION_CERTIFIED. |
+| Runtime code workflow | [#646](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43703478252), runtime code SHA above; all seven jobs passed, including F1.34 editorial workflow audit rollback/retry, 100/100 live PostgreSQL/Memgraph, Node 22/24 matrix, Playwright, collaboration Playwright, CodeQL, signed mainline attestation and evidence consolidation. |
 | Merged maintainer evidence | PR #128 (F1.23), main 7b3fe3f857bd20bf5d56bcc31a2044a89ffcfbb3 | Exact PR-head workflows #566/#567 and docs-final #568/#569 passed; current-main #570 passed all seven jobs with 90/90 live PostgreSQL/Memgraph tests, Node 22/24 594/594, CodeQL, browser/accessibility 9/9, collaboration Playwright 3/3 and main-only attestation. No formal PR review submission was recorded. Maintainer/automation evidence only; no independent approval. |
 | Merged maintainer test increment | PR #129 (F1.24), merged at 5929a53a1c551a2fe43bc38e61cb63dbecec52f5 | Exact-head #572/#573 and exact-main #574 passed 91/91 live PostgreSQL/Memgraph tests with zero failures/skips, including audit failure rollback and same-token retry; Node 22/24 594/594, CodeQL, browser/accessibility 9/9 and Playwright 3/3 passed. Test/docs/inventory only; no formal review submission. |
 | Merged maintainer test increment | PR #130 (F1.25), main 9f8e612c883a78d322d2086b4b08d3438b0b9231 | Exact-head #575/#576 and final docs-head #577/#578 passed 92/92 live PostgreSQL/Memgraph each; Node 22/24 594/594, CodeQL, browser/accessibility 9/9 and collaboration Playwright 3/3 passed. No formal review submission; maintainer/automation evidence only. |
