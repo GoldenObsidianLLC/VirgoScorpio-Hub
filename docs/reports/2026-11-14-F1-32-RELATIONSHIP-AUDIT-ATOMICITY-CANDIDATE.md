@@ -51,7 +51,11 @@ The test runs only when the dedicated PostgreSQL integration environment is enab
 
 **Local live database boundary:** the attempt to run `scripts/test-integration-live.js` stopped before migrations or integration tests because PostgreSQL was not listening at `127.0.0.1:5432` (`ECONNREFUSED`). No live PostgreSQL/Memgraph result is claimed locally. The exact candidate revision must pass hosted CI's disposable PostgreSQL/Memgraph integration job with zero skips.
 
-## Release and assurance boundary
+## Test-fixture request-throttle isolation
+
+The tenant-content-object integration server now sets RATE_LIMIT_MAX_REQUESTS=1000 in its test-only environment. The relationship rollback/retry coverage adds HTTP requests to a shared API fixture; the existing default request ceiling of 60 caused three later tenant-content assertions to receive 429. This test-only setting isolates tenant authorization assertions from the unrelated global request throttle. No production rate-limit behavior or default is changed.
+
+## Hosted CI diagnostic — first exact-head attempt\n\nPR workflow #625 (run `43655440155`) reached the PostgreSQL/Memgraph suite. The dedicated F1.32 relationship rollback/retry subtest passed. Three existing tenant-content assertions in the shared integration server received HTTP 429 instead of their expected 404/200 responses; the fixture's default global API request limit (60) was exhausted by the extra HTTP coverage. The evidence aggregator failed as a consequence of the live-integration job failure. The integration fixture now sets `RATE_LIMIT_MAX_REQUESTS=1000` for that test server only; production configuration and defaults are unchanged. This is a test-harness isolation correction, and a new exact-head CI run is required before acceptance.\n\n## Release and assurance boundary
 
 This is maintainer implementation and automated-test evidence, not an independent security assessment. Independent tenant review [#14](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/14) and platform security review [#25](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/25) remain OPEN / NOT PERFORMED.
 

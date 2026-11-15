@@ -76,6 +76,8 @@ test(
     const env = {
       ...process.env,
       NODE_ENV: 'test',
+      // Keep unrelated global request throttling from masking tenant-isolation assertions.
+      RATE_LIMIT_MAX_REQUESTS: '1000',
       DATABASE_URL: process.env.DATABASE_URL,
       REQUIRE_VERIFIED_EMAIL: 'false',
       AI_PROVIDER: 'mock',
