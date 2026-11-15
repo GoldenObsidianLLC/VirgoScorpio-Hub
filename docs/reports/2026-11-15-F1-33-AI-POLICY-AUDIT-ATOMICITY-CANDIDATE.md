@@ -1,7 +1,7 @@
 # F1.33 — Site AI-policy mutation audit atomicity candidate
 
 **Date:** 15 November 2026
-**Status:** Bounded implementation and live PostgreSQL regression added; local unit/security checks pass; hosted exact-head database validation pending; not merged.
+**Status:** Hosted exact-head functional CI passed; PR #151 is open for human review; not merged.
 **Issue:** [#150 — Make site AI-policy update and audit atomic](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/150)
 **Parent:** [#124 — Maintainer-led tenant isolation hardening](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/124)
 **Main baseline:** 9230177d3155d9ff9134180a67ed69203d618c0f (includes merged F1.32 / PR #149)
@@ -48,6 +48,14 @@ The failure trigger is scoped to action ai.policy_updated and the isolated Site 
 ## Live integration boundary
 
 The dedicated PostgreSQL integration test is gated by DATABASE_URL and VIRGOSCORPIO_HUB_RUN_POSTGRES_INTEGRATION=true. Neither is configured in this local environment; the live suite was NOT RUN locally. The exact candidate revision must pass hosted PostgreSQL/Memgraph integration with zero skips, supported Node matrices, CodeQL, browser smoke and evidence consolidation.
+
+## Hosted CI validation
+
+The first exact-head push/PR workflows #631/#632 failed because the generated tenant-isolation inventory did not reflect the newly changed source/catalog. The AI-policy transaction regression itself had no reported failure in that attempt. The generator was rerun, the generated inventory and route map were refreshed, and the follow-up was committed as documentation-only commit 3228f66fc9cdeb8fc69367bc1c8a457d722b9b15.
+
+Corrected exact-current-head push workflow #633 (run 43664467084) and PR workflow #634 (run 43664470029) both passed all functional jobs on 3228f66fc9cdeb8fc69367bc1c8a457d722b9b15. Node.js 22.23.4 and 24.22.1 each passed 608/608 Hub and 94/94 EnginEx tests with zero skips; PostgreSQL/Memgraph passed 99/99 with zero skips, including the ai.policy_updated audit-trigger rollback/retry regression; 18/18 fresh migrations and 18/18 idempotent re-entry checks passed; Playwright 9/9; CodeQL; and candidate evidence consolidation passed. Branch-only dependency/SBOM attestation skipped as designed for non-mainline workflows. The initial runs #631/#632 failed only because generated inventory outputs were stale after source/catalog changes; docs-only commit 3228f66 regenerated them and current-head validation is green.
+
+GitHub records no formal human review submission for PR #151. The separate local live database attempt remains NOT RUN due missing DATABASE_URL/integration enable flag; the hosted disposable PostgreSQL/Memgraph run supplies the live integration result.
 
 ## Mainline and assurance boundary
 
