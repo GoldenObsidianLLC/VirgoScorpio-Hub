@@ -694,8 +694,12 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
     }
   }
 
-  async function getPlugin(siteId, pluginId) {
-    const result = await localPool.query('SELECT * FROM plugin_installs WHERE site_id=$1 AND id=$2', [siteId, pluginId]);
+  async function getPlugin(siteId, pluginId, { queryable = localPool, forUpdate = false } = {}) {
+    const lockClause = forUpdate ? ' FOR UPDATE' : '';
+    const result = await queryable.query(
+      'SELECT * FROM plugin_installs WHERE site_id=$1 AND id=$2' + lockClause,
+      [siteId, pluginId],
+    );
     return result.rows[0] || null;
   }
   // Shared by legacy page/revision/workflow read handlers that still live in
@@ -1860,45 +1864,32 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
         if (body.sbomDigest !== undefined && !/^[a-f0-9]{64}$/i.test(body.sbomDigest)) throw fail(400, 'ERR_VIRGOSCORPIO_HUB_PLUGIN_SBOM_INVALID', 'sbomDigest must be a SHA-256 digest.');
         if (signatureResult.valid && (!body.sbomReference || !body.sbomDigest)) throw fail(400, 'ERR_VIRGOSCORPIO_HUB_PLUGIN_SBOM_REQUIRED', 'Signed plugin registration must include a verifiable SBOM reference and SHA-256 digest.');
         const provenance = { ...(body.provenance || {}), signingKeyId: signatureResult.valid ? body.keyId : null, signatureVerification: signatureResult.valid ? 'verified' : 'not-verified', signatureReason: signatureResult.valid ? null : signatureResult.reason };
-        const result = await localPool.query(
-          `INSERT INTO plugin_installs(site_id,name,version,api_version,status,source_type,package_sha256,image_digest,artifact_digest,sbom_reference,sbom_digest,provenance,signature_verified,security_reviewed_at,security_reviewed_by,manifest,requested_capabilities,installed_by)
-           VALUES($1,$2,$3,$4,'pending',$5,$6,$7,$8,$9,$10,$11::jsonb,$12,NULL,NULL,$13::jsonb,$14::jsonb,$15)
-           ON CONFLICT(site_id,name) DO UPDATE SET version=EXCLUDED.version,api_version=EXCLUDED.api_version,status='pending',source_type=EXCLUDED.source_type,package_sha256=EXCLUDED.package_sha256,image_digest=EXCLUDED.image_digest,artifact_digest=EXCLUDED.artifact_digest,sbom_reference=EXCLUDED.sbom_reference,sbom_digest=EXCLUDED.sbom_digest,provenance=EXCLUDED.provenance,signature_verified=EXCLUDED.signature_verified,security_reviewed_at=NULL,security_reviewed_by=NULL,manifest=EXCLUDED.manifest,requested_capabilities=EXCLUDED.requested_capabilities,approved_capabilities='[]'::jsonb,approved_by=NULL,updated_at=now()
-           RETURNING id,name,version,status,source_type,image_digest,artifact_digest,sbom_reference,sbom_digest,signature_verified,security_reviewed_at,requested_capabilities`,
-          [siteId, body.manifest.name, body.manifest.version, body.manifest.apiVersion, body.sourceType, body.packageSha256 || null, body.imageDigest || null, artifactDigest, body.sbomReference || null, body.sbomDigest ? String(body.sbomDigest).toLowerCase() : null, JSON.stringify(provenance), signatureResult.valid, JSON.stringify(body.manifest), JSON.stringify(body.manifest.capabilities), actor.user.id]
-        );
-        await identity?.audit({ siteId, actorId: actor.user.id, action: 'plugin.registered', targetType: 'plugin', targetId: result.rows[0].id, requestId, details: { name: result.rows[0].name, signatureVerified: signatureResult.valid } });
-        return sendJson(res, 201, { plugin: result.rows[0], requestId });
+        const plugin = await withTransaction(localPool, async client => {
+          const result = await client.query(
+            `INSERT INTO plugin_installs(site_id,name,version,api_version,status,source_type,package_sha256,image_digest,artifact_digest,sbom_reference,sbom_digest,provenance,signature_verified,security_reviewed_at,security_reviewed_by,manifest,requested_capabilities,installed_by)
+             VALUES($1,$2,$3,$4,'pending',$5,$6,$7,$8,$9,$10,$11::jsonb,$12,NULL,NULL,$13::jsonb,$14::jsonb,$15)
+             ON CONFLICT(site_id,name) DO UPDATE SET version=EXCLUDED.version,api_version=EXCLUDED.api_version,status='pending',source_type=EXCLUDED.source_type,package_sha256=EXCLUDED.package_sha256,image_digest=EXCLUDED.image_digest,artifact_digest=EXCLUDED.artifact_digest,sbom_reference=EXCLUDED.sbom_reference,sbom_digest=EXCLUDED.sbom_digest,provenance=EXCLUDED.provenance,signature_verified=EXCLUDED.signature_verified,security_reviewed_at=NULL,security_reviewed_by=NULL,manifest=EXCLUDED.manifest,requested_capabilities=EXCLUDED.requested_capabilities,approved_capabilities='[]'::jsonb,approved_by=NULL,updated_at=now()
+             RETURNING id,name,version,status,source_type,image_digest,artifact_digest,sbom_reference,sbom_digest,signature_verified,security_reviewed_at,requested_capabilities`,
+            [siteId, body.manifest.name, body.manifest.version, body.manifest.apiVersion, body.sourceType, body.packageSha256 || null, body.imageDigest || null, artifactDigest, body.sbomReference || null, body.sbomDigest ? String(body.sbomDigest).toLowerCase() : null, JSON.stringify(provenance), signatureResult.valid, JSON.stringify(body.manifest), JSON.stringify(body.manifest.capabilities), actor.user.id]
+          );
+          const registered = result.rows[0];
+          await identity?.audit(
+            { siteId, actorId: actor.user.id, action: 'plugin.registered', targetType: 'plugin', targetId: registered.id, requestId, details: { name: registered.name, signatureVerified: signatureResult.valid } },
+            { queryable: client },
+          );
+          return registered;
+        });
+        return sendJson(res, 201, { plugin, requestId });
+
       }
       const pluginActionMatch = url.pathname.match(/^\/api\/v1\/plugins\/([0-9a-f-]{36})\/(approve|security-review|activate|disable|invoke)$/i);
       if (req.method === 'POST' && pluginActionMatch) {
         const body = await readJson(req, Math.min(maxBody, 256_000)); const siteId = await siteIdFor({ req, url, body, actor }); await requireCapability(actor, siteId, 'plugins:manage');
-        const [, pluginId, action] = pluginActionMatch; const plugin = await getPlugin(siteId, pluginId);
-        if (!plugin) return sendJson(res, 404, { error: 'Plugin not found.', code: 'ERR_VIRGOSCORPIO_HUB_PLUGIN_NOT_FOUND', requestId });
-        let result;
-        if (action === 'approve') {
-          const requested = Array.isArray(plugin.requested_capabilities) ? plugin.requested_capabilities : [];
-          const approved = body.approvedCapabilities === undefined ? requested : body.approvedCapabilities;
-          if (!Array.isArray(approved) || approved.some(cap => !requested.includes(cap))) throw fail(400, 'ERR_VIRGOSCORPIO_HUB_PLUGIN_CAPABILITY_INVALID', 'Approved capabilities must be a subset of requested capabilities.');
-          result = await localPool.query("UPDATE plugin_installs SET status='approved',approved_capabilities=$3::jsonb,approved_by=$4,updated_at=now() WHERE site_id=$1 AND id=$2 RETURNING id,name,status,approved_capabilities,image_digest,signature_verified", [siteId, pluginId, JSON.stringify(approved), actor.user.id]);
-        } else if (action === 'security-review') {
-          if (plugin.status !== 'approved') throw fail(409, 'ERR_VIRGOSCORPIO_HUB_PLUGIN_NOT_APPROVED', 'Plugin must be approved before security review.');
-          if (plugin.approved_by && plugin.approved_by === actor.user.id) throw fail(403, 'ERR_VIRGOSCORPIO_HUB_PLUGIN_REVIEW_INDEPENDENCE', 'A different administrator must perform the security review.');
-          if (plugin.signature_verified !== true || !plugin.artifact_digest) throw fail(409, 'ERR_VIRGOSCORPIO_HUB_PLUGIN_SIGNATURE_REQUIRED', 'A verified signature and immutable artifact digest are required before security review.');
-          if (!plugin.sbom_reference || !plugin.sbom_digest || !/^[a-f0-9]{64}$/i.test(String(plugin.sbom_digest))) throw fail(409, 'ERR_VIRGOSCORPIO_HUB_PLUGIN_SBOM_REQUIRED', 'A signed software bill of materials reference and SHA-256 digest are required before activation.');
-          if (plugin.source_type !== 'oci-image' || !validatePinnedImageDigest(plugin.image_digest)) throw fail(409, 'ERR_VIRGOSCORPIO_HUB_PLUGIN_IMAGE_REQUIRED', 'Only a pinned OCI image can pass the execution security review.');
-          result = await localPool.query('UPDATE plugin_installs SET security_reviewed_at=now(),security_reviewed_by=$3,updated_at=now() WHERE site_id=$1 AND id=$2 RETURNING id,name,status,signature_verified,security_reviewed_at,security_reviewed_by,image_digest', [siteId, pluginId, actor.user.id]);
-        } else if (action === 'activate') {
-          if (env.VIRGOSCORPIO_HUB_PLUGIN_EXECUTION_ENABLED !== 'true') throw fail(503, 'ERR_VIRGOSCORPIO_HUB_PLUGIN_EXECUTION_DISABLED', 'Plugin execution is disabled until an isolated runner, trusted signing keys, and security policies are configured.');
-          if (plugin.status !== 'approved') throw fail(409, 'ERR_VIRGOSCORPIO_HUB_PLUGIN_NOT_APPROVED', 'Plugin must be approved before activation.');
-          if (plugin.signature_verified !== true || !plugin.artifact_digest) throw fail(409, 'ERR_VIRGOSCORPIO_HUB_PLUGIN_SIGNATURE_REQUIRED', 'The exact plugin artifact must have a verified trusted signature.');
-          if (!plugin.sbom_reference) throw fail(409, 'ERR_VIRGOSCORPIO_HUB_PLUGIN_SBOM_REQUIRED', 'An SBOM artifact reference is required before activation.');
-          if (!plugin.security_reviewed_at || !plugin.security_reviewed_by || (plugin.approved_by && plugin.security_reviewed_by === plugin.approved_by)) throw fail(409, 'ERR_VIRGOSCORPIO_HUB_PLUGIN_SECURITY_REVIEW_REQUIRED', 'A second administrator must review the exact artifact before activation.');
-          if (!validatePinnedImageDigest(plugin.image_digest) || digestForArtifact(plugin.image_digest) !== String(plugin.artifact_digest).toLowerCase()) throw fail(409, 'ERR_VIRGOSCORPIO_HUB_PLUGIN_IMAGE_DIGEST_MISMATCH', 'The reviewed OCI image digest must match the signed artifact digest.');
-          result = await localPool.query("UPDATE plugin_installs SET status='active',updated_at=now() WHERE site_id=$1 AND id=$2 AND signature_verified=true AND security_reviewed_at IS NOT NULL RETURNING id,name,status,image_digest,approved_capabilities,signature_verified,security_reviewed_at", [siteId, pluginId]);
-        } else if (action === 'disable') {
-          result = await localPool.query("UPDATE plugin_installs SET status='disabled',updated_at=now() WHERE site_id=$1 AND id=$2 RETURNING id,name,status", [siteId, pluginId]);
-        } else {
+        const [, pluginId, action] = pluginActionMatch;
+        if (action === 'invoke') {
+          // External runner work must not hold a PostgreSQL transaction or row lock.
+          const plugin = await getPlugin(siteId, pluginId);
+          if (!plugin) return sendJson(res, 404, { error: 'Plugin not found.', code: 'ERR_VIRGOSCORPIO_HUB_PLUGIN_NOT_FOUND', requestId });
           if (env.VIRGOSCORPIO_HUB_PLUGIN_EXECUTION_ENABLED !== 'true') throw fail(503, 'ERR_VIRGOSCORPIO_HUB_PLUGIN_EXECUTION_DISABLED', 'Plugin execution is disabled by policy.');
           if (plugin.status !== 'active' || !validatePinnedImageDigest(plugin.image_digest) || plugin.signature_verified !== true || !plugin.security_reviewed_at) throw fail(409, 'ERR_VIRGOSCORPIO_HUB_PLUGIN_INACTIVE', 'Only reviewed, signed, active plugins with pinned images may execute.');
           const started = Date.now();
@@ -1911,8 +1902,49 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
             throw error;
           }
         }
-        if (identity && actor.user.id) await identity.audit({ siteId, actorId: actor.user.id, action: `plugin.${action}`, targetType: 'plugin', targetId: pluginId, requestId, details: { status: result.rows[0]?.status, signatureVerified: Boolean(result.rows[0]?.signature_verified) } });
-        return sendJson(res, 200, { plugin: result.rows[0], requestId });
+
+        const plugin = await withTransaction(localPool, async client => {
+          // Validate current state only after locking the site-scoped row.
+          // Re-registration and lifecycle actions therefore cannot race stale validation.
+          const current = await getPlugin(siteId, pluginId, { queryable: client, forUpdate: true });
+          if (!current) return null;
+
+          let result;
+          if (action === 'approve') {
+            const requested = Array.isArray(current.requested_capabilities) ? current.requested_capabilities : [];
+            const approved = body.approvedCapabilities === undefined ? requested : body.approvedCapabilities;
+            if (!Array.isArray(approved) || approved.some(cap => !requested.includes(cap))) throw fail(400, 'ERR_VIRGOSCORPIO_HUB_PLUGIN_CAPABILITY_INVALID', 'Approved capabilities must be a subset of requested capabilities.');
+            result = await client.query("UPDATE plugin_installs SET status='approved',approved_capabilities=$3::jsonb,approved_by=$4,updated_at=now() WHERE site_id=$1 AND id=$2 RETURNING id,name,status,approved_capabilities,image_digest,signature_verified", [siteId, pluginId, JSON.stringify(approved), actor.user.id]);
+          } else if (action === 'security-review') {
+            if (current.status !== 'approved') throw fail(409, 'ERR_VIRGOSCORPIO_HUB_PLUGIN_NOT_APPROVED', 'Plugin must be approved before security review.');
+            if (current.approved_by && current.approved_by === actor.user.id) throw fail(403, 'ERR_VIRGOSCORPIO_HUB_PLUGIN_REVIEW_INDEPENDENCE', 'A different administrator must perform the security review.');
+            if (current.signature_verified !== true || !current.artifact_digest) throw fail(409, 'ERR_VIRGOSCORPIO_HUB_PLUGIN_SIGNATURE_REQUIRED', 'A verified signature and immutable artifact digest are required before security review.');
+            if (!current.sbom_reference || !current.sbom_digest || !/^[a-f0-9]{64}$/i.test(String(current.sbom_digest))) throw fail(409, 'ERR_VIRGOSCORPIO_HUB_PLUGIN_SBOM_REQUIRED', 'A signed software bill of materials reference and SHA-256 digest are required before activation.');
+            if (current.source_type !== 'oci-image' || !validatePinnedImageDigest(current.image_digest)) throw fail(409, 'ERR_VIRGOSCORPIO_HUB_PLUGIN_IMAGE_REQUIRED', 'Only a pinned OCI image can pass the execution security review.');
+            result = await client.query('UPDATE plugin_installs SET security_reviewed_at=now(),security_reviewed_by=$3,updated_at=now() WHERE site_id=$1 AND id=$2 RETURNING id,name,status,signature_verified,security_reviewed_at,security_reviewed_by,image_digest', [siteId, pluginId, actor.user.id]);
+          } else if (action === 'activate') {
+            if (env.VIRGOSCORPIO_HUB_PLUGIN_EXECUTION_ENABLED !== 'true') throw fail(503, 'ERR_VIRGOSCORPIO_HUB_PLUGIN_EXECUTION_DISABLED', 'Plugin execution is disabled until an isolated runner, trusted signing keys, and security policies are configured.');
+            if (current.status !== 'approved') throw fail(409, 'ERR_VIRGOSCORPIO_HUB_PLUGIN_NOT_APPROVED', 'Plugin must be approved before activation.');
+            if (current.signature_verified !== true || !current.artifact_digest) throw fail(409, 'ERR_VIRGOSCORPIO_HUB_PLUGIN_SIGNATURE_REQUIRED', 'The exact plugin artifact must have a verified trusted signature.');
+            if (!current.sbom_reference) throw fail(409, 'ERR_VIRGOSCORPIO_HUB_PLUGIN_SBOM_REQUIRED', 'An SBOM artifact reference is required before activation.');
+            if (!current.security_reviewed_at || !current.security_reviewed_by || (current.approved_by && current.security_reviewed_by === current.approved_by)) throw fail(409, 'ERR_VIRGOSCORPIO_HUB_PLUGIN_SECURITY_REVIEW_REQUIRED', 'A second administrator must review the exact artifact before activation.');
+            if (!validatePinnedImageDigest(current.image_digest) || digestForArtifact(current.image_digest) !== String(current.artifact_digest).toLowerCase()) throw fail(409, 'ERR_VIRGOSCORPIO_HUB_PLUGIN_IMAGE_DIGEST_MISMATCH', 'The reviewed OCI image digest must match the signed artifact digest.');
+            result = await client.query("UPDATE plugin_installs SET status='active',updated_at=now() WHERE site_id=$1 AND id=$2 AND signature_verified=true AND security_reviewed_at IS NOT NULL RETURNING id,name,status,image_digest,approved_capabilities,signature_verified,security_reviewed_at", [siteId, pluginId]);
+          } else if (action === 'disable') {
+            result = await client.query("UPDATE plugin_installs SET status='disabled',updated_at=now() WHERE site_id=$1 AND id=$2 RETURNING id,name,status", [siteId, pluginId]);
+          }
+
+          const updated = result?.rows[0];
+          if (!updated) return null;
+          await identity?.audit(
+            { siteId, actorId: actor.user.id, action: `plugin.${action}`, targetType: 'plugin', targetId: pluginId, requestId, details: { status: updated.status, signatureVerified: Boolean(updated.signature_verified) } },
+            { queryable: client },
+          );
+          return updated;
+        });
+        if (!plugin) return sendJson(res, 404, { error: 'Plugin not found.', code: 'ERR_VIRGOSCORPIO_HUB_PLUGIN_NOT_FOUND', requestId });
+        return sendJson(res, 200, { plugin, requestId });
+
       }
 
       return sendJson(res, 404, { error: 'Route not found.', code: 'ERR_VIRGOSCORPIO_HUB_NOT_FOUND', requestId });

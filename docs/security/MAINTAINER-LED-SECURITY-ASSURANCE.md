@@ -3,7 +3,7 @@
 > **Status:** Active internal engineering control for the restricted VirgoScorpio Hub 0.6.2 developer preview.
 > **Assessment type:** Maintainer-authored and automated checks only.
 > **Production certification:** **NOT CERTIFIED — NO-GO.**
-> **Current mainline evidence baseline:** `9c868e0f949e2c7d18f768a12b8f4e86b6591306` (F1.34 PR #154 merge; exact-main workflow #643 passed 7/7 jobs on 15 November 2026).
+> **Current mainline evidence baseline:** `c7047881d79af654a7b85bdf2e7e7e63fc741de8` (documentation-only PR #155 after F1.34; exact-main workflow #646 passed 7/7 jobs on 15 November 2026).
 
 ## 1. Purpose and decision
 
@@ -197,3 +197,14 @@ The exact-head candidate branch passed both push workflow #640 and PR workflow #
 PR [#154](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/154) merged at 2026-11-15 08:03:20 UTC to main `9c868e0f949e2c7d18f768a12b8f4e86b6591306`, closing issue #152. Exact-main workflow [#643](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43692705776) passed all seven jobs at 08:06:57 UTC, including signed mainline SBOM/provenance attestation and exact-source evidence consolidation. Mainline results remained 612/612 Hub and 94/94 EnginEx per runtime, 100/100 live PostgreSQL/Memgraph, 18 fresh/18 idempotent migrations, Playwright 9/9, collaboration 4/4 and CodeQL.
 
 GitHub records no formal human review submission for PR #154. Its implementation, merge and automated CI are maintainer evidence, not independent tenant/security acceptance. Independent tenant review #14 and platform security review #25 remain OPEN / NOT PERFORMED; #23 remains OPEN / PARTIAL. F1.34 does not populate or waive those independent evidence contracts and does not change the NO-GO production disposition.
+
+
+## F1.35 plugin registry lifecycle/audit atomicity — candidate (issue #156; NOT MERGED)
+
+Issue [#156](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/156) tracks a bounded maintainer engineering candidate on isolated branch `security/f1-35-audit-gap-review-2026-11-15` from exact main `c7047881d79af654a7b85bdf2e7e7e63fc741de8`. Mainline remains F1.34; exact-main workflow #646 passed 7/7 jobs after documentation-only PR #155.
+
+The candidate moves plugin registration/upsert and the approve, security-review, activate and disable transitions to the existing PostgreSQL `withTransaction` / `identity.audit(input, { queryable })` pattern. It obtains a site-scoped plugin row with `SELECT ... FOR UPDATE` before lifecycle checks, preventing re-registration from racing a stale second-administrator review. Failure-injection cases cover audit insert rollback and retry for registration and each administrative action; a concurrency fixture queues re-registration and review behind a held row lock. External `invoke` remains outside the transaction. No schema, migration, dependency, public route, package-version or SemVer change is proposed.
+
+Local Windows / supplemental Node.js 26.12.1 `npm run check` passed 609 tests, zero failures and three platform-specific skips. Generated route inventory was refreshed. The live PostgreSQL/Memgraph suite was NOT RUN locally because `DATABASE_URL` and `VIRGOSCORPIO_HUB_RUN_POSTGRES_INTEGRATION` are absent. Exact-head hosted live integration and functional CI are pending; no pass is being claimed yet.
+
+F1.35 is ordinary maintainer-led developer-preview work only. It is not independent review, a risk acceptance, a waiver, or production qualification. Independent tenant assessment #14 and platform assessment #25 remain OPEN / NOT PERFORMED; dependency/license assessment #23 remains OPEN / PARTIAL. Do not populate their independent evidence contracts from this candidate.

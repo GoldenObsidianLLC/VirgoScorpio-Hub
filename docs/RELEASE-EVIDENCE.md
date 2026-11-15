@@ -1,38 +1,40 @@
 # VirgoScorpio Hub Release Evidence Contract
-## Current mainline evidence snapshot — 15 November 2026 (0.6.2, F1.34 PR #154 merged)
+## Current mainline evidence snapshot — 15 November 2026 (0.6.2, F1.34 runtime; PR #155 docs merge)
 
-Current `main`: `9c868e0f949e2c7d18f768a12b8f4e86b6591306`, merge commit for [PR #154](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/154), merged 15 November 2026 at 08:03:20 UTC; [issue #152](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/152) is CLOSED. GitHub records no formal review submission for PR #154. This is maintainer implementation and automation evidence only, not independent approval.
+Current `main`: `c7047881d79af654a7b85bdf2e7e7e63fc741de8`, documentation-only merge of [PR #155](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/155) synchronizing the release records after F1.34 merged through [PR #154](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/154); [issue #152](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/152) is CLOSED. GitHub records no formal review submission for PR #154. This is maintainer implementation and automation evidence only, not independent approval.
 
-Exact-main push [workflow #643](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43692705776) completed successfully on this exact SHA at 08:06:57 UTC (run ID `43692705776`, attempt 1); all seven jobs passed, including the mainline-only signed dependency/SBOM attestation and final evidence consolidation. The canonical readiness artifact was generated at 08:06:54.743 UTC while the aggregate job was finishing. Readiness is **8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN**; `readyForProduction` is false and classification is `NOT_PRODUCTION_CERTIFIED`. Production remains **NO-GO**.
+Exact-main push [workflow #646](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43703478252) completed successfully on this exact SHA at 10:21:57 UTC (run ID `43703478252`, attempt 1); all seven jobs passed, including the mainline-only signed dependency/SBOM attestation and final evidence consolidation. The canonical readiness artifact was generated at 10:21:53.346 UTC while the aggregate job was finishing. Readiness is **8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN**; `readyForProduction` is false and classification is `NOT_PRODUCTION_CERTIFIED`. Production remains **NO-GO**.
 
 Node.js 22.23.4 and 24.22.1 each passed **612/612 Hub** tests and **94/94 EnginEx 7.0.0** tests with zero failures/skips. Dedicated PostgreSQL/Memgraph passed **100/100** live integration tests with zero failures/skips, including the editorial workflow audit-trigger rollback/retry regression; all **18/18** fresh migrations applied and **18/18** were skipped on idempotent re-entry. Playwright browser/editor smoke passed **9/9**, and PostgreSQL-backed collaboration Playwright passed **4/4**. CodeQL, full/production npm audit, mainline signed SBOM/provenance attestation, SBOM runtime parity and exact-source evidence consolidation passed. Each CycloneDX 1.5 runtime SBOM contains 200 components and 201 dependency records. The two PARTIAL classifications remain incomplete human dependency/license/lockfile review and 34 service-less integration skips per Node runtime. Automated Playwright smoke is not manual WCAG/assistive-technology acceptance; CodeQL/SBOM/provenance do not replace independent security or legal review.
 
 PR #154 was merged without a formal GitHub review submission. The source review/merge and automation evidence are recorded for traceability but must not be relabeled as independent security approval. Independent tenant review #14 and platform security assessment #25 remain OPEN / NOT PERFORMED; dependency/license review #23 remains OPEN / PARTIAL. Fourteen production evidence gates remain missing. Package 0.6.2 stays private and unreleased; no tag, GitHub Release, npm publication, deployment or SemVer increment is authorized.
 
+The next bounded developer-preview candidate is F1.35, tracked by [issue #156](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/156) on an isolated branch from exact main `c7047881d79af654a7b85bdf2e7e7e63fc741de8`. It addresses plugin registration and administrative lifecycle audit atomicity plus stale lifecycle validation using a row lock. Local unit/syntax checks passed; live PostgreSQL/Memgraph was not run locally because database configuration is absent. Exact-head hosted functional and live integration evidence is pending. F1.35 is not merged and is not part of the exact-main #646 evidence or production gate count.
+
 ### Run-bound artifact inventory
 
-The following SHA-256 values are GitHub Actions artifact digests reported by the exact run's artifact API. They identify uploaded workflow artifact archives, not inner files.
+The following SHA-256 values are GitHub Actions artifact digests reported by exact-main workflow #646. They identify uploaded workflow artifact archives, not inner files.
 
 | Artifact | GitHub artifact ID | SHA-256 digest | Expires |
 |---|---:|---|---|
-| PostgreSQL/Memgraph producer bundle | `14153400385` | `eb0ebdc91ead92b0d6034415180985e64ef3b3672f48fed19b7db4ead84f9da5` | 13 February 2027 |
-| Node.js 24 CI evidence | `14153360265` | `13bc09d1e9d66453f2bd71637d79628d5621300758f10f8f8414f2a1961ce055` | 13 February 2027 |
-| Browser/accessibility evidence | `14153400226` | `81869f3f57fce3d8836aa5788a5d11589d1dd063354ab0d02c2a4673d02deab9` | 13 February 2027 |
-| Node.js 22 dependency/SBOM evidence | `14153640122` | `463d1a6d8dee639ece526ce506088a2bbc658ee1c7654a5dcbe28364fe70ddc8` | 13 February 2027 |
-| CodeQL evidence | `14153635110` | `7baa1bffca4052c255732de376a58b7e6a0277f03bfefeef16504015ac9ab690` | 13 February 2027 |
-| Mainline supply-chain attestations | `14153615251` | `7d37f01b342557daaa1663dd177c541070e027a33e9977e5cf2b8b5e7ff41ae7` | 13 February 2027 |
-| Release readiness | `14153271277` | `f37ce5377ead8de5640675ba969d4bfd2afd2413c78b3f0caf471df8a8d42462` | 13 February 2027 |
-| Node.js 22 CI evidence | `14152589775` | `54212353c681b2f6365c90712b5799aa8e654c0abf29fe9605fd75f28c875abf` | 13 February 2027 |
-| Node.js 22 live-integration evidence | `14152364096` | `e99a27d25dd058da7565495a7904705d983d1a4eafedb2c54f725ac0c7d53bf1` | 13 February 2027 |
-| Node.js 24 dependency/SBOM evidence | `14153470077` | `0370761d083b34dcc52e6355fee0db60f7e26451728410a93f31c44f7da2f865` | 13 February 2027 |
+| PostgreSQL/Memgraph producer bundle | `14157650986` | `f427abf882a131312e9b968328b644775fb0efe5623c277f9c8905f88a81b0e7` | 13 February 2027 |
+| Node.js 24 CI evidence | `14157800353` | `4a5695da02517fe9182bba3388ffd921b467fea70f5ce631b0a61a0b16f6f3db` | 13 February 2027 |
+| Browser/accessibility evidence | `14157935021` | `e783ca72ff50638b4588a9934e8ab51ec9844322322e74c99b68da4ba1e6cf91` | 13 February 2027 |
+| Node.js 22 dependency/SBOM evidence | `14157581100` | `0bc6b0ea92af48a407be932eaaaf0337ea3d11820b28fe800ccdd01948b35b0b` | 13 February 2027 |
+| CodeQL evidence | `14157338874` | `83add2699061a9cc5719a87697af27f0ca175f3431fe7104d4075e5fe764c3b1` | 13 February 2027 |
+| Mainline supply-chain attestations | `14157294103` | `8ffeafc44e6a42f2f0a4155d46351b341d65eb48419381c5e482a1e9e3e96731` | 13 February 2027 |
+| Release readiness | `14156589576` | `725cd04f267cc063c8f4757f371eb6b9e05ffdc1b231af494516b7d7974b6d46` | 13 February 2027 |
+| Node.js 22 CI evidence | `14157114615` | `e6386725aadf9f62c1d575716821049bf278a2ea944702d332229873d8dc96ce` | 13 February 2027 |
+| Node.js 22 live-integration evidence | `14157199632` | `7e7002c072e41e8551fbd4afc4b3395209d6bf24d1d1afe45a2a4aff19f18c43` | 13 February 2027 |
+| Node.js 24 dependency/SBOM evidence | `14157079737` | `aae97a4204f2fb9c17bb94dcf108b42d0f84524beaf8195b413fbea4fe512878` | 13 February 2027 |
 
-All ten artifacts are unexpired and bound to workflow run `43692705776`, attempt 1, source SHA `9c868e0f949e2c7d18f768a12b8f4e86b6591306`. GitHub reported expiry at `2027-02-13T08:03:23Z`; recheck retention before a later release decision.
+All ten artifacts are unexpired and bound to workflow run `43703478252`, attempt 1, source SHA `c7047881d79af654a7b85bdf2e7e7e63fc741de8`. GitHub reported expiry at `2027-02-13T10:19:02Z`; recheck retention before a later release decision.
 
 The verified CycloneDX 1.5 digests are Node.js 22 `971a79877e64aaf0ceba68675a547172f1d80c6f5b888a67d64b3938d9bc7803` and Node.js 24 `abd6ab417cba92d53a07709404d8116798cff6523c2bc2a0d76f2e51763503fc`. Both derive from lockfile SHA-256 `8f3786bcfcd03d0b63761c7107e4d757ae5b45171ba2f6c086ff38c027c8b086`, contain 200 components and 201 dependency records, and match the verified mainline attestation. The inventory has 14 Sharp/libvips components with LGPL license terms; this is not legal clearance.
 
-The PostgreSQL/Memgraph producer manifest SHA-256 is `d7652bfd43b84333b8e9e20c3b2ed0b2397a2db30c00b61840b63259b7db1cec`. It binds the 100/100 live integration result, 18 fresh migration applications and 18 idempotent second-pass skips to the exact main SHA. The live suite includes the F1.34 editorial workflow audit-trigger rollback/retry regression.
+The PostgreSQL/Memgraph producer manifest SHA-256 is `a0b2847d4219c093a66186a36b3b827a8794f4e6c9d273d2447fab5401a68434`. It binds the 100/100 live integration result, 18 fresh migration applications and 18 idempotent second-pass skips to the exact main SHA. The live suite includes the F1.34 editorial workflow audit-trigger rollback/retry regression.
 
-The canonical readiness JSON/Markdown was generated at `2026-11-15T08:06:54.743Z` while the aggregate workflow was still completing. GitHub's final run record independently records overall success and 7/7 successful jobs at `2026-11-15T08:06:57Z`. This timing distinction is preserved rather than rewriting the original run-bound artifact.
+The canonical readiness JSON/Markdown was generated at `2026-11-15T10:21:53.346Z` while the aggregate workflow was still completing. GitHub's final run record independently records overall success and 7/7 successful jobs at `2026-11-15T10:21:57Z`. This timing distinction is preserved rather than rewriting the original run-bound artifact.
 
 The 14 missing production evidence gates remain tenant isolation, identity provider E2E, ClamAV corpus, cloud live providers, Stripe lifecycle, manual browser accessibility, commerce parity, community parity, plugin isolation, qualified human dependency/SBOM/CodeQL acceptance, load/backup/restore, independent platform security, operations/release approval, and production observability. Issues #14/#25 remain OPEN / NOT PERFORMED and #23 remains OPEN / PARTIAL. Package 0.6.2 stays private and unreleased; no tag, GitHub Release, npm publication, deployment or SemVer increment is authorized.
 

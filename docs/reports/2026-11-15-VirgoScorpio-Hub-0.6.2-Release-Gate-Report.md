@@ -2,7 +2,7 @@
 
 **Evidence snapshot:** 15 November 2026 UTC / 15 November 2026 America/Chicago
 **Repository:** `GoldenObsidianLLC/VirgoScorpio-Hub`  
-**Current main:** `9c868e0f949e2c7d18f768a12b8f4e86b6591306`
+**Current main:** `c7047881d79af654a7b85bdf2e7e7e63fc741de8`
 **Current release decision:** **PRODUCTION NO-GO / NOT_PRODUCTION_CERTIFIED**  
 **Package:** `virgoscorpio-hub@0.6.2` — private and unreleased
 
@@ -10,7 +10,7 @@
 
 ## 1. Executive decision
 
-The current mainline is technically green for its defined CI workflow. F1.34, editorial workflow transition/audit atomicity, merged in PR [#154](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/154) at 08:03:20 UTC and closed issue [#152](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/152). Exact-main workflow [#643](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43692705776) passed all seven jobs on main SHA `9c868e0f949e2c7d18f768a12b8f4e86b6591306`. GitHub records no formal review submission for PR #154; merge and CI remain maintainer evidence, not independent approval.
+The current mainline is technically green for its defined CI workflow. F1.34, editorial workflow transition/audit atomicity, merged in PR [#154](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/154) at 08:03:20 UTC and closed issue [#152](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/152). Documentation-only PR [#155](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/155) then synchronized the exact-main release records. Exact-main workflow [#646](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43703478252) passed all seven jobs on main SHA `c7047881d79af654a7b85bdf2e7e7e63fc741de8`. GitHub records no formal review submission for PR #154; merge and CI remain maintainer evidence, not independent approval.
 
 The canonical readiness classification remains:
 
@@ -28,13 +28,14 @@ The canonical readiness classification remains:
 
 | Item | Verified value |
 |---|---|
-| Main SHA | `9c868e0f949e2c7d18f768a12b8f4e86b6591306` |
-| Main commit | `fix(content): make workflow transitions and audit atomic (F1.34) (#154)` |
+| Main SHA | `c7047881d79af654a7b85bdf2e7e7e63fc741de8` |
+| Main commit | `docs(release): sync 0.6.2 readiness after F1.34` (PR #155; documentation-only) |
 | F1.34 PR | [#154](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/154), merged 15 November 2026 08:03:20 UTC; no formal review submission recorded |
 | F1.34 issue | [#152](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/152), CLOSED |
-| CI workflow | [Run #643](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43692705776), push, attempt 1, 7/7 jobs successful |
-| CI completion | 15 November 2026 08:06:57 UTC |
-| Readiness snapshot generated | 15 November 2026 08:06:54.743 UTC, after producer verification while the aggregate workflow was finishing |
+| Release documentation sync | [PR #155](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/155), merged as main c7047881d79af654a7b85bdf2e7e7e63fc741de8; documentation-only | Updated current readiness, artifact inventory, roadmap and assurance baselines after F1.34. Exact-main workflow #646 passed 7/7 jobs; no runtime/API/schema/dependency/SemVer change. |
+| CI workflow | [Run #646](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43703478252), push, attempt 1, 7/7 jobs successful |
+| CI completion | 15 November 2026 10:21:57 UTC |
+| Readiness snapshot generated | 15 November 2026 10:21:53.346 UTC, after producer verification while the aggregate workflow was finishing |
 | Package version | `0.6.2`, `private: true`, not published |
 | Preview classification | `EXPANDED_DEVELOPER_PREVIEW_NOT_PRODUCTION_CERTIFIED` |
 | SemVer | No change authorized |
@@ -44,7 +45,7 @@ The source GitHub repository is public while the package remains private and unr
 
 ## 3. Exact-main CI and supply-chain evidence
 
-Workflow #643 completed all seven required jobs:
+Workflow #646 completed all seven required jobs:
 
 | Job / evidence family | Result | Exact evidence |
 |---|---|---|
@@ -72,24 +73,24 @@ The service-less integration diagnostic remains **PARTIAL**: 34 tests were skipp
 
 ### Run-bound artifact inventory
 
-All artifacts below belong to exact-main workflow run `43692705776`, attempt 1, source SHA `9c868e0f949e2c7d18f768a12b8f4e86b6591306`. GitHub reported expiry on 13 February 2027 at 08:03:23 UTC; retention should be rechecked before a later release review. The SHA-256 values are GitHub Actions artifact archive digests, not inner file hashes.
+All artifacts below belong to exact-main workflow run `43703478252`, attempt 1, source SHA `c7047881d79af654a7b85bdf2e7e7e63fc741de8`. GitHub reported expiry on 13 February 2027 at 10:19:02 UTC; retention should be rechecked before a later release review. The SHA-256 values are GitHub Actions artifact archive digests, not inner file hashes.
 
 | Artifact | GitHub artifact ID | API SHA-256 digest | Expires |
 |---|---:|---|---|
-| PostgreSQL/Memgraph producer bundle | 14153400385 | `eb0ebdc91ead92b0d6034415180985e64ef3b3672f48fed19b7db4ead84f9da5` | 13 February 2027 |
-| Node.js 24 CI evidence | 14153360265 | `13bc09d1e9d66453f2bd71637d79628d5621300758f10f8f8414f2a1961ce055` | 13 February 2027 |
-| Browser/accessibility evidence | 14153400226 | `81869f3f57fce3d8836aa5788a5d11589d1dd063354ab0d02c2a4673d02deab9` | 13 February 2027 |
-| Node.js 22 dependency/SBOM evidence | 14153640122 | `463d1a6d8dee639ece526ce506088a2bbc658ee1c7654a5dcbe28364fe70ddc8` | 13 February 2027 |
-| CodeQL evidence | 14153635110 | `7baa1bffca4052c255732de376a58b7e6a0277f03bfefeef16504015ac9ab690` | 13 February 2027 |
-| Mainline supply-chain attestations | 14153615251 | `7d37f01b342557daaa1663dd177c541070e027a33e9977e5cf2b8b5e7ff41ae7` | 13 February 2027 |
-| Release readiness | 14153271277 | `f37ce5377ead8de5640675ba969d4bfd2afd2413c78b3f0caf471df8a8d42462` | 13 February 2027 |
-| Node.js 22 CI evidence | 14152589775 | `54212353c681b2f6365c90712b5799aa8e654c0abf29fe9605fd75f28c875abf` | 13 February 2027 |
-| Node.js 22 live-integration evidence | 14152364096 | `e99a27d25dd058da7565495a7904705d983d1a4eafedb2c54f725ac0c7d53bf1` | 13 February 2027 |
-| Node.js 24 dependency/SBOM evidence | 14153470077 | `0370761d083b34dcc52e6355fee0db60f7e26451728410a93f31c44f7da2f865` | 13 February 2027 |
+| PostgreSQL/Memgraph producer bundle | 14157650986 | `f427abf882a131312e9b968328b644775fb0efe5623c277f9c8905f88a81b0e7` | 13 February 2027 |
+| Node.js 24 CI evidence | 14157800353 | `4a5695da02517fe9182bba3388ffd921b467fea70f5ce631b0a61a0b16f6f3db` | 13 February 2027 |
+| Browser/accessibility evidence | 14157935021 | `e783ca72ff50638b4588a9934e8ab51ec9844322322e74c99b68da4ba1e6cf91` | 13 February 2027 |
+| Node.js 22 dependency/SBOM evidence | 14157581100 | `0bc6b0ea92af48a407be932eaaaf0337ea3d11820b28fe800ccdd01948b35b0b` | 13 February 2027 |
+| CodeQL evidence | 14157338874 | `83add2699061a9cc5719a87697af27f0ca175f3431fe7104d4075e5fe764c3b1` | 13 February 2027 |
+| Mainline supply-chain attestations | 14157294103 | `8ffeafc44e6a42f2f0a4155d46351b341d65eb48419381c5e482a1e9e3e96731` | 13 February 2027 |
+| Release readiness | 14156589576 | `725cd04f267cc063c8f4757f371eb6b9e05ffdc1b231af494516b7d7974b6d46` | 13 February 2027 |
+| Node.js 22 CI evidence | 14157114615 | `e6386725aadf9f62c1d575716821049bf278a2ea944702d332229873d8dc96ce` | 13 February 2027 |
+| Node.js 22 live-integration evidence | 14157199632 | `7e7002c072e41e8551fbd4afc4b3395209d6bf24d1d1afe45a2a4aff19f18c43` | 13 February 2027 |
+| Node.js 24 dependency/SBOM evidence | 14157079737 | `aae97a4204f2fb9c17bb94dcf108b42d0f84524beaf8195b413fbea4fe512878` | 13 February 2027 |
 
-PostgreSQL/Memgraph producer artifact 14153400385 has API-reported SHA-256 `eb0ebdc91ead92b0d6034415180985e64ef3b3672f48fed19b7db4ead84f9da5`. The run-bound producer manifest SHA-256 is `d7652bfd43b84333b8e9e20c3b2ed0b2397a2db30c00b61840b63259b7db1cec`; it binds 100/100 live tests, the F1.34 audit-trigger rollback/retry regression and 18 fresh plus 18 idempotent migration checks against the exact main SHA.
+PostgreSQL/Memgraph producer artifact 14157650986 has API-reported SHA-256 `f427abf882a131312e9b968328b644775fb0efe5623c277f9c8905f88a81b0e7`. The run-bound producer manifest SHA-256 is `a0b2847d4219c093a66186a36b3b827a8794f4e6c9d273d2447fab5401a68434`; it records 100/100 live tests and 18 fresh plus 18 idempotent migration checks against exact main SHA `c7047881d79af654a7b85bdf2e7e7e63fc741de8`. The test suite includes the F1.34 editorial workflow audit-trigger rollback/retry regression.
 
-The canonical readiness file was generated at 08:06:54.743 UTC while the aggregate workflow job was still finishing; GitHub's final run record independently confirms all seven jobs and overall workflow conclusion as success at 08:06:57 UTC. Do not treat the timestamp ordering as a failed CI run or transplant this artifact to another revision.
+The canonical readiness file was generated at 10:21:53.346 UTC while the aggregate workflow job was still finishing; GitHub's final run record independently confirms all seven jobs and overall workflow conclusion as success at 10:21:57 UTC. Do not treat the timestamp ordering as a failed CI run or transplant this artifact to another revision.
 
 ## 4. Production evidence gate matrix
 
@@ -125,7 +126,7 @@ The maintainer-led process permits ordinary, isolated, non-production engineerin
 - [Issue #14](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/14): OPEN / NOT PERFORMED.
 - [Issue #25](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/25): OPEN / NOT PERFORMED.
 - [Issue #23](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/23): OPEN / PARTIAL.
-- The F1.28–F1.34 mutation/audit atomicity series now covers direct membership writes, site creation, design-system writes, taxonomy writes, relationship writes, site AI-policy writes and seven editorial workflow transitions. Each uses the existing transaction queryable seam rather than a parallel transaction abstraction.
+- The merged F1.28–F1.34 mutation/audit atomicity series covers direct membership writes, site creation, design-system writes, taxonomy writes, relationships, site AI-policy writes and seven editorial workflow transitions. F1.35 is a separate unmerged plugin registry lifecycle/audit candidate under issue #156, reusing the existing transaction queryable seam; it is not mainline evidence.
 - PR #154 has no formal human review submission recorded. Automated CI and maintainer implementation evidence do not constitute independent approval.
 
 Current main branch protection is not enabled (`protected: false`). Treat this as a governance hardening gap to address through an explicitly authorized repository policy decision; do not infer that green checks alone enforce human review or release ownership.
@@ -148,9 +149,36 @@ Exact-main [workflow #643](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub
 
 GitHub records no formal review submission for PR #154. Merge and automation are maintainer evidence, not independent approval. Independent tenant review #14 and platform security review #25 remain OPEN / NOT PERFORMED; dependency/license review #23 remains OPEN / PARTIAL. F1.34 does not populate or waive those independent evidence contracts.
 
-## 7. SemVer and release authorization
+## 7. F1.35 — Plugin registry lifecycle/audit atomicity (candidate; NOT MERGED)
 
-No public API, schema, migration, dependency, provider, lockfile or package-version change was introduced by F1.33 or F1.34. Keep `virgoscorpio-hub@0.6.2` private and unreleased. Do not create a tag or GitHub Release, publish to npm, deploy to production, or increment SemVer until:
+A bounded follow-up is tracked by [issue #156](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/156) on isolated branch `security/f1-35-audit-gap-review-2026-11-15`, based on exact current main `c7047881d79af654a7b85bdf2e7e7e63fc741de8`.
+
+### Source gap and planned correction
+
+The plugin registration route writes the `plugin_installs` row and then persists `plugin.registered` in a separate pool-backed audit insert. The `approve`, `security-review`, `activate` and `disable` routes similarly persist their lifecycle updates before a separate `plugin.<action>` audit insert. An audit failure could therefore return an HTTP error after the registration or lifecycle state had already committed.
+
+Lifecycle checks also loaded the plugin row before the update, using a non-locking query. Concurrent re-registration can reset status and clear approval/security-review metadata while a second-administrator review is in progress. A stale review could otherwise be applied to the replacement artifact.
+
+F1.35 reuses the existing `withTransaction(localPool, work)` helper and `identity.audit(input, { queryable })` seam. Registration/upsert and all four administrative lifecycle transitions now place the state change and correlated audit insert in one transaction. Lifecycle code obtains the site-scoped plugin record through the same transaction queryable with `SELECT ... FOR UPDATE` before validating status, approver/reviewer separation, signature/artifact/SBOM provenance and pinned-image requirements. The external `invoke` path remains outside transaction/row-lock scope so runner execution does not hold a database lock. No schema, migration, dependency, public route, API contract, package version or SemVer change is introduced.
+
+### Regression coverage added
+
+The existing two-site PostgreSQL plugin registry integration fixture now injects an `audit_events` trigger failure for registration, approval, security review, activation and disable. Each failure must roll back its associated registry mutation and leave no correlated audit event; retry must succeed and persist exactly one event. The fixture retains Site A/Site B isolation and two-administrator review coverage. A deterministic concurrency case holds the Site B registry row lock, queues re-registration followed by security review, then verifies that the reviewer reads the replacement pending row and is rejected rather than applying a stale review. External invocation remains outside the transaction and the execution-disabled default is still tested.
+
+### Local validation and outstanding hosted evidence
+
+On Windows / supplemental Node.js 26.12.1:
+
+- `npm run check`: 609 passed, zero failed, three Windows-specific skips (612 total).
+- The first run identified stale generated tenant inventory outputs. `npm run security:tenant-inventory` regenerated them; the catalog, JSON inventory and Markdown capability map now reflect the current source tree (27 families, 78 route patterns, 21 source files, 43 test files).
+- `node --check` passed for the modified API server and integration fixture; `git diff --check` passed.
+- Live PostgreSQL/Memgraph integration was **NOT RUN** locally because `DATABASE_URL` and `VIRGOSCORPIO_HUB_RUN_POSTGRES_INTEGRATION` are absent.
+
+This candidate is not merged and is not part of exact-main workflow #646 or the canonical readiness counts. Exact-head push and PR workflows must pass Node.js 22.23.4/24.22.1, live PostgreSQL/Memgraph with zero skips, migrations, Playwright, CodeQL and evidence consolidation before merge consideration. Independent tenant review #14 and platform security assessment #25 remain OPEN / NOT PERFORMED; dependency/license review #23 remains OPEN / PARTIAL. F1.35 does not supply or waive independent assessment evidence and does not alter the production NO-GO decision.
+
+## 8. SemVer and release authorization
+
+No public API, schema, migration, dependency, provider, lockfile or package-version change was introduced by merged F1.33/F1.34 or is proposed by the F1.35 candidate. Keep `virgoscorpio-hub@0.6.2` private and unreleased. Do not create a tag or GitHub Release, publish to npm, deploy to production, or increment SemVer until:
 1. all required production evidence gates are genuinely satisfied;
 2. independent tenant and platform security assessments are completed and accepted;
 3. qualified human dependency/license/provenance acceptance is documented;
