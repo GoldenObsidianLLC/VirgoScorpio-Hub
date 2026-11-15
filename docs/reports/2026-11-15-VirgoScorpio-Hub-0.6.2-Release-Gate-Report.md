@@ -125,22 +125,44 @@ The maintainer-led process permits ordinary, isolated, non-production engineerin
 
 Current main branch protection is not enabled (`protected: false`). Treat this as a governance hardening gap to address through an explicitly authorized repository policy decision; do not infer that green checks alone enforce human review or release ownership.
 
-## 6. Next development increment — F1.34
+## 6. Next development increment — F1.34 (hosted validation passed; review pending)
 
-A bounded follow-up is now tracked as [issue #152](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/152): make editorial workflow transitions and their correlated audit inserts atomic.
+A bounded follow-up is tracked as [issue #152](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/152) and implemented in unmerged [PR #154](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/154): make editorial workflow transitions and their correlated audit inserts atomic.
 
-Source inspection on main e982 found that the seven editorial routes currently dispatch the content status transition, workflow event and outbox write through the PostgreSQL store and then insert the audit event after the store transaction has returned. An audit persistence failure can therefore report an API failure after the state transition and outbox event have committed.
+Source inspection on main e982 found that the seven editorial routes dispatched content status/version, workflow and outbox writes through the PostgreSQL store, then inserted the correlated audit event after the store transaction had returned. An audit persistence failure could therefore report an API failure after the mutation and durable outbox event had already committed.
 
-The proposed bounded fix reuses the existing PostgreSQL transaction client and `identity.audit(input, { queryable })` seam. It preserves route authorization, site scope, action mapping, optimistic version checks, response shape and pool-backed audit defaults. Unit and route regression tests cover all seven store/route actions, callback ordering before COMMIT, backwards compatibility when the optional callback is omitted, and rollback when audit persistence fails. A disposable two-site live PostgreSQL trigger-failure/retry integration regression is included for hosted CI.
+PR #154 reuses the existing PostgreSQL transition transaction and the established `identity.audit(input, { queryable })` seam. It passes the active transaction client to an optional, backwards-compatible callback before COMMIT, removes the post-commit route audit to avoid duplicate writes, and narrows the published-route uniqueness mapping to the content UPDATE so workflow/outbox/audit database errors retain their original identity. It preserves route authorization, site scope, all seven action mappings, optimistic-version checks, scheduling, response shape and pool-backed audit defaults. It adds no transaction abstraction or schema/API/dependency/SemVer change.
 
-The implementation candidate is isolated on branch `security/f1-34-editorial-workflow-audit-atomicity-2026-11-15`; it is not in current main and must not be represented as merged or production-qualified. Local Windows/Node.js 26.12.1 evidence currently includes:
-- `npm run check`: 609 passed, 0 failed, 3 Windows-specific skips; artifact verification 235 required paths and 248 JavaScript files syntax-checked.
-- Focused F1.34 store/API regression: 31 passed, 0 failed, 0 skipped.
+### Exact-head hosted evidence
+
+PR #154 head commit is `9848fbfeb973bf8b349ef432dc7d03a495ee543a`. Both exact-head workflows completed successfully:
+
+| Event | Workflow | Result |
+|---|---|---|
+| Push | [#640](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43689323133) | Success; all required functional jobs passed |
+| Pull request | [#641](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43689373659) | Success; all required functional jobs passed |
+
+Each workflow completed 7/7 jobs with the mainline-only dependency/SBOM attestation job skipped as designed on a non-main branch. That skip is not a failed functional check and does not claim a signed mainline attestation.
+
+- Node.js 22.23.4: **612/612 Hub tests**, **94/94 EnginEx tests**, zero failures/skips.
+- Node.js 24.22.1: **612/612 Hub tests**, **94/94 EnginEx tests**, zero failures/skips.
+- Dedicated PostgreSQL/Memgraph: **100/100 live integration tests**, zero failures/skips.
+- Disposable database migrations: **18/18 applied** on fresh install and **18/18 idempotently skipped** on re-entry.
+- Browser/editor Playwright smoke: **9/9**; PostgreSQL-backed collaboration Playwright: **4/4**.
+- CodeQL and exact-source evidence consolidation: PASS.
+- Full and production dependency audit scopes: zero vulnerabilities. CycloneDX 1.5 SBOMs: 200 components / 201 dependency records per runtime; lockfile SHA-256 remains `8f3786bcfcd03d0b63761c7107e4d757ae5b45171ba2f6c086ff38c027c8b086`.
+
+The live PostgreSQL suite explicitly passed the new two-site subtest, `editorial workflow transition and correlated audit commit or roll back together`. It injected the expected audit-trigger failure, verified Site B content/workflow/outbox rollback and unchanged Site A control state, removed the trigger/function, then verified a safe retry persisted exactly one correlated audit/workflow/outbox result. The database log's `simulated editorial workflow audit persistence failure` is the deliberate fault injection asserted by the passing test, not an unhandled suite failure.
+
+### Local validation and review boundary
+
+Local Windows/Node.js 26.12.1 evidence:
+- `npm run check`: 609 passed, 0 failed, 3 Windows-specific skips; 235 required paths and 248 JavaScript files syntax-checked.
+- Focused F1.34 store/API regression: 31/31 passed, zero skips.
 - `npm audit --audit-level=high`: zero vulnerabilities.
-- Local live PostgreSQL/Memgraph was not run because this host has no `DATABASE_URL` or `VIRGOSCORPIO_HUB_RUN_POSTGRES_INTEGRATION`; the new failure-injection scenario requires hosted disposable database execution.
-- Node 26 is supplemental local evidence only. Supported runtime qualification remains hosted Node 22.23.4 and 24.22.1.
+- Local live PostgreSQL/Memgraph was NOT RUN because this host has no `DATABASE_URL` or `VIRGOSCORPIO_HUB_RUN_POSTGRES_INTEGRATION`; exact-head hosted database evidence above supplies that result. Node 26 is supplemental local validation, not a supported runtime qualification.
 
-The candidate must receive exact-head hosted CI, live integration and evidence aggregation. Keep independent assessments #14/#25 untouched, do not populate their evidence artifacts, and do not merge without formal human review and explicit merge authorization.
+PR #154 remains **OPEN / NOT MERGED**. GitHub currently reports zero submitted PR reviews and no requested reviewers. Exact-head hosted functional validation is complete, but formal human review and explicit merge authorization remain required. This candidate is maintainer engineering evidence, not independent security approval or production certification. Independent assessments #14/#25 remain OPEN / NOT PERFORMED; do not populate their evidence artifacts.
 
 ## 7. SemVer and release authorization
 
