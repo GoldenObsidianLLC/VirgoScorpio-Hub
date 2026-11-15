@@ -104,7 +104,11 @@
       "Hub 0.6.2 candidate PR #68 passed hosted push run #259 and PR run #260; all six CI jobs per run passed on Node.js 22.23.4/24.22.1, live PostgreSQL/Memgraph (65/65), fresh migrations (18/18 plus idempotent re-entry), browser smoke (9/9), CodeQL and consolidated evidence. Release readiness remains NO-GO with 14 missing evidence items; PR remains open/unmerged.",
       "Post-producer CI release-readiness finalization: schema-v2 producer manifests bind product/version, job, workflow, run/attempt and exact source SHA; the aggregate job validates all producers before promoting only exact-source PostgreSQL/Memgraph and fresh-migration evidence.",
       "F1.29 site-creation audit atomicity merged via PR #142 at main debd9890b94b55dd3b9496d80f49a9a7c00615fb; exact-main workflow #609 passed 7/7 jobs, including Node 22/24 Hub 607/607, EnginEx 94/94, PostgreSQL/Memgraph 95/95 with zero skips, 18 fresh/idempotent migrations, CodeQL, browser smoke, mainline signed SBOM/provenance and exact-source evidence finalization. Production readiness remains 8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE; NO-GO / NOT_PRODUCTION_CERTIFIED.",
-      "F1.30 design-system mutation/audit atomicity merged via PR #144 at main 67e9440b9c543e69a46bba8cbb25a9d2329f3502; exact-main workflow #612 passed 7/7 jobs: Node 22/24 608/608 Hub and 94/94 EnginEx, PostgreSQL/Memgraph 96/96 with zero skips, 18 fresh plus 18 idempotent migrations, Playwright 9/9, CodeQL, signed mainline attestation and evidence consolidation. No formal PR review submission; independent reviews #14/#25 remain separate. Readiness 8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE; NO-GO."
+      "F1.30 design-system mutation/audit atomicity merged via PR #144 at main 67e9440b9c543e69a46bba8cbb25a9d2329f3502; exact-main workflow #612 passed 7/7 jobs: Node 22/24 608/608 Hub and 94/94 EnginEx, PostgreSQL/Memgraph 96/96 with zero skips, 18 fresh plus 18 idempotent migrations, Playwright 9/9, CodeQL, signed mainline attestation and evidence consolidation. No formal PR review submission; independent reviews #14/#25 remain separate. Readiness 8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE; NO-GO.",
+      "F1.31 taxonomy mutation/audit atomicity merged PR #147; exact-main workflow #622 passed 97/97 live PostgreSQL/Memgraph tests; issue #146 CLOSED.",
+      "F1.32 relationship mutation/audit atomicity merged PR #149; exact-main workflow #630 passed 98/98 live PostgreSQL/Memgraph tests; issue #148 CLOSED.",
+      "F1.33 site AI-policy mutation/audit atomicity merged PR #151; exact-main workflow #637 passed 99/99 live PostgreSQL/Memgraph tests; issue #150 CLOSED.",
+      "F1.34 editorial workflow transition/audit atomicity is tracked by issue #152; candidate branch only, not merged; exact-head hosted live integration and formal review are pending."
     ]
   },
   "validation": {
@@ -141,72 +145,69 @@
     "gitleaks": "Gitleaks working-tree and all locally fetched Git refs scans both exited 0 with empty JSON findings on 2026-10-31; verify published remote refs before every release.",
     "releaseReadinessRedisEnvironment": "Regression-tested: release:readiness now forwards only approved local Redis/Memurai endpoints to VIRGOSCORPIO_HUB_TEST_REDIS_URL and enables the Redis integration suites; remote, malformed, and absent endpoints leave live Redis tests disabled.",
     "mainlineEvidence": {
-      "sourceRevision": "67e9440b9c543e69a46bba8cbb25a9d2329f3502",
-      "workflowRun": 612,
-      "workflowRunId": 43634472737,
+      "sourceRevision": "e982564c540b398a4809b072e11e15cbbe64f9cf",
+      "workflowRun": 637,
+      "workflowRunId": 43670354191,
       "workflowEvent": "push",
       "runAttempt": 1,
       "workflowConclusion": "success",
-      "workflowCompletedAt": "2026-11-14T19:56:11Z",
-      "workflowUrl": "https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43634472737",
+      "workflowCompletedAt": "2026-11-15T03:03:37Z",
+      "workflowUrl": "https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43670354191",
       "completedJobs": 7,
       "hubTestsPerRuntime": 608,
       "enginexTestsPerRuntime": 94,
-      "livePostgresMemgraph": 96,
+      "livePostgresMemgraph": 99,
       "migrationsApplied": 18,
       "idempotentSecondPass": 18,
       "playwrightSmoke": 9,
       "serviceLessIntegrationSkippedPerRuntime": 34,
       "serviceLessIntegrationStatus": "PARTIAL",
       "attestationStatus": "success",
-      "sbomSha256": "c10642773b4a33097df28a03c15496152293ba8efb91d80df49ee235c83b96a7",
+      "sbomSha256": "6d315be3c7bba6ecae5aad257e6b9eb55c2a58785dceda88c2cef1b93cf9e758",
       "lockfileSha256": "8f3786bcfcd03d0b63761c7107e4d757ae5b45171ba2f6c086ff38c027c8b086",
       "readyForProduction": false,
       "releaseClassification": "NOT_PRODUCTION_CERTIFIED",
       "finalizationStatus": "FINALIZED_AFTER_PRODUCER_VALIDATION",
       "readiness": {
+        "classification": "NOT_PRODUCTION_CERTIFIED",
+        "readyForProduction": false,
         "pass": 8,
         "partial": 2,
         "blocked": 0,
         "missingEvidence": 14,
-        "notRun": 0
+        "notRun": 0,
+        "decision": "NO_GO"
       },
-      "sourceMergePullRequest": 144,
-      "sourceFeatureIssue": 143,
-      "producerManifestChecksums": {
-        "browser": "6aa438d29fd27c3cde5aaad0db069aeb6ce68fd1942ccb424e19992e29bf7909",
-        "node22": "6d7124373c215f4b9951d2e68cfb13ded62a89373055cafc721ebf65f233af0d",
-        "node24": "bdb58e38eb438f10a95617b7f3ad53f4bf71e556a4dc3c4f8e8de6077d7fd86d",
-        "postgres": "28c5e7a22233fc117a1c255804dbc13d7d8e819e2a263824d5d5d85d35c8f45a",
-        "codeql": "f82d8dfaee32300773796860b905bb16ce7c6eb7a2e5e05a468aed6f9c19c4ad"
-      },
+      "sourceMergePullRequest": 151,
+      "sourceFeatureIssue": 150,
+      "producerManifestChecksums": {},
       "artifactIds": {
-        "readiness": 14130165264,
-        "attestation": 14129202354,
-        "postgres": 14129980661,
-        "browser": 14129586801,
-        "node22": 14129985070,
-        "node24": 14129820782,
-        "liveIntegration": 14129845974,
-        "dependency22": 14129536211,
-        "dependency24": 14129895615,
-        "codeql": 14129461431
+        "postgres": 14144465206,
+        "node24Ci": 14144345392,
+        "browser": 14144196564,
+        "dependency22": 14144166050,
+        "codeql": 14144037118,
+        "attestation": 14143862697,
+        "readiness": 14143803012,
+        "node22Ci": 14143524686,
+        "liveIntegration22": 14143169939,
+        "dependency24": 14143154861
       },
       "artifactDigests": {
-        "readiness": "sha256:552cff6fdb9e08c19e2660dd0b909d46d01a6b550248ea82490a0988c03dfc29",
-        "attestation": "sha256:7e163b8899111ceef95673bd7f4ba5771039d2064bba41e955f4d2754a58b4e3",
-        "postgres": "sha256:4485ba3e732427e5e399a0a3a554ca962b93a3e67fab013dd1b6d64949db437b",
-        "browser": "sha256:151d4a17f89fd5cd689e0044c77f31de1f69b66452326e9313e626a0a9f8f62c",
-        "node22": "sha256:238f0b5c1ce1d4d321e3dcf901a3eb6048371de412c43eb61db86427d47fef85",
-        "node24": "sha256:ed9bad34d586ea337b85012b090ebbe4f77eae341fd0508fab4ebe7b8493dff3",
-        "liveIntegration": "sha256:238e617977ce4bac63a17c8437899ffb59aa05436afffd2bf9a0e2e429eb1928",
-        "dependency22": "sha256:1a1ace4c7347cdec3667af6b0558643b15113d4d2009307fe1f79b12ded26bfa",
-        "dependency24": "sha256:baf8df4b3434e424d518b394f767f86f390328ed65984dfc931f9e611ca726e6",
-        "codeql": "sha256:3e1fa49ad2b631a84090fb220ea48aa5f30825e3f7fa1ff55c89f1e29e6cd090"
+        "postgres": "sha256:f181520ee47460e8a5fad99247a6b401c8d880b68c15c408ba7f1d96bf994147",
+        "node24Ci": "sha256:ca38b008a2df98b737c239b86f8685f5f0dccf5dd6de5760792473bd15d5fa46",
+        "browser": "sha256:e3e771bb572b0f891adfee33690872d8bec0ec33bb68937f2ef5533da2dd3af3",
+        "dependency22": "sha256:84fbd42bbcaeb556321cf30754579f71fdc9b5b0ca5af598b19e04065c059382",
+        "codeql": "sha256:f75a1721f1ec7991bbf8162c9a3c6b280aacf8e3cd4472d7e80f1acacda1a6ca",
+        "attestation": "sha256:e73b500375443953044497e707f5bf90c7756a1a68fe59b5ed2a27a2c40ea1cb",
+        "readiness": "sha256:605aeff05c6e8f9656f36fd4afdfe0f244270d7638f765d6ff5fd5a6ec706a34",
+        "node22Ci": "sha256:ca9e3145d896df970ef94d9c51511595e69f6ffb60afadd9d7a78de74b3a836c",
+        "liveIntegration22": "sha256:d78974b3d86602ae99f084c77c9cd3cff73590e79356a9e5151e4a4e33071712",
+        "dependency24": "sha256:b4df6e961fa703bac5ce0803b6639e48baf4bd0da9d38646027018017d9ae91f"
       },
-      "canonicalReadinessGeneratedAt": "2026-11-14T19:56:06.325Z",
+      "canonicalReadinessGeneratedAt": "2026-11-15T03:03:34.298Z",
       "requiredProducerCount": 5,
-      "artifactExpiresAt": "2027-02-12T19:52:51Z"
+      "artifactExpiresAt": "2027-02-13T03:00:29Z"
     },
     "ciReleaseReadinessFinalization": {
       "issue": 134,
@@ -502,6 +503,69 @@
       },
       "independentTenantReview": "OPEN_NOT_PERFORMED",
       "independentPlatformSecurityReview": "OPEN_NOT_PERFORMED",
+      "productionCertified": false
+    },
+    "taxonomyAuditAtomicity": {
+      "status": "merged-and-exact-main-validation-passed",
+      "feature": "F1.31",
+      "issue": 146,
+      "pullRequest": 147,
+      "sourceRevision": "63e4db46426c606b73fea6d03bc4ea6a54219f16",
+      "hostedWorkflowRun": 43653758324,
+      "hostedWorkflowNumber": 622,
+      "livePostgresMemgraph": {
+        "tests": 97,
+        "passed": 97,
+        "failed": 0,
+        "skipped": 0
+      },
+      "review": "No formal PR review submission; maintainer/automation evidence only.",
+      "productionCertified": false
+    },
+    "relationshipAuditAtomicity": {
+      "status": "merged-and-exact-main-validation-passed",
+      "feature": "F1.32",
+      "issue": 148,
+      "pullRequest": 149,
+      "sourceRevision": "9230177d3155d9ff9134180a67ed69203d618c0f",
+      "hostedWorkflowRun": 43662357311,
+      "hostedWorkflowNumber": 630,
+      "livePostgresMemgraph": {
+        "tests": 98,
+        "passed": 98,
+        "failed": 0,
+        "skipped": 0
+      },
+      "review": "No formal PR review submission; maintainer/automation evidence only.",
+      "productionCertified": false
+    },
+    "siteAIPolicyAuditAtomicity": {
+      "status": "merged-and-exact-main-validation-passed",
+      "feature": "F1.33",
+      "issue": 150,
+      "pullRequest": 151,
+      "sourceRevision": "e982564c540b398a4809b072e11e15cbbe64f9cf",
+      "hostedWorkflowRun": 43670354191,
+      "hostedWorkflowNumber": 637,
+      "livePostgresMemgraph": {
+        "tests": 99,
+        "passed": 99,
+        "failed": 0,
+        "skipped": 0
+      },
+      "review": "No formal PR review submission; maintainer/automation evidence only.",
+      "behavior": "Site AI-policy upsert and correlated ai.policy_updated audit event commit or roll back in the same PostgreSQL transaction.",
+      "independentTenantReview": "OPEN_NOT_PERFORMED",
+      "independentPlatformSecurityReview": "OPEN_NOT_PERFORMED",
+      "productionCertified": false
+    },
+    "editorialWorkflowAuditAtomicity": {
+      "status": "tracked-candidate-not-merged",
+      "feature": "F1.34",
+      "issue": 152,
+      "sourceMainRevision": "e982564c540b398a4809b072e11e15cbbe64f9cf",
+      "branch": "security/f1-34-editorial-workflow-audit-atomicity-2026-11-15",
+      "behavior": "Candidate moves correlated audit persistence into the existing transaction for submit-review, approve, reject, publish, schedule, archive and unpublish. Exact-head hosted live PostgreSQL evidence and formal review are pending.",
       "productionCertified": false
     }
   },
@@ -1279,24 +1343,24 @@
     "localValidationSummary": "PASS: 202 required paths, 211 JavaScript files syntax-checked; 461 unit tests (458 passed, 0 failed, 3 Windows/platform-specific skips); focused AI route/API/context suites 45/45; package-lock audit 0 vulnerabilities."
   },
   "latestMainEvidence": {
-    "reviewedAt": "2026-11-14",
+    "reviewedAt": "2026-11-15",
     "version": "0.6.2",
-    "commit": "67e9440b9c543e69a46bba8cbb25a9d2329f3502",
+    "commit": "e982564c540b398a4809b072e11e15cbbe64f9cf",
     "pullRequest": {
-      "number": 144,
-      "title": "fix(auth): make design-system audit atomic (F1.30)",
-      "mergedAt": "2026-11-14T19:52:48Z",
-      "mergeCommit": "67e9440b9c543e69a46bba8cbb25a9d2329f3502",
+      "number": 151,
+      "title": "fix(tenant): make AI policy audit atomic (F1.33)",
+      "mergedAt": "2026-11-15T03:00:26Z",
+      "mergeCommit": "e982564c540b398a4809b072e11e15cbbe64f9cf",
       "formalReviews": 0
     },
     "workflow": {
       "name": "VirgoScorpio Hub CI",
-      "runId": 43634472737,
-      "runNumber": 612,
-      "url": "https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43634472737",
+      "runId": 43670354191,
+      "runNumber": 637,
+      "url": "https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43670354191",
       "event": "push",
       "attempt": 1,
-      "completedAt": "2026-11-14T19:56:11Z",
+      "completedAt": "2026-11-15T03:03:37Z",
       "completedJobs": 7,
       "successfulJobs": 7
     },
@@ -1317,7 +1381,7 @@
         "skipped": 0
       },
       "livePostgresMemgraph": {
-        "passed": 96,
+        "passed": 99,
         "failed": 0,
         "skipped": 0
       },
@@ -1332,21 +1396,14 @@
       },
       "codeql": "PASS",
       "mainlineAttestation": "PASS",
-      "evidenceConsolidation": "PASS",
-      "producerManifests": {
-        "browser": "6aa438d29fd27c3cde5aaad0db069aeb6ce68fd1942ccb424e19992e29bf7909",
-        "node22": "6d7124373c215f4b9951d2e68cfb13ded62a89373055cafc721ebf65f233af0d",
-        "node24": "bdb58e38eb438f10a95617b7f3ad53f4bf71e556a4dc3c4f8e8de6077d7fd86d",
-        "postgres": "28c5e7a22233fc117a1c255804dbc13d7d8e819e2a263824d5d5d85d35c8f45a",
-        "codeql": "f82d8dfaee32300773796860b905bb16ce7c6eb7a2e5e05a468aed6f9c19c4ad"
-      }
+      "evidenceConsolidation": "PASS"
     },
     "sbom": {
       "cyclonedx": "1.5",
       "npm": "11.19.1",
       "lockfileSha256": "8f3786bcfcd03d0b63761c7107e4d757ae5b45171ba2f6c086ff38c027c8b086",
-      "node22Sha256": "c10642773b4a33097df28a03c15496152293ba8efb91d80df49ee235c83b96a7",
-      "node24Sha256": "028f60a22635ed5ec2cf240aef24725a29edccc55706cb712421952d23adbe79",
+      "node22Sha256": "6d315be3c7bba6ecae5aad257e6b9eb55c2a58785dceda88c2cef1b93cf9e758",
+      "node24Sha256": "c856bbdc2770c121963e6a4ea49b0294182456a4a638e9ce95cb795fbb18a41d",
       "componentsPerRuntime": 200,
       "dependencyRecordsPerRuntime": 201
     },
@@ -1361,30 +1418,30 @@
       "decision": "NO_GO"
     },
     "artifactIds": {
-      "readiness": 14130165264,
-      "attestation": 14129202354,
-      "postgres": 14129980661,
-      "browser": 14129586801,
-      "node22": 14129985070,
-      "node24": 14129820782,
-      "liveIntegration": 14129845974,
-      "dependency22": 14129536211,
-      "dependency24": 14129895615,
-      "codeql": 14129461431
+      "postgres": 14144465206,
+      "node24Ci": 14144345392,
+      "browser": 14144196564,
+      "dependency22": 14144166050,
+      "codeql": 14144037118,
+      "attestation": 14143862697,
+      "readiness": 14143803012,
+      "node22Ci": 14143524686,
+      "liveIntegration22": 14143169939,
+      "dependency24": 14143154861
     },
     "artifactDigests": {
-      "readiness": "sha256:552cff6fdb9e08c19e2660dd0b909d46d01a6b550248ea82490a0988c03dfc29",
-      "attestation": "sha256:7e163b8899111ceef95673bd7f4ba5771039d2064bba41e955f4d2754a58b4e3",
-      "postgres": "sha256:4485ba3e732427e5e399a0a3a554ca962b93a3e67fab013dd1b6d64949db437b",
-      "browser": "sha256:151d4a17f89fd5cd689e0044c77f31de1f69b66452326e9313e626a0a9f8f62c",
-      "node22": "sha256:238f0b5c1ce1d4d321e3dcf901a3eb6048371de412c43eb61db86427d47fef85",
-      "node24": "sha256:ed9bad34d586ea337b85012b090ebbe4f77eae341fd0508fab4ebe7b8493dff3",
-      "liveIntegration": "sha256:238e617977ce4bac63a17c8437899ffb59aa05436afffd2bf9a0e2e429eb1928",
-      "dependency22": "sha256:1a1ace4c7347cdec3667af6b0558643b15113d4d2009307fe1f79b12ded26bfa",
-      "dependency24": "sha256:baf8df4b3434e424d518b394f767f86f390328ed65984dfc931f9e611ca726e6",
-      "codeql": "sha256:3e1fa49ad2b631a84090fb220ea48aa5f30825e3f7fa1ff55c89f1e29e6cd090"
+      "postgres": "sha256:f181520ee47460e8a5fad99247a6b401c8d880b68c15c408ba7f1d96bf994147",
+      "node24Ci": "sha256:ca38b008a2df98b737c239b86f8685f5f0dccf5dd6de5760792473bd15d5fa46",
+      "browser": "sha256:e3e771bb572b0f891adfee33690872d8bec0ec33bb68937f2ef5533da2dd3af3",
+      "dependency22": "sha256:84fbd42bbcaeb556321cf30754579f71fdc9b5b0ca5af598b19e04065c059382",
+      "codeql": "sha256:f75a1721f1ec7991bbf8162c9a3c6b280aacf8e3cd4472d7e80f1acacda1a6ca",
+      "attestation": "sha256:e73b500375443953044497e707f5bf90c7756a1a68fe59b5ed2a27a2c40ea1cb",
+      "readiness": "sha256:605aeff05c6e8f9656f36fd4afdfe0f244270d7638f765d6ff5fd5a6ec706a34",
+      "node22Ci": "sha256:ca9e3145d896df970ef94d9c51511595e69f6ffb60afadd9d7a78de74b3a836c",
+      "liveIntegration22": "sha256:d78974b3d86602ae99f084c77c9cd3cff73590e79356a9e5151e4a4e33071712",
+      "dependency24": "sha256:b4df6e961fa703bac5ce0803b6639e48baf4bd0da9d38646027018017d9ae91f"
     },
-    "artifactExpiresAt": "2027-02-12T19:52:51Z",
+    "artifactExpiresAt": "2027-02-13T03:00:29Z",
     "review": {
       "formalPullRequestReviews": 0,
       "reviewDecision": "NONE",

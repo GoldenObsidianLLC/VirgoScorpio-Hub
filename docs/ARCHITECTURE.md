@@ -116,6 +116,12 @@ For setup and validation requirements, see [Contributing](../CONTRIBUTING.md), [
 
 The test links identify representative coverage, not full feature completeness or production certification.
 
+## Mutation and audit consistency
+
+For a mutation whose durable audit event is part of the same business invariant, write the state change, workflow/outbox rows and correlated audit event using the same PostgreSQL transaction queryable. Reuse the existing transaction boundary and call `identity.audit(input, { queryable })` before COMMIT; preserve the pool-backed default for callers that are not participating in that transaction. Do not commit the mutation and then issue a second, independent audit insert from the API route: a failure in that second write can return an error after state has already changed.
+
+F1.28–F1.33 apply this pattern to membership, site creation, design-system, taxonomy, relationships and site AI-policy operations. The editorial transition family remains a tracked gap on current main e982 under [issue #152](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/152); its candidate implementation is not yet merged. A new operation should first verify whether its store already owns a transaction and extend that boundary rather than create a nested transaction helper. Keep authorization, site predicates, optimistic concurrency, outbox ordering, error mapping and post-commit side effects explicit.
+
 ## Persistence and consistency
 
 - **PostgreSQL** is used for relational and transactional workflows, including revision/publication and outbox-related paths.
