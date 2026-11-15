@@ -8,7 +8,7 @@
   "generatedBy": "scripts/generate-tenant-isolation-route-inventory.js",
   "sourceTree": {
     "fileCount": 21,
-    "sha256": "dc25504248bab9fc2fb6ce51766e0064a8d309e529a68f60c25b5ab683a20743",
+    "sha256": "8ab9c2accdb066c96a9714a9dd1518679fcbafea5e45bd735366c20ab57cec15",
     "files": [
       "apps/api/src/ai-task-routes.js",
       "apps/api/src/auth-routes.js",
@@ -1378,25 +1378,25 @@
             {
               "anchor": "const communityProfile",
               "lines": [
-                55
+                56
               ]
             },
             {
               "anchor": "const groups=",
               "lines": [
-                57
+                58
               ]
             },
             {
               "anchor": "const feed=",
               "lines": [
-                70
+                71
               ]
             },
             {
               "anchor": "const friendRequest=",
               "lines": [
-                72
+                73
               ]
             }
           ]
@@ -1577,7 +1577,7 @@
             {
               "anchor": "const firewallCollection",
               "lines": [
-                75
+                76
               ]
             }
           ]
@@ -1626,7 +1626,7 @@
             {
               "anchor": "const cloudConnections",
               "lines": [
-                78
+                131
               ]
             }
           ]
@@ -1673,7 +1673,7 @@
             {
               "anchor": "const megaMenus",
               "lines": [
-                81
+                134
               ]
             }
           ]

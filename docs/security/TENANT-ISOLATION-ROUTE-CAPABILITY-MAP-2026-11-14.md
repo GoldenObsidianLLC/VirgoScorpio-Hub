@@ -8,7 +8,7 @@ Maintainer-prepared route, capability, data-access, and regression-test navigati
 
 - Status: MAINTAINER_PREPARED_NOT_INDEPENDENTLY_REVIEWED.
 - Generated from the current working-tree implementation anchors and the catalog at docs/security/tenant-isolation-route-inventory.catalog.json.
-- Implementation-source digest: dc25504248bab9fc2fb6ce51766e0064a8d309e529a68f60c25b5ab683a20743 across 21 files.
+- Implementation-source digest: 8ab9c2accdb066c96a9714a9dd1518679fcbafea5e45bd735366c20ab57cec15 across 21 files.
 - Referenced-test digest: 53d46a2d221f659eb7ceaa779c035fe92755a3056e5af767a4ccea500e1c7e26 across 43 files.
 - Inventory size: 27 route/flow families, 78 declared route patterns, 21 source files, and 43 test files.
 - Regenerate with npm run security:tenant-inventory; CI checks freshness with node scripts/generate-tenant-isolation-route-inventory.js --check.
@@ -281,7 +281,7 @@ Tests: test/content-type-routes.test.js, test/collaboration-api.test.js, test/re
 - Capabilities/controls: Site membership, content:create, community:moderate (group member administration)
 - Data-access boundary: social profiles; social groups and memberships; activities/feed; social friendships
 - Side effects: Group membership changes; Friendship transitions; Feed/activity writes
-- Source: apps/api/src/platform-routes.js (lines 55, 57, 70, 72)
+- Source: apps/api/src/platform-routes.js (lines 56, 58, 71, 73)
 - Test references: test/community-workflows.test.js, test/integration/tenant-community-object-isolation.integration.test.js, test/tenant-route-capabilities.test.js
 - Coverage characterization: **targeted-two-site**. A/B tests cover selected groups, joins, friendships and feed operations. Group-post/comment, profile privacy and all visibility combinations require reviewer expansion.
 
@@ -323,7 +323,7 @@ Tests: test/content-type-routes.test.js, test/collaboration-api.test.js, test/re
 - Capabilities/controls: security:manage
 - Data-access boundary: firewall_rules; shared firewall cache; site_security_events
 - Side effects: Rule create/delete; Cache invalidation; Security event write
-- Source: apps/api/src/platform-routes.js (lines 75)
+- Source: apps/api/src/platform-routes.js (lines 76)
 - Test references: test/tenant-route-capabilities.test.js, test/tenant-route-capabilities.test.js
 - Coverage characterization: **targeted**. Denied capability is tested before tenant data access. Global/site precedence, cross-site rule visibility and cache invalidation require reviewer verification.
 
@@ -337,7 +337,7 @@ Tests: test/content-type-routes.test.js, test/collaboration-api.test.js, test/re
 - Capabilities/controls: cloud:manage
 - Data-access boundary: cloud_connections; secret-manager credential references; object-storage provider adapters
 - Side effects: Configuration writes; Read-only provider probe; Connection status/health timestamp update
-- Source: apps/api/src/platform-routes.js (lines 78)
+- Source: apps/api/src/platform-routes.js (lines 131)
 - Test references: test/release-hardening.test.js, test/security-boundaries.test.js, test/tenant-route-capabilities.test.js, test/integration/tenant-isolation.integration.test.js
 - Coverage characterization: **targeted**. Live PostgreSQL coverage verifies Site A/B listing isolation, non-disclosing 404s for foreign test/disable IDs, selector mismatch rejection with unchanged row state, and Site B positive controls using deliberately unresolved vault:// references so no provider calls occur. Real provider lifecycle, least-privilege provider IAM, egress/SSRF and live secret-manager behavior remain unverified.
 
@@ -351,7 +351,7 @@ Tests: test/content-type-routes.test.js, test/collaboration-api.test.js, test/re
 - Capabilities/controls: content:read, site:manage
 - Data-access boundary: navigation_menus
 - Side effects: Create/update/delete versioned navigation configuration
-- Source: apps/api/src/platform-routes.js (lines 81)
+- Source: apps/api/src/platform-routes.js (lines 134)
 - Test references: test/tenant-route-capabilities.test.js, test/api.test.js, test/integration/tenant-mega-menu-isolation.integration.test.js
 - Coverage characterization: **targeted-two-site-route-tests**. Live PostgreSQL A/B route tests cover scoped listing, create, versioned update and delete with the same slug present in both sites. Foreign-site list/update/delete attempts and conflicting header/query/body selectors are rejected before mutation; snapshots prove both tenants remain unchanged after denial. The merged PR #92 regression races two updates with the same expected version and requires exactly one success, one version conflict, one version increment and a final row matching the winning request; the Site B same-slug row must remain unchanged. Consumer rendering/cache invalidation and every presentation variant remain separate review items.
 

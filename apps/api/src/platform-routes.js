@@ -11,6 +11,7 @@ const { handleCommerceRoute, productInput } = require('./commerce-routes');
 const { handleLibraryRoute } = require('./library-routes');
 const { isBoundedJsonObject } = require('./request-validation');
 const { isUuid } = require('../../../packages/domain/src/identifiers');
+const { withTransaction } = require('../../../packages/db/src/transaction');
 
 const validUuid = isUuid;
 function presentationValid(value) {
@@ -72,8 +73,60 @@ async function handlePlatformRoute(ctx) {
   const friendRequest=pathName.match(/^\/api\/v1\/sites\/([0-9a-f-]{36})\/community\/friends(?:\/([0-9a-f-]{36}))?$/i);
   if(friendRequest&&['GET','POST','PUT','DELETE'].includes(method)){if(!localPool||!actor.user.id)throw fail(503,'ERR_VIRGOSCORPIO_HUB_COMMUNITY_DISABLED','Friendships require PostgreSQL and a signed-in user.');const siteId=friendRequest[1],target=friendRequest[2];await siteIdFor({ req, url, body: {}, actor, routeSiteId: siteId });if(method==='GET'){const q=await localPool.query(`SELECT f.requester_id,f.addressee_id,f.status,f.created_at,u1.display_name AS requester_name,u2.display_name AS addressee_name FROM social_friendships f JOIN users u1 ON u1.id=f.requester_id JOIN users u2 ON u2.id=f.addressee_id WHERE f.site_id=$1 AND (f.requester_id=$2 OR f.addressee_id=$2) ORDER BY f.created_at DESC LIMIT 200`,[siteId,actor.user.id]);return sendJson(res,200,{friendships:q.rows,requestId});}if(!target||!validUuid(target)||target===actor.user.id)throw fail(400,'ERR_VIRGOSCORPIO_HUB_FRIEND_INVALID','A different valid user ID is required.');if(method==='POST'){const member=await localPool.query('SELECT 1 FROM site_memberships WHERE site_id=$1 AND user_id=$2',[siteId,target]);if(!member.rows[0])throw fail(404,'ERR_VIRGOSCORPIO_HUB_COMMUNITY_USER_NOT_FOUND','User is not a member of this site.');const q=await localPool.query("INSERT INTO social_friendships(site_id,requester_id,addressee_id,status) VALUES($1,$2,$3,'pending') ON CONFLICT(site_id,requester_id,addressee_id) DO UPDATE SET status=CASE WHEN social_friendships.status='blocked' THEN 'blocked' ELSE social_friendships.status END,updated_at=now() RETURNING *",[siteId,actor.user.id,target]);return sendJson(res,201,{friendship:q.rows[0],requestId});}if(method==='PUT'){const q=await localPool.query("UPDATE social_friendships SET status='accepted',updated_at=now() WHERE site_id=$1 AND requester_id=$2 AND addressee_id=$3 AND status='pending' RETURNING *",[siteId,target,actor.user.id]);if(!q.rows[0])throw fail(404,'ERR_VIRGOSCORPIO_HUB_FRIEND_REQUEST_NOT_FOUND','Pending friend request not found.');return sendJson(res,200,{friendship:q.rows[0],requestId});}const q=await localPool.query('DELETE FROM social_friendships WHERE site_id=$1 AND ((requester_id=$2 AND addressee_id=$3) OR (requester_id=$3 AND addressee_id=$2)) RETURNING site_id',[siteId,actor.user.id,target]);return sendJson(res,200,{removed:Boolean(q.rowCount),requestId});}
 
-  const firewallCollection=pathName.match(/^\/api\/v1\/sites\/([0-9a-f-]{36})\/security\/firewall-rules$/i);const firewallItem=pathName.match(/^\/api\/v1\/sites\/([0-9a-f-]{36})\/security\/firewall-rules\/([0-9a-f-]{36})$/i);
-  if((firewallCollection&&['GET','POST'].includes(method))||(firewallItem&&method==='DELETE')){if(!localPool||!firewall)throw fail(503,'ERR_VIRGOSCORPIO_HUB_FIREWALL_DISABLED','Firewall rule management requires PostgreSQL.');const siteId=firewallCollection?.[1]||firewallItem[1];const body=method==='POST'?await readJson(req,Math.min(maxBody,32_000)):{};await siteIdFor({ req, url, body, actor, routeSiteId: siteId });await requireCapability(actor,siteId,'security:manage');if(method==='GET'){const q=await localPool.query('SELECT id,site_id,action,scope,pattern,reason,enabled,created_by,created_at,updated_at FROM firewall_rules WHERE site_id=$1 OR site_id IS NULL ORDER BY created_at DESC LIMIT 500',[siteId]);return sendJson(res,200,{rules:q.rows,requestId});}if(method==='POST'){if(!['allow','deny','challenge','rate_limit'].includes(body.action)||!['ip','cidr','path','user_agent'].includes(body.scope)||!validateIpPattern(body.scope,body.pattern)||typeof body.reason!=='string'||body.reason.length>500)throw fail(422,'ERR_VIRGOSCORPIO_HUB_FIREWALL_RULE_INVALID','Firewall rule action, scope, pattern, or reason is invalid.');const q=await localPool.query('INSERT INTO firewall_rules(site_id,action,scope,pattern,reason,enabled,created_by) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id,site_id,action,scope,pattern,reason,enabled,created_by,created_at,updated_at',[siteId,body.action,body.scope,body.pattern,body.reason,body.enabled!==false,actor.user.id||null]);firewall.clearCache();await localPool.query('INSERT INTO site_security_events(site_id,request_id,event_type,severity,actor_id,details) VALUES($1,$2,$3,$4,$5,$6::jsonb)',[siteId,requestId,'firewall.rule_created','medium',actor.user.id||null,JSON.stringify({ruleId:q.rows[0].id,action:body.action,scope:body.scope})]);return sendJson(res,201,{rule:q.rows[0],requestId});}const q=await localPool.query('DELETE FROM firewall_rules WHERE site_id=$1 AND id=$2 RETURNING id',[siteId,firewallItem[2]]);if(!q.rows[0])throw fail(404,'ERR_VIRGOSCORPIO_HUB_FIREWALL_RULE_NOT_FOUND','Firewall rule not found.');firewall.clearCache();return sendJson(res,200,{deleted:true,requestId});}
+  const firewallCollection=pathName.match(/^\/api\/v1\/sites\/([0-9a-f-]{36})\/security\/firewall-rules$/i);
+  const firewallItem=pathName.match(/^\/api\/v1\/sites\/([0-9a-f-]{36})\/security\/firewall-rules\/([0-9a-f-]{36})$/i);
+  if ((firewallCollection && ['GET','POST'].includes(method)) || (firewallItem && method === 'DELETE')) {
+    if (!localPool || !firewall) throw fail(503, 'ERR_VIRGOSCORPIO_HUB_FIREWALL_DISABLED', 'Firewall rule management requires PostgreSQL.');
+    const siteId = firewallCollection?.[1] || firewallItem[1];
+    const body = method === 'POST' ? await readJson(req, Math.min(maxBody, 32_000)) : {};
+    await siteIdFor({ req, url, body, actor, routeSiteId: siteId });
+    await requireCapability(actor, siteId, 'security:manage');
+
+    if (method === 'GET') {
+      const q = await localPool.query(
+        'SELECT id,site_id,action,scope,pattern,reason,enabled,created_by,created_at,updated_at FROM firewall_rules WHERE site_id=$1 OR site_id IS NULL ORDER BY created_at DESC LIMIT 500',
+        [siteId]
+      );
+      return sendJson(res, 200, { rules: q.rows, requestId });
+    }
+
+    if (method === 'POST') {
+      if (!['allow','deny','challenge','rate_limit'].includes(body.action) ||
+          !['ip','cidr','path','user_agent'].includes(body.scope) ||
+          !validateIpPattern(body.scope, body.pattern) ||
+          typeof body.reason !== 'string' || body.reason.length > 500) {
+        throw fail(422, 'ERR_VIRGOSCORPIO_HUB_FIREWALL_RULE_INVALID', 'Firewall rule action, scope, pattern, or reason is invalid.');
+      }
+
+      const rule = await withTransaction(localPool, async client => {
+        const q = await client.query(
+          'INSERT INTO firewall_rules(site_id,action,scope,pattern,reason,enabled,created_by) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id,site_id,action,scope,pattern,reason,enabled,created_by,created_at,updated_at',
+          [siteId, body.action, body.scope, body.pattern, body.reason, body.enabled !== false, actor.user.id || null]
+        );
+        await client.query(
+          'INSERT INTO site_security_events(site_id,request_id,event_type,severity,actor_id,details) VALUES($1,$2,$3,$4,$5,$6::jsonb)',
+          [siteId, requestId, 'firewall.rule_created', 'medium', actor.user.id || null, JSON.stringify({ ruleId: q.rows[0].id, action: body.action, scope: body.scope })]
+        );
+        return q.rows[0];
+      });
+      firewall.clearCache();
+      return sendJson(res, 201, { rule, requestId });
+    }
+
+    await withTransaction(localPool, async client => {
+      const q = await client.query(
+        'DELETE FROM firewall_rules WHERE site_id=$1 AND id=$2 RETURNING id,action,scope',
+        [siteId, firewallItem[2]]
+      );
+      if (!q.rows[0]) throw fail(404, 'ERR_VIRGOSCORPIO_HUB_FIREWALL_RULE_NOT_FOUND', 'Firewall rule not found.');
+      await client.query(
+        'INSERT INTO site_security_events(site_id,request_id,event_type,severity,actor_id,details) VALUES($1,$2,$3,$4,$5,$6::jsonb)',
+        [siteId, requestId, 'firewall.rule_deleted', 'medium', actor.user.id || null, JSON.stringify({ ruleId: q.rows[0].id, action: q.rows[0].action, scope: q.rows[0].scope })]
+      );
+    });
+    firewall.clearCache();
+    return sendJson(res, 200, { deleted: true, requestId });
+  }
 
   const cloudConnections=pathName.match(/^\/api\/v1\/sites\/([0-9a-f-]{36})\/cloud\/connections(?:\/([0-9a-f-]{36})\/(test|disable))?$/i);
   if(cloudConnections&&((!cloudConnections[2]&&['GET','POST'].includes(method))||(cloudConnections[2]&&method==='POST'))){if(!localPool)throw fail(503,'ERR_VIRGOSCORPIO_HUB_DATABASE_DISABLED','Cloud integration settings require PostgreSQL.');const siteId=cloudConnections[1],body=method==='POST'?await readJson(req,Math.min(maxBody,32_000)):{};await siteIdFor({ req, url, body, actor, routeSiteId: siteId });await requireCapability(actor,siteId,'cloud:manage');if(!cloudConnections[2]&&method==='GET'){const q=await localPool.query('SELECT id,site_id,provider,name,config,credential_reference,status,last_health_check_at,created_at,updated_at FROM cloud_connections WHERE site_id=$1 ORDER BY created_at DESC',[siteId]);return sendJson(res,200,{connections:q.rows,availableProviders:['aws-s3','s3-compatible','google-cloud-storage','azure-blob','cloudflare-r2','minio'],requestId});}if(!cloudConnections[2]&&method==='POST'){const validation=cloudConfigStatus({provider:body.provider,credentialReference:body.credentialReference,config:body.config||{}});const endpointAllowed=!(body.config||{}).endpoint||cloudEndpointAllowed((body.config||{}).endpoint,env);if(!validation.valid||!endpointAllowed)throw fail(422,'ERR_VIRGOSCORPIO_HUB_CLOUD_CONFIG_INVALID','Cloud connection failed validation.',[...validation.errors,...(!endpointAllowed?['endpoint must match the deployment allowlist in production']:[])]);if(typeof body.name!=='string'||!body.name.trim()||body.name.length>180)throw fail(400,'ERR_VIRGOSCORPIO_HUB_CLOUD_CONFIG_INVALID','Connection name is required.');const q=await localPool.query('INSERT INTO cloud_connections(site_id,provider,name,config,credential_reference,status) VALUES($1,$2,$3,$4::jsonb,$5,\'configured\') RETURNING id,site_id,provider,name,config,credential_reference,status,created_at,updated_at',[siteId,body.provider,body.name.trim(),JSON.stringify(body.config||{}),body.credentialReference]);return sendJson(res,201,{connection:q.rows[0],note:'Credentials are held by the configured secret manager; this record does not store secret values.',requestId});}if(cloudConnections[3]==='disable'){const q=await localPool.query("UPDATE cloud_connections SET status='disabled',updated_at=now() WHERE site_id=$1 AND id=$2 RETURNING id,status",[siteId,cloudConnections[2]]);if(!q.rows[0])throw fail(404,'ERR_VIRGOSCORPIO_HUB_CLOUD_CONNECTION_NOT_FOUND','Cloud connection not found.');return sendJson(res,200,{connection:q.rows[0],requestId});}if(cloudConnections[3]==='test'){const q=await localPool.query('SELECT id,provider,config,credential_reference,status FROM cloud_connections WHERE site_id=$1 AND id=$2',[siteId,cloudConnections[2]]);if(!q.rows[0])throw fail(404,'ERR_VIRGOSCORPIO_HUB_CLOUD_CONNECTION_NOT_FOUND','Cloud connection not found.');const connection=q.rows[0];const credentialStatus=resolveCloudCredentialReference({provider:connection.provider,reference:connection.credential_reference,env});const configured=credentialStatus.ok;let test={status:'unhealthy',provider:connection.provider,credentialReferenceConfigured:configured,credentialReferenceMode:credentialStatus.mode||'unsupported',liveProbeAttempted:false,liveObjectStoreOperationPerformed:false};if(configured){try{const config=connection.config||{};const providerMap={'aws-s3':'aws-s3','s3-compatible':'s3-compatible','cloudflare-r2':'cloudflare-r2','minio':'minio','google-cloud-storage':'google-cloud-storage','azure-blob':'azure-blob'};const expected=providerMap[connection.provider];if(!expected)throw new Error('unsupported provider');const bucket=config.bucket||env.LIBRARY_STORAGE_BUCKET||env.S3_BUCKET||env.GCS_BUCKET;const container=config.container||env.LIBRARY_STORAGE_CONTAINER||env.AZURE_STORAGE_CONTAINER;if(['aws-s3','s3-compatible','cloudflare-r2','minio','google-cloud-storage'].includes(expected)&&(!bucket||typeof bucket!=='string'))throw new Error('bucket is not configured');if(expected==='azure-blob'&&(!container||typeof container!=='string'))throw new Error('container is not configured');const probeEnv={...env,LIBRARY_STORAGE_PROVIDER:expected,LIBRARY_STORAGE_BUCKET:bucket,LIBRARY_STORAGE_CONTAINER:container,LIBRARY_STORAGE_ENDPOINT:config.endpoint||env.LIBRARY_STORAGE_ENDPOINT,LIBRARY_STORAGE_REGION:config.region||env.LIBRARY_STORAGE_REGION,S3_FORCE_PATH_STYLE:config.forcePathStyle===true?'true':(config.forcePathStyle===false?'false':env.S3_FORCE_PATH_STYLE),GOOGLE_CLOUD_PROJECT:config.projectId||env.GOOGLE_CLOUD_PROJECT};const adapter=createCloudStorageAdapterFromEnv({env:probeEnv});test={...test,liveProbeAttempted:Boolean(adapter)};const result=await probeCloudStorageAdapter(adapter);test={status:'healthy',provider:connection.provider,credentialReferenceConfigured:true,credentialReferenceMode:credentialStatus.mode,liveProbeAttempted:true,liveObjectStoreOperationPerformed:true,probe:result};}catch(error){test={...test,status:'unhealthy',errorCode:error.code||'ERR_VIRGOSCORPIO_HUB_CLOUD_PROBE_FAILED',message:'Live storage probe failed. Verify provider credentials, bucket/container configuration, and permissions.'};}}else test={...test,status:'unhealthy',message:credentialStatus.message||'Credential reference could not be resolved by this runtime.'};await localPool.query('UPDATE cloud_connections SET status=$3,last_health_check_at=now(),updated_at=now() WHERE site_id=$1 AND id=$2',[siteId,cloudConnections[2],test.status]);return sendJson(res,200,{test,requestId});}}
