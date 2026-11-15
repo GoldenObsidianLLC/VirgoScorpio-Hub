@@ -101,7 +101,7 @@ function createPostgresStore({ pool }) {
     await client.query('DELETE FROM content_collaboration_operation_keys WHERE content_id=$1', [contentId]);
   }
 
-  async function transition({ siteId, id, actorId, correlationId = null, action, fromStatuses, toStatus, expectedVersion, note, scheduledAt, publish = false, clearPublished = false }) {
+  async function transition({ siteId, id, actorId, correlationId = null, action, fromStatuses, toStatus, expectedVersion, note, scheduledAt, publish = false, clearPublished = false, onTransition }) {
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
@@ -117,25 +117,36 @@ function createPostgresStore({ pool }) {
       if (publish) {
         snapshot = { title: row.title, slug: row.slug, locale: row.locale, contentType: row.content_type, status: 'published', document: row.body, version: row.version };
       }
-      const updated = await client.query(
-        `UPDATE content_items SET status=$3, scheduled_at=$4,
-           published_snapshot=CASE WHEN $5 THEN NULL WHEN $6 THEN $7::jsonb ELSE published_snapshot END,
-           published_version=CASE WHEN $5 THEN NULL WHEN $6 THEN version ELSE published_version END,
-           published_at=CASE WHEN $5 THEN NULL WHEN $6 THEN now() ELSE published_at END,
-           published_search_vector=CASE WHEN $5 THEN ''::tsvector WHEN $6 THEN to_tsvector('simple',$8 || ' ' || $9) ELSE published_search_vector END,
-           reviewed_by=CASE WHEN $10 THEN $11 ELSE reviewed_by END,
-           reviewed_at=CASE WHEN $10 THEN now() ELSE reviewed_at END,
-           lock_version=lock_version+1,updated_at=now()
-         WHERE id=$1 AND site_id=$2
-         RETURNING id,site_id,title,slug,locale,content_type,status,version,lock_version,scheduled_at,published_at,published_version,updated_at`,
-        [id, siteId, toStatus, scheduledAt || null, clearPublished, publish, JSON.stringify(snapshot), row.title, extractPageText(row.body), action === 'approved', actorId || null]
-      );
+      let updated;
+      try {
+        updated = await client.query(
+          `UPDATE content_items SET status=$3, scheduled_at=$4,
+             published_snapshot=CASE WHEN $5 THEN NULL WHEN $6 THEN $7::jsonb ELSE published_snapshot END,
+             published_version=CASE WHEN $5 THEN NULL WHEN $6 THEN version ELSE published_version END,
+             published_at=CASE WHEN $5 THEN NULL WHEN $6 THEN now() ELSE published_at END,
+             published_search_vector=CASE WHEN $5 THEN ''::tsvector WHEN $6 THEN to_tsvector('simple',$8 || ' ' || $9) ELSE published_search_vector END,
+             reviewed_by=CASE WHEN $10 THEN $11 ELSE reviewed_by END,
+             reviewed_at=CASE WHEN $10 THEN now() ELSE reviewed_at END,
+             lock_version=lock_version+1,updated_at=now()
+           WHERE id=$1 AND site_id=$2
+           RETURNING id,site_id,title,slug,locale,content_type,status,version,lock_version,scheduled_at,published_at,published_version,updated_at`,
+          [id, siteId, toStatus, scheduledAt || null, clearPublished, publish, JSON.stringify(snapshot), row.title, extractPageText(row.body), action === 'approved', actorId || null]
+        );
+      } catch (error) {
+        // Only a published-route uniqueness conflict maps to the route conflict response.
+        // Audit/workflow/outbox constraint errors must retain their original identity.
+        if (error.code === '23505') throw conflict('A page with that published route already exists.', 'ERR_VIRGOSCORPIO_HUB_ROUTE_CONFLICT');
+        throw error;
+      }
       if (toStatus === 'draft' && row.status !== 'draft') await checkpointCollaboration(client, id);
       await writeWorkflow(client, { siteId, id, version: row.version, action, fromStatus: row.status, toStatus, actorId, scheduledAt, note });
       await writeOutbox(client, { id, siteId, version: row.version, aggregateVersion: updated.rows[0].lock_version, eventType: publish ? 'content.publish' : clearPublished ? 'content.unpublish' : `content.${action}`, payload: { slug: row.slug, locale: row.locale, status: toStatus, action }, actorId, correlationId });
+      if (typeof onTransition === 'function') {
+        await onTransition({ queryable: client, result: updated.rows[0], previous: row, action });
+      }
       await client.query('COMMIT');
       return updated.rows[0];
-    } catch (error) { await client.query('ROLLBACK').catch(() => {}); if (error.code === '23505') throw conflict('A page with that published route already exists.', 'ERR_VIRGOSCORPIO_HUB_ROUTE_CONFLICT'); throw error; }
+    } catch (error) { await client.query('ROLLBACK').catch(() => {}); throw error; }
     finally { client.release(); }
   }
 
@@ -580,30 +591,30 @@ function createPostgresStore({ pool }) {
       return result.rows[0] || null;
     },
 
-    async submitForReview({ siteId, id, actorId, expectedVersion, note }) {
-      return transition({ siteId, id, actorId, action: 'submitted_for_review', fromStatuses: ['draft'], toStatus: 'in_review', expectedVersion, note });
+    async submitForReview({ siteId, id, actorId, expectedVersion, note, correlationId = null, onTransition }) {
+      return transition({ siteId, id, actorId, correlationId, action: 'submitted_for_review', fromStatuses: ['draft'], toStatus: 'in_review', expectedVersion, note, onTransition });
     },
-    async approve({ siteId, id, actorId, expectedVersion, note }) {
-      return transition({ siteId, id, actorId, action: 'approved', fromStatuses: ['in_review'], toStatus: 'approved', expectedVersion, note });
+    async approve({ siteId, id, actorId, expectedVersion, note, correlationId = null, onTransition }) {
+      return transition({ siteId, id, actorId, correlationId, action: 'approved', fromStatuses: ['in_review'], toStatus: 'approved', expectedVersion, note, onTransition });
     },
-    async rejectReview({ siteId, id, actorId, expectedVersion, note }) {
-      return transition({ siteId, id, actorId, action: 'rejected', fromStatuses: ['in_review'], toStatus: 'draft', expectedVersion, note });
+    async rejectReview({ siteId, id, actorId, expectedVersion, note, correlationId = null, onTransition }) {
+      return transition({ siteId, id, actorId, correlationId, action: 'rejected', fromStatuses: ['in_review'], toStatus: 'draft', expectedVersion, note, onTransition });
     },
-    async publishContent({ siteId, id, actorId, expectedVersion, note }) {
-      return transition({ siteId, id, actorId, action: 'published', fromStatuses: ['approved'], toStatus: 'published', expectedVersion, note, publish: true });
+    async publishContent({ siteId, id, actorId, expectedVersion, note, correlationId = null, onTransition }) {
+      return transition({ siteId, id, actorId, correlationId, action: 'published', fromStatuses: ['approved'], toStatus: 'published', expectedVersion, note, publish: true, onTransition });
     },
-    async scheduleContent({ siteId, id, actorId, scheduledAt, expectedVersion, note }) {
+    async scheduleContent({ siteId, id, actorId, scheduledAt, expectedVersion, note, correlationId = null, onTransition }) {
       const when = new Date(scheduledAt);
       if (!Number.isFinite(when.getTime()) || when.getTime() < Date.now() + 60_000 || when.getTime() > Date.now() + 366 * 24 * 60 * 60_000) {
         const error = new Error('scheduledAt must be between one minute and one year in the future.'); error.statusCode = 400; error.code = 'ERR_VIRGOSCORPIO_HUB_INVALID_SCHEDULE'; throw error;
       }
-      return transition({ siteId, id, actorId, action: 'scheduled', fromStatuses: ['approved'], toStatus: 'scheduled', expectedVersion, note, scheduledAt: when });
+      return transition({ siteId, id, actorId, correlationId, action: 'scheduled', fromStatuses: ['approved'], toStatus: 'scheduled', expectedVersion, note, scheduledAt: when, onTransition });
     },
-    async archiveContent({ siteId, id, actorId, expectedVersion, note }) {
-      return transition({ siteId, id, actorId, action: 'archived', fromStatuses: ['draft','in_review','approved','scheduled','published'], toStatus: 'archived', expectedVersion, note, clearPublished: true });
+    async archiveContent({ siteId, id, actorId, expectedVersion, note, correlationId = null, onTransition }) {
+      return transition({ siteId, id, actorId, correlationId, action: 'archived', fromStatuses: ['draft','in_review','approved','scheduled','published'], toStatus: 'archived', expectedVersion, note, clearPublished: true, onTransition });
     },
-    async unpublishContent({ siteId, id, actorId, expectedVersion, note }) {
-      return transition({ siteId, id, actorId, action: 'unpublished', fromStatuses: ['published'], toStatus: 'draft', expectedVersion, note, clearPublished: true });
+    async unpublishContent({ siteId, id, actorId, expectedVersion, note, correlationId = null, onTransition }) {
+      return transition({ siteId, id, actorId, correlationId, action: 'unpublished', fromStatuses: ['published'], toStatus: 'draft', expectedVersion, note, clearPublished: true, onTransition });
     },
 
     async publishDue({ limit = 20 } = {}) {
