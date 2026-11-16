@@ -1,8 +1,8 @@
 # VirgoScorpio Hub 0.6.2 — Full release-gate report
 **Assessment snapshot:** 16 November 2026 (UTC)
-**Current mainline source:** fef8c9e19ceac14d965a3ed824250a7abbafc04f (F1.40 / PR #172 merged)
-**Latest exact-main CI:** [workflow #688](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43926434802) — successful, 7/7 jobs
-**Latest runtime merge:** F1.40 / PR #172 at fef8c9e19ceac14d965a3ed824250a7abbafc04f
+**Current mainline source:** ac6658e9aeeb5a7fe880450932cafe9a8e518ff9 (F1.40 runtime PR #172 plus docs-only PR #173)
+**Latest exact-main CI:** [workflow #693](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43954775588) — successful, 7/7 jobs
+**Latest runtime merge:** F1.40 / PR #172 at fef8c9e19ceac14d965a3ed824250a7abbafc04f; docs PR #173 merged at ac6658e9aeeb5a7fe880450932cafe9a8e518ff9
 **Decision:** **PRODUCTION NO-GO / NOT_PRODUCTION_CERTIFIED**
 
 > This report records F1.39 as merged mainline functionality and separates engineering CI evidence from the remaining independent/provider/product/legal/operational production gates. Passing CI and internal regression tests do not satisfy external provider, independent security, manual product acceptance, legal, governance, or operational release gates.
@@ -11,7 +11,7 @@
 
 VirgoScorpio Hub `0.6.2` remains a private, unreleased developer-preview candidate. `readyForProduction` is `false`. No SemVer increment, release tag, GitHub Release, npm publication, production deployment, or claim of production certification is authorized.
 
-The current mainline includes F1.38 (PR #166), F1.39 legacy media upload/audit atomicity (PR #169), and F1.40 reusable-component mutation/audit atomicity (PR #172). Current main is fef8c9e19ceac14d965a3ed824250a7abbafc04f. Exact-main workflow #688 passed all seven jobs, including 111/111 live PostgreSQL/Memgraph tests, Node 22/24 each 646/646 Hub and 94/94 EnginEx tests, 18/18 fresh and 18/18 idempotent migration checks, Playwright 9/9, CodeQL, signed mainline attestations and exact-source evidence consolidation. Canonical readiness artifact 14256906930 was generated at 2026-11-16T18:16:00.210Z, archive SHA-256 7eadf403d925e29166a4db152c39afa62b8ddf728764ab081646a5eab85a9892. Final readiness remains 8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN; production remains NO-GO / NOT_PRODUCTION_CERTIFIED.
+The current mainline includes F1.38 (PR #166), F1.39 (PR #169), and F1.40 reusable-component mutation/audit atomicity (PR #172 at runtime merge SHA fef8c9e19ceac14d965a3ed824250a7abbafc04f). Docs-only PR #173 merged at ac6658e9aeeb5a7fe880450932cafe9a8e518ff9, producing current main ac6658e9aeeb5a7fe880450932cafe9a8e518ff9. Exact-main workflow #693 passed all seven jobs, including 111/111 live PostgreSQL/Memgraph tests, Node 22/24 each 646/646 Hub and 94/94 EnginEx tests, 18/18 fresh and 18/18 idempotent migration checks, Playwright 9/9, CodeQL, signed mainline attestations and exact-source evidence consolidation. Canonical readiness artifact 14271681561 was generated at 2026-11-16T20:58:40.478Z, archive SHA-256 250b5e2f9224dbf57594d2ae469c9871a1996f43fa4039b6d574092d5c61ad53. Final readiness remains 8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN; production remains NO-GO / NOT_PRODUCTION_CERTIFIED.
 
 The finalized production-gate classification is:
 
@@ -25,7 +25,41 @@ The finalized production-gate classification is:
 
 This is the authoritative final aggregate, not the preliminary per-runtime readiness snapshot. The preliminary Node reports are retained as audit records; they show 38 service-less integration skips per runtime before producer validation. The final aggregate promotes the exact-source live PostgreSQL/Memgraph producer evidence but does not convert the service-less skips into passes.
 
-## Latest exact-main source validation — workflow #688 (F1.40 merged; current main fef8c9e)
+## Latest exact-main source validation — workflow #693 (F1.40 + docs PR #173 merged; current main ac6658e)
+
+Workflow [#693](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43954775588) validated current main SHA ac6658e9aeeb5a7fe880450932cafe9a8e518ff9 and completed all seven jobs successfully.
+
+| Producer / job | Result | Qualification |
+|---|---|---|
+| Node.js 22.23.4 | PASS | 646/646 Hub tests; 94/94 EnginEx tests; zero failures or skips |
+| Node.js 24.22.1 | PASS | 646/646 Hub tests; 94/94 EnginEx tests; zero failures or skips |
+| PostgreSQL / Memgraph | PASS | 111/111 live integration tests; zero failures/skips, including F1.40 two-site boundary and create/update/delete audit rollback/retry |
+| Fresh migrations | PASS | 18/18 migrations applied; 18/18 idempotent second-pass checks passed |
+| Browser editor/accessibility smoke | PASS | 9/9 Playwright smoke tests; not full manual WCAG acceptance |
+| CodeQL | PASS | Static analysis succeeded; not independent application-security review |
+| Mainline attestations | PASS | Signed SLSA provenance and CycloneDX SBOM attestations passed and verified |
+| Evidence consolidation | PASS | Exact-source producer manifests/checksums verified; final readiness generated |
+
+Canonical readiness artifact 14271681561 was generated at 2026-11-16T20:58:40.478Z; archive SHA-256 250b5e2f9224dbf57594d2ae469c9871a1996f43fa4039b6d574092d5c61ad53. Final status remains 8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN, readyForProduction false, NOT_PRODUCTION_CERTIFIED, production NO-GO. PARTIAL categories remain service-less integration diagnostics (39 skips per runtime, not live integration failures) and incomplete qualified human dependency/license review.
+
+| Evidence | Artifact ID | Archive SHA-256 |
+|---|---:|---|
+| Canonical readiness | 14271681561 | 250b5e2f9224dbf57594d2ae469c9871a1996f43fa4039b6d574092d5c61ad53 |
+| PostgreSQL/Memgraph producer | 14271156912 | 3daa9351cccc85631325db5e4dba96bfcd1885daf1b04e4cadb4c6785d48de50 |
+| Live PostgreSQL/Memgraph tests | 14271391593 | 5c96eaec79848e49aa12149d07c49445ca1e42a08cc8f7d7b9d051e2dfcab879 |
+| Node.js 22 CI | 14272486262 | ff2ebe6ccf03ae5a11650b55f02d6b0e9ece2248f5103a8020131fd74f1f35c7 |
+| Node.js 24 CI | 14272596091 | 9d43b1d1108ffdc3aa4ceb47b24c3d434a4416138e679580c3ad67bd6cad2676 |
+| Browser/editor | 14272321304 | a5af37f07fc82b4258067129556c8219b719e0dff83160f9ab70bc4b5095b130 |
+| CodeQL | 14271816311 | 22541c0ae2035c717d1984995534af5ea3146541488f50593ca30f6637aa8270 |
+| Signed attestations | 14269178467 | 27df4a6473b6ac17880230fea0e860ede28391d8f10ba570925758a375afa698 |
+| Node.js 22 dependency evidence | 14272586181 | 99232da6162e89c8bce56511bcc5b34b38cee831c0474eb58e2fa2ed4dfe814e |
+| Node.js 24 dependency evidence | 14271651418 | b80f3511b7d5f11196bb171ae6ac9ad9ea910fba1ee2cfad624081164f80ede7 |
+
+Lockfile SHA-256: 8f3786bcfcd03d0b63761c7107e4d757ae5b45171ba2f6c086ff38c027c8b086. Attested CycloneDX SBOM SHA-256: 20bdd0666d62a6486b78d417d0dfa0aa06f37ff0d1ce7939fd47f4de9cbba91b. Attestations: [SLSA provenance](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/attestations/68318767) and [CycloneDX SBOM](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/attestations/68318790). Listed artifact digests are GitHub ZIP archive digests, not hashes of files inside each archive.
+
+PR #172 (runtime) and PR #173 (documentation-only reconciliation) each have zero formal review submissions and zero inline review threads. This is maintainer implementation and automation evidence, not independent security/legal approval. See the [F1.40 merged report](2026-11-16-F1-40-REUSABLE-COMPONENT-AUDIT-ATOMICITY-REPORT.md).
+
+## Historical exact-main source validation — workflow #688 (F1.40 runtime merge SHA fef8c9e)
 
 Workflow [#688](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43926434802) validated current main SHA fef8c9e19ceac14d965a3ed824250a7abbafc04f and completed all seven jobs successfully.
 
@@ -57,7 +91,7 @@ Canonical readiness artifact 14256906930 was generated at 2026-11-16T18:16:00.21
 
 Lockfile SHA-256: 8f3786bcfcd03d0b63761c7107e4d757ae5b45171ba2f6c086ff38c027c8b086. Attested CycloneDX SBOM SHA-256: 2e01fa397584f4adc716e2108d8e4c8b632fb0e7476157c301df89000340eb9a. Attestations: [SLSA provenance](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/attestations/68257370) and [CycloneDX SBOM](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/attestations/68257381). Listed artifact digests are ZIP archive digests, not inner-file hashes.
 
-Issue #171 is CLOSED. PR #172 has zero formal review submissions and zero inline review threads. This is maintainer implementation and automation evidence, not independent security/legal approval. Docs-only PR #173 is open after push #689 and PR #690 passed, pending human review. See the [F1.40 merged report](2026-11-16-F1-40-REUSABLE-COMPONENT-AUDIT-ATOMICITY-REPORT.md).
+Issue #171 is CLOSED. PR #172 and PR #173 each have zero formal review submissions and zero inline review threads. This is maintainer implementation and automation evidence, not independent security/legal approval. See the [F1.40 merged report](2026-11-16-F1-40-REUSABLE-COMPONENT-AUDIT-ATOMICITY-REPORT.md).
 
 ## Historical exact-main source validation — workflow #685 (F1.39/docs-only baseline)
 
@@ -169,7 +203,7 @@ Supplemental evidence in the run also records clean `npm ci`, fresh migration va
 
 F1.21–F1.39 comprise 19 consecutive bounded engineering increments merged to main. The increments harden site-owner concurrency; site capability and SSE revocation; invitation role/audit boundaries; content-type registry concurrency; Redis Pub/Sub reconnect; editorial role ownership; membership, site creation and design-system transaction/audit consistency; taxonomy, relationship and AI-policy outbox/audit consistency; editorial workflow transitions; plugin lifecycle locking/audit consistency; firewall rule/audit consistency; page-draft/revision/collaboration/workflow/outbox/audit atomicity; library upload/version audit atomicity; and legacy local/S3 media upload audit atomicity.
 
-The latest merged runtime increment is F1.40, PR #172 / issue #171 (CLOSED), at current main fef8c9e19ceac14d965a3ed824250a7abbafc04f, validated by exact-main workflow #688. F1.39 (PR #169, merge SHA d4e1c1ce5e08b4594614448d64ad2738a84355b2) and F1.38 (PR #166) remain prior completed increments. PR #172 has zero formal reviews and zero inline review threads; maintainer/automation evidence only. Docs-only PR #173 is open after push #689 and PR #690 passed; human review remains pending.
+The latest merged runtime increment is F1.40, PR #172 / issue #171 (CLOSED), runtime merge SHA fef8c9e19ceac14d965a3ed824250a7abbafc04f. Documentation-only PR #173 is also merged, advancing current main to ac6658e9aeeb5a7fe880450932cafe9a8e518ff9, validated by workflow #693. F1.39 (PR #169, merge SHA d4e1c1ce5e08b4594614448d64ad2738a84355b2) and F1.38 (PR #166) remain prior completed increments. PR #172 and PR #173 each have zero formal reviews and zero inline review threads; maintainer/automation evidence only.
 
 ### F1.39 merged — legacy media upload/audit atomicity
 
@@ -202,7 +236,7 @@ No meaningful overall percentage or delivery date is asserted: these gates have 
 - Mainline exact-source workflow #681: https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43812646684
 - Mainline readiness artifact: GitHub artifact 14201530780, digest recorded above.
 - F1.39 runtime merge commit: https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/commit/d4e1c1ce5e08b4594614448d64ad2738a84355b2
-- Current F1.40 main / merge: https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/commit/fef8c9e19ceac14d965a3ed824250a7abbafc04f (exact-main workflow #688)
+- Current docs-merged F1.40 main: https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/commit/ac6658e9aeeb5a7fe880450932cafe9a8e518ff9 (exact-main workflow #693); F1.40 runtime merge: fef8c9e19ceac14d965a3ed824250a7abbafc04f (workflow #688)
 - F1.38 merge report: [2026-11-16-F1-38-LIBRARY-ASSET-AUDIT-ATOMICITY-REPORT.md](2026-11-16-F1-38-LIBRARY-ASSET-AUDIT-ATOMICITY-REPORT.md)
 - F1.39 issue: https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/167
 - Parent engineering issue: https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/124

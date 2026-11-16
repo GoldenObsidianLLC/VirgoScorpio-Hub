@@ -2391,7 +2391,7 @@
   "latestMainSourceEvidence": {
     "reviewedAt": "2026-11-16",
     "version": "0.6.2",
-    "sourceRevision": "fef8c9e19ceac14d965a3ed824250a7abbafc04f",
+    "sourceRevision": "ac6658e9aeeb5a7fe880450932cafe9a8e518ff9",
     "runtimeMergeRevision": "fef8c9e19ceac14d965a3ed824250a7abbafc04f",
     "previousRuntimeMergeRevision": "d4e1c1ce5e08b4594614448d64ad2738a84355b2",
     "latestRuntimeChange": {
@@ -2404,15 +2404,15 @@
     },
     "workflow": {
       "name": "VirgoScorpio Hub CI",
-      "runId": 43926434802,
-      "runNumber": 688,
-      "url": "https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43926434802",
+      "runId": 43954775588,
+      "runNumber": 693,
+      "url": "https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43954775588",
       "event": "push",
       "attempt": 1,
-      "completedAt": "2026-11-16T18:16:06Z",
+      "completedAt": "2026-11-16T20:58:46Z",
       "completedJobs": 7,
       "successfulJobs": 7,
-      "sourceRevision": "fef8c9e19ceac14d965a3ed824250a7abbafc04f"
+      "sourceRevision": "ac6658e9aeeb5a7fe880450932cafe9a8e518ff9"
     },
     "results": {
       "node22HubTests": {
@@ -2452,16 +2452,17 @@
     },
     "supplyChain": {
       "lockfileSha256": "8f3786bcfcd03d0b63761c7107e4d757ae5b45171ba2f6c086ff38c027c8b086",
-      "sbomSha256": "2e01fa397584f4adc716e2108d8e4c8b632fb0e7476157c301df89000340eb9a",
+      "sbomSha256": "20bdd0666d62a6486b78d417d0dfa0aa06f37ff0d1ce7939fd47f4de9cbba91b",
       "cyclonedx": "1.5",
       "npm": "11.19.1",
       "componentsPerRuntime": 200,
       "dependencyRecordsPerRuntime": 201
     },
     "readiness": {
-      "generatedAt": "2026-11-16T18:16:00.210Z",
-      "sourceRevision": "fef8c9e19ceac14d965a3ed824250a7abbafc04f",
-      "producerStatus": "FINALIZED_AFTER_PRODUCER_VALIDATION",
+      "generatedAt": "2026-11-16T20:58:40.478Z",
+      "artifactId": 14271681561,
+      "archiveSha256": "250b5e2f9224dbf57594d2ae469c9871a1996f43fa4039b6d574092d5c61ad53",
+      "sourceRevision": "ac6658e9aeeb5a7fe880450932cafe9a8e518ff9",
       "pass": 8,
       "partial": 2,
       "blocked": 0,
@@ -2470,74 +2471,80 @@
       "readyForProduction": false,
       "classification": "NOT_PRODUCTION_CERTIFIED",
       "decision": "NO_GO",
-      "serviceLessIntegrationSkippedPerRuntime": 39
+      "serviceLessIntegrationSkippedPerRuntime": 39,
+      "producerStatus": "FINALIZED_AFTER_PRODUCER_VALIDATION"
     },
     "artifacts": {
       "readiness": {
-        "id": 14256906930,
-        "archiveSha256": "7eadf403d925e29166a4db152c39afa62b8ddf728764ab081646a5eab85a9892"
-      },
-      "postgresMemgraph": {
-        "id": 14257061824,
-        "archiveSha256": "1d616806e1cd455d3140776137475ff253d5bc783dfa307f6a806a3263254084"
-      },
-      "liveIntegrationNode22": {
-        "id": 14256002273,
-        "archiveSha256": "714e260b9d6bbb67e62bb97813d5a98d0494ea10332dddc432d546bf9445847b"
+        "id": 14271681561,
+        "archiveSha256": "250b5e2f9224dbf57594d2ae469c9871a1996f43fa4039b6d574092d5c61ad53"
       },
       "node22Ci": {
-        "id": 14257455351,
-        "archiveSha256": "a1a7e7203c59bd107d77ad9352ec17b19d5c217d63b815bfa7370da6d0254d55"
+        "id": 14272486262,
+        "archiveSha256": "ff2ebe6ccf03ae5a11650b55f02d6b0e9ece2248f5103a8020131fd74f1f35c7"
       },
       "node24Ci": {
-        "id": 14256416968,
-        "archiveSha256": "63b65a64b7cda8da3652c7c3f807b2011ea4b7b80c430221ec52a399cc4a4ddc"
-      },
-      "browser": {
-        "id": 14255962007,
-        "archiveSha256": "3d2d48df33f26ea449f0a83c1f981c96d3a3246f2140fd99e8ac587ce09e8718"
-      },
-      "codeql": {
-        "id": 14255912153,
-        "archiveSha256": "4dc1cf712e3971beb007d1da74b33c610e2bc9721970adc846b35511745a4d58"
-      },
-      "supplyChainAttestation": {
-        "id": 14257570303,
-        "archiveSha256": "1e0e24af312d3cf9e6a7e9fa47131315a8bfc90bc465b1c9617205606eff1296"
+        "id": 14272596091,
+        "archiveSha256": "9d43b1d1108ffdc3aa4ceb47b24c3d434a4416138e679580c3ad67bd6cad2676"
       },
       "dependency22": {
-        "id": 14257395503,
-        "archiveSha256": "c54bb17cdeff594ed0071270ff20752d355b6fc9c7a569134630f3a1ea4564a0"
+        "id": 14272586181,
+        "archiveSha256": "99232da6162e89c8bce56511bcc5b34b38cee831c0474eb58e2fa2ed4dfe814e"
       },
       "dependency24": {
-        "id": 14257046704,
-        "archiveSha256": "808c2cc68c0b9d6db7bd57b1c1194ddbc813d1dad46b2c8d6f7d16c6e417ef05"
+        "id": 14271651418,
+        "archiveSha256": "b80f3511b7d5f11196bb171ae6ac9ad9ea910fba1ee2cfad624081164f80ede7"
+      },
+      "postgresMemgraph": {
+        "id": 14271156912,
+        "archiveSha256": "3daa9351cccc85631325db5e4dba96bfcd1885daf1b04e4cadb4c6785d48de50"
+      },
+      "liveIntegrationNode22": {
+        "id": 14271391593,
+        "archiveSha256": "5c96eaec79848e49aa12149d07c49445ca1e42a08cc8f7d7b9d051e2dfcab879"
+      },
+      "browser": {
+        "id": 14272321304,
+        "archiveSha256": "a5af37f07fc82b4258067129556c8219b719e0dff83160f9ab70bc4b5095b130"
+      },
+      "codeql": {
+        "id": 14271816311,
+        "archiveSha256": "22541c0ae2035c717d1984995534af5ea3146541488f50593ca30f6637aa8270"
+      },
+      "supplyChainAttestation": {
+        "id": 14269178467,
+        "archiveSha256": "27df4a6473b6ac17880230fea0e860ede28391d8f10ba570925758a375afa698"
       }
     },
     "attestations": {
-      "slsa": "https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/attestations/68257370",
-      "sbom": "https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/attestations/68257381"
+      "slsa": "https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/attestations/68318767",
+      "sbom": "https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/attestations/68318790"
     },
     "review": {
-      "pullRequest": 172,
-      "formalReviews": 0,
-      "inlineReviewThreads": 0,
-      "reviewDecision": "NONE",
-      "qualification": "Owner merge and CI only; no independent review recorded."
+      "runtimePullRequest": 172,
+      "runtimeFormalReviews": 0,
+      "runtimeInlineReviewThreads": 0,
+      "documentationPullRequest": 173,
+      "documentationFormalReviews": 0,
+      "documentationInlineReviewThreads": 0,
+      "qualification": "Both merges and exact-main CI are maintainer/automation evidence; no independent review recorded."
     },
     "candidateBoundary": {
       "latestIncrement": "F1.40",
       "issue": 171,
       "pullRequest": 172,
       "state": "MERGED",
+      "issueState": "CLOSED",
       "includedInThisMainlineEvidence": true
     },
-    "qualification": "Workflow #688 validates exact current main and merged F1.40 runtime. Production remains NOT_PRODUCTION_CERTIFIED / NO-GO.",
+    "qualification": "Workflow #693 validates exact current main after documentation-only PR #173; F1.40 runtime remains merged at fef8c9e19ceac14d965a3ed824250a7abbafc04f. Production remains NOT_PRODUCTION_CERTIFIED / NO-GO.",
     "documentationReconciliation": {
       "pullRequest": 173,
       "branch": "docs/f1-40-mainline-evidence-2026-11-16",
-      "headCommit": "01975726c73e11e6c854377be70bcf6140d2b1b9",
+      "headCommit": "c5df6fd4e104739fd84fdae294282dbee98afbeb",
+      "mergeCommit": "ac6658e9aeeb5a7fe880450932cafe9a8e518ff9",
       "baseRevision": "fef8c9e19ceac14d965a3ed824250a7abbafc04f",
+      "mergedAt": "2026-11-16T20:55:32Z",
       "pushRun": {
         "id": 43948242701,
         "number": 689,
@@ -2550,11 +2557,28 @@
         "conclusion": "success",
         "headSha": "01975726c73e11e6c854377be70bcf6140d2b1b9"
       },
-      "attestation": "SKIPPED_BY_DESIGN_ON_NON_MAINLINE_PR",
+      "mainlineRun": {
+        "id": 43954775588,
+        "number": 693,
+        "conclusion": "success",
+        "headSha": "ac6658e9aeeb5a7fe880450932cafe9a8e518ff9"
+      },
+      "attestation": "PASS_ON_EXACT_MAINLINE",
       "formalReviews": 0,
       "inlineReviewThreads": 0,
-      "state": "OPEN_PENDING_HUMAN_REVIEW",
+      "state": "MERGED",
       "runtimeChange": false
+    },
+    "latestDocumentationChange": {
+      "pullRequest": 173,
+      "branch": "docs/f1-40-mainline-evidence-2026-11-16",
+      "headCommit": "c5df6fd4e104739fd84fdae294282dbee98afbeb",
+      "mergeCommit": "ac6658e9aeeb5a7fe880450932cafe9a8e518ff9",
+      "baseRevision": "fef8c9e19ceac14d965a3ed824250a7abbafc04f",
+      "mergedAt": "2026-11-16T20:55:32Z",
+      "runtimeChange": false,
+      "formalReviews": 0,
+      "inlineReviewThreads": 0
     }
   },
   "previousCandidateEvidence": {
@@ -2682,7 +2706,7 @@
       "number": 171,
       "state": "CLOSED",
       "parentIssue": 124,
-      "closedAt": "2026-11-16T20:23:00Z",
+      "closedAt": "2026-11-16T20:22:58Z",
       "closeReason": "completed"
     },
     "branch": "security/f1-40-reusable-component-audit-atomicity-2026-11-16",
@@ -2827,10 +2851,10 @@
       "attestation": "PASS_ON_EXACT_MAIN"
     },
     "mainlineReadiness": {
-      "generatedAt": "2026-11-16T18:16:00.210Z",
-      "artifactId": 14256906930,
-      "archiveSha256": "7eadf403d925e29166a4db152c39afa62b8ddf728764ab081646a5eab85a9892",
-      "sourceRevision": "fef8c9e19ceac14d965a3ed824250a7abbafc04f",
+      "generatedAt": "2026-11-16T20:58:40.478Z",
+      "artifactId": 14271681561,
+      "archiveSha256": "250b5e2f9224dbf57594d2ae469c9871a1996f43fa4039b6d574092d5c61ad53",
+      "sourceRevision": "ac6658e9aeeb5a7fe880450932cafe9a8e518ff9",
       "pass": 8,
       "partial": 2,
       "blocked": 0,
@@ -2842,10 +2866,10 @@
       "serviceLessIntegrationSkippedPerRuntime": 39
     },
     "attestations": {
-      "slsa": "https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/attestations/68257370",
-      "sbom": "https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/attestations/68257381",
+      "slsa": "https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/attestations/68318767",
+      "sbom": "https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/attestations/68318790",
       "lockfileSha256": "8f3786bcfcd03d0b63761c7107e4d757ae5b45171ba2f6c086ff38c027c8b086",
-      "sbomSha256": "2e01fa397584f4adc716e2108d8e4c8b632fb0e7476157c301df89000340eb9a"
+      "sbomSha256": "20bdd0666d62a6486b78d417d0dfa0aa06f37ff0d1ce7939fd47f4de9cbba91b"
     },
     "candidateBoundary": {
       "latestIncrement": "F1.40",
@@ -2854,6 +2878,85 @@
       "state": "MERGED",
       "issueState": "CLOSED",
       "includedInThisMainlineEvidence": true
+    },
+    "readiness": {
+      "generatedAt": "2026-11-16T20:58:40.478Z",
+      "artifactId": 14271681561,
+      "archiveSha256": "250b5e2f9224dbf57594d2ae469c9871a1996f43fa4039b6d574092d5c61ad53",
+      "sourceRevision": "ac6658e9aeeb5a7fe880450932cafe9a8e518ff9",
+      "pass": 8,
+      "partial": 2,
+      "blocked": 0,
+      "missingEvidence": 14,
+      "notRun": 0,
+      "readyForProduction": false,
+      "classification": "NOT_PRODUCTION_CERTIFIED",
+      "decision": "NO_GO",
+      "serviceLessIntegrationSkippedPerRuntime": 39,
+      "producerStatus": "FINALIZED_AFTER_PRODUCER_VALIDATION"
+    },
+    "latestMainlineSourceRevision": "ac6658e9aeeb5a7fe880450932cafe9a8e518ff9",
+    "mainlineWorkflow": {
+      "name": "VirgoScorpio Hub CI",
+      "runId": 43954775588,
+      "runNumber": 693,
+      "url": "https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43954775588",
+      "event": "push",
+      "attempt": 1,
+      "completedAt": "2026-11-16T20:58:46Z",
+      "completedJobs": 7,
+      "successfulJobs": 7,
+      "sourceRevision": "ac6658e9aeeb5a7fe880450932cafe9a8e518ff9"
+    },
+    "mainlineArtifacts": {
+      "readiness": {
+        "id": 14271681561,
+        "archiveSha256": "250b5e2f9224dbf57594d2ae469c9871a1996f43fa4039b6d574092d5c61ad53"
+      },
+      "node22Ci": {
+        "id": 14272486262,
+        "archiveSha256": "ff2ebe6ccf03ae5a11650b55f02d6b0e9ece2248f5103a8020131fd74f1f35c7"
+      },
+      "node24Ci": {
+        "id": 14272596091,
+        "archiveSha256": "9d43b1d1108ffdc3aa4ceb47b24c3d434a4416138e679580c3ad67bd6cad2676"
+      },
+      "dependency22": {
+        "id": 14272586181,
+        "archiveSha256": "99232da6162e89c8bce56511bcc5b34b38cee831c0474eb58e2fa2ed4dfe814e"
+      },
+      "dependency24": {
+        "id": 14271651418,
+        "archiveSha256": "b80f3511b7d5f11196bb171ae6ac9ad9ea910fba1ee2cfad624081164f80ede7"
+      },
+      "postgresMemgraph": {
+        "id": 14271156912,
+        "archiveSha256": "3daa9351cccc85631325db5e4dba96bfcd1885daf1b04e4cadb4c6785d48de50"
+      },
+      "liveIntegrationNode22": {
+        "id": 14271391593,
+        "archiveSha256": "5c96eaec79848e49aa12149d07c49445ca1e42a08cc8f7d7b9d051e2dfcab879"
+      },
+      "browser": {
+        "id": 14272321304,
+        "archiveSha256": "a5af37f07fc82b4258067129556c8219b719e0dff83160f9ab70bc4b5095b130"
+      },
+      "codeql": {
+        "id": 14271816311,
+        "archiveSha256": "22541c0ae2035c717d1984995534af5ea3146541488f50593ca30f6637aa8270"
+      },
+      "supplyChainAttestation": {
+        "id": 14269178467,
+        "archiveSha256": "27df4a6473b6ac17880230fea0e860ede28391d8f10ba570925758a375afa698"
+      }
+    },
+    "documentationReconciliation": {
+      "pullRequest": 173,
+      "mergeCommit": "ac6658e9aeeb5a7fe880450932cafe9a8e518ff9",
+      "mergedAt": "2026-11-16T20:55:32Z",
+      "formalReviews": 0,
+      "inlineReviewThreads": 0,
+      "runtimeChange": false
     }
   }
 }
