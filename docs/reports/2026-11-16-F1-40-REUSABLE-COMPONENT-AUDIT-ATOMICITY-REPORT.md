@@ -3,9 +3,11 @@
 **Status:** Merged through [PR #172](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/172) on 16 November 2026 at 18:12:45Z.
 **Issue:** [#171](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/171), CLOSED; parent #124 remains OPEN.
 **Implementation head:** 4e16213b5b087fa8fc7b4623c1a9732ed4f6ec65.
-**Merge/current main:** fef8c9e19ceac14d965a3ed824250a7abbafc04f.
-**Exact-main validation:** [workflow #688](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43926434802), run ID 43926434802.
-**Documentation follow-up:** docs-only [PR #173](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/173) is open; exact-head push #689 and PR #690 both passed. It awaits human review and does not change runtime code.
+**Runtime merge SHA:** fef8c9e19ceac14d965a3ed824250a7abbafc04f.
+**Current docs-merged main:** ac6658e9aeeb5a7fe880450932cafe9a8e518ff9.
+**Runtime exact-main validation:** [workflow #688](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43926434802), run ID 43926434802.
+**Current docs-merged exact-main validation:** [workflow #693](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43954775588), run ID 43954775588.
+**Documentation follow-up:** docs-only [PR #173](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/173) merged at ac6658e9aeeb5a7fe880450932cafe9a8e518ff9 after exact-head push #689 and PR #690 passed. It changed no runtime code; exact-main workflow #693 then passed on docs-merged main.
 **Package:** virgoscorpio-hub@0.6.2, private and unreleased.
 
 ## Scope and finding
@@ -38,7 +40,7 @@ Windows developer workstation, Node.js 26.12.1:
 | Focused reusable-component unit and route-capability tests | 23/23 passed; 0 skipped |
 | Artifact/syntax verification | 238 required paths; 258 JavaScript files |
 | Tenant route inventory | 27 families; 78 declared patterns; 21 source files; 48 test files |
-| Markdown relative links | 487 across 152 Markdown files; 0 broken |
+| Markdown relative links | 490 across 151 Markdown files; 0 broken |
 | git diff --check | PASS |
 
 Live PostgreSQL was not run locally because neither TEST_DATABASE_URL nor DATABASE_URL was configured. Hosted CI supplied live database validation.
@@ -47,7 +49,7 @@ Live PostgreSQL was not run locally because neither TEST_DATABASE_URL nor DATABA
 
 Exact candidate-head push workflow [#686](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43916914367) and PR workflow [#687](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43917206442) both passed on implementation head 4e16213b5b087fa8fc7b4623c1a9732ed4f6ec65. Each passed Node 22.23.4 and 24.22.1 test/security jobs, browser/editor smoke, CodeQL, and live PostgreSQL/Memgraph integration. Branch-only attestation was skipped by design.
 
-Exact-main workflow #688 completed all seven jobs successfully on merge/current main fef8c9e19ceac14d965a3ed824250a7abbafc04f:
+Runtime exact-main workflow #688 completed all seven jobs successfully on runtime merge SHA fef8c9e19ceac14d965a3ed824250a7abbafc04f. Documentation-only PR #173 subsequently merged at ac6658e9aeeb5a7fe880450932cafe9a8e518ff9. Current docs-merged exact-main workflow #693 completed all seven jobs successfully on ac6658e9aeeb5a7fe880450932cafe9a8e518ff9:
 
 | Producer / job | Result | Qualification |
 |---|---|---|
@@ -64,14 +66,14 @@ Exact-main workflow #688 completed all seven jobs successfully on merge/current 
 The 111 live database tests include F1.40 two-site listing/ID-boundary coverage and trigger-injected audit failure for create/update/delete. Each failure proves rollback and a successful retry with exactly one correlated audit record. Migrations used a disposable test database.
 
 Supply-chain attestations:
-- [SLSA build provenance](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/attestations/68257370)
-- [CycloneDX SBOM](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/attestations/68257381)
+- [SLSA build provenance](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/attestations/68318767)
+- [CycloneDX SBOM](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/attestations/68318790)
 - Lockfile SHA-256: 8f3786bcfcd03d0b63761c7107e4d757ae5b45171ba2f6c086ff38c027c8b086
-- Attested SBOM SHA-256: 2e01fa397584f4adc716e2108d8e4c8b632fb0e7476157c301df89000340eb9a
+- Attested SBOM SHA-256: 20bdd0666d62a6486b78d417d0dfa0aa06f37ff0d1ce7939fd47f4de9cbba91b
 
 ## Readiness and retained artifacts
 
-Canonical readiness artifact 14256906930 was generated at 2026-11-16T18:16:00.210Z; archive SHA-256 7eadf403d925e29166a4db152c39afa62b8ddf728764ab081646a5eab85a9892.
+Canonical readiness artifact for runtime merge #688 was 14256906930. The later docs-merged mainline readiness artifact is 14271681561, generated at 2026-11-16T20:58:40.478Z; archive SHA-256 250b5e2f9224dbf57594d2ae469c9871a1996f43fa4039b6d574092d5c61ad53; source revision ac6658e9aeeb5a7fe880450932cafe9a8e518ff9.
 
 | Evidence | Artifact ID | Archive SHA-256 |
 |---|---:|---|
@@ -90,6 +92,6 @@ Final readiness remains 8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0
 
 ## Review and release boundary
 
-GitHub records zero formal review submissions and zero inline review threads for PR #172. The repository owner merged the PR; automated tests and owner merge are maintainer engineering evidence, not independent security/legal approval. Documentation-only PR #173 reconciles these merged facts; push #689 and PR #690 passed, but formal human review remains pending. Parent #124 remains OPEN; independent tenant review #14 and platform security assessment #25 remain OPEN / NOT PERFORMED; dependency/license review #23 remains OPEN / PARTIAL.
+GitHub records zero formal review submissions and zero inline review threads for PR #172 and PR #173. The repository owner merged both; automated tests and owner merges are maintainer engineering evidence, not independent security/legal approval. Parent #124 remains OPEN; independent tenant review #14 and platform security assessment #25 remain OPEN / NOT PERFORMED; dependency/license review #23 remains OPEN / PARTIAL.
 
 No schema, migration, dependency, public REST contract, lockfile, package-version, or SemVer change was introduced. Package virgoscorpio-hub@0.6.2 remains private and unreleased. No release tag, publication, or deployment is authorized. Production remains NO-GO / NOT_PRODUCTION_CERTIFIED.
