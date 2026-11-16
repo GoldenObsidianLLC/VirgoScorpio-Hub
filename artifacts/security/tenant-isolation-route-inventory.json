@@ -8,7 +8,7 @@
   "generatedBy": "scripts/generate-tenant-isolation-route-inventory.js",
   "sourceTree": {
     "fileCount": 21,
-    "sha256": "dda425250756b9e4080753ec3ca5fc0b213a081a2a9d439b1e2b48193f965de7",
+    "sha256": "45c3c608fad9600f3c1504b9e6b55c577d791e893d9a8af2615b46267a6fc81f",
     "files": [
       "apps/api/src/ai-task-routes.js",
       "apps/api/src/auth-routes.js",
@@ -35,7 +35,7 @@
   },
   "testTree": {
     "fileCount": 46,
-    "sha256": "1ef331818dec8e5b976e304573d7e7032e2e5ca9c8820277f52807585941af95",
+    "sha256": "bdd043b2be1c4f5317084aa813d51fcb97738c0c33b7f696d2f4d15f8fbb712d",
     "files": [
       "test/ai-queue-worker.test.js",
       "test/ai-task-queue.test.js",
@@ -192,10 +192,10 @@
               "anchor": "canEditContent",
               "lines": [
                 450,
-                1678,
-                1705,
-                1784,
-                1801
+                1683,
+                1710,
+                1789,
+                1806
               ]
             }
           ]
@@ -444,7 +444,7 @@
             {
               "anchor": "const siteMembershipHandled = await handleSiteMembershipRoute({",
               "lines": [
-                1831
+                1836
               ]
             }
           ]
@@ -723,32 +723,32 @@
             {
               "anchor": "const pageIdMatch",
               "lines": [
-                1756
+                1761
               ]
             },
             {
               "anchor": "const revisionsMatch",
               "lines": [
-                1770
+                1775
               ]
             },
             {
               "anchor": "const restoreMatch",
               "lines": [
-                1781
+                1786
               ]
             },
             {
               "anchor": "const workflowMatch",
               "lines": [
-                1792
+                1797
               ]
             },
             {
               "anchor": "url.pathname === '/api/v1/pages/drafts'",
               "lines": [
-                1670,
-                1675
+                1675,
+                1680
               ]
             }
           ]
@@ -815,7 +815,7 @@
             {
               "anchor": "const collaborationMatch",
               "lines": [
-                1690
+                1695
               ]
             },
             {
@@ -958,7 +958,7 @@
             {
               "anchor": "async readPublic(",
               "lines": [
-                51
+                102
               ]
             }
           ]
@@ -1539,19 +1539,19 @@
             {
               "anchor": "url.pathname === '/api/v1/plugins'",
               "lines": [
-                1847
+                1852
               ]
             },
             {
               "anchor": "url.pathname === '/api/v1/plugins/register'",
               "lines": [
-                1853
+                1858
               ]
             },
             {
               "anchor": "const pluginActionMatch",
               "lines": [
-                1890
+                1895
               ]
             }
           ]
@@ -1822,7 +1822,7 @@
             {
               "anchor": "upgradePath = url.pathname",
               "lines": [
-                2022
+                2027
               ]
             },
             {
