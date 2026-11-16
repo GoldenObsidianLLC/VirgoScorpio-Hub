@@ -2,7 +2,7 @@
 
 ## Current exact-main evidence snapshot — 16 November 2026 (0.6.2, F1.40 merged; workflow #688)
 
-Current main is fef8c9e19ceac14d965a3ed824250a7abbafc04f. F1.40 reusable-component mutation/audit atomicity merged through [PR #172](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/172) from implementation head 4e16213b5b087fa8fc7b4623c1a9732ed4f6ec65; issue #171 tracks the increment. Exact-main push [workflow #688](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43926434802), run ID 43926434802, attempt 1, completed all seven jobs successfully.
+Current main is fef8c9e19ceac14d965a3ed824250a7abbafc04f. F1.40 reusable-component mutation/audit atomicity merged through [PR #172](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/172) from implementation head 4e16213b5b087fa8fc7b4623c1a9732ed4f6ec65; issue #171 is CLOSED. Docs-only PR #173 is open after exact-head push #689 and PR #690 passed, pending human review. Exact-main push [workflow #688](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43926434802), run ID 43926434802, attempt 1, completed all seven jobs successfully.
 
 - Node.js 22.23.4 and 24.22.1 each passed 646/646 Hub tests and 94/94 EnginEx 7.0.0 tests, with zero failures or skips. Full and production-only npm audits each reported zero vulnerabilities.
 - PostgreSQL/Memgraph passed 111/111 live integration tests with zero failures/skips, including the F1.40 two-site boundary and audit-trigger rollback/retry for create, update and delete. Fresh migrations applied 18/18; the idempotent second pass skipped 18/18. Browser/editor Playwright smoke passed 9/9; CodeQL passed.

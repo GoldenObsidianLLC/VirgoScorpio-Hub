@@ -2532,7 +2532,30 @@
       "state": "MERGED",
       "includedInThisMainlineEvidence": true
     },
-    "qualification": "Workflow #688 validates exact current main and merged F1.40 runtime. Production remains NOT_PRODUCTION_CERTIFIED / NO-GO."
+    "qualification": "Workflow #688 validates exact current main and merged F1.40 runtime. Production remains NOT_PRODUCTION_CERTIFIED / NO-GO.",
+    "documentationReconciliation": {
+      "pullRequest": 173,
+      "branch": "docs/f1-40-mainline-evidence-2026-11-16",
+      "headCommit": "01975726c73e11e6c854377be70bcf6140d2b1b9",
+      "baseRevision": "fef8c9e19ceac14d965a3ed824250a7abbafc04f",
+      "pushRun": {
+        "id": 43948242701,
+        "number": 689,
+        "conclusion": "success",
+        "headSha": "01975726c73e11e6c854377be70bcf6140d2b1b9"
+      },
+      "pullRequestRun": {
+        "id": 43948379458,
+        "number": 690,
+        "conclusion": "success",
+        "headSha": "01975726c73e11e6c854377be70bcf6140d2b1b9"
+      },
+      "attestation": "SKIPPED_BY_DESIGN_ON_NON_MAINLINE_PR",
+      "formalReviews": 0,
+      "inlineReviewThreads": 0,
+      "state": "OPEN_PENDING_HUMAN_REVIEW",
+      "runtimeChange": false
+    }
   },
   "previousCandidateEvidence": {
     "reviewedAt": "2026-11-16",
@@ -2657,8 +2680,10 @@
     "feature": "F1.40",
     "issue": {
       "number": 171,
-      "state": "OPEN_PENDING_CLOSEOUT",
-      "parentIssue": 124
+      "state": "CLOSED",
+      "parentIssue": 124,
+      "closedAt": "2026-11-16T20:23:00Z",
+      "closeReason": "completed"
     },
     "branch": "security/f1-40-reusable-component-audit-atomicity-2026-11-16",
     "baseMainCommit": "b77505ef34507c8ba84152b47b3ebffb8f1420e7",
@@ -2821,6 +2846,14 @@
       "sbom": "https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/attestations/68257381",
       "lockfileSha256": "8f3786bcfcd03d0b63761c7107e4d757ae5b45171ba2f6c086ff38c027c8b086",
       "sbomSha256": "2e01fa397584f4adc716e2108d8e4c8b632fb0e7476157c301df89000340eb9a"
+    },
+    "candidateBoundary": {
+      "latestIncrement": "F1.40",
+      "issue": 171,
+      "pullRequest": 172,
+      "state": "MERGED",
+      "issueState": "CLOSED",
+      "includedInThisMainlineEvidence": true
     }
   }
 }

@@ -57,7 +57,7 @@ Canonical readiness artifact 14256906930 was generated at 2026-11-16T18:16:00.21
 
 Lockfile SHA-256: 8f3786bcfcd03d0b63761c7107e4d757ae5b45171ba2f6c086ff38c027c8b086. Attested CycloneDX SBOM SHA-256: 2e01fa397584f4adc716e2108d8e4c8b632fb0e7476157c301df89000340eb9a. Attestations: [SLSA provenance](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/attestations/68257370) and [CycloneDX SBOM](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/attestations/68257381). Listed artifact digests are ZIP archive digests, not inner-file hashes.
 
-PR #172 has zero formal review submissions and zero inline review threads. This is maintainer implementation and automation evidence, not independent security/legal approval. See the [F1.40 merged report](2026-11-16-F1-40-REUSABLE-COMPONENT-AUDIT-ATOMICITY-REPORT.md).
+Issue #171 is CLOSED. PR #172 has zero formal review submissions and zero inline review threads. This is maintainer implementation and automation evidence, not independent security/legal approval. Docs-only PR #173 is open after push #689 and PR #690 passed, pending human review. See the [F1.40 merged report](2026-11-16-F1-40-REUSABLE-COMPONENT-AUDIT-ATOMICITY-REPORT.md).
 
 ## Historical exact-main source validation — workflow #685 (F1.39/docs-only baseline)
 
@@ -169,7 +169,7 @@ Supplemental evidence in the run also records clean `npm ci`, fresh migration va
 
 F1.21–F1.39 comprise 19 consecutive bounded engineering increments merged to main. The increments harden site-owner concurrency; site capability and SSE revocation; invitation role/audit boundaries; content-type registry concurrency; Redis Pub/Sub reconnect; editorial role ownership; membership, site creation and design-system transaction/audit consistency; taxonomy, relationship and AI-policy outbox/audit consistency; editorial workflow transitions; plugin lifecycle locking/audit consistency; firewall rule/audit consistency; page-draft/revision/collaboration/workflow/outbox/audit atomicity; library upload/version audit atomicity; and legacy local/S3 media upload audit atomicity.
 
-The latest merged runtime increment is F1.40, PR #172 / issue #171, at current main fef8c9e19ceac14d965a3ed824250a7abbafc04f, validated by exact-main workflow #688. F1.39 (PR #169, merge SHA d4e1c1ce5e08b4594614448d64ad2738a84355b2) and F1.38 (PR #166) remain prior completed increments. PR #172 has zero formal reviews and zero inline review threads; maintainer/automation evidence only.
+The latest merged runtime increment is F1.40, PR #172 / issue #171 (CLOSED), at current main fef8c9e19ceac14d965a3ed824250a7abbafc04f, validated by exact-main workflow #688. F1.39 (PR #169, merge SHA d4e1c1ce5e08b4594614448d64ad2738a84355b2) and F1.38 (PR #166) remain prior completed increments. PR #172 has zero formal reviews and zero inline review threads; maintainer/automation evidence only. Docs-only PR #173 is open after push #689 and PR #690 passed; human review remains pending.
 
 ### F1.39 merged — legacy media upload/audit atomicity
 

@@ -1,10 +1,11 @@
 # F1.40 — Reusable-component mutation and audit atomicity (merged report)
 
 **Status:** Merged through [PR #172](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/172) on 16 November 2026 at 18:12:45Z.
-**Issue:** [#171](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/171), under parent #124.
+**Issue:** [#171](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/171), CLOSED; parent #124 remains OPEN.
 **Implementation head:** 4e16213b5b087fa8fc7b4623c1a9732ed4f6ec65.
 **Merge/current main:** fef8c9e19ceac14d965a3ed824250a7abbafc04f.
 **Exact-main validation:** [workflow #688](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43926434802), run ID 43926434802.
+**Documentation follow-up:** docs-only [PR #173](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/173) is open; exact-head push #689 and PR #690 both passed. It awaits human review and does not change runtime code.
 **Package:** virgoscorpio-hub@0.6.2, private and unreleased.
 
 ## Scope and finding
@@ -35,7 +36,7 @@ Windows developer workstation, Node.js 26.12.1:
 |---|---:|
 | npm run check | 643 passed; 0 failed; 3 Windows-specific skips (646 total) |
 | Focused reusable-component unit and route-capability tests | 23/23 passed; 0 skipped |
-| Artifact/syntax verification | 238 required paths; 268 JavaScript files |
+| Artifact/syntax verification | 238 required paths; 258 JavaScript files |
 | Tenant route inventory | 27 families; 78 declared patterns; 21 source files; 48 test files |
 | Markdown relative links | 487 across 152 Markdown files; 0 broken |
 | git diff --check | PASS |
@@ -89,6 +90,6 @@ Final readiness remains 8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0
 
 ## Review and release boundary
 
-GitHub records zero formal review submissions and zero inline review threads for PR #172. The repository owner merged the PR; automated tests and owner merge are maintainer engineering evidence, not independent security/legal approval. Parent #124 remains OPEN; independent tenant review #14 and platform security assessment #25 remain OPEN / NOT PERFORMED; dependency/license review #23 remains OPEN / PARTIAL.
+GitHub records zero formal review submissions and zero inline review threads for PR #172. The repository owner merged the PR; automated tests and owner merge are maintainer engineering evidence, not independent security/legal approval. Documentation-only PR #173 reconciles these merged facts; push #689 and PR #690 passed, but formal human review remains pending. Parent #124 remains OPEN; independent tenant review #14 and platform security assessment #25 remain OPEN / NOT PERFORMED; dependency/license review #23 remains OPEN / PARTIAL.
 
 No schema, migration, dependency, public REST contract, lockfile, package-version, or SemVer change was introduced. Package virgoscorpio-hub@0.6.2 remains private and unreleased. No release tag, publication, or deployment is authorized. Production remains NO-GO / NOT_PRODUCTION_CERTIFIED.
