@@ -96,7 +96,7 @@ function createLibraryStore({ pool, root = path.resolve(process.env.LIBRARY_ROOT
     if (filePath.startsWith(`${libraryRoot}${path.sep}`)) await fs.promises.unlink(filePath).catch(() => {});
   }
   return Object.freeze({
-    async upload({ siteId, actorId, category, dataBase64, mimeType, fileName, displayName, altText = '', caption = '', description = '', isPublic = false, metadata = {} }) {
+    async upload({ siteId, actorId, category, dataBase64, mimeType, fileName, displayName, altText = '', caption = '', description = '', isPublic = false, metadata = {}, onAssetUploaded }) {
       const kind = CATEGORY_TO_KIND[category];
       if (!kind) throw libraryError('category must be image, video, audio, document, file, or font.');
       const data = decodeDataBase64(dataBase64, maxFileBytes); const detected = sniffMime(data);
@@ -109,17 +109,31 @@ function createLibraryStore({ pool, root = path.resolve(process.env.LIBRARY_ROOT
       const assetStatus = scan.clean ? 'active' : 'quarantined';
       const publicAfterScan = scan.clean && isPublic === true;
       const safeMetadata = { ...metadata, securityScan: { status: scan.status, engine: scan.engine, scannedAt: scan.clean ? new Date().toISOString() : null } };
-      await put(storageKey, data, detected);
-      const client = await pool.connect();
+      let client = null;
+      let committed = false;
       try {
+        await put(storageKey, data, detected);
+        client = await pool.connect();
         await client.query('BEGIN');
         const q = await client.query(`INSERT INTO library_assets(id,site_id,asset_kind,display_name,original_name,storage_provider,storage_key,mime_type,byte_size,sha256,alt_text,caption,description,is_public,metadata,created_by,updated_by,optimization_status,status,malware_scan_status,malware_scan_engine,malware_scanned_at)
           VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15::jsonb,$16,$16,'pending',$17,$18,$19,CASE WHEN $18='clean' THEN now() ELSE NULL END)
           RETURNING id,site_id,asset_kind,display_name,original_name,storage_provider,mime_type,byte_size,sha256,alt_text,caption,description,is_public,version,status,optimization_status,malware_scan_status,malware_scan_engine,metadata,created_by,created_at,updated_at`,
           [id, siteId, kind, name, originalName, storageAdapter?.provider || 'local', storageKey, detected, data.length, digest, altText, caption, description, publicAfterScan, JSON.stringify(safeMetadata), actorId || null, assetStatus, scan.status, scan.engine]);
+        const asset = q.rows[0];
         await client.query(`INSERT INTO library_asset_versions(asset_id,version,snapshot,storage_key,sha256,created_by) VALUES($1,1,$2::jsonb,$3,$4,$5)`, [id, JSON.stringify({displayName:name,originalName,altText,caption,description,metadata}), storageKey, digest, actorId || null]);
-        await client.query('COMMIT'); return q.rows[0];
-      } catch (error) { await client.query('ROLLBACK').catch(()=>{}); await remove(storageKey); throw error; } finally { client.release(); }
+        if (typeof onAssetUploaded === 'function') {
+          await onAssetUploaded({ queryable: client, result: asset });
+        }
+        await client.query('COMMIT');
+        committed = true;
+        return asset;
+      } catch (error) {
+        if (client) await client.query('ROLLBACK').catch(() => {});
+        if (!committed) await remove(storageKey).catch(() => {});
+        throw error;
+      } finally {
+        client?.release();
+      }
     },
     async list({ siteId, category, query, limit = 50, offset = 0 }) {
       const conditions = ['site_id=$1','deleted_at IS NULL']; const values = [siteId];
@@ -165,7 +179,7 @@ function createLibraryStore({ pool, root = path.resolve(process.env.LIBRARY_ROOT
       if (!owns.rowCount) return null;
       const rows = await pool.query('SELECT id,asset_id,version,snapshot,sha256,created_by,created_at FROM library_asset_versions WHERE asset_id=$1 ORDER BY version DESC', [id]); return rows.rows;
     },
-    async replaceVersion({ siteId, id, actorId, expectedVersion, dataBase64, mimeType, fileName }) {
+    async replaceVersion({ siteId, id, actorId, expectedVersion, dataBase64, mimeType, fileName, onVersionReplaced }) {
       const data = decodeDataBase64(dataBase64, maxFileBytes);
       const detected = sniffMime(data);
       if (!detected || detected !== mimeType) throw libraryError('Replacement file signature does not match MIME type.', 'ERR_VIRGOSCORPIO_HUB_LIBRARY_TYPE');
@@ -195,6 +209,9 @@ function createLibraryStore({ pool, root = path.resolve(process.env.LIBRARY_ROOT
           WHERE site_id=$1 AND id=$2 AND version=$10 RETURNING id,site_id,asset_kind,display_name,original_name,mime_type,byte_size,sha256,alt_text,caption,description,is_public,version,status,optimization_status,malware_scan_status,malware_scan_engine,metadata,updated_at`, [siteId, id, safeFileName || old.original_name, storageKey, detected, data.length, digest, nextVersion, actorId || null, old.version, nextStatus, scan.status, scan.engine, JSON.stringify({securityScan:nextScanMetadata})]);
         if (!result.rows[0]) throw libraryError('Asset version is stale.', 'ERR_VIRGOSCORPIO_HUB_VERSION_CONFLICT', 409);
         await client.query('INSERT INTO library_asset_versions(asset_id,version,snapshot,storage_key,sha256,created_by) VALUES($1,$2,$3::jsonb,$4,$5,$6) ON CONFLICT(asset_id,version) DO NOTHING', [id, nextVersion, JSON.stringify({ displayName: old.display_name, originalName: sanitizeDisplayName(fileName || old.original_name), mimeType: detected, byteSize: data.length }), storageKey, digest, actorId || null]);
+        if (typeof onVersionReplaced === 'function') {
+          await onVersionReplaced({ queryable: client, result: result.rows[0] });
+        }
         await client.query('COMMIT');
         committed = true;
         return result.rows[0];
