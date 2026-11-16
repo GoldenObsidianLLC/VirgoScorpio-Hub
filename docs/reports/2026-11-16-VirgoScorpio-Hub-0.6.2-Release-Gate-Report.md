@@ -104,7 +104,13 @@ The latest merged increment, F1.38, is PR #166 / issue #165, with exact-main liv
 
 ### F1.39 candidate — legacy media upload/audit atomicity
 
-Issue [#167](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/167) remains OPEN. The mainline route still has the pre-existing split mutation/audit behavior because the new F1.39 work is in a separate local feature worktree, not merged. The candidate extends the same transaction/queryable callback pattern to both local and S3 media stores, routes `media.uploaded` through `identity.audit(event, { queryable })`, and compensates newly created objects on transaction failure. Candidate-focused local tests currently pass 49/49. Its live PostgreSQL trigger-injection test is added but cannot run locally because neither `TEST_DATABASE_URL` nor `DATABASE_URL` is configured; hosted CI has not yet validated this candidate. Do not count F1.39 as a merged increment or mainline evidence until PR review, exact-head CI, merge and exact-main CI are complete.
+Issue [#167](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/167) is implemented on branch security/f1-39-media-audit-atomicity-2026-11-16 at 639f0513ddde6ed5b6cce9d5847ec5cda31d8c41 and proposed in [PR #169](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/169). The mainline route retains the pre-existing split mutation/audit behavior until this PR is reviewed and merged. Both exact-head hosted [push workflow #679](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43808420828) and [PR workflow #680](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43808426639) completed successfully on the same candidate SHA.
+
+Node 22.23.4 and 24.22.1 each passed 641/641 Hub tests and 94/94 EnginEx tests with zero failures/skips. The hosted PostgreSQL/Memgraph suite passed 106/106 with zero skips and included the F1.39 trigger-injected rollback/retry regression. Fresh migrations applied 18/18 and the idempotent second pass skipped 18/18. CodeQL and browser/editor smoke passed. The PR-only signing job was skipped as designed for a non-mainline ref; signed attestation is a required post-merge exact-main step.
+
+The first exact-head attempts #677/#678 failed on a test-only assertion type mismatch (bigint audit detail returned as a string, expected as a number). The test fixture was corrected to match PostgreSQL existing driver representation; the reruns #679/#680 passed. Local full check passes 638 with zero failures and three Windows-specific skips; local focused route/store/security/API tests pass 49/49. The local live database test was not run because no dedicated TEST_DATABASE_URL was configured; hosted #680 executed it successfully.
+
+GitHub currently records zero formal PR reviews and zero inline review threads for PR #169. It remains OPEN / unmerged and F1.39 is **not** a completed mainline increment. Candidate CI is maintainer/automation evidence, not independent approval. The candidate readiness output remains NOT_PRODUCTION_CERTIFIED and does not change the mainline production disposition (8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN; production NO-GO).
 
 ### Milestones C, D and E
 
@@ -118,9 +124,8 @@ No meaningful overall percentage or delivery date is asserted: these gates have 
 
 ## Recommended next actions
 
-1. Complete F1.39 local full-suite/inventory validation; run its live database regression only against an explicitly configured disposable test database.
-2. Push the F1.39 branch and open a linked PR for independent/maintainer review; wait for exact-head CI and inspect the live PostgreSQL test evidence.
-3. After merge, require exact-main workflow and signed attestation, reconcile all current docs and generated evidence, and close #167 only when its acceptance criteria pass.
+1. Complete human review of [PR #169](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/169) and address any findings before merge.
+2. After merge, require exact-main workflow and signed attestation, reconcile all current docs and generated evidence, and close #167 only when its acceptance criteria pass.
 4. Keep the 14 missing production gates and governance issues visible; do not authorize a release or SemVer bump until they are formally satisfied.
 
 ## Evidence links

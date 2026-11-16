@@ -4,7 +4,7 @@
 - Parent: [#124](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/124)
 - Branch: `security/f1-39-media-audit-atomicity-2026-11-16`
 - Baseline: `529bb43ca11ce06f67a4e8a7cfdb6401f0852c09`
-- Status: local implementation candidate; not pushed/merged at time of this report.
+- Status: implemented and pushed at 639f0513ddde6ed5b6cce9d5847ec5cda31d8c41; [PR #169](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/169) is OPEN / unmerged pending human review.
 
 ## Gap and selected design
 
@@ -39,10 +39,22 @@ PostgreSQL and object storage do not share a distributed transaction. Process lo
 - Live PostgreSQL trigger-injection integration test: added, but not run locally. The local environment has neither `TEST_DATABASE_URL` nor `DATABASE_URL`; no database connection was attempted. The test is intentionally opt-in and the repository runner refuses to infer `DATABASE_URL` for destructive integration work.
 - Exact candidate CI, PR review, hosted PostgreSQL trigger-injection evidence and provider-backed S3 cleanup acceptance remain required before merge. Mocked S3 tests prove best-effort DeleteObject is attempted after both ambiguous PutObject transport failure and SQL/audit failure, and that cleanup errors do not mask the triggering failure; they do not prove real provider credentials, object versioning, delete permissions, consistency or recovery.
 
+## Hosted candidate acceptance — exact head
+
+Candidate head 639f0513ddde6ed5b6cce9d5847ec5cda31d8c41 on PR #169 was validated by both exact-head [push workflow #679](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43808420828) and [pull-request workflow #680](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43808426639); each run completed successfully. The PR run completed the functional CI jobs: CodeQL, Node 22.23.4 tests/security/dependency checks, Node 24.22.1 tests/security/dependency checks, PostgreSQL/Memgraph integration, browser/editor smoke and candidate evidence consolidation. The mainline-only signing job was skipped as designed.
+
+- Node.js 22.23.4: **641/641 Hub tests**, 0 failures/skips; vendored EnginEx **94/94**, 0 failures/skips.
+- Node.js 24.22.1: **641/641 Hub tests**, 0 failures/skips; vendored EnginEx **94/94**, 0 failures/skips.
+- Dedicated PostgreSQL/Memgraph suite: **106/106 passed**, 0 failures/skips. The new media.uploaded trigger-injection regression passed: audit failure rolled back the media_assets row, the created local file was removed, and retry committed exactly one asset plus one audit event.
+- Fresh migrations: **18/18 applied** to an isolated database; the idempotent second pass skipped **18/18** as expected.
+- CodeQL and browser/editor smoke jobs completed successfully. Full npm audit and production-only audit each reported zero vulnerabilities in the Node matrix; the CI SBOM schema check passed (200 components / 201 dependency records per runtime).
+- The first candidate attempts #677/#678 failed only on a test assertion that expected numeric byteSize; PostgreSQL returned the established bigint detail as a string. The fixture now asserts String(image.length); rerun workflows #679/#680 passed on the corrected exact head.
+- GitHub records **zero formal PR reviews and zero inline review threads** for PR #169. The candidate remains OPEN and must not be merged until human review is completed.
+- Candidate release-readiness output remains NOT_PRODUCTION_CERTIFIED; the PR signing job is intentionally skipped for non-mainline refs. This is not mainline certification. Exact-main signed attestation and refreshed canonical readiness evidence are required after merge.
 ## Compatibility and release impact
 
 The new callback is optional; direct store callers may continue calling `upload` with existing arguments. No database schema or migration, package dependency, public REST route, lockfile, package version, SemVer, release tag, publication or deployment change is intended. Package `virgoscorpio-hub@0.6.2` remains private/unreleased and Production remains NO-GO / NOT_PRODUCTION_CERTIFIED.
 
 ## Next acceptance step
 
-Complete full local validation and source/diff review, push the branch, open a PR linked to #167, and require hosted exact-head PostgreSQL trigger-injection evidence before considering merge. After merge, require exact-main CI, signed mainline attestation and updated canonical readiness evidence; only then close #167.
+Complete human review of [PR #169](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/169), address any findings, and merge only after approval. Then require exact-main CI, signed mainline attestation and updated canonical readiness evidence; only then close #167.
