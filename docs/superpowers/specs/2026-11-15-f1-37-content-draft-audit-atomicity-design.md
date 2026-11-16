@@ -1,7 +1,7 @@
 # F1.37 Page-Draft Save and Audit Atomicity Design
 
 **Date:** 15 November 2026
-**Status:** Approved implementation design for maintainer issue #162
+**Status:** Implemented and merged through PR #163 at `212df05a2c2af5b222eb6a06a798f2ce5ba6cabc`; exact-main workflow #667 passed 7/7 jobs
 **Baseline:** ead1760b71d747dad3100a568ac403ce6a59a08f
 **Parent:** #124
 

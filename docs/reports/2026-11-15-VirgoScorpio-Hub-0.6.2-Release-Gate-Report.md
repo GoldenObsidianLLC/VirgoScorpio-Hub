@@ -2,11 +2,21 @@
 
 **Evidence snapshot:** 15 November 2026 UTC / 15 November 2026 America/Chicago
 **Repository:** `GoldenObsidianLLC/VirgoScorpio-Hub`  
-**Current main:** 460eff191d84fe422ed4ac15260a8fd6d9100d77
+**Current main:** 212df05a2c2af5b222eb6a06a798f2ce5ba6cabc
 **Current release decision:** **PRODUCTION NO-GO / NOT_PRODUCTION_CERTIFIED**  
 **Package:** `virgoscorpio-hub@0.6.2` — private and unreleased
 
 > This report distinguishes exact-main hosted evidence, local maintainer engineering checks, and missing production acceptance. It does not authorize release, deployment, publication, or risk acceptance.
+
+## Latest exact-main update — F1.37 merged (15 November 2026)
+
+F1.37 page-draft/audit atomicity merged through [PR #163](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/163) at main SHA `212df05a2c2af5b222eb6a06a798f2ce5ba6cabc` from implementation commit `058d26605b4984ed7455b5ebd4f70e24e8b9b494`; issue #162 remains OPEN pending maintainer close-out. Exact-main [workflow #667](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43774335902), push attempt 1, passed all seven jobs at 23:24:26 UTC: Node.js 22/24 each 626/626 Hub and 94/94 EnginEx; live PostgreSQL/Memgraph 102/102 with zero skips; 18/18 fresh migrations and 18/18 idempotent re-entry; Playwright 9/9; CodeQL; signed mainline dependency/SBOM attestations; exact-source evidence consolidation; full and production npm audits each 0 vulnerabilities. The new F1.37 `content.draft_saved` audit trigger-injection rollback/retry regression passed.
+
+Canonical readiness was finalized on source `212df05a2c2af5b222eb6a06a798f2ce5ba6cabc` at `2026-11-15T23:24:20.423Z`: **8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN**, `readyForProduction: false`, `NOT_PRODUCTION_CERTIFIED`. All five producer manifests passed; required mainline attestation job status was `success`. The service-less Node integration diagnostic separately remains PARTIAL (36 skipped tests per runtime); those skips are distinct from the dedicated live 102/102 zero-skip database result. Production remains NO-GO.
+
+GitHub records no formal review submission or inline review threads for PR #163. These are maintainer/automation results, not independent human review. Independent tenant review #14 and platform security assessment #25 remain OPEN / NOT PERFORMED; dependency/license review #23 remains OPEN / PARTIAL. Package 0.6.2 remains private/unreleased, with no SemVer increment, release, publication, or deployment authorized.
+
+## Previous F1.36 release-gate snapshot (superseded by workflow #667)
 
 ## 1. Executive decision
 
@@ -24,7 +34,7 @@ The canonical readiness classification remains:
 
 `readyForProduction` is **false**. The 14 missing production gates, two partial reviews, absent independent assessments, and pending release-owner/governance decisions are material blockers. Successful CI does not remove them.
 
-## 2. Source and release baseline
+## 2. Previous F1.36 source and release baseline (historical; superseded by the F1.37 update)
 
 | Item | Verified value |
 |---|---|
@@ -44,7 +54,7 @@ The canonical readiness classification remains:
 
 The source GitHub repository is public while the package remains private and unreleased. Do not confuse repository visibility with package publication or production authorization.
 
-## 3. Exact-main CI and supply-chain evidence
+## 3. Previous F1.36 exact-main CI and supply-chain evidence (historical; superseded by workflow #667)
 
 Current main SHA 460eff191d84fe422ed4ac15260a8fd6d9100d77 was validated by exact-main workflow #661 (https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43759090734), which completed all seven required jobs on 15 November 2026 at 20:40:33 UTC.
 
