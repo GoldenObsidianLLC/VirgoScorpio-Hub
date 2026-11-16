@@ -1675,40 +1675,71 @@
     }
   },
   "latestCandidateEvidence": {
-    "reviewedAt": "2026-11-12",
+    "reviewedAt": "2026-11-16",
     "version": "0.6.2",
-    "branch": "main",
-    "headCommit": "4a9ee181be5d9d46d94ed11a14de64b4dbbe9907",
-    "mergeRefCommit": "4a9ee181be5d9d46d94ed11a14de64b4dbbe9907",
+    "feature": "F1.39",
+    "issue": {
+      "number": 167,
+      "state": "OPEN",
+      "parentIssue": 124
+    },
+    "branch": "security/f1-39-media-audit-atomicity-2026-11-16",
+    "headCommit": "639f0513ddde6ed5b6cce9d5847ec5cda31d8c41",
+    "baseMainCommit": "529bb43ca11ce06f67a4e8a7cfdb6401f0852c09",
     "pullRequest": {
-      "number": 132,
-      "url": "https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/132",
-      "state": "closed",
-      "merged": true,
-      "head": "ffb2632ed11f774982587a49abaef6bfe4380be0",
-      "base": "0748f56e01421d13121ec08f7bc036579e5406835",
-      "mergeRef": "4a9ee181be5d9d46d94ed11a14de64b4dbbe9907",
-      "reviewCount": 0
+      "number": 169,
+      "url": "https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/169",
+      "state": "open",
+      "merged": false,
+      "mergeable": true,
+      "formalReviews": 0,
+      "inlineReviewThreads": 0,
+      "reviewDecision": "NONE"
     },
     "ci": {
-      "mainlineRun": {
-        "id": 43266581120,
-        "number": 585,
-        "event": "push",
-        "conclusion": "success"
-      },
+      "status": "PASS_FUNCTIONAL_CI_PENDING_HUMAN_REVIEW",
       "jobsPerRun": 7,
-      "status": "PASS",
-      "workflowStatus": "completed"
+      "pushRun": {
+        "id": 43808420828,
+        "number": 679,
+        "event": "push",
+        "conclusion": "success",
+        "url": "https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43808420828",
+        "headSha": "639f0513ddde6ed5b6cce9d5847ec5cda31d8c41"
+      },
+      "pullRequestRun": {
+        "id": 43808426639,
+        "number": 680,
+        "event": "pull_request",
+        "conclusion": "success",
+        "url": "https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43808426639",
+        "headSha": "639f0513ddde6ed5b6cce9d5847ec5cda31d8c41"
+      },
+      "firstAttempts": {
+        "pushRun": {
+          "id": 43807719176,
+          "number": 677,
+          "conclusion": "failure",
+          "disposition": "corrected-test-expectation"
+        },
+        "pullRequestRun": {
+          "id": 43808014124,
+          "number": 678,
+          "conclusion": "failure",
+          "disposition": "corrected-test-expectation"
+        },
+        "note": "Integration assertion expected numeric byteSize but PostgreSQL bigint JSON detail is returned as a string; fixture corrected in exact head."
+      },
+      "attestationJob": "SKIPPED_AS_DESIGNED_ON_PULL_REQUEST; require exact-main attestation after merge"
     },
     "tests": {
       "node22Hub": {
-        "passed": 595,
+        "passed": 641,
         "failed": 0,
         "skipped": 0
       },
       "node24Hub": {
-        "passed": 595,
+        "passed": 641,
         "failed": 0,
         "skipped": 0
       },
@@ -1718,59 +1749,91 @@
         "skipped": 0
       },
       "livePostgresMemgraph": {
-        "passed": 93,
+        "passed": 106,
         "failed": 0,
         "skipped": 0
       },
       "migrations": {
-        "applied": 18,
-        "secondPassSkipped": 18,
-        "disposableDatabaseDropped": true
+        "freshApplied": 18,
+        "idempotentSecondPassSkipped": 18
       },
-      "supportedUpgradeFixture": "Not separately asserted in workflow #585; do not infer from fresh migration checks.",
-      "memgraphOutageReplay": "PASS",
-      "canonicalGraphRebuild": "PASS",
-      "playwrightSmoke": {
-        "passed": 9,
+      "codeql": "PASS",
+      "browserEditorSmoke": "PASS",
+      "fullNpmAuditVulnerabilities": 0,
+      "productionNpmAuditVulnerabilities": 0
+    },
+    "localValidation": {
+      "runtime": "Node.js 26.12.1",
+      "fullCheck": {
+        "passed": 638,
+        "failed": 0,
+        "skipped": 3,
+        "skipReason": "Windows-specific platform semantics"
+      },
+      "focusedRouteStoreSecurityApi": {
+        "passed": 49,
         "failed": 0,
         "skipped": 0
       },
-      "requiredPaths": 235,
-      "javascriptSyntaxChecked": 243,
-      "npmAuditVulnerabilities": 0,
-      "serviceLessIntegration": {
-        "skippedPerRuntime": 34,
-        "status": "PARTIAL"
+      "mediaStoreRouteUnit": {
+        "passed": 11,
+        "failed": 0,
+        "skipped": 0
+      },
+      "tenantInventory": {
+        "families": 27,
+        "declaredRoutePatterns": 78,
+        "sourceFiles": 21,
+        "testFiles": 46
+      },
+      "dedicatedPostgresIntegration": "NOT_RUN_LOCALLY; hosted PR workflow #680 passed it"
+    },
+    "artifacts": {
+      "prRun": {
+        "node24Ci": {
+          "id": 14199920276,
+          "digest": "sha256:8c7b7b8854397a80bdd2c7632f89b8b8052f658b25ab7ae15a727880b552d2a0"
+        },
+        "node22Ci": {
+          "id": 14199501852,
+          "digest": "sha256:f8a787d50d80af6e3d9432802dcd4cbf04f86b39c4bfce665c4868c6838df719"
+        },
+        "node22Dependency": {
+          "id": 14199501846,
+          "digest": "sha256:d50817ddd45b624f6529bc856b87bab09bb72326370ce21b36e76278e5a028bb"
+        },
+        "node24Dependency": {
+          "id": 14199461711,
+          "digest": "sha256:5b6a92e5f8345184cf10e8e8e9975b504715f3e4207dcb439acabc71602407c3"
+        },
+        "browser": {
+          "id": 14199302792,
+          "digest": "sha256:e4fe0037f721a106ba202122c3d976bcb4a7a9173804d2a0d60041250591aa53"
+        },
+        "postgresMemgraph": {
+          "id": 14199134530,
+          "digest": "sha256:be9e20dc6a891a38f2424b7c8a36802345eddd31b72b103b6e55908158adc7fb"
+        },
+        "livePostgresNode22": {
+          "id": 14199129527,
+          "digest": "sha256:475cb50d12f76227351f1df5a0b137aadc87e2e53b0324a00ef5358358fac8f3"
+        },
+        "codeql": {
+          "id": 14198963421,
+          "digest": "sha256:6356064c8d73a518e4cafb8f795dec4fd1fce175f878ba4c948859aad4b31d8d"
+        },
+        "releaseReadinessCandidate": {
+          "id": 14198744724,
+          "digest": "sha256:518a00cfc97c397c8a3b6f23f39da29b1e32d00699701530ff79d1a85dfd5d47"
+        }
       }
     },
-    "sbom": {
-      "cyclonedx": "1.5",
-      "lockfileSha256": "8f3786bcfcd03d0b63761c7107e4d757ae5b45171ba2f6c086ff38c027c8b086",
-      "npm": "11.19.1",
-      "node22Components": 200,
-      "node22Dependencies": 201,
-      "node24Components": 200,
-      "node24Dependencies": 201,
-      "normalizedComponentAndDependencyGraphParity": "PASS"
-    },
-    "formalReadiness": {
-      "sourceRevision": "4a9ee181be5d9d46d94ed11a14de64b4dbbe9907",
-      "releaseClassification": "NOT_PRODUCTION_CERTIFIED",
+    "candidateReleaseReadiness": {
+      "classification": "NOT_PRODUCTION_CERTIFIED",
       "readyForProduction": false,
-      "pass": 7,
-      "partial": 2,
-      "blocked": 1,
-      "missingEvidence": 14,
-      "notRun": 0,
-      "productionCertification": "BLOCKED"
+      "note": "Feature-branch candidate readiness is not mainline release certification; production gates remain unsatisfied and unchanged."
     },
-    "supersededRun": {
-      "runNumber": 268,
-      "conclusion": "failure",
-      "disposition": "corrected",
-      "summary": "The intermediate library-route compatibility patch returned the stale ERR_SYSTEMFABRIC_LIBRARY_NOT_FOUND code. The final candidate restores the canonical ERR_VIRGOSCORPIO_HUB_* namespace; run #270 passes live tenant-isolation tests."
-    },
-    "status": "MAINLINE_CI_PASS_PRODUCTION_NO_GO"
+    "status": "OPEN_CANDIDATE_FUNCTIONAL_CI_PASS_PENDING_HUMAN_REVIEW_AND_MERGE"
   },
   "releaseEvidenceHardeningFollowUp": {
     "reviewedAt": "2026-11-05",
@@ -2230,5 +2293,103 @@
       "reviewCount": 0,
       "issueCommentCount": 0
     }
+  },
+  "historicalCandidateEvidenceBeforeF139": {
+    "reviewedAt": "2026-11-12",
+    "version": "0.6.2",
+    "branch": "main",
+    "headCommit": "4a9ee181be5d9d46d94ed11a14de64b4dbbe9907",
+    "mergeRefCommit": "4a9ee181be5d9d46d94ed11a14de64b4dbbe9907",
+    "pullRequest": {
+      "number": 132,
+      "url": "https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/132",
+      "state": "closed",
+      "merged": true,
+      "head": "ffb2632ed11f774982587a49abaef6bfe4380be0",
+      "base": "0748f56e01421d13121ec08f7bc036579e5406835",
+      "mergeRef": "4a9ee181be5d9d46d94ed11a14de64b4dbbe9907",
+      "reviewCount": 0
+    },
+    "ci": {
+      "mainlineRun": {
+        "id": 43266581120,
+        "number": 585,
+        "event": "push",
+        "conclusion": "success"
+      },
+      "jobsPerRun": 7,
+      "status": "PASS",
+      "workflowStatus": "completed"
+    },
+    "tests": {
+      "node22Hub": {
+        "passed": 595,
+        "failed": 0,
+        "skipped": 0
+      },
+      "node24Hub": {
+        "passed": 595,
+        "failed": 0,
+        "skipped": 0
+      },
+      "enginexPerRuntime": {
+        "passed": 94,
+        "failed": 0,
+        "skipped": 0
+      },
+      "livePostgresMemgraph": {
+        "passed": 93,
+        "failed": 0,
+        "skipped": 0
+      },
+      "migrations": {
+        "applied": 18,
+        "secondPassSkipped": 18,
+        "disposableDatabaseDropped": true
+      },
+      "supportedUpgradeFixture": "Not separately asserted in workflow #585; do not infer from fresh migration checks.",
+      "memgraphOutageReplay": "PASS",
+      "canonicalGraphRebuild": "PASS",
+      "playwrightSmoke": {
+        "passed": 9,
+        "failed": 0,
+        "skipped": 0
+      },
+      "requiredPaths": 235,
+      "javascriptSyntaxChecked": 243,
+      "npmAuditVulnerabilities": 0,
+      "serviceLessIntegration": {
+        "skippedPerRuntime": 34,
+        "status": "PARTIAL"
+      }
+    },
+    "sbom": {
+      "cyclonedx": "1.5",
+      "lockfileSha256": "8f3786bcfcd03d0b63761c7107e4d757ae5b45171ba2f6c086ff38c027c8b086",
+      "npm": "11.19.1",
+      "node22Components": 200,
+      "node22Dependencies": 201,
+      "node24Components": 200,
+      "node24Dependencies": 201,
+      "normalizedComponentAndDependencyGraphParity": "PASS"
+    },
+    "formalReadiness": {
+      "sourceRevision": "4a9ee181be5d9d46d94ed11a14de64b4dbbe9907",
+      "releaseClassification": "NOT_PRODUCTION_CERTIFIED",
+      "readyForProduction": false,
+      "pass": 7,
+      "partial": 2,
+      "blocked": 1,
+      "missingEvidence": 14,
+      "notRun": 0,
+      "productionCertification": "BLOCKED"
+    },
+    "supersededRun": {
+      "runNumber": 268,
+      "conclusion": "failure",
+      "disposition": "corrected",
+      "summary": "The intermediate library-route compatibility patch returned the stale ERR_SYSTEMFABRIC_LIBRARY_NOT_FOUND code. The final candidate restores the canonical ERR_VIRGOSCORPIO_HUB_* namespace; run #270 passes live tenant-isolation tests."
+    },
+    "status": "MAINLINE_CI_PASS_PRODUCTION_NO_GO"
   }
 }
