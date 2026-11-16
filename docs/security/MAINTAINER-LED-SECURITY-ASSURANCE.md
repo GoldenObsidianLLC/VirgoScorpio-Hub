@@ -3,7 +3,7 @@
 > **Status:** Active internal engineering control for the restricted VirgoScorpio Hub 0.6.2 developer preview.
 > **Assessment type:** Maintainer-authored and automated checks only.
 > **Production certification:** **NOT CERTIFIED — NO-GO.**
-> **Current mainline evidence baseline:** `233f8e9cf61f391cb46d269c2dd3f87ff75d1023` (F1.35 merged through PR #157; exact-main workflow #655 passed 7/7 jobs, including signed mainline attestations, on 15 November 2026).
+> **Current mainline evidence baseline:** `212df05a2c2af5b222eb6a06a798f2ce5ba6cabc` (F1.37 merged through PR #163; exact-main workflow #667 passed 7/7 jobs, including signed mainline dependency/SBOM attestations, on 15 November 2026).
 
 ## 1. Purpose and decision
 
@@ -208,3 +208,11 @@ The two-site PostgreSQL fixture injects audit-event trigger failures and verifie
 Exact-head push #653 and PR #654 passed 7/7 jobs. Exact-main workflow [#655](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43733907591) passed 7/7 jobs, including Node 22/24 test matrices, 100/100 live PostgreSQL/Memgraph, 18 fresh and 18 idempotent migrations, Playwright 9/9, collaboration 4/4, CodeQL, signed mainline attestation and evidence consolidation. Local Windows/Node 26.12.1 `npm run check` passed 609 tests, zero failures and three platform-specific skips; local live DB integration was not run due absent DB configuration.
 
 F1.35 is maintainer-led developer-preview engineering, not independent assessment, risk acceptance, waiver or production qualification. GitHub records no formal review submission for PR #157. Independent tenant assessment #14 and platform assessment #25 remain OPEN / NOT PERFORMED; dependency/license assessment #23 remains OPEN / PARTIAL. No separate transaction abstraction, schema, migration, dependency, public API, lockfile or SemVer change was introduced.
+
+## F1.37 page-draft save/audit atomicity — merged mainline (issue #162; PR #163)
+
+F1.37 merged through [PR #163](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/163) at main SHA `212df05a2c2af5b222eb6a06a798f2ce5ba6cabc` from implementation commit `058d26605b4984ed7455b5ebd4f70e24e8b9b494`. `POST /api/v1/pages/drafts` now persists `content.draft_saved` through optional `saveDraft.onDraftSaved`, using the same PostgreSQL transaction client for the content row, collaboration checkpoint, revision, workflow event, outbox event and audit record. Audit failure rolls back the complete write set; safe retry commits one correlated event. The callback remains optional for existing store callers and developer-token requests. Unique-conflict mapping is restricted to content-row writes so an audit `23505` preserves its original error identity.
+
+Exact-head workflow #666 and exact-main [workflow #667](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43774335902) passed. Exact-main #667 passed Node 22/24 each 626/626 Hub and 94/94 EnginEx tests; live PostgreSQL/Memgraph 102/102 with zero skips including the trigger-injected audit rollback/retry test; fresh migrations 18/18 and idempotent re-entry 18/18; Playwright 9/9; CodeQL; signed mainline attestations; and exact-source evidence consolidation. Full and production npm audits each reported zero vulnerabilities.
+
+GitHub records no formal review submission or inline review threads for PR #163. Merge and CI are maintainer/automation evidence, not independent security approval. Issue #162 remains OPEN pending maintainer close-out; parent #124 remains OPEN. Independent tenant review #14 and platform assessment #25 remain OPEN / NOT PERFORMED; dependency/license assessment #23 remains OPEN / PARTIAL. No schema, migration, dependency, public API, lockfile or SemVer change was introduced. Package 0.6.2 remains private/unreleased and production remains NO-GO.

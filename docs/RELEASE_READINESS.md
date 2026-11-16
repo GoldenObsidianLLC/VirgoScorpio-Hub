@@ -2,7 +2,7 @@
 
 > **Current decision: PRODUCTION NO-GO / NOT_PRODUCTION_CERTIFIED.** This exact-main snapshot does not authorize release, publication, deployment, or a SemVer increment.
 
-Current main is 460eff191d84fe422ed4ac15260a8fd6d9100d77, the F1.36 firewall rule/security-event atomicity merge through PR #160; issue #159 is CLOSED. F1.35 runtime code remains merged through PR #157 at 233f8e9cf61f391cb46d269c2dd3f87ff75d1023; documentation-only PR #158 preceded F1.36. Exact-main workflow #661 (https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43759090734) completed 7/7 jobs at 2026-11-15 20:40:33 UTC, including signed mainline lockfile/SBOM attestations and exact-source evidence consolidation. Node 22/24 each passed 619/619 Hub and 94/94 EnginEx; PostgreSQL/Memgraph 101/101 zero skips, including the F1.36 firewall audit rollback/retry regression; migrations 18/18 fresh and 18/18 idempotent; Playwright 9/9; collaboration 4/4; CodeQL; full and production npm audit zero vulnerabilities. GitHub records no formal review submission for PR #160; implementation/merge/automation are maintainer evidence, not independent approval.
+Current main is 212df05a2c2af5b222eb6a06a798f2ce5ba6cabc, the F1.37 page-draft/audit atomicity merge through PR #163 from implementation commit 058d26605b4984ed7455b5ebd4f70e24e8b9b494. Issue #162 remains OPEN pending maintainer close-out; parent #124 remains OPEN. Exact-main workflow #667 (https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43774335902) completed 7/7 jobs at 2026-11-15 23:24:26 UTC, including signed mainline dependency/SBOM attestations and exact-source evidence consolidation. Node 22/24 each passed 626/626 Hub and 94/94 EnginEx; PostgreSQL/Memgraph 102/102 zero skips, including the F1.37 audit rollback/retry regression; migrations 18/18 fresh and 18/18 idempotent; Playwright 9/9; CodeQL; full and production npm audit each reported zero vulnerabilities. GitHub records no formal review submission or inline review threads for PR #163; implementation/merge/automation are maintainer evidence, not independent approval.
 
 | Readiness classification | Count |
 |---|---:|
@@ -12,13 +12,13 @@ Current main is 460eff191d84fe422ed4ac15260a8fd6d9100d77, the F1.36 firewall rul
 | MISSING_EVIDENCE | 14 |
 | NOT_RUN | 0 |
 
-The two PARTIAL classifications remain incomplete human lockfile/dependency/license review and the service-less integration diagnostic (35 skips per runtime); those skips are not live integration passes. Automated browser smoke is not manual WCAG/assistive-technology acceptance; CodeQL and signed attestations do not establish independent security or legal approval.
+The two PARTIAL classifications remain incomplete human lockfile/dependency/license review and the service-less integration diagnostic (36 skips per runtime in workflow #667); those skips are not live integration passes. Automated browser smoke is not manual WCAG/assistive-technology acceptance; CodeQL and signed attestations do not establish independent security or legal approval.
 
 The 14 missing production evidence gates remain: tenant-isolation-review, identity-provider-e2e, clamav-corpus, cloud-live-providers, stripe-live-lifecycle, browser-accessibility, commerce-parity-acceptance, community-parity-acceptance, plugin-container-isolation, dependency-sbom-codeql, load-backup-restore, independent-security-review, operations-release-approval, and observability-production.
 
-Independent tenant review #14 and platform security assessment #25 remain OPEN / NOT PERFORMED; supply-chain review #23 remains OPEN / PARTIAL. Authorized scope #13, load/restore #24, operations/release ownership #26, and governance #32 remain open. F1.36 closes the bounded firewall rule/audit atomicity issue #159; it does not satisfy or waive any independent production gate.
+Independent tenant review #14 and platform security assessment #25 remain OPEN / NOT PERFORMED; supply-chain review #23 remains OPEN / PARTIAL. Authorized scope #13, load/restore #24, operations/release ownership #26, and governance #32 remain open. F1.37 closes the bounded page-draft/audit implementation scope in PR #163, while issue #162 remains OPEN pending maintainer close-out; no independent or production gate is satisfied or waived.
 
-The exact source, 14-gate matrix, run-bound artifacts, F1.31-F1.36 merged evidence and assurance limitations are recorded in the 15 November full release-gate report, release evidence contract, and root release manifest.
+The exact source, 14-gate matrix, run-bound artifacts, F1.31-F1.37 merged evidence and assurance limitations are recorded in the [15 November full release-gate report](reports/2026-11-15-VirgoScorpio-Hub-0.6.2-Release-Gate-Report.md), [F1.37 merge report](reports/2026-11-15-F1-37-CONTENT-DRAFT-AUDIT-ATOMICITY-REPORT.md), release evidence contract, and root release manifest.
 
 Package virgoscorpio-hub@0.6.2 remains private and unreleased. No tag, GitHub Release, npm publication, production deployment or SemVer increment is authorized.
 ## Historical candidate implementation note — post-producer readiness finalization (12 November 2026)
