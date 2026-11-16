@@ -1,6 +1,20 @@
 # VirgoScorpio Hub Release Evidence Contract
 
-## Current mainline evidence snapshot — 16 November 2026 (0.6.2, F1.38 merged)
+## Current exact-main evidence snapshot — 16 November 2026 (0.6.2, F1.38 merged; workflow #676)
+
+Current main is 529bb43ca11ce06f67a4e8a7cfdb6401f0852c09, following documentation-only PR #168 after the F1.38 runtime merge PR #166 at 4e3efd859b0447ee215d26343314da25d0a867c2. Exact-main push [workflow #676](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43796417545), run ID 43796417545, attempt 1, completed all seven jobs successfully. The exact mainline-only attestation job completed successfully (unlike feature-branch PR jobs, where main-only signing is skipped by design).
+
+- Node.js 22.23.4 and 24.22.1 each passed 630/630 Hub tests and 94/94 EnginEx 7.0.0 tests.
+- Dedicated PostgreSQL/Memgraph passed 105/105 live integration tests with zero failures/skips. Fresh migrations applied 18/18 and the idempotent second pass skipped 18/18 as expected.
+- Browser/editor Playwright smoke passed 9/9; CodeQL succeeded; mainline lockfile/SBOM provenance and signed CycloneDX attestation verified the exact source SHA, lockfile and generated SBOM bytes.
+- Evidence consolidation validated the five required producer manifests and wrote the canonical release-readiness report at 2026-11-16T03:12:22.965Z. The final status remains 8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN, readyForProduction false, NOT_PRODUCTION_CERTIFIED; production is NO-GO.
+- The canonical run-bound artifact is GitHub artifact **14194523110**, archive SHA-256 84c097c3a286784a2a0dcf1cac331e99fb1477ce165e83a7229471433118a3a5. The PostgreSQL/Memgraph producer artifact is **14194831640**, digest 5b30d3d16f63c9e0191cab56175f507d47db36389940e3a15abc744142d77373; Node 22 and Node 24 producer archives are **14194826470** (d2957373a2054025485d35bbfabe9a6a6d26c223428c58773c920a0b22923b63) and **14194038693** (67ae9cba0db32f8c37966200057a3635fd0ad356a6871bea31683cccb34650d8); browser/editor is **14195105336** (29ce1a7221c856905414158ca1bb49fe0d1f79fbd53892d74c431255fae0f7e7); attestation is **14193534885** (b24b219e98e3689e90c70892ee00e078d73c66ac9dd06299103d334a6d40ca41). These are GitHub archive digests, not inner-file hashes.
+- The attestation verification record binds source SHA 529bb43ca11ce06f67a4e8a7cfdb6401f0852c09, package virgoscorpio-hub@0.6.2, lockfile SHA-256 8f3786bcfcd03d0b63761c7107e4d757ae5b45171ba2f6c086ff38c027c8b086, and generated CycloneDX SBOM SHA-256 a7bc2292bba2f15b6e70510e21889ce9a7ac817725f0a4153e843d30b8fc0fce. The verified predicate type is https://cyclonedx.org/bom; the signed predicate matches the generated SBOM. Attestation evidence artifact 14193534885 records these exact subjects.
+- The 37 service-less diagnostic skips per runtime remain PARTIAL and are not counted in the live integration pass. Human dependency/license review, independent tenant/security assessments, live providers, manual accessibility, product parity, plugin isolation, load/restore, observability and operations approval remain open.
+
+The mainline state is maintainer implementation and CI evidence. It is not an independent security/legal assessment and does not waive any production gate. See the [16 November full release-gate report](reports/2026-11-16-VirgoScorpio-Hub-0.6.2-Release-Gate-Report.md). F1.39 issue #167 is a local unpushed candidate, not merged and not included in this mainline source revision.
+
+## Historical exact-main evidence snapshot — 16 November 2026 (0.6.2, F1.38 merged; workflow #673)
 
 Current main: `4e3efd859b0447ee215d26343314da25d0a867c2`, F1.38 library asset/audit atomicity merged through [PR #166](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/166) from implementation commit `125a8cd0539bf11891fc05745b95273b99a76bbf`. Issue [#165](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/165) is CLOSED; parent #124 remains OPEN. GitHub records no formal review submission or inline review threads for PR #166. Implementation, merge and CI are maintainer/automation evidence, not independent security approval.
 

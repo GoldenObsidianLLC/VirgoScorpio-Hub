@@ -57,7 +57,7 @@ test('local media files are created exclusively with owner-only permissions', as
   const image = Buffer.from([0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a,0x00]);
   let insertedValues;
   const store = createLocalMediaStore({
-    pool: { async query(_sql, values) { insertedValues = values; return { rows: [{ storage_key: values[2], mime_type: values[3] }] }; } },
+    pool: { async query(_sql, values) { if (!String(_sql).trim().startsWith('INSERT INTO media_assets')) return { rows: [] }; insertedValues = values; return { rows: [{ storage_key: values[2], mime_type: values[3] }] }; }, async connect() { return { query: this.query.bind(this), release() {} }; } },
     root
   });
   const asset = await store.upload({ siteId: '00000000-0000-4000-8000-000000000001', dataBase64: image.toString('base64'), mimeType: 'image/png' });
@@ -77,7 +77,7 @@ test('media upload rejects SVG and unsupported files before touching storage', a
   const root = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'virgoscorpio_hub-media-invalid-'));
   t.after(() => fs.promises.rm(root, { recursive: true, force: true }));
   const calls = [];
-  const store = createLocalMediaStore({ pool: { query: async (...args) => { calls.push(args); return { rows: [] }; } }, root });
+  const store = createLocalMediaStore({ pool: { query: async (...args) => { calls.push(args); return { rows: [] }; }, async connect() { return { query: this.query.bind(this), release() {} }; } }, root });
   await assert.rejects(() => store.upload({ siteId: '00000000-0000-4000-8000-000000000001', dataBase64: Buffer.from('<svg></svg>').toString('base64'), mimeType: 'image/svg+xml' }), { code: 'ERR_VIRGOSCORPIO_HUB_MEDIA_INVALID' });
   assert.equal(calls.length, 0);
 });

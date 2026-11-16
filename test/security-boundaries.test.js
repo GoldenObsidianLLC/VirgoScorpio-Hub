@@ -59,7 +59,7 @@ test('S3 media store keeps public objects private and requires API-gated revocab
   const commands = { PutObjectCommand: Command, DeleteObjectCommand: Command, GetObjectCommand: Command };
   const client = { async send(command) { sent.push(command); if (command instanceof commands.GetObjectCommand) return { Body: Buffer.from([0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a,0x00]) }; return {}; } };
   const poolCalls = [];
-  const pool = { async query(sql, args) { poolCalls.push({ sql, args }); return { rows: [{ id: args[0], site_id: args[1], storage_key: args[2], mime_type: args[3], byte_size: args[4], alt_text: args[5], publicly_accessible: args[8], created_at: new Date() }] }; } };
+  const pool = { async query(sql, args) { poolCalls.push({ sql, args }); if (!String(sql).trim().startsWith('INSERT INTO media_assets')) return { rows: [] }; return { rows: [{ id: args[0], site_id: args[1], storage_key: args[2], mime_type: args[3], byte_size: args[4], alt_text: args[5], publicly_accessible: args[8], created_at: new Date() }] }; }, async connect() { return { query: this.query.bind(this), release() {} }; } };
   assert.throws(() => createS3MediaStore({ pool, client, commands, env: { S3_BUCKET: 'virgoscorpio-hub-assets', MEDIA_CDN_PUBLIC: 'true', CDN_BASE_URL: 'https://cdn.example.test' } }), /MEDIA_CDN_PUBLIC is disabled/);
   const store = createS3MediaStore({ pool, client, commands, env: { S3_BUCKET: 'virgoscorpio-hub-assets', S3_REGION: 'us-east-1', CDN_BASE_URL: 'https://cdn.example.test' } });
   const png = Buffer.from([0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a,0x00]);
@@ -70,5 +70,5 @@ test('S3 media store keeps public objects private and requires API-gated revocab
   assert.match(sent[0].input.Key, /^site-a\//);
   assert.equal(sent[0].input.CacheControl, 'private, no-store');
   assert.equal(store.publicUrl(asset), '/media/' + asset.id);
-  assert.equal(poolCalls.length, 1);
+  assert.equal(poolCalls.filter(call => String(call.sql).trim().startsWith('INSERT INTO media_assets')).length, 1);
 });

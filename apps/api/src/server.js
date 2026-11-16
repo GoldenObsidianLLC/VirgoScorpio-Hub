@@ -167,7 +167,7 @@ async function writeTaxonomyOutboxEvent(client, { term, status, actorId = null, 
     ]
   );
 }
-function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAITaskStore, contentStore, pool, identityService, pluginRunner, stripeFetch = fetch, realtimeHub: injectedRealtimeHub, presenceService: injectedPresenceService, realtimeBridge: injectedRealtimeBridge, realtimeMetrics: injectedRealtimeMetrics, realtimeConnectionLimiter: injectedRealtimeConnectionLimiter, publishDocumentOperation: injectedDocumentPublisher, realtimeHeartbeatMs = 15_000, logger = console, otelLogger = null, structuredLogger: suppliedStructuredLogger = null } = {}) {
+function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAITaskStore, contentStore, pool, identityService, pluginRunner, mediaStore: injectedMediaStore, stripeFetch = fetch, realtimeHub: injectedRealtimeHub, presenceService: injectedPresenceService, realtimeBridge: injectedRealtimeBridge, realtimeMetrics: injectedRealtimeMetrics, realtimeConnectionLimiter: injectedRealtimeConnectionLimiter, publishDocumentOperation: injectedDocumentPublisher, realtimeHeartbeatMs = 15_000, logger = console, otelLogger = null, structuredLogger: suppliedStructuredLogger = null } = {}) {
   if (env.NODE_ENV === 'production') {
     const missing = [];
     if (!env.DATABASE_URL && !pool) missing.push('DATABASE_URL');
@@ -239,7 +239,7 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
   }) : null);
   // Use a shared PostgreSQL-backed SAML cache so request IDs are validated and consumed across replicas.
   const samlAuth = env.SAML_ENABLED === 'true' ? createSamlAuthenticator({ env, pool: localPool }) : null;
-  const mediaStore = localPool ? (env.MEDIA_DRIVER === 's3' ? createS3MediaStore({ pool: localPool, env }) : createLocalMediaStore({ pool: localPool, root: env.MEDIA_ROOT || path.resolve(process.cwd(), 'var', 'media') })) : null;
+  const mediaStore = injectedMediaStore || (localPool ? (env.MEDIA_DRIVER === 's3' ? createS3MediaStore({ pool: localPool, env }) : createLocalMediaStore({ pool: localPool, root: env.MEDIA_ROOT || path.resolve(process.cwd(), 'var', 'media') })) : null);
   const maxLibraryFileBytes = boundedInt(env.VIRGOSCORPIO_HUB_LIBRARY_MAX_FILE_BYTES, 50 * 1024 * 1024, 1024, 50 * 1024 * 1024, 'VIRGOSCORPIO_HUB_LIBRARY_MAX_FILE_BYTES');
   const maxLibraryBody = boundedInt(env.VIRGOSCORPIO_HUB_LIBRARY_MAX_BODY_BYTES, MAX_LIBRARY_BODY_DEFAULT, 16 * 1024 * 1024, 80 * 1024 * 1024, 'VIRGOSCORPIO_HUB_LIBRARY_MAX_BODY_BYTES');
   const libraryStorageAdapter = createCloudStorageAdapterFromEnv({ env });
@@ -1653,8 +1653,13 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
       if (req.method === 'POST' && url.pathname === '/api/v1/media/uploads') {
         if (!mediaStore) return sendJson(res, 503, { error: 'Media storage requires PostgreSQL.', code: 'ERR_VIRGOSCORPIO_HUB_DATABASE_DISABLED', requestId });
         const body = await readJson(req, maxMediaBody); const siteId = await siteIdFor({ req, url, body, actor }); await requireCapability(actor, siteId, 'media:manage');
-        const asset = await mediaStore.upload({ siteId, actorId: actor.user.id, dataBase64: body.dataBase64, mimeType: body.mimeType, altText: body.altText || '', isPublic: body.public !== false });
-        if (identity && actor.user.id) await identity.audit({ siteId, actorId: actor.user.id, action: 'media.uploaded', targetType: 'media', targetId: asset.id, requestId, details: { mimeType: asset.mime_type, byteSize: asset.byte_size } });
+        const onAssetUploaded = identity && actor.user.id
+          ? async ({ queryable, result }) => identity.audit(
+            { siteId, actorId: actor.user.id, action: 'media.uploaded', targetType: 'media', targetId: result.id, requestId, details: { mimeType: result.mime_type, byteSize: result.byte_size } },
+            { queryable },
+          )
+          : undefined;
+        const asset = await mediaStore.upload({ siteId, actorId: actor.user.id, dataBase64: body.dataBase64, mimeType: body.mimeType, altText: body.altText || '', isPublic: body.public !== false, onAssetUploaded });
         return sendJson(res, 201, { asset, url: mediaStore.publicUrl ? mediaStore.publicUrl(asset) : `/media/${asset.id}`, requestId });
       }
 
