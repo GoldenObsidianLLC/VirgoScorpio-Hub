@@ -153,6 +153,6 @@ test(
     assert.equal(audit.rows[0].target_type, 'media');
     assert.equal(audit.rows[0].target_id, asset.id);
     assert.equal(audit.rows[0].request_id, requestId);
-    assert.deepEqual(audit.rows[0].details, { mimeType: 'image/png', byteSize: image.length });
+    assert.deepEqual(audit.rows[0].details, { mimeType: 'image/png', byteSize: String(image.length) });
   }
 );
