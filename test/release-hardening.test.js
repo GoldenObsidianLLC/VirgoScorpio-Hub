@@ -28,6 +28,17 @@ function poolForInsert(capture = {}) {
   };
 }
 
+async function filesBelow(root, current = root) {
+  const entries = await fs.promises.readdir(current, { withFileTypes: true });
+  const files = [];
+  for (const entry of entries) {
+    const fullPath = path.join(current, entry.name);
+    if (entry.isDirectory()) files.push(...await filesBelow(root, fullPath));
+    else if (entry.isFile()) files.push(path.relative(root, fullPath));
+  }
+  return files.sort();
+}
+
 function completedScannerProcess(exitCode, output = '') {
   return (_executable, args, options) => {
     assert.deepEqual(args.slice(0, 3), ['--no-summary', '--infected', '--stdout']);
@@ -70,6 +81,177 @@ test('library uploads activate only after scanner confirms clean content', async
   assert.equal(asset.status, 'active');
   assert.equal(asset.malware_scan_status, 'clean');
   assert.equal(asset.is_public, true);
+});
+
+test('library upload persists its audit callback on the store transaction before commit', async t => {
+  const root = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'vsh-library-upload-audit-'));
+  t.after(() => fs.promises.rm(root, { recursive: true, force: true }));
+  const calls = [];
+  let client;
+  const pool = {
+    async connect() {
+      client = {
+        async query(sql, args) {
+          calls.push({ sql, args });
+          if (/INSERT INTO library_assets/.test(sql)) {
+            return { rows: [{
+              id: args[0], site_id: args[1], asset_kind: args[2], storage_key: args[6],
+              mime_type: args[7], byte_size: args[8], sha256: args[9],
+            }] };
+          }
+          return { rows: [], rowCount: 1 };
+        },
+        release() { calls.push({ sql: 'RELEASE' }); },
+      };
+      return client;
+    },
+  };
+  const store = createLibraryStore({ pool, root, requireMalwareScan: false });
+  let callbackResult;
+  const asset = await store.upload({
+    siteId: 'site-one', actorId: 'actor-one', category: 'image',
+    dataBase64: png.toString('base64'), mimeType: 'image/png', fileName: 'brand.png',
+    onAssetUploaded: async ({ queryable, result }) => {
+      assert.equal(queryable, client, 'the callback receives the transaction client');
+      callbackResult = result;
+      await queryable.query('INSERT INTO audit_events (action) VALUES ($1)', ['library.asset_uploaded']);
+    },
+  });
+
+  assert.equal(callbackResult, asset);
+  const auditIndex = calls.findIndex(call => /INSERT INTO audit_events/.test(call.sql));
+  const commitIndex = calls.findIndex(call => call.sql === 'COMMIT');
+  assert.ok(auditIndex >= 0);
+  assert.ok(commitIndex > auditIndex, 'the audit insert must precede COMMIT');
+  assert.equal(calls.filter(call => call.sql === 'COMMIT').length, 1);
+  assert.equal(calls.some(call => call.sql === 'ROLLBACK'), false);
+  assert.equal(fs.existsSync(path.join(root, asset.storage_key)), true);
+});
+
+test('library upload rolls back and removes its object when the in-transaction audit callback fails', async t => {
+  const root = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'vsh-library-upload-audit-fail-'));
+  t.after(() => fs.promises.rm(root, { recursive: true, force: true }));
+  const calls = [];
+  const auditError = Object.assign(new Error('audit insert rejected'), { code: '23505' });
+  const pool = {
+    async connect() {
+      return {
+        async query(sql, args) {
+          calls.push({ sql, args });
+          if (/INSERT INTO library_assets/.test(sql)) {
+            return { rows: [{ id: args[0], site_id: args[1], storage_key: args[6] }] };
+          }
+          return { rows: [], rowCount: 1 };
+        },
+        release() { calls.push({ sql: 'RELEASE' }); },
+      };
+    },
+  };
+  const store = createLibraryStore({ pool, root, requireMalwareScan: false });
+
+  await assert.rejects(
+    store.upload({
+      siteId: 'site-one', category: 'image', dataBase64: png.toString('base64'),
+      mimeType: 'image/png', fileName: 'rollback.png',
+      onAssetUploaded: async ({ queryable }) => {
+        calls.push({ sql: 'AUDIT_CALLBACK' });
+        await queryable.query('INSERT INTO audit_events (action) VALUES ($1)', ['library.asset_uploaded']);
+        throw auditError;
+      },
+    }),
+    error => error === auditError,
+  );
+
+  assert.ok(calls.some(call => call.sql === 'AUDIT_CALLBACK'));
+  assert.ok(calls.some(call => call.sql === 'ROLLBACK'));
+  assert.equal(calls.some(call => call.sql === 'COMMIT'), false);
+  assert.deepEqual(await filesBelow(root), [], 'the newly written object must be compensated');
+});
+
+test('library upload removes its object when PostgreSQL connection acquisition fails', async t => {
+  const root = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'vsh-library-upload-connect-fail-'));
+  t.after(() => fs.promises.rm(root, { recursive: true, force: true }));
+  const connectionError = new Error('database unavailable');
+  const store = createLibraryStore({
+    pool: { async connect() { throw connectionError; } },
+    root,
+    requireMalwareScan: false,
+  });
+
+  await assert.rejects(
+    store.upload({
+      siteId: 'site-one', category: 'image', dataBase64: png.toString('base64'),
+      mimeType: 'image/png', fileName: 'connect-failure.png',
+    }),
+    error => error === connectionError,
+  );
+  assert.deepEqual(await filesBelow(root), [], 'storage must be cleaned when connect fails after put');
+});
+
+test('library version replacement rolls back and removes the new object when audit fails', async t => {
+  const root = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'vsh-library-replace-audit-fail-'));
+  t.after(() => fs.promises.rm(root, { recursive: true, force: true }));
+  const siteId = 'site-one';
+  const assetId = 'asset-one';
+  const oldBytes = Buffer.from('original library file');
+  const newBytes = Buffer.from('replacement library file');
+  const oldKey = siteId + '/' + assetId + '/v1.txt';
+  const newKey = siteId + '/' + assetId + '/v2.txt';
+  await fs.promises.mkdir(path.dirname(path.join(root, oldKey)), { recursive: true });
+  await fs.promises.writeFile(path.join(root, oldKey), oldBytes);
+  const calls = [];
+  const auditError = Object.assign(new Error('audit insert rejected'), { code: '23505' });
+  let client;
+  const pool = {
+    async connect() {
+      client = {
+        async query(sql, args) {
+          calls.push({ sql, args });
+          if (/SELECT \* FROM library_assets/.test(sql)) {
+            return { rows: [{
+              id: assetId, site_id: siteId, version: 1, status: 'active',
+              asset_kind: 'document', storage_key: oldKey, sha256: 'a'.repeat(64),
+              display_name: 'original.txt', original_name: 'original.txt',
+              alt_text: '', caption: '', description: '', is_public: false, metadata: {},
+              mime_type: 'text/plain', byte_size: oldBytes.length, updated_by: 'actor-one',
+            }] };
+          }
+          if (/UPDATE library_assets SET original_name/.test(sql)) {
+            return { rows: [{
+              id: assetId, site_id: siteId, version: 2, status: 'quarantined',
+              asset_kind: 'document', display_name: 'original.txt', original_name: 'replacement.txt',
+              mime_type: 'text/plain', byte_size: newBytes.length, sha256: args[6],
+              alt_text: '', caption: '', description: '', is_public: false, metadata: {},
+            }] };
+          }
+          return { rows: [], rowCount: 1 };
+        },
+        release() { calls.push({ sql: 'RELEASE' }); },
+      };
+      return client;
+    },
+  };
+  const store = createLibraryStore({ pool, root, requireMalwareScan: false });
+
+  await assert.rejects(
+    store.replaceVersion({
+      siteId, id: assetId, actorId: 'actor-one', expectedVersion: 1,
+      dataBase64: newBytes.toString('base64'), mimeType: 'text/plain', fileName: 'replacement.txt',
+      onVersionReplaced: async ({ queryable, result }) => {
+        assert.equal(queryable, client);
+        assert.equal(result.version, 2);
+        calls.push({ sql: 'AUDIT_CALLBACK' });
+        throw auditError;
+      },
+    }),
+    error => error === auditError,
+  );
+
+  assert.ok(calls.some(call => call.sql === 'AUDIT_CALLBACK'));
+  assert.ok(calls.some(call => call.sql === 'ROLLBACK'));
+  assert.equal(calls.some(call => call.sql === 'COMMIT'), false);
+  assert.equal(fs.existsSync(path.join(root, oldKey)), true, 'the previous object must remain');
+  assert.equal(fs.existsSync(path.join(root, newKey)), false, 'the replacement object must be removed');
 });
 
 test('library media variants validate file signatures and parent asset categories before storage', async t => {

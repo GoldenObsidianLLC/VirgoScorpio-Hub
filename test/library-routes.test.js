@@ -25,7 +25,7 @@ function createContext({
   events = [],
   pool = {},
   libraryStore = {},
-  identity = { async audit(entry) { events.push({ type: 'audit', entry }); } }
+  identity = { async audit(entry, options = {}) { events.push({ type: 'audit', entry, options }); } }
 } = {}) {
   const res = {
     statusCode: 0,
@@ -134,6 +134,7 @@ test('library upload uses the library body limit and records a metadata-only aud
     sha256: 'a'.repeat(64),
     is_public: false
   };
+  const transactionClient = { transaction: 'upload-client' };
   const ctx = createContext({
     path: `/api/v1/sites/${siteId}/library/items`,
     method: 'POST',
@@ -142,6 +143,8 @@ test('library upload uses the library body limit and records a metadata-only aud
     libraryStore: {
       async upload(input) {
         events.push({ type: 'upload', input });
+        assert.equal(typeof input.onAssetUploaded, 'function');
+        await input.onAssetUploaded({ queryable: transactionClient, result: asset });
         return asset;
       }
     }
@@ -158,6 +161,7 @@ test('library upload uses the library body limit and records a metadata-only aud
   assert.equal(events[3].input.siteId, siteId);
   assert.equal(events[3].input.actorId, actorId);
   assert.equal(events[4].entry.action, 'library.asset_uploaded');
+  assert.equal(events[4].options.queryable, transactionClient, 'audit must use the store transaction client');
   assert.equal(events[4].entry.details.sha256, 'a'.repeat(64));
   assert.equal(JSON.stringify(events[4]).includes('cG5n'), false, 'audit must not contain uploaded file data');
 });
@@ -218,10 +222,11 @@ test('private asset download sends hardened no-store headers and a sanitized att
   assert.equal(ctx.res.headers['content-disposition'], 'attachment; filename="report___unsafe_.pdf"');
 });
 
-test('asset version replacement is audited after the versioned store operation', async () => {
+test('asset version replacement persists its audit inside the versioned store transaction', async () => {
   const events = [];
   const body = { expectedVersion: 2, dataBase64: 'cG5n', mimeType: 'image/png', fileName: 'new.png' };
   const item = { id: assetId, version: 3, mime_type: 'image/png', sha256: 'b'.repeat(64) };
+  const transactionClient = { transaction: 'replace-version-client' };
   const ctx = createContext({
     path: `/api/v1/sites/${siteId}/library/items/${assetId}`,
     method: 'PUT',
@@ -230,6 +235,8 @@ test('asset version replacement is audited after the versioned store operation',
     libraryStore: {
       async replaceVersion(input) {
         events.push({ type: 'replaceVersion', input });
+        assert.equal(typeof input.onVersionReplaced, 'function');
+        await input.onVersionReplaced({ queryable: transactionClient, result: item });
         return item;
       }
     }
@@ -244,6 +251,7 @@ test('asset version replacement is audited after the versioned store operation',
   assert.equal(events[0].maxBytes, 750_000);
   assert.equal(events[3].input.expectedVersion, 2);
   assert.equal(events[4].entry.action, 'library.asset_version_replaced');
+  assert.equal(events[4].options.queryable, transactionClient, 'audit must use the version transaction client');
   assert.equal(events[4].entry.details.version, 3);
 });
 
