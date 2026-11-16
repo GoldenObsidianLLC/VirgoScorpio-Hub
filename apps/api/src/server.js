@@ -1368,26 +1368,53 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
       if ((reusableCollectionMatch && ['GET','POST'].includes(req.method)) || (reusableItemMatch && ['PUT','DELETE'].includes(req.method))) {
         if (!localPool) return sendJson(res, 503, { error: 'Reusable components require PostgreSQL.', code: 'ERR_VIRGOSCORPIO_HUB_DATABASE_DISABLED', requestId });
         const siteId = reusableCollectionMatch?.[1] || reusableItemMatch[1]; await reconcileRouteSiteContext(siteId); await requireCapability(actor, siteId, req.method === 'GET' ? 'content:read' : 'content:edit');
+        const auditMutation = async (action, component, queryable) => {
+          if (!identity || !actor.user.id) return;
+          await identity.audit({
+            siteId,
+            actorId: actor.user.id,
+            action,
+            targetType: 'reusable-component',
+            targetId: component.id,
+            requestId,
+            details: { slug: component.slug, version: component.version },
+          }, { queryable });
+        };
         if (req.method === 'GET') {
           const result = await localPool.query('SELECT id,slug,name,version,document,created_at,updated_at FROM reusable_components WHERE site_id=$1 ORDER BY name', [siteId]);
           return sendJson(res, 200, { components: result.rows, requestId });
         }
         if (req.method === 'DELETE') {
-          const deleted = await localPool.query('DELETE FROM reusable_components WHERE site_id=$1 AND id=$2 RETURNING id', [siteId, reusableItemMatch[2]]);
-          if (!deleted.rows[0]) throw fail(404, 'ERR_VIRGOSCORPIO_HUB_COMPONENT_NOT_FOUND', 'Reusable component not found.');
+          const deleted = await withTransaction(localPool, async client => {
+            const result = await client.query('DELETE FROM reusable_components WHERE site_id=$1 AND id=$2 RETURNING id,slug,version', [siteId, reusableItemMatch[2]]);
+            const component = result.rows[0];
+            if (!component) throw fail(404, 'ERR_VIRGOSCORPIO_HUB_COMPONENT_NOT_FOUND', 'Reusable component not found.');
+            await auditMutation('reusable_component.deleted', component, client);
+            return component;
+          });
           return sendJson(res, 200, { deleted: true, requestId });
         }
         const body = await readJson(req, Math.min(maxBody, 1_000_000)); await reconcileRouteSiteContext(siteId, body); const validation = validatePageDocument(body.document);
         if (!validation.valid) throw fail(422, 'ERR_VIRGOSCORPIO_HUB_INVALID_DOCUMENT', 'Reusable component document failed validation.', validation.errors);
         if (!/^[a-z0-9][a-z0-9-]{0,100}$/.test(String(body.slug || '')) || typeof body.name !== 'string' || !body.name.trim() || body.name.length > 180) throw fail(400, 'ERR_VIRGOSCORPIO_HUB_COMPONENT_METADATA_INVALID', 'A safe slug and component name are required.');
         if (req.method === 'POST') {
-          const saved = await localPool.query('INSERT INTO reusable_components(site_id,slug,name,document,created_by,updated_by) VALUES($1,$2,$3,$4::jsonb,$5,$5) RETURNING id,slug,name,version,document,created_at,updated_at', [siteId, body.slug, body.name.trim(), JSON.stringify(body.document), actor.user.id]);
-          return sendJson(res, 201, { component: saved.rows[0], requestId });
+          const component = await withTransaction(localPool, async client => {
+            const result = await client.query('INSERT INTO reusable_components(site_id,slug,name,document,created_by,updated_by) VALUES($1,$2,$3,$4::jsonb,$5,$5) RETURNING id,slug,name,version,document,created_at,updated_at', [siteId, body.slug, body.name.trim(), JSON.stringify(body.document), actor.user.id]);
+            const savedComponent = result.rows[0];
+            await auditMutation('reusable_component.created', savedComponent, client);
+            return savedComponent;
+          });
+          return sendJson(res, 201, { component, requestId });
         }
         const expected = Number(body.expectedVersion);
-        const saved = await localPool.query('UPDATE reusable_components SET slug=$3,name=$4,document=$5::jsonb,version=version+1,updated_by=$6,updated_at=now() WHERE site_id=$1 AND id=$2 AND version=$7 RETURNING id,slug,name,version,document,updated_at', [siteId, reusableItemMatch[2], body.slug, body.name.trim(), JSON.stringify(body.document), actor.user.id, expected]);
-        if (!saved.rows[0]) throw fail(409, 'ERR_VIRGOSCORPIO_HUB_VERSION_CONFLICT', 'The reusable component changed or was removed since it was loaded.');
-        return sendJson(res, 200, { component: saved.rows[0], requestId });
+        const component = await withTransaction(localPool, async client => {
+          const result = await client.query('UPDATE reusable_components SET slug=$3,name=$4,document=$5::jsonb,version=version+1,updated_by=$6,updated_at=now() WHERE site_id=$1 AND id=$2 AND version=$7 RETURNING id,slug,name,version,document,updated_at', [siteId, reusableItemMatch[2], body.slug, body.name.trim(), JSON.stringify(body.document), actor.user.id, expected]);
+          const savedComponent = result.rows[0];
+          if (!savedComponent) throw fail(409, 'ERR_VIRGOSCORPIO_HUB_VERSION_CONFLICT', 'The reusable component changed or was removed since it was loaded.');
+          await auditMutation('reusable_component.updated', savedComponent, client);
+          return savedComponent;
+        });
+        return sendJson(res, 200, { component, requestId });
       }
 
       const templateCollectionMatch = url.pathname.match(/^\/api\/v1\/sites\/([0-9a-f-]{36})\/templates$/i);

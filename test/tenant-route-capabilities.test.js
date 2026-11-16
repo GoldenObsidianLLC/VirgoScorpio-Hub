@@ -72,6 +72,9 @@ test('site-addressed route families deny a member without the required capabilit
   const routes = [
     { method: 'GET', path: '/api/v1/sites/' + SITE_A + '/design-system', capability: 'content:read' },
     { method: 'GET', path: '/api/v1/sites/' + SITE_A + '/reusable-components', capability: 'content:read' },
+    { method: 'POST', path: '/api/v1/sites/' + SITE_A + '/reusable-components', capability: 'content:edit', body: { document: {} } },
+    { method: 'PUT', path: '/api/v1/sites/' + SITE_A + '/reusable-components/cccccccc-cccc-4ccc-8ccc-cccccccccccc', capability: 'content:edit', body: { document: {} } },
+    { method: 'DELETE', path: '/api/v1/sites/' + SITE_A + '/reusable-components/cccccccc-cccc-4ccc-8ccc-cccccccccccc', capability: 'content:edit' },
     { method: 'GET', path: '/api/v1/sites/' + SITE_A + '/templates', capability: 'content:read' },
     { method: 'GET', path: '/api/v1/sites/' + SITE_A + '/terms', capability: 'content:read' },
     { method: 'GET', path: '/api/v1/sites/' + SITE_A + '/relationships', capability: 'content:read' },
@@ -94,7 +97,11 @@ test('site-addressed route families deny a member without the required capabilit
       const beforeDataAccess = protectedDataAccess.length;
       const response = await fetch(base + route.path, {
         method: route.method,
-        headers: { authorization: 'Bearer site-a-member-session' }
+        headers: {
+          authorization: 'Bearer site-a-member-session',
+          ...(route.body ? { 'content-type': 'application/json' } : {})
+        },
+        ...(route.body ? { body: JSON.stringify(route.body) } : {})
       });
       const payload = await response.json();
 

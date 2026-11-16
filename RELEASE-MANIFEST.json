@@ -1613,7 +1613,8 @@
         "conclusion": "success",
         "headSha": "639f0513ddde6ed5b6cce9d5847ec5cda31d8c41"
       }
-    ]
+    ],
+    "evidenceScope": "Historical runtime-merge evidence for F1.39 at commit d4e1c1ce5e08b4594614448d64ad2738a84355b2, validated by exact-main workflow #681. It is retained to describe the latest runtime change. The subsequent documentation-only PR #170 advanced current main to b77505ef34507c8ba84152b47b3ebffb8f1420e7; see latestMainSourceEvidence for current source validation and workflow #685."
   },
   "libraryRouteRefactor": {
     "reviewedAt": "2026-11-04",
@@ -1663,107 +1664,56 @@
   "latestCandidateEvidence": {
     "reviewedAt": "2026-11-16",
     "version": "0.6.2",
-    "feature": "F1.39",
+    "feature": "F1.40",
     "issue": {
-      "number": 167,
-      "state": "CLOSED",
-      "parentIssue": 124,
-      "closedAt": "2026-11-16T05:48:45Z"
+      "number": 171,
+      "state": "OPEN",
+      "parentIssue": 124
     },
-    "branch": "security/f1-39-media-audit-atomicity-2026-11-16",
-    "headCommit": "639f0513ddde6ed5b6cce9d5847ec5cda31d8c41",
-    "baseMainCommit": "529bb43ca11ce06f67a4e8a7cfdb6401f0852c09",
-    "pullRequest": {
-      "number": 169,
-      "url": "https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/169",
-      "state": "closed",
-      "merged": true,
-      "mergedAt": "2026-11-16T05:48:44Z",
-      "mergeCommit": "d4e1c1ce5e08b4594614448d64ad2738a84355b2",
-      "formalReviews": 0,
-      "inlineReviewThreads": 0,
-      "reviewDecision": "NONE"
-    },
-    "ci": {
-      "status": "PASS_EXACT_HEAD_AND_EXACT_MAIN",
-      "pushRun": {
-        "id": 43808420828,
-        "number": 679,
-        "event": "push",
-        "conclusion": "success"
-      },
-      "pullRequestRun": {
-        "id": 43808426639,
-        "number": 680,
-        "event": "pull_request",
-        "conclusion": "success"
-      },
-      "mainlineRun": {
-        "id": 43812646684,
-        "number": 681,
-        "event": "push",
-        "conclusion": "success"
-      },
-      "attestation": "PASS_ON_EXACT_MAIN"
-    },
-    "tests": {
-      "node22Hub": {
-        "passed": 641,
-        "failed": 0,
-        "skipped": 0
-      },
-      "node24Hub": {
-        "passed": 641,
-        "failed": 0,
-        "skipped": 0
-      },
-      "enginexPerRuntime": {
-        "passed": 94,
-        "failed": 0,
-        "skipped": 0
-      },
-      "livePostgresMemgraph": {
-        "passed": 106,
-        "failed": 0,
-        "skipped": 0
-      },
-      "migrations": {
-        "freshApplied": 18,
-        "idempotentSecondPassSkipped": 18
-      },
-      "codeql": "PASS",
-      "browserEditorSmoke": "PASS",
-      "signedMainlineAttestation": "PASS"
-    },
-    "initialAttempts": {
-      "pushRun": {
-        "id": 43807719176,
-        "number": 677,
-        "conclusion": "failure",
-        "disposition": "corrected-test-expectation"
-      },
-      "pullRequestRun": {
-        "id": 43808014124,
-        "number": 678,
-        "conclusion": "failure",
-        "disposition": "corrected-test-expectation"
-      },
-      "note": "The integration fixture expected numeric byteSize; PostgreSQL returned the established bigint detail as a string. The assertion was corrected and exact-head reruns passed."
+    "branch": "security/f1-40-reusable-component-audit-atomicity-2026-11-16",
+    "baseMainCommit": "b77505ef34507c8ba84152b47b3ebffb8f1420e7",
+    "status": "LOCAL_IMPLEMENTATION_AND_CHECKS_PASS_HOSTED_VALIDATION_PENDING",
+    "implementation": {
+      "route": "apps/api/src/server.js",
+      "methods": [
+        "POST",
+        "PUT",
+        "DELETE"
+      ],
+      "transactionBoundary": "existing withTransaction(localPool, work)",
+      "auditActions": [
+        "reusable_component.created",
+        "reusable_component.updated",
+        "reusable_component.deleted"
+      ],
+      "targetType": "reusable-component",
+      "auditDetails": [
+        "slug",
+        "version"
+      ],
+      "queryable": "same transaction-owned client passed to identity.audit(event, { queryable })",
+      "awaitsAuditBeforeCommit": true,
+      "preservesSitePredicatesAndOptimisticVersioning": true,
+      "preservesRouteContract": true,
+      "mapsAudit23505ToComponentConflict": false,
+      "schemaOrMigrationChange": false,
+      "dependencyOrLockfileChange": false,
+      "publicApiOrSemverChange": false
     },
     "localValidation": {
       "runtime": "Node.js 26.12.1",
       "fullCheck": {
-        "passed": 638,
+        "tests": 646,
+        "passed": 643,
         "failed": 0,
         "skipped": 3
       },
-      "focusedRouteStoreSecurityApi": {
-        "passed": 49,
-        "failed": 0,
-        "skipped": 0
+      "artifactCheck": {
+        "requiredPaths": 238,
+        "javascriptFilesSyntaxChecked": 258
       },
-      "mediaStoreRouteUnit": {
-        "passed": 11,
+      "focusedUnitAndCapabilityTests": {
+        "passed": 23,
         "failed": 0,
         "skipped": 0
       },
@@ -1771,11 +1721,30 @@
         "families": 27,
         "declaredRoutePatterns": 78,
         "sourceFiles": 21,
-        "testFiles": 46
+        "testFiles": 48
       },
-      "dedicatedPostgresIntegration": "NOT_RUN_LOCALLY; executed and passed in hosted workflows #680/#681"
+      "markdownLinks": {
+        "files": 151,
+        "relativeLinksChecked": 490,
+        "broken": 0
+      },
+      "gitDiffCheck": "PASS",
+      "livePostgresIntegration": "NOT_RUN_LOCALLY; TEST_DATABASE_URL and DATABASE_URL are not configured"
     },
-    "status": "MERGED_TO_MAIN_EXACT_MAIN_CI_PASS"
+    "hostedValidation": {
+      "candidatePushWorkflow": "PENDING",
+      "candidatePullRequestWorkflow": "PENDING",
+      "livePostgresMemgraph": "PENDING; require zero skips",
+      "browserCodeQLDependencyAndEvidenceConsolidation": "PENDING"
+    },
+    "pullRequest": null,
+    "formalReviews": 0,
+    "inlineReviewThreads": 0,
+    "independentSecurityReview": "NOT_PERFORMED",
+    "productionCertified": false,
+    "readyForProduction": false,
+    "productionDecision": "NO_GO",
+    "releaseBoundary": "Private/unreleased 0.6.2. No merge, SemVer increment, tag, publication or deployment is authorized."
   },
   "releaseEvidenceHardeningFollowUp": {
     "reviewedAt": "2026-11-05",
@@ -2502,5 +2471,256 @@
         "headSha": "125a8cd0539bf11891fc05745b95273b99a76bbf"
       }
     ]
+  },
+  "latestMainSourceEvidence": {
+    "reviewedAt": "2026-11-16",
+    "version": "0.6.2",
+    "sourceRevision": "b77505ef34507c8ba84152b47b3ebffb8f1420e7",
+    "runtimeMergeRevision": "d4e1c1ce5e08b4594614448d64ad2738a84355b2",
+    "documentationOnlyReconciliation": {
+      "pullRequest": 170,
+      "title": "docs: reconcile F1.39 mainline evidence",
+      "mergedAt": "2026-11-16T15:08:13Z",
+      "implementationHead": "d8cf0d0dbd7ca5df4f7492657610d1d82a079c5b",
+      "mergeCommit": "b77505ef34507c8ba84152b47b3ebffb8f1420e7",
+      "runtimeChange": false
+    },
+    "workflow": {
+      "name": "VirgoScorpio Hub CI",
+      "runId": 43893136232,
+      "runNumber": 685,
+      "url": "https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43893136232",
+      "event": "push",
+      "attempt": 1,
+      "completedAt": "2026-11-16T15:11:46Z",
+      "completedJobs": 7,
+      "successfulJobs": 7,
+      "sourceRevision": "b77505ef34507c8ba84152b47b3ebffb8f1420e7"
+    },
+    "results": {
+      "node22HubTests": {
+        "passed": 641,
+        "failed": 0,
+        "skipped": 0
+      },
+      "node24HubTests": {
+        "passed": 641,
+        "failed": 0,
+        "skipped": 0
+      },
+      "enginexTestsPerRuntime": {
+        "passed": 94,
+        "failed": 0,
+        "skipped": 0
+      },
+      "livePostgresMemgraph": {
+        "passed": 106,
+        "failed": 0,
+        "skipped": 0
+      },
+      "migrations": {
+        "applied": 18,
+        "idempotentSecondPass": 18
+      },
+      "playwrightSmoke": {
+        "passed": 9,
+        "failed": 0,
+        "skipped": 0
+      },
+      "codeql": "PASS",
+      "mainlineAttestation": "PASS",
+      "evidenceConsolidation": "PASS",
+      "fullNpmAudit": "0 vulnerabilities",
+      "productionNpmAudit": "0 vulnerabilities"
+    },
+    "supplyChain": {
+      "lockfileSha256": "8f3786bcfcd03d0b63761c7107e4d757ae5b45171ba2f6c086ff38c027c8b086",
+      "node22SbomSha256": "14165da23bdd2ed449d278e3a30e559f0ae8758fd2733f1dbdd641b46d3215d9",
+      "node24SbomSha256": "52f63fccd76f3e94e17be7458e3e4bbb115206164855e2abc593dc05d292200e",
+      "cyclonedx": "1.5",
+      "npm": "11.19.1",
+      "componentsPerRuntime": 200,
+      "dependencyRecordsPerRuntime": 201
+    },
+    "readiness": {
+      "generatedAt": "2026-11-16T15:11:41.167Z",
+      "sourceRevision": "b77505ef34507c8ba84152b47b3ebffb8f1420e7",
+      "producerStatus": "FINALIZED_AFTER_PRODUCER_VALIDATION",
+      "pass": 8,
+      "partial": 2,
+      "blocked": 0,
+      "missingEvidence": 14,
+      "notRun": 0,
+      "readyForProduction": false,
+      "classification": "NOT_PRODUCTION_CERTIFIED",
+      "decision": "NO_GO",
+      "serviceLessIntegrationSkippedPerRuntime": 38
+    },
+    "artifacts": {
+      "readiness": {
+        "id": 14239020197,
+        "archiveSha256": "40edac0ca9415dcdc3d026a5af55e1cb6e393b1b6e13bf115dff2adf5a87c104"
+      },
+      "postgresMemgraph": {
+        "id": 14238166932,
+        "archiveSha256": "065b85cce30b952229284a8ed73e2e098537dfaca2656dbc08e1e395ce7ff352"
+      },
+      "liveIntegrationNode22": {
+        "id": 14237912545,
+        "archiveSha256": "99d580132e62a78e3e59dfb0530e322387e2a2a5b87d5ad83bd0f458a6aeb573"
+      },
+      "node22Ci": {
+        "id": 14238016835,
+        "archiveSha256": "ca51dd6d22c568954deb42c6cdcc217ee7c2618a2362033f4f3e7b3646fec729"
+      },
+      "node24Ci": {
+        "id": 14237303241,
+        "archiveSha256": "d8fbf063c0cae50a66ae9532403798c9d0fb3173324423e363726dd8fe80bfc7"
+      },
+      "browser": {
+        "id": 14238405827,
+        "archiveSha256": "cc738f18a7c6a33d9818c97e49def9a6b3e0266e4c95a085a18503a86864aaeb"
+      },
+      "codeql": {
+        "id": 14237073750,
+        "archiveSha256": "3a88e761b0417a224a9116f836ba83dfc81ce93097447f368a0f205a15236ee8"
+      },
+      "supplyChainAttestation": {
+        "id": 14237812068,
+        "archiveSha256": "6e57928f226dc4858745286e0e9704b7973321daaa9e8b97f60a7888ea07ebd9"
+      },
+      "dependency22": {
+        "id": 14237557292,
+        "archiveSha256": "d0f6e79bfe1110a6b2aba2d778776511c7bb456173c3f0ac0ab5c42e6f0bd19d"
+      },
+      "dependency24": {
+        "id": 14237846828,
+        "archiveSha256": "7292d574eef1b83ded59ccd4270fe3528adb6d1bdfb88600b3783d486ee56f0b"
+      }
+    },
+    "candidateBoundary": {
+      "nextIncrement": "F1.40",
+      "issue": 171,
+      "state": "OPEN_UNMERGED",
+      "includedInThisMainlineEvidence": false
+    },
+    "qualification": "Workflow #685 validates current docs-synced main source and the merged F1.39 runtime. It does not validate or include the unmerged F1.40 candidate and does not constitute independent security/legal approval or production certification."
+  },
+  "previousCandidateEvidence": {
+    "reviewedAt": "2026-11-16",
+    "version": "0.6.2",
+    "feature": "F1.39",
+    "issue": {
+      "number": 167,
+      "state": "CLOSED",
+      "parentIssue": 124,
+      "closedAt": "2026-11-16T05:48:45Z"
+    },
+    "branch": "security/f1-39-media-audit-atomicity-2026-11-16",
+    "headCommit": "639f0513ddde6ed5b6cce9d5847ec5cda31d8c41",
+    "baseMainCommit": "529bb43ca11ce06f67a4e8a7cfdb6401f0852c09",
+    "pullRequest": {
+      "number": 169,
+      "url": "https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/169",
+      "state": "closed",
+      "merged": true,
+      "mergedAt": "2026-11-16T05:48:44Z",
+      "mergeCommit": "d4e1c1ce5e08b4594614448d64ad2738a84355b2",
+      "formalReviews": 0,
+      "inlineReviewThreads": 0,
+      "reviewDecision": "NONE"
+    },
+    "ci": {
+      "status": "PASS_EXACT_HEAD_AND_EXACT_MAIN",
+      "pushRun": {
+        "id": 43808420828,
+        "number": 679,
+        "event": "push",
+        "conclusion": "success"
+      },
+      "pullRequestRun": {
+        "id": 43808426639,
+        "number": 680,
+        "event": "pull_request",
+        "conclusion": "success"
+      },
+      "mainlineRun": {
+        "id": 43812646684,
+        "number": 681,
+        "event": "push",
+        "conclusion": "success"
+      },
+      "attestation": "PASS_ON_EXACT_MAIN"
+    },
+    "tests": {
+      "node22Hub": {
+        "passed": 641,
+        "failed": 0,
+        "skipped": 0
+      },
+      "node24Hub": {
+        "passed": 641,
+        "failed": 0,
+        "skipped": 0
+      },
+      "enginexPerRuntime": {
+        "passed": 94,
+        "failed": 0,
+        "skipped": 0
+      },
+      "livePostgresMemgraph": {
+        "passed": 106,
+        "failed": 0,
+        "skipped": 0
+      },
+      "migrations": {
+        "freshApplied": 18,
+        "idempotentSecondPassSkipped": 18
+      },
+      "codeql": "PASS",
+      "browserEditorSmoke": "PASS",
+      "signedMainlineAttestation": "PASS"
+    },
+    "initialAttempts": {
+      "pushRun": {
+        "id": 43807719176,
+        "number": 677,
+        "conclusion": "failure",
+        "disposition": "corrected-test-expectation"
+      },
+      "pullRequestRun": {
+        "id": 43808014124,
+        "number": 678,
+        "conclusion": "failure",
+        "disposition": "corrected-test-expectation"
+      },
+      "note": "The integration fixture expected numeric byteSize; PostgreSQL returned the established bigint detail as a string. The assertion was corrected and exact-head reruns passed."
+    },
+    "localValidation": {
+      "runtime": "Node.js 26.12.1",
+      "fullCheck": {
+        "passed": 638,
+        "failed": 0,
+        "skipped": 3
+      },
+      "focusedRouteStoreSecurityApi": {
+        "passed": 49,
+        "failed": 0,
+        "skipped": 0
+      },
+      "mediaStoreRouteUnit": {
+        "passed": 11,
+        "failed": 0,
+        "skipped": 0
+      },
+      "tenantInventory": {
+        "families": 27,
+        "declaredRoutePatterns": 78,
+        "sourceFiles": 21,
+        "testFiles": 46
+      },
+      "dedicatedPostgresIntegration": "NOT_RUN_LOCALLY; executed and passed in hosted workflows #680/#681"
+    },
+    "status": "MERGED_TO_MAIN_EXACT_MAIN_CI_PASS"
   }
 }
