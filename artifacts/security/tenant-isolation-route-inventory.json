@@ -8,7 +8,7 @@
   "generatedBy": "scripts/generate-tenant-isolation-route-inventory.js",
   "sourceTree": {
     "fileCount": 21,
-    "sha256": "8fca459b5deabee424e43e63eb95f425eb9874e8d0a501d0fd7e68583ba0e08e",
+    "sha256": "661e79a3c6c02b500e86d804484660e01c430afbdd548160b0dab3b3e63683e3",
     "files": [
       "apps/api/src/ai-task-routes.js",
       "apps/api/src/auth-routes.js",
@@ -34,8 +34,8 @@
     ]
   },
   "testTree": {
-    "fileCount": 54,
-    "sha256": "28e09a289fd0dc632c272e548f9495d8ce510cb53e564aecdb579f6796c1f86d",
+    "fileCount": 55,
+    "sha256": "369b60c3b3675e171d78efa59fe9fd072090002759e39e54cbd32c0cd0ea17d6",
     "files": [
       "test/ai-queue-worker.test.js",
       "test/ai-task-queue.test.js",
@@ -61,6 +61,7 @@
       "test/integration/content-restore-audit-atomicity.integration.test.js",
       "test/integration/mega-menu-audit-atomicity.integration.test.js",
       "test/integration/memgraph.integration.test.js",
+      "test/integration/navigation-menu-audit-atomicity.integration.test.js",
       "test/integration/postgres.integration.test.js",
       "test/integration/redis-presence.integration.test.js",
       "test/integration/reusable-component-audit-atomicity.integration.test.js",
@@ -94,12 +95,12 @@
     ]
   },
   "summary": {
-    "routeFamilyCount": 27,
-    "httpRouteFamilyCount": 23,
+    "routeFamilyCount": 28,
+    "httpRouteFamilyCount": 24,
     "nonHttpFamilyCount": 4,
-    "declaredRoutePatternCount": 78,
+    "declaredRoutePatternCount": 80,
     "sourceFileCount": 21,
-    "testFileCount": 54
+    "testFileCount": 55
   },
   "commonControls": [
     {
@@ -200,10 +201,10 @@
               "anchor": "canEditContent",
               "lines": [
                 450,
-                1710,
-                1737,
-                1816,
-                1839
+                1766,
+                1793,
+                1872,
+                1895
               ]
             }
           ]
@@ -452,7 +453,7 @@
             {
               "anchor": "const siteMembershipHandled = await handleSiteMembershipRoute({",
               "lines": [
-                1869
+                1925
               ]
             }
           ]
@@ -560,7 +561,7 @@
             {
               "anchor": "const aiPolicyMatch",
               "lines": [
-                1590
+                1646
               ]
             },
             {
@@ -741,32 +742,32 @@
             {
               "anchor": "const pageIdMatch",
               "lines": [
-                1788
+                1844
               ]
             },
             {
               "anchor": "const revisionsMatch",
               "lines": [
-                1802
+                1858
               ]
             },
             {
               "anchor": "const restoreMatch",
               "lines": [
-                1813
+                1869
               ]
             },
             {
               "anchor": "const workflowMatch",
               "lines": [
-                1830
+                1886
               ]
             },
             {
               "anchor": "url.pathname === '/api/v1/pages/drafts'",
               "lines": [
-                1702,
-                1707
+                1758,
+                1763
               ]
             }
           ]
@@ -834,7 +835,7 @@
             {
               "anchor": "const collaborationMatch",
               "lines": [
-                1722
+                1778
               ]
             },
             {
@@ -898,7 +899,7 @@
             {
               "anchor": "url.pathname === '/api/v1/ai/page-draft'",
               "lines": [
-                1626
+                1682
               ]
             }
           ]
@@ -960,13 +961,13 @@
             {
               "anchor": "url.pathname === '/api/v1/media'",
               "lines": [
-                1675
+                1731
               ]
             },
             {
               "anchor": "url.pathname === '/api/v1/media/uploads'",
               "lines": [
-                1680
+                1736
               ]
             }
           ]
@@ -1559,19 +1560,19 @@
             {
               "anchor": "url.pathname === '/api/v1/plugins'",
               "lines": [
-                1886
+                1942
               ]
             },
             {
               "anchor": "url.pathname === '/api/v1/plugins/register'",
               "lines": [
-                1892
+                1948
               ]
             },
             {
               "anchor": "const pluginActionMatch",
               "lines": [
-                1929
+                1985
               ]
             }
           ]
@@ -1742,7 +1743,62 @@
       ],
       "coverage": {
         "level": "targeted-two-site-plus-transactional-audit-rollback",
-        "limits": "Live PostgreSQL A/B route tests cover scoped listing, create, versioned update and delete with the same slug present in both sites. Foreign-site list/update/delete attempts and conflicting header/query/body selectors are rejected before mutation; snapshots prove both tenants remain unchanged after denial. The merged PR #92 regression races two updates with the same expected version and requires exactly one success, one version conflict, one version increment and a final row matching the winning request; the Site B same-slug row remains unchanged. F1.45 adds metadata-only identity audit events for create/update/delete on the same transaction queryable; unit tests prove callback ordering, fail-closed audit availability, stale-version behavior and rollback/retry for all three actions, while the live PostgreSQL route test injects audit_events trigger failures and proves database rollback plus exactly-one-event retry. Consumer rendering/cache invalidation, every presentation variant and independent adversarial review remain separate gates."
+        "limits": "Live PostgreSQL A/B route tests cover scoped listing, create, versioned update and delete with the same slug present in both sites. Foreign-site list/update/delete attempts and conflicting header/query/body selectors are rejected before mutation; snapshots prove both tenants remain unchanged after denial. The merged PR #92 regression races two updates with the same expected version and requires exactly one success, one version conflict, one version increment and a final row matching the winning request; the Site B same-slug row remains unchanged. F1.45 adds metadata-only identity audit events for create/update/delete on the same transaction queryable; unit tests prove callback ordering, fail-closed audit availability, stale-version behavior and rollback/retry for all three actions, while the live PostgreSQL route test injects audit_events trigger failures and proves database rollback plus exactly-one-event retry. Consumer rendering/cache invalidation, every presentation variant and independent adversarial review remain separate gates. F1.45 specifically validates the /mega-menus route family; the separate regular /menus route is tracked independently in the navigation-menus family."
+      },
+      "methods": [
+        "GET",
+        "POST",
+        "PUT",
+        "DELETE"
+      ]
+    },
+    {
+      "id": "navigation-menus",
+      "title": "Site navigation-menu configuration",
+      "routePatterns": [
+        "/api/v1/sites/{siteId}/menus",
+        "/api/v1/sites/{siteId}/menus/{slug}"
+      ],
+      "authentication": "Authenticated session.",
+      "siteContext": "The path site is reconciled with optional header, query and JSON-body selectors before route authorization. GET requires content:read; create/update/delete require site:manage. Every read and mutation is scoped by site_id; update uses the existing expected-version condition.",
+      "capabilities": [
+        "content:read",
+        "site:manage"
+      ],
+      "dataAccess": [
+        "navigation_menus"
+      ],
+      "sideEffects": [
+        "Create/update/delete versioned site navigation-menu configuration",
+        "Metadata-only navigation.menu_created, navigation.menu_updated and navigation.menu_deleted identity audit events commit on the same transaction queryable as the menu mutation."
+      ],
+      "sourceRefs": [
+        {
+          "file": "apps/api/src/server.js",
+          "anchors": [
+            {
+              "anchor": "const menuCollectionMatch",
+              "lines": [
+                1570
+              ]
+            },
+            {
+              "anchor": "withIdentityAuditTransaction(",
+              "lines": [
+                1577,
+                1613
+              ]
+            }
+          ]
+        }
+      ],
+      "tests": [
+        "test/tenant-route-capabilities.test.js",
+        "test/integration/navigation-menu-audit-atomicity.integration.test.js"
+      ],
+      "coverage": {
+        "level": "transactional-audit-rollback-retry",
+        "limits": "The route-capability suite verifies site:manage authorization before tenant data access. The dedicated PostgreSQL integration injects audit_events trigger failures for create, update and delete, verifies the menu mutation and audit row roll back together, then verifies safe retry commits exactly one metadata-only correlated event. Stale updates preserve 409 without audit; missing deletes preserve 404 without audit. The dedicated suite is single-site; independent two-site adversarial review, cache/rendering behavior and production certification remain separate gates."
       },
       "methods": [
         "GET",
@@ -1854,7 +1910,7 @@
             {
               "anchor": "upgradePath = url.pathname",
               "lines": [
-                2061
+                2117
               ]
             },
             {

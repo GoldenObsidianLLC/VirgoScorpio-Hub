@@ -1212,7 +1212,51 @@
       ],
       "coverage": {
         "level": "targeted-two-site-plus-transactional-audit-rollback",
-        "limits": "Live PostgreSQL A/B route tests cover scoped listing, create, versioned update and delete with the same slug present in both sites. Foreign-site list/update/delete attempts and conflicting header/query/body selectors are rejected before mutation; snapshots prove both tenants remain unchanged after denial. The merged PR #92 regression races two updates with the same expected version and requires exactly one success, one version conflict, one version increment and a final row matching the winning request; the Site B same-slug row remains unchanged. F1.45 adds metadata-only identity audit events for create/update/delete on the same transaction queryable; unit tests prove callback ordering, fail-closed audit availability, stale-version behavior and rollback/retry for all three actions, while the live PostgreSQL route test injects audit_events trigger failures and proves database rollback plus exactly-one-event retry. Consumer rendering/cache invalidation, every presentation variant and independent adversarial review remain separate gates."
+        "limits": "Live PostgreSQL A/B route tests cover scoped listing, create, versioned update and delete with the same slug present in both sites. Foreign-site list/update/delete attempts and conflicting header/query/body selectors are rejected before mutation; snapshots prove both tenants remain unchanged after denial. The merged PR #92 regression races two updates with the same expected version and requires exactly one success, one version conflict, one version increment and a final row matching the winning request; the Site B same-slug row remains unchanged. F1.45 adds metadata-only identity audit events for create/update/delete on the same transaction queryable; unit tests prove callback ordering, fail-closed audit availability, stale-version behavior and rollback/retry for all three actions, while the live PostgreSQL route test injects audit_events trigger failures and proves database rollback plus exactly-one-event retry. Consumer rendering/cache invalidation, every presentation variant and independent adversarial review remain separate gates. F1.45 specifically validates the /mega-menus route family; the separate regular /menus route is tracked independently in the navigation-menus family."
+      },
+      "methods": [
+        "GET",
+        "POST",
+        "PUT",
+        "DELETE"
+      ]
+    },
+    {
+      "id": "navigation-menus",
+      "title": "Site navigation-menu configuration",
+      "routePatterns": [
+        "/api/v1/sites/{siteId}/menus",
+        "/api/v1/sites/{siteId}/menus/{slug}"
+      ],
+      "authentication": "Authenticated session.",
+      "siteContext": "The path site is reconciled with optional header, query and JSON-body selectors before route authorization. GET requires content:read; create/update/delete require site:manage. Every read and mutation is scoped by site_id; update uses the existing expected-version condition.",
+      "capabilities": [
+        "content:read",
+        "site:manage"
+      ],
+      "dataAccess": [
+        "navigation_menus"
+      ],
+      "sideEffects": [
+        "Create/update/delete versioned site navigation-menu configuration",
+        "Metadata-only navigation.menu_created, navigation.menu_updated and navigation.menu_deleted identity audit events commit on the same transaction queryable as the menu mutation."
+      ],
+      "sourceRefs": [
+        {
+          "file": "apps/api/src/server.js",
+          "anchors": [
+            "const menuCollectionMatch",
+            "withIdentityAuditTransaction("
+          ]
+        }
+      ],
+      "tests": [
+        "test/tenant-route-capabilities.test.js",
+        "test/integration/navigation-menu-audit-atomicity.integration.test.js"
+      ],
+      "coverage": {
+        "level": "transactional-audit-rollback-retry",
+        "limits": "The route-capability suite verifies site:manage authorization before tenant data access. The dedicated PostgreSQL integration injects audit_events trigger failures for create, update and delete, verifies the menu mutation and audit row roll back together, then verifies safe retry commits exactly one metadata-only correlated event. Stale updates preserve 409 without audit; missing deletes preserve 404 without audit. The dedicated suite is single-site; independent two-site adversarial review, cache/rendering behavior and production certification remain separate gates."
       },
       "methods": [
         "GET",
