@@ -1,4 +1,31 @@
-### Current exact-main evidence snapshot — 17 November 2026 UTC / 17 November America/Chicago (0.6.2, F1.45 merged; workflow #727)
+### Current exact-main evidence snapshot — 17 November 2026 UTC / 17 November America/Chicago (0.6.2, F1.46 merged; workflow #732)
+
+Current main is `54b766b05db51640281840607df7e16e09da699e`. F1.46 merged through [PR #191](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/191); merge commit `54b766b05db51640281840607df7e16e09da699e`; issue #190 is CLOSED. Exact-head workflows #730/#731 and exact-main [workflow #732](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44182949889), run ID 44182949889, attempt 1, completed all seven required jobs successfully on main SHA `54b766b05db51640281840607df7e16e09da699e`.
+
+- Node.js 22.23.4 and 24.22.1 each passed 670/670 Hub tests and 94/94 EnginEx 7.0.0 tests with zero failures or skips. Full and production-only npm audit scopes each reported zero vulnerabilities.
+- PostgreSQL/Memgraph/Redis passed 129/129 live integration tests with zero failures, skips or TODOs. The F1.46 navigation-menu suite passed all four subtests: audit unavailable fails closed; create, update and delete audit failures each roll back and safe retry commits exactly one correlated event. The suite also checks stale update 409/no audit event, missing delete 404/no audit event, and metadata-only `slug`/`version` details.
+- Fresh migration evidence applied all 18 migrations; the idempotent pass recognized all 18 as already applied. Browser editor/accessibility smoke passed 9/9; CodeQL passed.
+- Signed mainline attestations: [SLSA provenance #68832685](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/attestations/68832685) and [CycloneDX SBOM #68832701](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/attestations/68832701). Lockfile SHA-256 remains `8f3786bcfcd03d0b63761c7107e4d757ae5b45171ba2f6c086ff38c027c8b086`; SBOM SHA-256 is `887dcd07398edb37c36c6c48572594d484d5e2e1f007b55bdd8596f89b10f5f2`.
+- Consolidated readiness artifact 14372653774 (archive SHA-256 `f24ba5765160fdd91902a6fb1523c3952d92befe9e993e98d01019b3891e948c`) is source-bound to main `54b766b05db51640281840607df7e16e09da699e`. It reports `CI EVIDENCE: PASS`, `FINAL RELEASE READINESS: NOT_PRODUCTION_CERTIFIED`, and `PRODUCTION CERTIFICATION: NO`. The finalized consolidated status is 8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN; `readyForProduction` is false.
+- Supply-chain artifact 14371789272 (archive SHA-256 `12dd674b705177bc0729ebdbd3a948ff69819a07e70dcac9535f1d4836ddd4d2`) contains the signed and verified provenance/SBOM evidence for the exact main source. The lockfile digest is unchanged from prior mainline snapshots.
+
+| Workflow #732 evidence | Artifact ID | Archive SHA-256 |
+|---|---:|---|
+| Consolidated readiness / CI evidence | 14372653774 | `f24ba5765160fdd91902a6fb1523c3952d92befe9e993e98d01019b3891e948c` |
+| PostgreSQL/Memgraph live integration producer | 14373451842 | `d6526ba12eb0f2e86ecf4e6a05a3c519296084b9e56f23a7d5ca5af679e7f52b` |
+| Node.js 22.23.4 CI evidence | 14371684165 | `03f5d488aa2cf5b266084bc4b52e9219f223c563a287ddf608121f259bd3bfe8` |
+| Node.js 24.22.1 CI evidence | 14372548199 | `9320a0a24e56c28874d561655b729b37b0c799f090454bc82c62836fb5587a6b` |
+| Browser/editor evidence | 14371619472 | `939d57983309e505d47aaa747a756908ddbe682d9b5db66ce466b2c935bb41cd` |
+| CodeQL / static analysis | 14371979133 | `6f2214cb3a227c6048ec8f37c56c393ac6a484427c9d9c5dff14e7948ccee2c9` |
+| Signed supply-chain attestations | 14371789272 | `12dd674b705177bc0729ebdbd3a948ff69819a07e70dcac9535f1d4836ddd4d2` |
+| Node.js 22 dependency evidence | 14372063895 | `9a3f4bdb0d300204e89ea5358396c2624021e806bee1de51fba67847e6c07fb7` |
+| Node.js 24 dependency evidence | 14373192141 | `9f51c9e5285e53d3585cf4fb2a73c5c2bbe53526425a519b6d6811eedd09696e` |
+
+The two PARTIAL items are qualified human lockfile/dependency/license review and service-less integration diagnostics; 43 of 44 diagnostic cases are skipped per supported Node runtime. Those skips are not live integration passes and are separate from #732's 129/129 zero-skip live producer. The 14 MISSING_EVIDENCE categories remain tenant-isolation review, identity-provider E2E, ClamAV corpus, live cloud providers, Stripe live lifecycle, manual browser/accessibility acceptance, commerce parity, community parity, plugin container isolation, qualified dependency/SBOM/CodeQL review, load/backup/restore, independent security assessment, operations/release approval and production observability.
+
+PR #191 records no formal review submission or inline review thread. Mainline CI, CodeQL and signed attestations are maintainer/automation evidence, not independent security or legal approval. Package 0.6.2 remains private and unreleased; no SemVer increment, tag, GitHub Release, publication or deployment is authorized. Production remains NO-GO / NOT_PRODUCTION_CERTIFIED.
+
+### Historical exact-main evidence snapshot — 17 November 2026 UTC / 17 November America/Chicago (0.6.2, F1.45 merged; workflow #727; superseded by #732)
 
 Current main is `60cca7645dd5f65a2c459742b05af7eb9016eee5`. F1.45 implementation commit `3fdd09a053c6a1252e1eb0bbb655b4e284b769ed` merged through [PR #189](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/189); issue #188 is CLOSED. Exact-head workflows #725/#726 and exact-main [workflow #727](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44139631658), run ID 44139631658, attempt 1, completed all seven required jobs successfully on main SHA `60cca7645dd5f65a2c459742b05af7eb9016eee5`.
 

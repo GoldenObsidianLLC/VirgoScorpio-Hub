@@ -1,26 +1,27 @@
 # F1.46 — Regular navigation-menu audit atomicity implementation report
 
 **Date:** 17 November 2026
-**Issue:** [#190](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/190) — OPEN
-**Baseline main SHA:** `60cca7645dd5f65a2c459742b05af7eb9016eee5` (F1.45 / PR #189 merged)
-**Branch:** `security/f1-46-navigation-menu-audit-atomicity-2026-11-17`
-**Status:** [Draft PR #191](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/191) is open; issue #190 remains OPEN. Initial exact-head push/PR workflows #728/#729 exposed integration-fixture failures; the fixtures are corrected and candidate CI rerun is pending. No human review, merge or release is claimed.
+**Issue:** [#190](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/190) — CLOSED (completed)
+**Original baseline main SHA:** `60cca7645dd5f65a2c459742b05af7eb9016eee5` (F1.45 / PR #189)
+**Merged main SHA:** `54b766b05db51640281840607df7e16e09da699e`
+**Merge:** [PR #191](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/191), merge commit `54b766b05db51640281840607df7e16e09da699e`
+**Status:** Merged to main; exact-main [workflow #732](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44182949889) passed all seven jobs. Issue #190 is closed as completed. No package release or production certification is claimed.
 
 ## Executive summary
 
-F1.46 closes the separate regular-navigation-menu audit gap discovered after F1.45. The site-managed `/api/v1/sites/{siteId}/menus` create, update and delete operations now reuse the existing `withIdentityAuditTransaction()` abstraction and persist their metadata-only identity audit event on the same transaction queryable as the `navigation_menus` mutation.
+F1.46 closes the regular-navigation-menu audit gap discovered after F1.45. The site-managed `/api/v1/sites/{siteId}/menus` create, update and delete operations reuse the existing `withIdentityAuditTransaction()` abstraction and persist metadata-only identity audit events on the same transaction queryable as the `navigation_menus` mutation.
 
-This is intentionally separate from F1.45, which covers the `/mega-menus` route family. It does not add a second transaction helper, schema, migration, public API, dependency, lockfile change or SemVer change.
+This is separate from F1.45, which covers `/mega-menus`. F1.46 adds no second transaction helper, schema, migration, public API, dependency, lockfile change or SemVer change.
 
 ## Source finding
 
-At baseline main `60cca7645dd5f65a2c459742b05af7eb9016eee5`, the regular `/menus` route already reconciled path/header/query/body site selectors, required `content:read` for GET and `site:manage` for mutations, bounded request bodies, validated menu items and presentation data, scoped SQL by `site_id`, and retained expected-version updates. Its POST/PUT/DELETE writes nevertheless used `localPool.query()` directly and did not persist correlated identity audit events.
+At original baseline main `60cca7645dd5f65a2c459742b05af7eb9016eee5`, the regular `/menus` route already reconciled path/header/query/body site selectors, required `content:read` for GET and `site:manage` for mutations, bounded request bodies, validated menu items and presentation data, scoped SQL by `site_id`, and retained expected-version updates. Its POST/PUT/DELETE writes nevertheless used `localPool.query()` directly and did not persist correlated identity audit events.
 
 F1.45 addressed `/mega-menus` in `apps/api/src/platform-routes.js`; it did not cover this separate route in `apps/api/src/server.js`. The source-anchored catalog therefore keeps distinct `mega-menus` and `navigation-menus` families.
 
 ## Implementation
 
-Successful regular-navigation mutations now emit:
+Successful regular-navigation mutations emit:
 
 | Method | Audit action | Target type | Allow-listed details |
 |---|---|---|---|
@@ -36,43 +37,50 @@ Existing route authorization, site selector reconciliation, GET behavior, SQL te
 
 ## Test coverage
 
-Added `test/integration/navigation-menu-audit-atomicity.integration.test.js`, based on the F1.45 live PostgreSQL trigger-injection pattern. It covers:
+Added `test/integration/navigation-menu-audit-atomicity.integration.test.js`, based on the F1.45 live PostgreSQL trigger-injection pattern. Its PostgreSQL test group covers:
 
-- Trigger-injected audit failure for create/update/delete, proving the menu mutation and audit row roll back together.
-- Retry after removing the trigger, proving the mutation and exactly one correlated event commit.
-- Metadata minimization and request/site/actor/target correlation.
-- Missing identity audit capability fails closed before a mutation.
-- Stale expected-version update preserves 409 with no event.
-- Missing-menu delete preserves 404 with no event.
+- Missing identity audit capability fails closed before mutation and leaves neither a menu nor audit row.
+- Create audit failure rolls back the menu and audit row; safe retry commits exactly one event.
+- Update audit failure restores the prior version/content; safe retry commits exactly one event.
+- Delete audit failure restores the menu; safe retry commits exactly one event.
+- Stale expected-version update preserves 409 and emits no update event.
+- Missing-menu delete preserves 404 and emits no delete event.
+- Audit details are restricted to `slug` and `version`, with site/actor/target/request correlation checked.
 
-The tenant-isolation route inventory was regenerated: 28 route/flow families, 80 declared route patterns, 21 implementation source files and 55 test references. The navigation-menus family now points at the new integration test and records the transaction/audit behavior. F1.45's mega-menu family remains separate.
+The tenant-isolation route inventory was regenerated: 28 route/flow families, 80 declared route patterns, 21 implementation source files and 55 test references. The navigation-menus family points at the new integration test and records the transaction/audit behavior. F1.45's mega-menu family remains separate.
 
 ## Local validation
 
 | Check | Result | Qualification |
 |---|---|---|
-| Windows / Node.js 26.12.1 `npm run check` | PASS — 667 passed, 0 failed, 3 platform-specific skips | Post-inventory-refresh run passed with `NODE_OPTIONS=--max-old-space-size=4096`; artifact verifier passed 238 required paths / 266 JavaScript files. |
-| Artifact verifier | PASS — 238 required paths and 266 JavaScript files syntax-checked | Local worktree. |
-| New integration test `node --check` | PASS | Syntax only; not a live PostgreSQL execution. |
-| Tenant inventory generation | PASS — 28 / 80 / 21 / 55 | Generated JSON, catalog and Markdown map refreshed after adding the separate regular navigation-menus family. |
-| `git diff --check` | PASS | Whitespace check; Windows line-ending normalization warnings only. |
-| Focused live PostgreSQL route test | NOT RUN / BLOCKED LOCALLY | Disposable Docker PostgreSQL was ready inside the container, but Windows-host Node.js connections to the published port terminated during startup. No shared database was changed and the disposable containers were removed. Hosted exact-head PostgreSQL validation is required. |
+| Windows / Node.js 26.12.1 `npm run check` | PASS — 667 passed, 0 failed, 3 platform-specific skips | Post-inventory-refresh run used `NODE_OPTIONS=--max-old-space-size=4096`. |
+| Artifact verifier | PASS — 238 required paths and 266 JavaScript files | Local worktree. |
+| New integration test `node --check` | PASS | Syntax check only. |
+| Tenant inventory generation | PASS — 28 / 80 / 21 / 55 | JSON, catalog and generated Markdown refreshed. |
+| `git diff --check` | PASS | No whitespace errors. |
+| Focused local live PostgreSQL route test | NOT RUN / BLOCKED LOCALLY | Disposable Docker PostgreSQL was ready inside the container, but Windows-host Node.js connections to the published port terminated during startup. No shared database was changed and the disposable containers were removed. |
 
-The local root unit suite does not include `test/integration/**`; the new test is syntax-checked and is wired into the existing live integration runner by file discovery. No local live-pass is claimed for F1.46.
+No local live-pass is claimed; the live behavior was subsequently validated by the dedicated hosted CI database producer.
 
-## Hosted candidate CI iteration
+## Hosted candidate and exact-main CI
 
-Draft [PR #191](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/191) was opened against current main; issue #190 remains open. Initial exact-head push workflow [#728](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44155254865) and pull-request workflow [#729](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44155764226) completed their PostgreSQL/Memgraph integration jobs with failures in the new navigation-menu suite. The failure was in the test fixtures, not a route implementation regression: the existing regular-menu PUT contract requires the `slug` field in its request body, which was absent from the stale/update fixtures and caused 400 responses before the expected conflict or mutation path; the suite also expected five request IDs while issuing six correlated requests. The fixtures now include `slug: 'site-navigation'` on both PUT requests and assert six request IDs. The regenerated inventory and root suite were rerun after this correction; `NODE_OPTIONS=--max-old-space-size=4096 npm run check` passed 667/0/3-platform-skips. A new push is required to run the corrected PostgreSQL integration suite in hosted CI. Do not mark F1.46 accepted or merge PR #191 until all seven candidate jobs pass and the live PostgreSQL/Memgraph/Redis producer reports zero failures, skips and TODOs. No formal review has been recorded yet.
+Initial push/PR workflows [#728](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44155254865) and [#729](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44155764226) exposed fixture-only failures: the existing regular-menu PUT contract requires `slug` in the body, and the request-ID assertion expected five although six correlated requests were issued. Commit `f23afa8fda7f40b7210ee06336519a70ec686b5a` corrected both PUT fixtures and the six-ID assertion.
 
-## Release and assurance boundary
+Corrected exact-head push workflow [#730](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44179904351) and PR workflow [#731](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44179917962) passed all six applicable jobs. PR #191 then merged at main SHA `54b766b05db51640281840607df7e16e09da699e`. Exact-main push [workflow #732](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44182949889) completed all seven jobs successfully, including mainline attestations and source-bound evidence consolidation.
 
-F1.46 is a maintainer engineering candidate, not a merge, release waiver or independent security assessment. PR/hosted validation and human review remain pending. Independent tenant review #14 and platform security assessment #25 remain OPEN / NOT PERFORMED; qualified dependency/SBOM/license review #23, authorized scope #13, load/backup/restore #24, operations/release ownership #26 and governance #32 remain separate.
+On exact main:
 
-Package `virgoscorpio-hub@0.6.2` remains private and unreleased. No schema or migration change, API contract change, dependency/lockfile change, SemVer increment, release tag, GitHub Release, npm publication or production deployment is authorized. Production remains **NO-GO / NOT_PRODUCTION_CERTIFIED**.
+- Node.js 22.23.4 and 24.22.1 each passed 670/670 Hub tests and 94/94 EnginEx tests with zero failures or skips; both npm audit scopes reported zero vulnerabilities.
+- PostgreSQL/Memgraph/Redis passed 129/129 live integration tests with zero failures, skips or TODOs. The F1.46 navigation-menu group passed all four subtests described above.
+- Fresh PostgreSQL migrations applied 18/18; the idempotent second pass recognized 18/18 as already applied.
+- Browser/editor smoke passed 9/9; CodeQL passed.
+- Signed mainline attestations were published: [SLSA provenance #68832685](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/attestations/68832685) and [CycloneDX SBOM #68832701](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/attestations/68832701). The lockfile SHA-256 is `8f3786bcfcd03d0b63761c7107e4d757ae5b45171ba2f6c086ff38c027c8b086`; the SBOM SHA-256 is `887dcd07398edb37c36c6c48572594d484d5e2e1f007b55bdd8596f89b10f5f2`.
+- Exact-main consolidated readiness artifact [14372653774](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44182949889) has archive SHA-256 `f24ba5765160fdd91902a6fb1523c3952d92befe9e993e98d01019b3891e948c`. It reports `CI EVIDENCE: PASS`, `FINAL RELEASE READINESS: NOT_PRODUCTION_CERTIFIED` and `PRODUCTION CERTIFICATION: NO`. The consolidated source-current classification is 8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN; `readyForProduction` remains false.
 
-## Next steps
+## Merge and assurance boundary
 
-1. Open a draft PR for F1.46 and run exact-head CI.
-2. Require the dedicated PostgreSQL/Memgraph/Redis producer to execute the new create/update/delete rollback-and-retry integration test with zero skips, alongside both Node 22/24 matrices, CodeQL, browser smoke, signing and evidence consolidation.
-3. Obtain human review; after an approved merge, require exact-main CI and refresh the source-bound release evidence.
-4. Do not close issue #190 or claim production readiness until those criteria and independent review boundaries are satisfied.
+PR #191 merged through commit `54b766b05db51640281840607df7e16e09da699e`; issue #190 was closed as completed after the exact-main producer passed. GitHub records no formal PR review submissions or inline review threads for #191. The merge and CI are maintainer/automation evidence, not independent security approval.
+
+Independent tenant review #14 and platform security assessment #25 remain OPEN / NOT PERFORMED; qualified dependency/SBOM/license review #23, authorized scope #13, load/backup/restore #24, operations/release ownership #26 and governance #32 remain separate gates.
+
+Package `virgoscorpio-hub@0.6.2` remains private and unreleased. No SemVer increment, release tag, GitHub Release, npm publication or production deployment is authorized. Production remains **NO-GO / NOT_PRODUCTION_CERTIFIED**.
