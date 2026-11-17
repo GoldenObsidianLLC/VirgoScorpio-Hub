@@ -1,6 +1,6 @@
 # F1.41 Candidate — Stripe Refund Audit Atomicity
 
-**Status:** Candidate implementation committed locally; issue [#175](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/175) remains OPEN. No pull request has been opened yet. This report is maintainer-prepared candidate evidence, not merged-main, independent-review, live-provider, or production acceptance.
+**Status:** Candidate implementation is pushed and [PR #176](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/176) is OPEN; issue [#175](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/175) remains OPEN pending acceptance and merge. The latest exact-head workflow is in progress. The PR currently has zero formal review submissions and zero inline review threads. This report is maintainer-prepared candidate evidence, not merged-main, independent-review, live-provider, or production acceptance.
 
 - **Branch:** `security/f1-41-stripe-refund-audit-atomicity-2026-11-16`
 - **Base main:** `7f8de5d07687aa0526e7a152d831a88be64389c8`
@@ -58,4 +58,4 @@ The last verified mainline release-readiness baseline remains exact-main workflo
 
 ## Next step
 
-Push the candidate branch, open a PR linked to issue #175, and require exact-head hosted CI plus human review. Do not merge the PR or close #175 until its acceptance criteria are met and review is complete.
+Track [PR #176](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/176) through the latest exact-head workflow, complete focused and hosted acceptance, and obtain human review. Do not merge the PR or close #175 until its acceptance criteria are met and review is complete.
