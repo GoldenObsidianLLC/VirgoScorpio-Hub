@@ -263,6 +263,7 @@ test('mega-menu create, update and delete emit metadata-only audit events on the
     assert.equal(event.target_type, 'navigation-menu');
     assert.equal(event.target_id, MENU_ID);
     assert.equal(event.request_id, REQUEST_ID);
+    assert.equal(event.result, 'success');
     assert.equal(event.client.startsWith('transaction-'), true);
     assert.deepEqual(Object.keys(event.details).sort(), ['slug', 'version']);
   }
@@ -378,4 +379,15 @@ test('stale mega-menu update keeps the version conflict contract and emits no au
   );
   assert.deepEqual(harness.menus, before);
   assert.equal(harness.auditEvents.length, 0);
+});
+
+test('missing mega-menu delete preserves the 404 contract and emits no audit event', async () => {
+  const harness = createHarness();
+  await assert.rejects(
+    harness.call('DELETE', '/api/v1/sites/' + SITE_ID + '/mega-menus/missing-menu'),
+    error => error.statusCode === 404 && error.code === 'ERR_VIRGOSCORPIO_HUB_MEGA_MENU_NOT_FOUND',
+  );
+  assert.equal(harness.menus.length, 0);
+  assert.equal(harness.auditEvents.length, 0);
+  assert.equal(harness.transactionOpen, false);
 });

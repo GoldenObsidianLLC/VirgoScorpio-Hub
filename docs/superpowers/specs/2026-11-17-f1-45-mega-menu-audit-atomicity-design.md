@@ -3,7 +3,8 @@
 **Date:** 17 November 2026
 **Status:** Candidate implemented; local validation complete; hosted PR validation and human review pending
 **Issue:** https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/188
-**Baseline:** 68cfd2f0e05e5c43ccb617770124a39c9226db9c
+**Source-gap baseline:** 68cfd2f0e05e5c43ccb617770124a39c9226db9c
+**Implementation branch base:** 0f5d12c1e5da98551c43690959201af21c0fe6cc (after documentation-only PR #187)
 
 ## Context and source-confirmed gap
 

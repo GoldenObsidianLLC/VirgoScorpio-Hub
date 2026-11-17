@@ -3,7 +3,8 @@
 **Date:** 17 November 2026
 **Issue:** #188
 **Source baseline at finding identification:** 68cfd2f0e05e5c43ccb617770124a39c9226db9c
-**Current base after documentation-only PR #187:** 0f5d12c1e5da98551c43690959201af21c0fe6cc; the F1.45 branch was rebased onto this mainline before candidate review.
+**Implementation branch base:** 0f5d12c1e5da98551c43690959201af21c0fe6cc (after documentation-only PR #187)
+**Candidate commit:** 3fdd09a053c6a1252e1eb0bbb655b4e284b769ed
 **Status:** Candidate implementation and local validation complete; hosted PR validation and human review pending.
 
 ## Executive summary
@@ -55,7 +56,7 @@ The disposable container was removed after validation.
 
 ### Repository check and inventory
 
-Final Windows / Node.js 26.12.1 npm run check passed 666 tests, failed 0, and skipped 3 platform-specific cases. The artifact check covered 238 required paths and 265 JavaScript files. The tenant-isolation inventory freshness check passes at 27 families, 78 declared route patterns, 21 implementation source files and 54 unique test files.
+Final Windows / Node.js 26.12.1 npm run check passed 667 tests, failed 0, and skipped 3 platform-specific cases. The artifact check covered 238 required paths and 265 JavaScript files. The tenant-isolation inventory freshness check passes at 27 families, 78 declared route patterns, 21 implementation source files and 54 unique test files. Implementation-source digest: 8fca459b5deabee424e43e63eb95f425eb9874e8d0a501d0fd7e68583ba0e08e.
 
 
 ## Scope and release boundary
@@ -66,4 +67,6 @@ No release, package publication, tag, deployment or production certification is 
 
 ## Hosted validation and review
 
-Pending: exact-head pull-request workflow results, hosted zero-skip PostgreSQL/Memgraph/Redis integration, CodeQL, browser/accessibility checks, consolidated evidence, human review and exact-main verification after an approved merge.
+The rebased F1.45 candidate is based on main SHA 0f5d12c1e5da98551c43690959201af21c0fe6cc. Exact-main workflow [#721 post-PR-187](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44125167273) passed all seven jobs on this base: Node 22.23.4 and 24.22.1 each passed 659/659 Hub tests; live PostgreSQL/Memgraph/Redis passed 120/120 with zero skips; fresh and idempotent migration passes each applied/recognized all 18 migrations; browser smoke passed 9/9; CodeQL, signed mainline SBOM/provenance attestations and exact-source evidence consolidation passed. This is baseline mainline evidence only and does not substitute for F1.45 candidate CI or human review.
+
+Pending: F1.45 exact-head pull-request workflow results, hosted zero-skip PostgreSQL/Memgraph/Redis integration on the candidate, CodeQL, browser/accessibility checks, consolidated candidate evidence and independent human review. After an approved merge, exact-main verification on the merge SHA will still be required.
