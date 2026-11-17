@@ -1869,6 +1869,7 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
         requireCapability,
         readJson,
         sendJson,
+        fail,
         requestId,
         identity,
         maxBody,

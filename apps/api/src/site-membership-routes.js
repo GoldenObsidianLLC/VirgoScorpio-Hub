@@ -19,6 +19,7 @@ async function handleSiteMembershipRoute(ctx) {
     requireCapability,
     readJson,
     sendJson,
+    fail,
     requestId,
     identity,
     maxBody,
@@ -85,19 +86,28 @@ async function handleSiteMembershipRoute(ctx) {
     const siteId = await resolveRouteSite(inviteMatch[1], body);
     await requireCapability(actor, siteId, 'site:manage');
 
+    if (typeof identity?.createInvitation !== 'function' || typeof identity?.audit !== 'function') {
+      throw fail(
+        503,
+        'ERR_VIRGOSCORPIO_HUB_AUDIT_UNAVAILABLE',
+        'Invitation creation requires the identity audit service.',
+      );
+    }
+
     const invitation = await identity.createInvitation({
       siteId,
       email: body.email,
       roleSlug: body.role,
       invitedBy: actor.user.id,
-    });
-    await identity.audit({
-      siteId,
-      actorId: actor.user.id,
-      action: 'site.invitation_created',
-      targetType: 'invitation',
-      requestId,
-      details: { email: invitation.email, role: invitation.role },
+      onInvitationCreated: ({ queryable, result }) => identity.audit({
+        siteId,
+        actorId: actor.user.id,
+        action: 'site.invitation_created',
+        targetType: 'invitation',
+        targetId: result.id,
+        requestId,
+        details: { email: result.email, role: result.role },
+      }, { queryable }),
     });
 
     return sendJson(res, 201, {
