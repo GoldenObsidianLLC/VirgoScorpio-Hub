@@ -8,7 +8,7 @@
   "generatedBy": "scripts/generate-tenant-isolation-route-inventory.js",
   "sourceTree": {
     "fileCount": 21,
-    "sha256": "3bc206f26809fbb6c9d3720d6f9e718414c52073753b2b17c8680812b39b8b50",
+    "sha256": "8fca459b5deabee424e43e63eb95f425eb9874e8d0a501d0fd7e68583ba0e08e",
     "files": [
       "apps/api/src/ai-task-routes.js",
       "apps/api/src/auth-routes.js",
@@ -34,8 +34,8 @@
     ]
   },
   "testTree": {
-    "fileCount": 52,
-    "sha256": "b9991fff8a8e1800ad1e0556ee60a1c54aee6eb64bc02812e2976aa593fbadf2",
+    "fileCount": 54,
+    "sha256": "28e09a289fd0dc632c272e548f9495d8ce510cb53e564aecdb579f6796c1f86d",
     "files": [
       "test/ai-queue-worker.test.js",
       "test/ai-task-queue.test.js",
@@ -59,6 +59,7 @@
       "test/integration/community-workflows.integration.test.js",
       "test/integration/content-draft-audit.integration.test.js",
       "test/integration/content-restore-audit-atomicity.integration.test.js",
+      "test/integration/mega-menu-audit-atomicity.integration.test.js",
       "test/integration/memgraph.integration.test.js",
       "test/integration/postgres.integration.test.js",
       "test/integration/redis-presence.integration.test.js",
@@ -77,6 +78,7 @@
       "test/integration/tenant-public-catalog-isolation.integration.test.js",
       "test/integration/tenant-public-query-loop-isolation.integration.test.js",
       "test/library-routes.test.js",
+      "test/mega-menu-audit-atomicity.test.js",
       "test/memgraph-projector.test.js",
       "test/outbox-contract.test.js",
       "test/outbox-delivery.test.js",
@@ -97,7 +99,7 @@
     "nonHttpFamilyCount": 4,
     "declaredRoutePatternCount": 78,
     "sourceFileCount": 21,
-    "testFileCount": 52
+    "testFileCount": 54
   },
   "commonControls": [
     {
@@ -1420,25 +1422,25 @@
             {
               "anchor": "const communityProfile",
               "lines": [
-                80
+                102
               ]
             },
             {
               "anchor": "const groups=",
               "lines": [
-                82
+                104
               ]
             },
             {
               "anchor": "const feed=",
               "lines": [
-                95
+                117
               ]
             },
             {
               "anchor": "const friendRequest=",
               "lines": [
-                97
+                119
               ]
             }
           ]
@@ -1619,7 +1621,7 @@
             {
               "anchor": "const firewallCollection",
               "lines": [
-                100
+                122
               ]
             }
           ]
@@ -1668,7 +1670,7 @@
             {
               "anchor": "const cloudConnections",
               "lines": [
-                155
+                177
               ]
             }
           ]
@@ -1706,7 +1708,8 @@
         "navigation_menus"
       ],
       "sideEffects": [
-        "Create/update/delete versioned navigation configuration"
+        "Create/update/delete versioned navigation configuration",
+        "Metadata-only navigation.mega_menu_created, navigation.mega_menu_updated and navigation.mega_menu_deleted identity audit events"
       ],
       "sourceRefs": [
         {
@@ -1715,7 +1718,16 @@
             {
               "anchor": "const megaMenus",
               "lines": [
-                396
+                418
+              ]
+            },
+            {
+              "anchor": "withIdentityAuditTransaction(",
+              "lines": [
+                51,
+                68,
+                470,
+                503
               ]
             }
           ]
@@ -1724,11 +1736,13 @@
       "tests": [
         "test/tenant-route-capabilities.test.js",
         "test/api.test.js",
-        "test/integration/tenant-mega-menu-isolation.integration.test.js"
+        "test/integration/tenant-mega-menu-isolation.integration.test.js",
+        "test/mega-menu-audit-atomicity.test.js",
+        "test/integration/mega-menu-audit-atomicity.integration.test.js"
       ],
       "coverage": {
-        "level": "targeted-two-site-route-tests",
-        "limits": "Live PostgreSQL A/B route tests cover scoped listing, create, versioned update and delete with the same slug present in both sites. Foreign-site list/update/delete attempts and conflicting header/query/body selectors are rejected before mutation; snapshots prove both tenants remain unchanged after denial. The merged PR #92 regression races two updates with the same expected version and requires exactly one success, one version conflict, one version increment and a final row matching the winning request; the Site B same-slug row must remain unchanged. Consumer rendering/cache invalidation and every presentation variant remain separate review items."
+        "level": "targeted-two-site-plus-transactional-audit-rollback",
+        "limits": "Live PostgreSQL A/B route tests cover scoped listing, create, versioned update and delete with the same slug present in both sites. Foreign-site list/update/delete attempts and conflicting header/query/body selectors are rejected before mutation; snapshots prove both tenants remain unchanged after denial. The merged PR #92 regression races two updates with the same expected version and requires exactly one success, one version conflict, one version increment and a final row matching the winning request; the Site B same-slug row remains unchanged. F1.45 adds metadata-only identity audit events for create/update/delete on the same transaction queryable; unit tests prove callback ordering, fail-closed audit availability, stale-version behavior and rollback/retry for all three actions, while the live PostgreSQL route test injects audit_events trigger failures and proves database rollback plus exactly-one-event retry. Consumer rendering/cache invalidation, every presentation variant and independent adversarial review remain separate gates."
       },
       "methods": [
         "GET",
