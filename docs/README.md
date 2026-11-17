@@ -2,6 +2,8 @@
 
 ## Current status and repository assurance
 
+- [F1.41 Stripe refund audit atomicity — active candidate (issue #175; not merged)](reports/2026-11-16-F1-41-STRIPE-REFUND-AUDIT-ATOMICITY-CANDIDATE.md) — candidate commit `c60c0448de676e06f7b22b399107a8e61674b8af`, local `npm run check` 643 passed / 0 failed / 3 Windows-specific skips, and focused refund unit + dedicated PostgreSQL failure-injection/retry/replay 17/17 with zero skips. Stripe is mocked; hosted CI, live Stripe and independent review remain pending. The existing #693 mainline NO-GO snapshot is unchanged.
+
 - [Full 0.6.2 release-gate report — 16 November 2026](reports/2026-11-16-VirgoScorpio-Hub-0.6.2-Release-Gate-Report.md) — current docs-merged main SHA ac6658e9aeeb5a7fe880450932cafe9a8e518ff9, exact-main workflow #693, final 8 PASS / 2 PARTIAL / 14 MISSING_EVIDENCE disposition and production NO-GO.
 - [F1.40 reusable-component mutation/audit atomicity merged report](reports/2026-11-16-F1-40-REUSABLE-COMPONENT-AUDIT-ATOMICITY-REPORT.md) — runtime PR #172 merged at fef8c9e19ceac14d965a3ed824250a7abbafc04f; issue #171 CLOSED. Docs-only PR #173 merged at ac6658e9aeeb5a7fe880450932cafe9a8e518ff9; exact-main #693 passed, including 111/111 live PostgreSQL/Memgraph tests with zero skips.
 - [F1.39 media upload/audit atomicity merged report](reports/2026-11-16-F1-39-MEDIA-UPLOAD-AUDIT-ATOMICITY-REPORT.md) — PR #169 merged at main d4e1c1ce5e08b4594614448d64ad2738a84355b2; exact-main workflow #681 passed, issue #167 CLOSED.

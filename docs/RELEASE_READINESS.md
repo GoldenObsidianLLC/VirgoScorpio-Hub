@@ -20,6 +20,10 @@ Independent tenant review #14 and platform security assessment #25 remain OPEN /
 
 Package virgoscorpio-hub@0.6.2 remains private and unreleased. No tag, GitHub Release, npm publication, production deployment or SemVer increment is authorized. See [Release evidence](RELEASE-EVIDENCE.md), the [F1.40 merged report](reports/2026-11-16-F1-40-REUSABLE-COMPONENT-AUDIT-ATOMICITY-REPORT.md), the [F1.39 merged report](reports/2026-11-16-F1-39-MEDIA-UPLOAD-AUDIT-ATOMICITY-REPORT.md), and the [F1.38 merge report](reports/2026-11-16-F1-38-LIBRARY-ASSET-AUDIT-ATOMICITY-REPORT.md).
 
+### Active engineering candidate — F1.41 (issue #175; not mainline readiness evidence)
+
+Candidate commit `c60c0448de676e06f7b22b399107a8e61674b8af` on `security/f1-41-stripe-refund-audit-atomicity-2026-11-16` passes the focused local PostgreSQL refund audit failure-injection/retry/terminal-replay regression (17/17 including unit tests, zero skips) and local `npm run check` (643 passed, 0 failed, 3 Windows-specific skips). The new live fixture used a dedicated fresh PostgreSQL 18 test database and a Stripe stub; hosted exact-head CI, Node 22/24, full PostgreSQL/Memgraph integration, live Stripe, CodeQL and human review remain pending. This candidate does not change the exact-main readiness counts above or close any production gate. See the [F1.41 candidate report](reports/2026-11-16-F1-41-STRIPE-REFUND-AUDIT-ATOMICITY-CANDIDATE.md).
+
 ## Historical candidate implementation note — post-producer readiness finalization (12 November 2026)
 
 
