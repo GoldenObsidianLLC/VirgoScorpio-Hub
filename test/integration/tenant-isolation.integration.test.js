@@ -35,6 +35,9 @@ test(
       AI_PROVIDER: 'mock',
       AI_ALLOWED_PROVIDERS: 'mock',
       AI_ALLOW_EXTERNAL_CONTENT: 'false',
+      // This fixture intentionally exercises many tenant/audit routes through
+      // one test server; keep its in-memory limiter above the scenario volume.
+      RATE_LIMIT_MAX_REQUESTS: '500',
     };
     // Ensure the development-token shortcut is not enabled in this API test.
     delete env.VIRGOSCORPIO_HUB_API_TOKEN;
@@ -818,6 +821,175 @@ test(
       assert.equal((await ownDisable.json()).connection.status, 'disabled');
       assert.equal((await snapshot(siteB, siteBConnectionId)).status, 'disabled');
       assert.deepEqual(await snapshot(siteA, siteAConnectionId), siteABefore);
+
+      const cloudAuditRequestIds = {
+        createFailure: randomUUID(),
+        createRetry: randomUUID(),
+        disableFailure: randomUUID(),
+        disableRetry: randomUUID(),
+        testFailure: randomUUID(),
+        testRetry: randomUUID(),
+      };
+      const cloudAuditBody = {
+        provider: 's3-compatible',
+        name: 'F1.42 Audit Connection ' + randomUUID(),
+        credentialReference: 'env://VSH_F1_42_TEST_MISSING_SECRET',
+        config: { bucket: 'f1-42-audit-test-bucket' },
+      };
+      const cloudAuditRequest = (route, requestId, body = {}) => fetch(base + route, {
+        method: 'POST',
+        headers: { ...cloudHeaders, 'content-type': 'application/json', 'x-request-id': requestId },
+        body: JSON.stringify(body),
+      });
+      const cloudAuditRows = (action, requestId) => pool.query(
+        'SELECT site_id,actor_id,action,target_type,target_id,result,request_id,details FROM audit_events WHERE site_id=$1 AND action=$2 AND request_id=$3',
+        [siteB, action, requestId],
+      );
+      const withCloudAuditFailure = async (action, work) => {
+        const suffix = randomUUID().replace(/-/g, '');
+        const functionName = 'f142_cloud_audit_fn_' + suffix;
+        const triggerName = 'f142_cloud_audit_tr_' + suffix;
+        const escapedAction = action.replace(/'/g, "''");
+        const functionSql = [
+          'CREATE FUNCTION "' + functionName + '"() RETURNS trigger LANGUAGE plpgsql AS $audit$',
+          'BEGIN',
+          "  IF NEW.action = '" + escapedAction + "' AND NEW.site_id = '" + siteB + "'::uuid THEN",
+          "    RAISE EXCEPTION 'F1.42 injected cloud audit failure' USING ERRCODE = 'P0001';",
+          '  END IF;',
+          '  RETURN NEW;',
+          'END;',
+          '$audit$',
+        ].join('\n');
+        await pool.query(functionSql);
+        await pool.query(
+          'CREATE TRIGGER "' + triggerName + '" BEFORE INSERT ON audit_events ' +
+          'FOR EACH ROW EXECUTE FUNCTION "' + functionName + '"()',
+        );
+        try {
+          return await work();
+        } finally {
+          await pool.query('DROP TRIGGER IF EXISTS "' + triggerName + '" ON audit_events').catch(() => {});
+          await pool.query('DROP FUNCTION IF EXISTS "' + functionName + '"()').catch(() => {});
+        }
+      };
+
+      // Create: an audit insert failure must roll back the new connection.
+      const createFailure = await withCloudAuditFailure('cloud.connection_created', () =>
+        cloudAuditRequest(
+          '/api/v1/sites/' + siteB + '/cloud/connections',
+          cloudAuditRequestIds.createFailure,
+          cloudAuditBody,
+        ),
+      );
+      assert.equal(createFailure.status, 500);
+      await createFailure.json();
+      const failedCreate = await pool.query(
+        'SELECT id FROM cloud_connections WHERE site_id=$1 AND name=$2',
+        [siteB, cloudAuditBody.name],
+      );
+      assert.equal(failedCreate.rowCount, 0, 'failed create must roll back the cloud connection insert');
+      assert.equal((await cloudAuditRows('cloud.connection_created', cloudAuditRequestIds.createFailure)).rowCount, 0);
+
+      const createRetry = await cloudAuditRequest(
+        '/api/v1/sites/' + siteB + '/cloud/connections',
+        cloudAuditRequestIds.createRetry,
+        cloudAuditBody,
+      );
+      assert.equal(createRetry.status, 201);
+      const createdCloudConnection = (await createRetry.json()).connection;
+      assert.ok(createdCloudConnection.id);
+      const createAudit = await cloudAuditRows('cloud.connection_created', cloudAuditRequestIds.createRetry);
+      assert.equal(createAudit.rowCount, 1);
+      assert.equal(createAudit.rows[0].actor_id, cloudActor.id);
+      assert.equal(createAudit.rows[0].target_type, 'cloud-connection');
+      assert.equal(createAudit.rows[0].target_id, createdCloudConnection.id);
+      assert.equal(createAudit.rows[0].request_id, cloudAuditRequestIds.createRetry);
+      assert.deepEqual(createAudit.rows[0].details, { provider: 's3-compatible', status: 'configured' });
+      assert.doesNotMatch(JSON.stringify(createAudit.rows[0].details), /f1-42-audit-test-bucket|VSH_F1_42/);
+
+      // Disable: status and updated_at must roll back with an audit failure.
+      const disableConnectionId = await seedConnection({
+        siteId: siteB,
+        name: 'F1.42 Disable Audit Connection',
+        status: 'configured',
+        lastHealthCheckAt: null,
+      });
+      const disableBefore = await snapshot(siteB, disableConnectionId);
+      const disableFailure = await withCloudAuditFailure('cloud.connection_disabled', () =>
+        cloudAuditRequest(
+          '/api/v1/sites/' + siteB + '/cloud/connections/' + disableConnectionId + '/disable',
+          cloudAuditRequestIds.disableFailure,
+        ),
+      );
+      assert.equal(disableFailure.status, 500);
+      await disableFailure.json();
+      assert.deepEqual(await snapshot(siteB, disableConnectionId), disableBefore);
+      assert.equal((await cloudAuditRows('cloud.connection_disabled', cloudAuditRequestIds.disableFailure)).rowCount, 0);
+
+      const disableRetry = await cloudAuditRequest(
+        '/api/v1/sites/' + siteB + '/cloud/connections/' + disableConnectionId + '/disable',
+        cloudAuditRequestIds.disableRetry,
+      );
+      assert.equal(disableRetry.status, 200);
+      assert.equal((await disableRetry.json()).connection.status, 'disabled');
+      const disableAudit = await cloudAuditRows('cloud.connection_disabled', cloudAuditRequestIds.disableRetry);
+      assert.equal(disableAudit.rowCount, 1);
+      assert.equal(disableAudit.rows[0].actor_id, cloudActor.id);
+      assert.equal(disableAudit.rows[0].target_id, disableConnectionId);
+      assert.equal(disableAudit.rows[0].request_id, cloudAuditRequestIds.disableRetry);
+      assert.deepEqual(disableAudit.rows[0].details, { provider: 's3-compatible', status: 'disabled' });
+
+      // Health check: unresolved references stay provider-free; only the local
+      // outcome/timestamp and audit share the rollback/retry transaction.
+      const testConnectionId = await seedConnection({
+        siteId: siteB,
+        name: 'F1.42 Health Audit Connection',
+        status: 'configured',
+        lastHealthCheckAt: null,
+      });
+      const testBefore = await snapshot(siteB, testConnectionId);
+      const testFailure = await withCloudAuditFailure('cloud.connection_tested', () =>
+        cloudAuditRequest(
+          '/api/v1/sites/' + siteB + '/cloud/connections/' + testConnectionId + '/test',
+          cloudAuditRequestIds.testFailure,
+        ),
+      );
+      assert.equal(testFailure.status, 500);
+      await testFailure.json();
+      assert.deepEqual(await snapshot(siteB, testConnectionId), testBefore);
+      assert.equal((await cloudAuditRows('cloud.connection_tested', cloudAuditRequestIds.testFailure)).rowCount, 0);
+
+      const testRetry = await cloudAuditRequest(
+        '/api/v1/sites/' + siteB + '/cloud/connections/' + testConnectionId + '/test',
+        cloudAuditRequestIds.testRetry,
+      );
+      assert.equal(testRetry.status, 200);
+      const testRetryPayload = await testRetry.json();
+      assert.equal(testRetryPayload.test.status, 'unhealthy');
+      assert.equal(testRetryPayload.test.liveProbeAttempted, false);
+      assert.equal(testRetryPayload.test.liveObjectStoreOperationPerformed, false);
+      const testAfter = await snapshot(siteB, testConnectionId);
+      assert.equal(testAfter.status, 'unhealthy');
+      assert.ok(testAfter.last_health_check_at);
+      const testAudit = await cloudAuditRows('cloud.connection_tested', cloudAuditRequestIds.testRetry);
+      assert.equal(testAudit.rowCount, 1);
+      assert.equal(testAudit.rows[0].actor_id, cloudActor.id);
+      assert.equal(testAudit.rows[0].target_id, testConnectionId);
+      assert.equal(testAudit.rows[0].request_id, cloudAuditRequestIds.testRetry);
+      assert.deepEqual(testAudit.rows[0].details, {
+        provider: 's3-compatible',
+        probeStatus: 'unhealthy',
+        connectionStatus: 'unhealthy',
+        credentialReferenceMode: 'unsupported',
+        liveProbeAttempted: false,
+        liveObjectStoreOperationPerformed: false,
+      });
+
+      await pool.query(
+        'DELETE FROM audit_events WHERE site_id=$1 AND request_id=ANY($2::text[])',
+        [siteB, Object.values(cloudAuditRequestIds)],
+      );
+
     });
   }
 );
