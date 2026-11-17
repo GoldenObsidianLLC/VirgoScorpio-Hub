@@ -65,12 +65,14 @@ function makeRefundContext({
   allowManage = true,
   headers = {}
 } = {}) {
-  const state = { order: { ...order }, refunds: refunds.map(row => ({ ...row })), calls: [] };
+  const state = { order: { ...order }, refunds: refunds.map(row => ({ ...row })), calls: [], clients: [], auditCalls: [], timeline: [] };
   const pool = {
     async connect() {
-      return {
+      const client = {
         async query(sql, params = []) {
-          state.calls.push({ sql, params });
+          const queryEvent = { type: 'query', sql, params, client };
+          state.calls.push({ sql, params, client });
+          state.timeline.push(queryEvent);
           if (['BEGIN', 'COMMIT', 'ROLLBACK'].includes(sql)) return { rows: [] };
 
           if (sql.includes('FROM commerce_orders') && sql.includes('FOR UPDATE')) {
@@ -147,6 +149,8 @@ function makeRefundContext({
         },
         release() {}
       };
+      state.clients.push(client);
+      return client;
     }
   };
 
@@ -177,7 +181,11 @@ function makeRefundContext({
     requestId: 'refund-test-request',
     maxBody: 150_000,
     env: { STRIPE_SECRET_KEY: 'sk_test_fixture_not_a_real_key' },
-    identity: { async audit() {} }
+    identity: { async audit(event, options = {}) {
+      const auditCall = { type: 'audit', event, queryable: options.queryable };
+      state.auditCalls.push(auditCall);
+      state.timeline.push(auditCall);
+    } }
   };
   return { ctx, state };
 }
@@ -288,6 +296,13 @@ test('admin refund route reserves amounts, calls Stripe once and keeps partial r
   assert.equal(state.refunds.length, 1);
   assert.equal(state.order.status, 'paid');
   assert.equal(state.refunds[0].provider_refund_id, 're_test123');
+  assert.equal(state.auditCalls.length, 1, 'provider-response persistence writes one correlated audit');
+  const auditCall = state.auditCalls[0];
+  assert.equal(auditCall.event.action, 'commerce.refund_requested');
+  assert.equal(auditCall.queryable, state.clients[1], 'audit uses the provider-response transaction client');
+  const auditIndex = state.timeline.indexOf(auditCall);
+  const commitIndex = state.timeline.findIndex(event => event.type === 'query' && event.client === auditCall.queryable && event.sql === 'COMMIT');
+  assert.ok(auditIndex >= 0 && commitIndex > auditIndex, 'audit completes before the provider-response transaction commits');
   const finalOrderLockIndex = state.calls.findLastIndex(call =>
     call.sql.includes('FROM commerce_orders') && call.sql.includes('FOR UPDATE')
   );
