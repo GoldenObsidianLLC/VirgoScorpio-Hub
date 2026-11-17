@@ -39,16 +39,21 @@ function createContext({
       return { removed: true };
     },
     async createInvitation(input) {
-      events.push({ type: 'createInvitation', input });
-      return {
+      const queryable = { transactionId: INVITATION_ID };
+      events.push({ type: 'createInvitation', input, queryable });
+      const result = {
         id: INVITATION_ID,
         email: input.email,
         role: input.roleSlug,
         token: 'one-time-secret-invitation-token',
       };
+      if (typeof input.onInvitationCreated === 'function') {
+        await input.onInvitationCreated({ queryable, result });
+      }
+      return result;
     },
-    async audit(input) {
-      events.push({ type: 'audit', input });
+    async audit(input, options) {
+      events.push({ type: 'audit', input, options });
     },
     ...identityOverrides,
   };
@@ -78,6 +83,7 @@ function createContext({
     },
     requestId: REQUEST_ID,
     identity,
+    fail: (statusCode, code, message) => Object.assign(new Error(message), { statusCode, code }),
     maxBody: 128_000,
     events,
   };
@@ -190,7 +196,7 @@ test('member removal passes actor and request correlation to the transactional i
   assert.deepEqual(ctx.res.payload.body, { removed: true, requestId: REQUEST_ID });
 });
 
-test('invitation creation scopes capability checks and never audits the one-time token', async () => {
+test('invitation creation audits through the transaction callback and never audits the one-time token', async () => {
   const ctx = createContext({
     path: `/api/v1/sites/${SITE_ID}/invitations`,
     method: 'POST',
@@ -208,26 +214,54 @@ test('invitation creation scopes capability checks and never audits the one-time
   ]);
   assert.equal(ctx.events[0].maxBytes, 16_384);
   assert.deepEqual(ctx.events[1], { type: 'siteIdFor', routeSiteId: SITE_ID, body: { email: 'invitee@example.test', role: 'viewer' }, requireMembership: false });
-  assert.deepEqual(ctx.events[3].input, {
+  const { onInvitationCreated, ...createInput } = ctx.events[3].input;
+  assert.deepEqual(createInput, {
     siteId: SITE_ID,
     email: 'invitee@example.test',
     roleSlug: 'viewer',
     invitedBy: ACTOR_ID,
   });
+  assert.equal(typeof onInvitationCreated, 'function');
   assert.deepEqual(ctx.events[4].input, {
     siteId: SITE_ID,
     actorId: ACTOR_ID,
     action: 'site.invitation_created',
     targetType: 'invitation',
+    targetId: INVITATION_ID,
     requestId: REQUEST_ID,
     details: { email: 'invitee@example.test', role: 'viewer' },
   });
   assert.equal(
+    ctx.events[4].options.queryable,
+    ctx.events[3].queryable,
+    'the audit must receive the exact transaction queryable supplied by the identity service',
+  );
+  assert.equal(JSON.stringify(ctx.events[4].input).includes('one-time-secret-invitation-token'), false);
+  assert.equal(
     ctx.res.payload.body.invitation.token,
     'one-time-secret-invitation-token',
-    'the token is returned to the trusted request but is not written to audit metadata',
+    'the token remains available only to the trusted non-production response',
   );
   assert.match(ctx.res.payload.body.note, /trusted channel/);
+});
+
+test('invitation creation fails closed when the identity audit service is unavailable', async () => {
+  const ctx = createContext({
+    path: `/api/v1/sites/${SITE_ID}/invitations`,
+    method: 'POST',
+    body: { email: 'invitee@example.test', role: 'viewer' },
+    identityOverrides: { audit: undefined },
+  });
+
+  await assert.rejects(
+    handleSiteMembershipRoute(ctx),
+    error => error.statusCode === 503 && error.code === 'ERR_VIRGOSCORPIO_HUB_AUDIT_UNAVAILABLE',
+  );
+  assert.deepEqual(ctx.events.map(event => event.type), [
+    'readJson',
+    'siteIdFor',
+    'requireCapability',
+  ]);
 });
 
 test('denied site capability prevents member listing, mutation, and audit', async t => {

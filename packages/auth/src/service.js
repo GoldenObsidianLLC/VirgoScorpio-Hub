@@ -505,25 +505,36 @@ function createIdentityService({ pool, env = process.env, clock = () => Date.now
       if (removed.rowCount > 0) await notifyAuthorizationChange({ siteId, principalId: userId });
     },
 
-    async createInvitation({ siteId, email: inputEmail, roleSlug, invitedBy }) {
+    async createInvitation({ siteId, email: inputEmail, roleSlug, invitedBy, onInvitationCreated }) {
       const email = normalizeEmail(inputEmail);
       if (!email) { const error = new Error('A valid email address is required.'); error.statusCode = 400; error.code = 'ERR_VIRGOSCORPIO_HUB_INVALID_EMAIL'; throw error; }
       if (!['editor','author','viewer'].includes(roleSlug)) { const error = new Error('Invitations may grant editor, author, or viewer access.'); error.statusCode = 400; error.code = 'ERR_VIRGOSCORPIO_HUB_INVALID_ROLE'; throw error; }
+      if (onInvitationCreated !== undefined && typeof onInvitationCreated !== 'function') {
+        throw new TypeError('onInvitationCreated must be a function when provided.');
+      }
       const role = await pool.query('SELECT id FROM roles WHERE slug=$1', [roleSlug]);
       const token = randomBytes(32).toString('base64url');
       const expiresAt = new Date(clock() + 7 * 24 * 60 * 60_000);
       const site = await pool.query('SELECT slug,name FROM sites WHERE id=$1', [siteId]);
       if (!site.rows[0]) throw authError(404, 'ERR_VIRGOSCORPIO_HUB_SITE_NOT_FOUND', 'Site not found.');
-      const client = await pool.connect();
-      try {
-        await client.query('BEGIN');
-        await client.query(`INSERT INTO site_invitations(site_id,email,role_id,token_hash,invited_by,expires_at)
+      await withTransaction(pool, async queryable => {
+        const inserted = await queryable.query(`INSERT INTO site_invitations(site_id,email,role_id,token_hash,invited_by,expires_at)
           VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT (site_id, (lower(email))) WHERE accepted_at IS NULL DO UPDATE
-          SET role_id=EXCLUDED.role_id,token_hash=EXCLUDED.token_hash,invited_by=EXCLUDED.invited_by,expires_at=EXCLUDED.expires_at,created_at=now()`,
+          SET role_id=EXCLUDED.role_id,token_hash=EXCLUDED.token_hash,invited_by=EXCLUDED.invited_by,expires_at=EXCLUDED.expires_at,created_at=now()
+          RETURNING id`,
           [siteId, email, role.rows[0].id, digest(token), invitedBy, expiresAt]);
-        await client.query("INSERT INTO mail_outbox(recipient,template,payload) VALUES($1,'site-invitation',$2::jsonb)", [email, JSON.stringify({ siteName: site.rows[0].name, inviteUrl: `${configuredPublicBase(env)}/accept-invitation?token=${encodeURIComponent(token)}`, expiresAt: expiresAt.toISOString() })]);
-        await client.query('COMMIT');
-      } catch (error) { await client.query('ROLLBACK').catch(() => {}); throw error; } finally { client.release(); }
+        const result = {
+          id: inserted.rows[0]?.id,
+          email,
+          role: roleSlug,
+          expiresAt,
+        };
+        if (!result.id) throw new Error('Invitation persistence did not return an identifier.');
+        await queryable.query("INSERT INTO mail_outbox(recipient,template,payload) VALUES($1,'site-invitation',$2::jsonb)", [email, JSON.stringify({ siteName: site.rows[0].name, inviteUrl: `${configuredPublicBase(env)}/accept-invitation?token=${encodeURIComponent(token)}`, expiresAt: expiresAt.toISOString() })]);
+        if (onInvitationCreated) {
+          await onInvitationCreated({ queryable, result });
+        }
+      });
       return { email, role: roleSlug, expiresAt, ...(env.NODE_ENV !== 'production' && env.VIRGOSCORPIO_HUB_EXPOSE_DEV_TOKENS === 'true' ? { token } : {}) };
     },
 
