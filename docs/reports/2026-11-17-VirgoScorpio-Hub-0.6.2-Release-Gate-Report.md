@@ -1,9 +1,9 @@
 # VirgoScorpio Hub 0.6.2 — Full release-gate report
 
 **Assessment snapshot:** 17 November 2026 UTC / 17 November 2026 America/Chicago
-**Current mainline source:** `10e62a5902a68cee5edc31b57847a5602078feb1` (F1.42 / PR #179)
-**Latest exact-main CI:** [workflow #709](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44031913251) — successful, 7/7 jobs
-**Latest runtime merge:** F1.42 / PR #179 at `10e62a5902a68cee5edc31b57847a5602078feb1`, implementation commit `19a4599db0087810550ea152bd509c80ce49e1bf`
+**Current mainline source:** `00b78a85ddf33b92878a7fcbdddca8e2fc812f66` (F1.44 / PR #184)
+**Latest exact-main CI:** [workflow #718](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44081171818) — successful, 7/7 jobs
+**Latest runtime merge:** F1.44 / PR #184 at `00b78a85ddf33b92878a7fcbdddca8e2fc812f66`, implementation commit `905e5f06e6929b0aa2ef2c4c65ce7a17e34a7e19`
 **Decision:** **PRODUCTION NO-GO / NOT_PRODUCTION_CERTIFIED**
 
 > This report separates engineering implementation and CI evidence from the independent, provider, product, legal, governance and operational acceptance gates required for production. Passing CI, database regressions, CodeQL or signed attestations do not constitute independent security or legal approval.
@@ -12,9 +12,9 @@
 
 VirgoScorpio Hub `0.6.2` remains a private, unreleased developer-preview candidate. `readyForProduction` is `false`. No SemVer increment, release tag, GitHub Release, npm publication, production deployment or claim of production certification is authorized.
 
-Current mainline includes F1.38 (PR #166), F1.39 (PR #169), F1.40 reusable-component mutation/audit atomicity (PR #172), F1.41 Stripe refund audit atomicity (PR #176), and F1.42 cloud connection audit atomicity (PR #179). F1.42 implementation commit `19a4599db0087810550ea152bd509c80ce49e1bf` merged at `10e62a5902a68cee5edc31b57847a5602078feb1`; issue #178 is CLOSED. Exact-main workflow #709 passed all seven jobs, including 115/115 live PostgreSQL/Memgraph/Redis tests, Node.js 22/24 each passing 655/655 Hub and 94/94 EnginEx tests, 18/18 fresh and 18/18 idempotent migration checks, PostgreSQL-backed collaboration Playwright 4/4, browser smoke 9/9, CodeQL, signed mainline attestations and exact-source evidence consolidation.
+Current mainline includes F1.38 (PR #166), F1.39 (PR #169), F1.40 reusable-component mutation/audit atomicity (PR #172), F1.41 Stripe refund audit atomicity (PR #176), F1.42 cloud connection audit atomicity (PR #179), F1.43 site invitation audit atomicity (PR #182), and F1.44 content revision restore audit atomicity (PR #184). F1.43 implementation commit `1b98867fc3b191eecd888fb53ef52552dbc0df7b` merged at `82ace7f0413842a9d92156f6d4be3692e3913ce5`; F1.44 implementation commit `905e5f06e6929b0aa2ef2c4c65ce7a17e34a7e19` merged at current main `00b78a85ddf33b92878a7fcbdddca8e2fc812f66`. Issues #181, #183 and #178 are CLOSED. Exact-main workflow #715 passed all seven jobs after F1.43; exact-main workflow #718 passed all seven jobs on the F1.44 merge SHA, covering Node.js 22/24, live PostgreSQL/Memgraph/Redis integration, migrations, PostgreSQL-backed collaboration/browser checks, CodeQL, signed mainline attestations and exact-source evidence consolidation. PRs #182 and #184 recorded no formal review submissions or inline review threads; implementation and automation evidence are not independent security approval.
 
-The canonical readiness artifact 14304914480 was generated at `2026-11-17T06:35:26.692Z`, source-bound to the exact main SHA above; archive SHA-256 is `2bee41c738b0dd9e1f0fd738e05591fae3dd223edb7579c92c65c47750b08019`. The final readiness aggregate remains:
+The last published canonical readiness artifact 14304914480 was generated at `2026-11-17T06:35:26.692Z`, source-bound to the prior F1.42 main SHA `10e62a5902a68cee5edc31b57847a5602078feb1` (not the current F1.44 SHA); archive SHA-256 is `2bee41c738b0dd9e1f0fd738e05591fae3dd223edb7579c92c65c47750b08019`. The classification below is the last recorded snapshot pending refresh against the newer source:
 
 | Classification | Count |
 |---|---:|
@@ -24,29 +24,29 @@ The canonical readiness artifact 14304914480 was generated at `2026-11-17T06:35:
 | MISSING_EVIDENCE | 14 |
 | NOT_RUN | 0 |
 
-The two PARTIAL classifications are (1) incomplete qualified human lockfile/dependency/license review, and (2) service-less integration diagnostics with 40 skipped tests per supported Node runtime. These skips are not live integration passes and remain separate from the 115/115 zero-skip PostgreSQL/Memgraph producer evidence.
+In that prior F1.42 snapshot, the two PARTIAL classifications were (1) incomplete qualified human lockfile/dependency/license review, and (2) service-less integration diagnostics with 40 skipped tests per supported Node runtime. Those skips are not live integration passes and remain separate from the 115/115 zero-skip PostgreSQL/Memgraph producer evidence recorded by prior workflow #709. Do not interpret this stale source-bound classification as refreshed release approval for F1.44.
 
-## Latest exact-main source validation — workflow #709 (F1.42 merged)
+## Latest exact-main source validation — workflow #718 (F1.44 merged)
 
-Workflow [#709](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44031913251) validated exact current main SHA `10e62a5902a68cee5edc31b57847a5602078feb1` and completed all seven required jobs successfully.
+Workflow [#718](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44081171818) validated exact current main SHA `00b78a85ddf33b92878a7fcbdddca8e2fc812f66` and completed all seven required jobs successfully after F1.44 merged. The run passed the supported Node.js 22/24 jobs, live PostgreSQL/Memgraph/Redis integration, fresh/idempotent migration validation, PostgreSQL-backed collaboration and browser/accessibility checks, CodeQL, signed mainline provenance/SBOM attestations and exact-source evidence consolidation.
 
 | Producer / job | Result | Qualification |
 |---|---|---|
-| Node.js 22.23.4 | PASS | 655/655 Hub tests; 94/94 EnginEx tests; zero failures or skips. |
-| Node.js 24.22.1 | PASS | 655/655 Hub tests; 94/94 EnginEx tests; zero failures or skips. |
-| PostgreSQL / Memgraph / Redis | PASS | 115/115 live integration tests; zero failures/skips. Includes F1.42 audit-trigger rollback/retry for cloud create, disable and health-check persistence; Redis outage/recovery; Memgraph outage/replay and graph rebuild. |
-| Fresh migrations | PASS | 18/18 migrations applied; 18/18 idempotent second-pass checks passed. |
-| PostgreSQL-backed collaboration browser suite | PASS | 4/4 Playwright tests. |
-| Browser editor/accessibility smoke | PASS | 9/9 Playwright smoke tests; not full manual WCAG/assistive-technology acceptance. |
+| Node.js 22.23.4 | PASS | Supported Node 22 validation job succeeded on the exact F1.44 source; see workflow #718 logs for the run-bound test summary. |
+| Node.js 24.22.1 | PASS | Supported Node 24 validation job succeeded on the exact F1.44 source; see workflow #718 logs for the run-bound test summary. |
+| PostgreSQL / Memgraph / Redis | PASS | Exact-main live integration job succeeded. The F1.44-specific authenticated restore-route audit failure/retry case is separately tracked under #185 and is not attributed to this mainline run. |
+| Fresh migrations | PASS | Mainline migration validation job succeeded. The dedicated local follow-up test independently applied all 18 migrations before its PostgreSQL route regression. |
+| PostgreSQL-backed collaboration browser suite | PASS | The exact-main collaboration Playwright job succeeded. |
+| Browser editor/accessibility smoke | PASS | The exact-main browser/accessibility job succeeded; not full manual WCAG/assistive-technology acceptance. |
 | CodeQL | PASS | Static analysis succeeded; not independent application-security review. |
-| Mainline attestations | PASS | Signed SLSA provenance and CycloneDX SBOM attestations created, uploaded and verified against the exact mainline subjects. |
-| Evidence consolidation | PASS | Exact-source producer manifests/checksums validated; canonical readiness finalized. |
+| Mainline attestations | PASS | Signed SLSA provenance and CycloneDX SBOM attestations were created, uploaded and verified against the exact F1.44 mainline subjects. |
+| Evidence consolidation | PASS | Exact-source producer manifests/checksums validated and evidence consolidation completed. This is distinct from refreshing the canonical production-readiness decision. |
 
-Both full and production-only npm audit scopes reported zero vulnerabilities on each runtime. Mainline attestations: [SLSA build provenance](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/attestations/68489190) and [CycloneDX SBOM](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/attestations/68489198). Lockfile SHA-256 is `8f3786bcfcd03d0b63761c7107e4d757ae5b45171ba2f6c086ff38c027c8b086`; generated CycloneDX 1.5 SBOM SHA-256 is `160e202d95587f70695c65fd944e33f68424c8f6d8c45a5aa2a0ce89ed97da63` (200 components / 201 dependency records per runtime).
+The run-bound audit results and SBOM/provenance subjects are retained in workflow #718. The attestation links, lockfile digest and CycloneDX digest retained from the prior report revision are artifacts of F1.42 workflow #709, not hashes for the newer F1.44 source; they are not carried forward as current-source identifiers here.
 
 ### Canonical readiness and retained workflow artifacts
 
-The canonical report is source-bound to `10e62a5902a68cee5edc31b57847a5602078feb1`; it does not certify production.
+The last published canonical readiness artifact listed below is source-bound to the prior F1.42 main SHA `10e62a5902a68cee5edc31b57847a5602078feb1`; it has not been refreshed to the F1.44 source `00b78a85ddf33b92878a7fcbdddca8e2fc812f66`. Its 8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE classification is therefore the last recorded gate snapshot, not a source-current certification. Workflow #718's successful evidence consolidation and signed attestations do not change that limitation or certify production.
 
 | Evidence | Artifact ID | Archive SHA-256 |
 |---|---:|---|
@@ -100,16 +100,6 @@ The canonical report is source-bound to `eb6fe4c8672dadd98892a62062ecf718ce9393b
 
 The listed hashes are GitHub artifact ZIP archive digests, not hashes of files inside each ZIP. Workflow #703 producer records and run-bound source identity are authoritative for this snapshot.
 
-## F1.41 — Stripe refund audit atomicity (previous completed increment)
-
-[PR #176](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/176) merged at `2026-11-17T01:34:31Z` from implementation head `f15af08e8a0647da56328a8be2717ea41c674ae0`; the underlying implementation commit is `c60c0448de676e06f7b22b399107a8e61674b8af`. Merge commit and current main SHA are `eb6fe4c8672dadd98892a62062ecf718ce9393b6`. PR exact-head [workflow #702](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43991407172) and exact-main workflow #703 both passed. Issue [#175](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/175) remains OPEN for maintainer close-out.
-
-The Stripe refund request remains outside PostgreSQL. Once Stripe responds, provider refund ID/status, any full-order transition and the correlated metadata-only `commerce.refund_requested` audit now persist through the same checked-out PostgreSQL transaction queryable before COMMIT. Audit failure rolls back local provider binding/status/order changes while preserving the durable refund reservation. A same-key retry reuses the stable `vsh_refund_<local refund id>` Stripe idempotency key; terminal replay does not make another provider call or duplicate the audit. PostgreSQL cannot roll back an external Stripe refund already accepted by Stripe; this is not a distributed transaction.
-
-Local Windows / Node.js 26.12.1 evidence: `npm run check` passed 643 tests / 0 failed / 3 Windows-specific skips; focused refund unit + dedicated PostgreSQL failure-injection/retry/terminal-replay suite passed 17/17 with zero skips; a fresh PostgreSQL 18 database applied all 18 migrations; tenant inventory reported 27 families / 78 route patterns / 21 source files / 49 test files; full and production npm audits reported zero vulnerabilities. The test uses a Stripe stub, not live provider credentials or provider-lifecycle certification.
-
-GitHub records zero formal review submissions and zero inline review threads for PR #176. Merge and CI represent maintainer/automation evidence only, not independent security review. The Stripe lifecycle production gate remains MISSING_EVIDENCE.
-
 ## F1.42 — Cloud connection audit atomicity (merged)
 
 [PR #179](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/179) merged at `2026-11-17T06:32:01Z` from candidate head `2c20dafc1ffc28e67b7be0f73bbe989162c80c0f`; implementation commit is `19a4599db0087810550ea152bd509c80ce49e1bf`. Merge commit and current main SHA are `10e62a5902a68cee5edc31b57847a5602078feb1`. Issue [#178](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/178) closed at `2026-11-17T06:32:02Z`. Exact-head workflow [#708](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44031408890) and exact-main workflow [#709](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44031913251) both passed their required jobs; #709 additionally completed mainline signing and evidence consolidation.
@@ -121,6 +111,16 @@ Local Windows / Node.js 26.12.1 evidence: `npm run check` passed 652 tests / 0 f
 Hosted PR exact-head workflow #708 passed Node 22/24 (655/655 Hub and 94/94 EnginEx each), 115/115 live PostgreSQL/Memgraph/Redis integration tests with zero skips, fresh/idempotent migration checks, browser smoke 9/9, collaboration Playwright 4/4, CodeQL, zero-vulnerability full/production audits and candidate evidence consolidation. Mainline exact-main workflow #709 passed the same Node and integration matrices, signed Build Provenance and SBOM attestations, and finalized the canonical readiness snapshot. The mainline readiness remains 8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN; `readyForProduction` is false.
 
 GitHub records zero formal review submissions and zero inline review threads for PR #179. Merge and CI are maintainer/automation evidence only, not independent tenant-isolation, security or legal acceptance. Live AWS/S3-compatible/GCS/Azure/R2/MinIO lifecycle, IAM/egress/SSRF qualification, and independent review remain separate production gates. No schema, migration, public API, dependency, lockfile or SemVer change; package 0.6.2 remains private/unreleased. Production remains **NO-GO / NOT_PRODUCTION_CERTIFIED**.
+
+## F1.41 — Stripe refund audit atomicity (previous completed increment)
+
+[PR #176](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/176) merged at `2026-11-17T01:34:31Z` from implementation head `f15af08e8a0647da56328a8be2717ea41c674ae0`; the underlying implementation commit is `c60c0448de676e06f7b22b399107a8e61674b8af`. Merge commit and current main SHA are `eb6fe4c8672dadd98892a62062ecf718ce9393b6`. PR exact-head [workflow #702](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43991407172) and exact-main workflow #703 both passed. Issue [#175](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/175) remains OPEN for maintainer close-out.
+
+The Stripe refund request remains outside PostgreSQL. Once Stripe responds, provider refund ID/status, any full-order transition and the correlated metadata-only `commerce.refund_requested` audit now persist through the same checked-out PostgreSQL transaction queryable before COMMIT. Audit failure rolls back local provider binding/status/order changes while preserving the durable refund reservation. A same-key retry reuses the stable `vsh_refund_<local refund id>` Stripe idempotency key; terminal replay does not make another provider call or duplicate the audit. PostgreSQL cannot roll back an external Stripe refund already accepted by Stripe; this is not a distributed transaction.
+
+Local Windows / Node.js 26.12.1 evidence: `npm run check` passed 643 tests / 0 failed / 3 Windows-specific skips; focused refund unit + dedicated PostgreSQL failure-injection/retry/terminal-replay suite passed 17/17 with zero skips; a fresh PostgreSQL 18 database applied all 18 migrations; tenant inventory reported 27 families / 78 route patterns / 21 source files / 49 test files; full and production npm audits reported zero vulnerabilities. The test uses a Stripe stub, not live provider credentials or provider-lifecycle certification.
+
+GitHub records zero formal review submissions and zero inline review threads for PR #176. Merge and CI represent maintainer/automation evidence only, not independent security review. The Stripe lifecycle production gate remains MISSING_EVIDENCE.
 
 ## Production evidence matrix — 14 missing gates
 
@@ -157,8 +157,8 @@ No formal PR review submissions or inline review threads were recorded for PR #1
 
 ## Engineering roadmap
 
-F1.21–F1.42 are 22 consecutive bounded engineering increments merged to main, covering site-owner concurrency, site capabilities/SSE revocation, invitation and audit recovery, content-type registry concurrency, Redis reconnect behavior, editorial ownership, membership/site creation/design-system/taxonomy/relationship/AI-policy/workflow audit atomicity, plugin lifecycle locking/audit consistency, firewall rule/audit consistency, page-draft persistence/audit atomicity, library asset upload/version audit atomicity, legacy media upload/audit atomicity, reusable-component mutation/audit atomicity, Stripe refund audit/recovery atomicity, and cloud connection mutation/audit atomicity.
+F1.21–F1.44 are 24 consecutive bounded engineering increments merged to main, covering site-owner concurrency, site capabilities/SSE revocation, invitation and audit recovery, content-type registry concurrency, Redis reconnect behavior, editorial ownership, membership/site creation/design-system/taxonomy/relationship/AI-policy/workflow audit atomicity, plugin lifecycle locking/audit consistency, firewall rule/audit consistency, page-draft persistence/audit atomicity, library asset upload/version audit atomicity, legacy media upload/audit atomicity, reusable-component mutation/audit atomicity, Stripe refund audit/recovery atomicity, cloud connection mutation/audit atomicity, site invitation creation/audit atomicity (F1.43), and content revision restore/audit atomicity (F1.44).
 
-F1.42 is the latest runtime merge; issue #178 is CLOSED. Issue #175 remains OPEN for maintainer close-out. The next bounded increment F1.43 is not selected yet: inspect remaining OPEN items under parent #124 and the source-anchored tenant inventory, then confirm a concrete route, authorization, transaction or recovery gap before fixing scope. Independent reviews #14/#25 and qualified dependency/license review #23 remain separate assurance gates, not reasons to overstate engineering evidence. Continue non-production resilience and operations preparation under #24/#26 without implying production readiness.
+F1.44 is the latest runtime merge; issues #181, #183 and #178 are CLOSED. Issue #175 remains OPEN for maintainer close-out. Issue #185 tracks an additional live PostgreSQL route-level fault-injection regression for authenticated revision restore; the test has passed 1/1 with zero skips on a disposable PostgreSQL 18 database after 18/18 migrations, but it remains on an isolated follow-up branch and is not yet part of main. Complete its exact-head CI and human review before merge; do not self-approve. Next, inspect remaining OPEN items under parent #124 and the source-anchored tenant inventory to reproduce a concrete F1.45 route, authorization, transaction or recovery gap before selecting further runtime scope. Independent reviews #14/#25 and qualified dependency/license review #23 remain separate assurance gates. Continue non-production resilience and operations preparation under #24/#26 without implying production readiness.
 
 No meaningful overall completion percentage or delivery date is asserted: these gates have different scope and evidence weight, and green CI must not be conflated with external product or production acceptance. Package `0.6.2` remains private and unreleased; production remains **NO-GO / NOT_PRODUCTION_CERTIFIED**.
