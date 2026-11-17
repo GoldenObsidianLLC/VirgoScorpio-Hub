@@ -25,7 +25,7 @@ const { createLibraryStore } = require('../../../packages/library/src/file-store
 const { createClamDScanScanner } = require('../../../packages/security/src/malware-scanner');
 const { createCloudStorageAdapterFromEnv } = require('../../../packages/cloud/src/storage-adapters');
 const { createFirewall } = require('../../../packages/security/src/firewall');
-const { handlePlatformRoute } = require('./platform-routes');
+const { handlePlatformRoute, withIdentityAuditTransaction } = require('./platform-routes');
 const { verifyStripeSignature, digestWebhookBody, normalizeStripeRefundStatus, retrieveStripeSubscription } = require('../../../packages/billing/src/stripe');
 const { releaseOrderStockReservations, commitOrderStockReservations } = require('../../../packages/commerce/src/stock-reservations');
 const { validatePluginManifest, validatePinnedImageDigest } = require('../../../packages/plugins/src/manifest');
@@ -1573,18 +1573,74 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
         if (!localPool) return sendJson(res, 503, { error: 'Navigation menus require PostgreSQL.', code: 'ERR_VIRGOSCORPIO_HUB_DATABASE_DISABLED', requestId });
         const siteId = menuCollectionMatch?.[1] || menuItemMatch[1]; await reconcileRouteSiteContext(siteId); await requireCapability(actor, siteId, req.method === 'GET' ? 'content:read' : 'site:manage');
         if (req.method === 'GET') { const result = await localPool.query('SELECT id,slug,name,version,items,presentation,created_at,updated_at FROM navigation_menus WHERE site_id=$1 ORDER BY name', [siteId]); return sendJson(res, 200, { menus: result.rows, requestId }); }
-        if (req.method === 'DELETE') { const deleted = await localPool.query('DELETE FROM navigation_menus WHERE site_id=$1 AND slug=$2 RETURNING slug', [siteId, menuItemMatch[2]]); if (!deleted.rows[0]) throw fail(404, 'ERR_VIRGOSCORPIO_HUB_MENU_NOT_FOUND', 'Navigation menu not found.'); return sendJson(res, 200, { deleted: true, requestId }); }
-        const body = await readJson(req, Math.min(maxBody, 256_000)); await reconcileRouteSiteContext(siteId, body); const validation = validateMenuItems(body.items || []);
+        if (req.method === 'DELETE') {
+          await withIdentityAuditTransaction({
+            localPool,
+            identity,
+            fail,
+            unavailableMessage: 'Navigation menu changes require the identity audit service.',
+            mutate: async queryable => {
+              const deleted = await queryable.query(
+                'DELETE FROM navigation_menus WHERE site_id=$1 AND slug=$2 RETURNING id,slug,version',
+                [siteId, menuItemMatch[2]],
+              );
+              if (!deleted.rows[0]) {
+                throw fail(404, 'ERR_VIRGOSCORPIO_HUB_MENU_NOT_FOUND', 'Navigation menu not found.');
+              }
+              return deleted.rows[0];
+            },
+            audit: menu => ({
+              siteId,
+              actorId: actor.user.id,
+              action: 'navigation.menu_deleted',
+              targetType: 'navigation-menu',
+              targetId: menu.id,
+              requestId,
+              details: { slug: menu.slug, version: menu.version },
+            }),
+          });
+          return sendJson(res, 200, { deleted: true, requestId });
+        }
+
+        const body = await readJson(req, Math.min(maxBody, 256_000));
+        await reconcileRouteSiteContext(siteId, body);
+        const validation = validateMenuItems(body.items || []);
         if (!validation.valid) throw fail(422, 'ERR_VIRGOSCORPIO_HUB_MENU_INVALID', 'Navigation menu failed validation.', validation.errors);
         if (!/^[a-z0-9][a-z0-9-]{0,100}$/.test(String(body.slug || '')) || typeof body.name !== 'string' || !body.name.trim() || body.name.length > 180) throw fail(400, 'ERR_VIRGOSCORPIO_HUB_MENU_METADATA_INVALID', 'Menu slug and name are required.');
         const presentation = body.presentation === undefined ? {} : body.presentation;
         if (!presentation || typeof presentation !== 'object' || Array.isArray(presentation) || Buffer.byteLength(JSON.stringify(presentation)) > 16_384) throw fail(400, 'ERR_VIRGOSCORPIO_HUB_MENU_PRESENTATION_INVALID', 'presentation must be a small JSON object.');
         const expected = req.method === 'PUT' ? Number(body.expectedVersion) : null;
-        const saved = req.method === 'POST'
-          ? await localPool.query('INSERT INTO navigation_menus(site_id,slug,name,items,presentation,updated_by) VALUES($1,$2,$3,$4::jsonb,$5::jsonb,$6) RETURNING id,slug,name,version,items,presentation,updated_at', [siteId, body.slug, body.name.trim(), JSON.stringify(body.items || []), JSON.stringify(presentation), actor.user.id])
-          : await localPool.query('UPDATE navigation_menus SET name=$3,items=$4::jsonb,presentation=$5::jsonb,version=version+1,updated_by=$6,updated_at=now() WHERE site_id=$1 AND slug=$2 AND version=$7 RETURNING id,slug,name,version,items,presentation,updated_at', [siteId, menuItemMatch[2], body.name.trim(), JSON.stringify(body.items || []), JSON.stringify(presentation), actor.user.id, expected]);
-        if (!saved.rows[0]) throw fail(req.method === 'POST' ? 409 : 409, 'ERR_VIRGOSCORPIO_HUB_VERSION_CONFLICT', 'Menu already exists or changed since it was loaded.');
-        return sendJson(res, req.method === 'POST' ? 201 : 200, { menu: saved.rows[0], requestId });
+        const saved = await withIdentityAuditTransaction({
+          localPool,
+          identity,
+          fail,
+          unavailableMessage: 'Navigation menu changes require the identity audit service.',
+          mutate: async queryable => {
+            const result = req.method === 'POST'
+              ? await queryable.query(
+                'INSERT INTO navigation_menus(site_id,slug,name,items,presentation,updated_by) VALUES($1,$2,$3,$4::jsonb,$5::jsonb,$6) RETURNING id,slug,name,version,items,presentation,updated_at',
+                [siteId, body.slug, body.name.trim(), JSON.stringify(body.items || []), JSON.stringify(presentation), actor.user.id],
+              )
+              : await queryable.query(
+                'UPDATE navigation_menus SET name=$3,items=$4::jsonb,presentation=$5::jsonb,version=version+1,updated_by=$6,updated_at=now() WHERE site_id=$1 AND slug=$2 AND version=$7 RETURNING id,slug,name,version,items,presentation,updated_at',
+                [siteId, menuItemMatch[2], body.name.trim(), JSON.stringify(body.items || []), JSON.stringify(presentation), actor.user.id, expected],
+              );
+            if (!result.rows[0]) {
+              throw fail(409, 'ERR_VIRGOSCORPIO_HUB_VERSION_CONFLICT', 'Menu already exists or changed since it was loaded.');
+            }
+            return result.rows[0];
+          },
+          audit: menu => ({
+            siteId,
+            actorId: actor.user.id,
+            action: req.method === 'POST' ? 'navigation.menu_created' : 'navigation.menu_updated',
+            targetType: 'navigation-menu',
+            targetId: menu.id,
+            requestId,
+            details: { slug: menu.slug, version: menu.version },
+          }),
+        });
+        return sendJson(res, req.method === 'POST' ? 201 : 200, { menu: saved, requestId });
       }
 
       const aiPolicyMatch = url.pathname.match(/^\/api\/v1\/sites\/([0-9a-f-]{36})\/ai-policy$/i);

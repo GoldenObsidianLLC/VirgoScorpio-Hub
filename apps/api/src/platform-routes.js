@@ -530,4 +530,4 @@ async function handlePlatformRoute(ctx) {
 
   return false;
 }
-module.exports = { handlePlatformRoute, presentationValid, productInput, validUuid };
+module.exports = { handlePlatformRoute, presentationValid, productInput, validUuid, withIdentityAuditTransaction };
