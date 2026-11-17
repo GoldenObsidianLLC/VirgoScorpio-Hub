@@ -146,45 +146,51 @@
     "gitleaks": "Gitleaks working-tree and all locally fetched Git refs scans both exited 0 with empty JSON findings on 2026-10-31; verify published remote refs before every release.",
     "releaseReadinessRedisEnvironment": "Regression-tested: release:readiness now forwards only approved local Redis/Memurai endpoints to VIRGOSCORPIO_HUB_TEST_REDIS_URL and enables the Redis integration suites; remote, malformed, and absent endpoints leave live Redis tests disabled.",
     "mainlineEvidence": {
-      "sourceRevision": "d4e1c1ce5e08b4594614448d64ad2738a84355b2",
-      "workflowRun": 681,
-      "workflowRunId": 43812646684,
+      "sourceRevision": "10e62a5902a68cee5edc31b57847a5602078feb1",
+      "workflowRun": 709,
+      "workflowRunId": 44031913251,
       "workflowEvent": "push",
       "runAttempt": 1,
       "workflowConclusion": "success",
-      "workflowCompletedAt": "2026-11-16T05:52:08Z",
-      "workflowUrl": "https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43812646684",
+      "workflowCompletedAt": "2026-11-17T06:35:30Z",
+      "workflowUrl": "https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44031913251",
       "completedJobs": 7,
-      "hubTestsPerRuntime": 641,
+      "hubTestsPerRuntime": 655,
       "enginexTestsPerRuntime": 94,
-      "livePostgresMemgraph": 106,
+      "livePostgresMemgraph": 115,
       "migrationsApplied": 18,
       "idempotentSecondPass": 18,
       "playwrightSmoke": 9,
-      "serviceLessIntegrationSkippedPerRuntime": 38,
+      "postgresBackedCollaborationPlaywright": 4,
+      "serviceLessIntegrationSkippedPerRuntime": 40,
       "serviceLessIntegrationStatus": "PARTIAL",
       "attestationStatus": "success",
       "lockfileSha256": "8f3786bcfcd03d0b63761c7107e4d757ae5b45171ba2f6c086ff38c027c8b086",
-      "sbomNode22Sha256": "7d5366630ad513e8eb4fb5a86de8737c853185438a0ea1ade9f86156b855d959",
-      "sbomNode24Sha256": "482fda7fa4a32abc73da0bac94e6419d4e8546203297b93f1ab44e80c11a6108",
+      "sbomSha256": "160e202d95587f70695c65fd944e33f68424c8f6d8c45a5aa2a0ce89ed97da63",
       "readyForProduction": false,
       "releaseClassification": "NOT_PRODUCTION_CERTIFIED",
       "finalizationStatus": "FINALIZED_AFTER_PRODUCER_VALIDATION",
       "readiness": {
-        "classification": "NOT_PRODUCTION_CERTIFIED",
-        "readyForProduction": false,
+        "generatedAt": "2026-11-17T06:35:26.692Z",
+        "artifactId": 14304914480,
+        "archiveSha256": "2bee41c738b0dd9e1f0fd738e05591fae3dd223edb7579c92c65c47750b08019",
+        "sourceRevision": "10e62a5902a68cee5edc31b57847a5602078feb1",
         "pass": 8,
         "partial": 2,
         "blocked": 0,
         "missingEvidence": 14,
         "notRun": 0,
-        "decision": "NO_GO"
+        "readyForProduction": false,
+        "classification": "NOT_PRODUCTION_CERTIFIED",
+        "decision": "NO_GO",
+        "serviceLessIntegrationSkippedPerRuntime": 40,
+        "producerStatus": "FINALIZED_AFTER_PRODUCER_VALIDATION"
       },
-      "sourceRuntimePullRequest": 169,
-      "sourceFeatureIssue": 167,
+      "sourceRuntimePullRequest": 179,
+      "sourceFeatureIssue": 178,
       "attestationArtifacts": {
-        "supplyChain": 14201002106,
-        "readiness": 14201530780
+        "supplyChain": 14305947193,
+        "readiness": 14304914480
       }
     },
     "ciReleaseReadinessFinalization": {
@@ -1427,20 +1433,32 @@
   "latestMainEvidence": {
     "reviewedAt": "2026-11-17",
     "version": "0.6.2",
-    "commit": "eb6fe4c8672dadd98892a62062ecf718ce9393b6",
+    "commit": "10e62a5902a68cee5edc31b57847a5602078feb1",
     "pullRequest": {
-      "number": 176,
-      "title": "fix(commerce): atomically persist Stripe refund audit (F1.41)",
-      "mergedAt": "2026-11-17T01:34:31Z",
-      "mergeCommit": "eb6fe4c8672dadd98892a62062ecf718ce9393b6",
-      "head": "f15af08e8a0647da56328a8be2717ea41c674ae0",
-      "base": "7f8de5d07687aa0526e7a152d831a88be64389c8",
+      "number": 179,
+      "title": "F1.42: make cloud connection mutations and audits atomic",
+      "mergedAt": "2026-11-17T06:32:01Z",
+      "mergeCommit": "10e62a5902a68cee5edc31b57847a5602078feb1",
+      "head": "2c20dafc1ffc28e67b7be0f73bbe989162c80c0f",
+      "base": "326456823f21e2f0526eeb2a8d19b88cddbfc32d",
       "formalReviews": 0,
       "inlineReviewThreads": 0,
       "reviewDecision": "NONE",
       "documentationOnly": false
     },
     "runtimeChange": {
+      "feature": "F1.42",
+      "pullRequest": 179,
+      "issue": 178,
+      "issueState": "CLOSED",
+      "parentIssue": 124,
+      "mergeCommit": "10e62a5902a68cee5edc31b57847a5602078feb1",
+      "implementationCommit": "19a4599db0087810550ea152bd509c80ce49e1bf",
+      "mergedAt": "2026-11-17T06:32:01Z",
+      "formalReviews": 0,
+      "inlineReviewThreads": 0
+    },
+    "previousRuntimeChange": {
       "feature": "F1.41",
       "pullRequest": 176,
       "issue": 175,
@@ -1452,39 +1470,27 @@
       "formalReviews": 0,
       "inlineReviewThreads": 0
     },
-    "previousRuntimeChange": {
-      "feature": "F1.40",
-      "pullRequest": 172,
-      "issue": 171,
-      "issueState": "CLOSED",
-      "parentIssue": 124,
-      "mergeCommit": "fef8c9e19ceac14d965a3ed824250a7bbafc04f",
-      "implementationCommit": "4e16213b5b087fa8fc7b4623c1a9732ed4f6ec65",
-      "mergedAt": "2026-11-16T18:12:45Z",
-      "formalReviews": 0,
-      "inlineReviewThreads": 0
-    },
-    "previousMainCommit": "ac6658e9aeeb5a7fe880450932cafe9a8e518ff9",
+    "previousMainCommit": "326456823f21e2f0526eeb2a8d19b88cddbfc32d",
     "workflow": {
       "name": "VirgoScorpio Hub CI",
-      "runId": 43996617110,
-      "runNumber": 703,
-      "url": "https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43996617110",
+      "runId": 44031913251,
+      "runNumber": 709,
+      "url": "https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44031913251",
       "event": "push",
       "attempt": 1,
-      "completedAt": "2026-11-17T01:38:12Z",
+      "completedAt": "2026-11-17T06:35:30Z",
       "completedJobs": 7,
       "successfulJobs": 7,
-      "sourceRevision": "eb6fe4c8672dadd98892a62062ecf718ce9393b6"
+      "sourceRevision": "10e62a5902a68cee5edc31b57847a5602078feb1"
     },
     "results": {
       "node22HubTests": {
-        "passed": 646,
+        "passed": 655,
         "failed": 0,
         "skipped": 0
       },
       "node24HubTests": {
-        "passed": 646,
+        "passed": 655,
         "failed": 0,
         "skipped": 0
       },
@@ -1519,17 +1525,22 @@
       "productionNpmAudit": "0 vulnerabilities"
     },
     "sbom": {
+      "lockfileSha256": "8f3786bcfcd03d0b63761c7107e4d757ae5b45171ba2f6c086ff38c027c8b086",
+      "sbomSha256": "160e202d95587f70695c65fd944e33f68424c8f6d8c45a5aa2a0ce89ed97da63",
       "cyclonedx": "1.5",
       "npm": "11.19.1",
-      "lockfileSha256": "8f3786bcfcd03d0b63761c7107e4d757ae5b45171ba2f6c086ff38c027c8b086",
       "componentsPerRuntime": 200,
-      "dependencyRecordsPerRuntime": 201
+      "dependencyRecordsPerRuntime": 201,
+      "attestations": {
+        "slsa": "https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/attestations/68489190",
+        "sbom": "https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/attestations/68489198"
+      }
     },
     "readiness": {
-      "generatedAt": "2026-11-17T01:38:09.077Z",
-      "artifactId": 14290516898,
-      "archiveSha256": "1e9cf157025b2fc0338c624b28a971993152f441e732d2d5251c1b938583ba16",
-      "sourceRevision": "eb6fe4c8672dadd98892a62062ecf718ce9393b6",
+      "generatedAt": "2026-11-17T06:35:26.692Z",
+      "artifactId": 14304914480,
+      "archiveSha256": "2bee41c738b0dd9e1f0fd738e05591fae3dd223edb7579c92c65c47750b08019",
+      "sourceRevision": "10e62a5902a68cee5edc31b57847a5602078feb1",
       "pass": 8,
       "partial": 2,
       "blocked": 0,
@@ -1542,34 +1553,34 @@
       "producerStatus": "FINALIZED_AFTER_PRODUCER_VALIDATION"
     },
     "artifactIds": {
-      "readiness": 14290516898,
-      "node22Ci": 14290272065,
-      "node24Ci": 14289227766,
-      "dependency22": 14290242144,
-      "dependency24": 14289622488,
-      "postgresMemgraph": 14289519267,
-      "liveIntegrationNode22": 14290022564,
-      "browser": 14290366833,
-      "codeql": 14290810676,
-      "supplyChainAttestation": 14289509139
+      "readiness": 14304914480,
+      "node22Ci": 14305702555,
+      "node24Ci": 14305532776,
+      "dependency22": 14305677498,
+      "dependency24": 14305842144,
+      "postgresMemgraph": 14305268510,
+      "liveIntegrationNode22": 14305013820,
+      "browser": 14304839302,
+      "codeql": 14305078472,
+      "supplyChainAttestation": 14305947193
     },
     "artifactDigests": {
-      "readiness": "sha256:1e9cf157025b2fc0338c624b28a971993152f441e732d2d5251c1b938583ba16",
-      "node22Ci": "sha256:05785f5049800e39dc258b6ac9c4fc73a116dd910adf4a38152daf51ca0e4f19",
-      "node24Ci": "sha256:ed11682abce36f2b385a82ac88914f85ac201777b1b8a00f516994f87b858b7f",
-      "dependency22": "sha256:e4cabd6d8eb773a54fd4e2b9dbdcf1d0a281481e3cff5c4caaa9bb361e82fee3",
-      "dependency24": "sha256:22b725d587224e41cdb33310a9979e2ea7d788b78d0274f843945542d6056428",
-      "postgresMemgraph": "sha256:411bc3769c9ec9b5ae69eedf4b9c50119121a13c68505c8a774b956de8614715",
-      "liveIntegrationNode22": "sha256:62350aa70bbc9158c2296f170e6a665029f27f331c56106457f737ebdf29727b",
-      "browser": "sha256:900e1f67cdb96cc9995ab7d414f70e793ea78148356ef56ab96e7871574f4f5d",
-      "codeql": "sha256:1c9a68d02ad3ce152d730021499cbf8216ef106cf30c8f30396ac6fef21af0b8",
-      "supplyChainAttestation": "sha256:62bad3d08f0aba4a711bf5d7975de9e06327afbbb05915c37550149ee22b6329"
+      "readiness": "sha256:2bee41c738b0dd9e1f0fd738e05591fae3dd223edb7579c92c65c47750b08019",
+      "node22Ci": "sha256:54477a234cb1678445c0d841103db592a427dd3df15ccb75d65c4411b75dcae1",
+      "node24Ci": "sha256:f881a2012ed140a607211091a78ee838b553ec32f472aa4bea04ecd2cbdd6729",
+      "dependency22": "sha256:b2727c2cfe821624d40085cc09c45baff3abc9d759d559ad70875b0749b10b84",
+      "dependency24": "sha256:9175f16bf89c5a3b6436599b9d6780ca1805003e8ceab0f4d4aee12b503e3d0e",
+      "postgresMemgraph": "sha256:e1a20084553cdc7b2558197354e513f4996083a6c019f919f2013c1afa5f22e4",
+      "liveIntegrationNode22": "sha256:6a82f424e9729b347ca46faa4ac4bee2bb7e2ac9bb246920bc4857973002e0e8",
+      "browser": "sha256:d2bee0edb866a0ce482b178d110f995f5c70b2c2766f2ebea3a06a40b606bd55",
+      "codeql": "sha256:4b04e6ad6a532e8c4ef7179cf6d4f7cea538ecb4af21c64b50c0878889b72f9a",
+      "supplyChainAttestation": "sha256:377cbee5eec324dc83171cc13d8c59115247733b72f40e26f48ed6793f26327c"
     },
     "review": {
       "formalPullRequestReviews": 0,
       "inlineReviewThreads": 0,
       "reviewDecision": "NONE",
-      "note": "F1.41 PR #176 merged with no formal review submission or inline review threads; maintainer/automation evidence only, not independent security/legal approval."
+      "note": "PR #179 merged with no formal review submissions or inline review threads; maintainer/automation evidence only, not independent security/legal approval."
     },
     "release": {
       "gitHubReleasePublished": false,
@@ -1579,14 +1590,14 @@
     },
     "candidateWorkflows": [
       {
-        "runId": 43991407172,
-        "runNumber": 702,
+        "runId": 44031408890,
+        "runNumber": 708,
         "event": "pull_request",
         "conclusion": "success",
-        "headSha": "f15af08e8a0647da56328a8be2717ea41c674ae0"
+        "headSha": "2c20dafc1ffc28e67b7be0f73bbe989162c80c0f"
       }
     ],
-    "evidenceScope": "Current exact-main F1.41 evidence at main eb6fe4c8672dadd98892a62062ecf718ce9393b6, validated by workflow #703. Readiness is 8 PASS / 2 PARTIAL / 14 MISSING_EVIDENCE; production is NOT_PRODUCTION_CERTIFIED / NO-GO. Stripe uses a test stub in the regression; provider lifecycle acceptance is separate."
+    "evidenceScope": "Current exact-main F1.42 evidence at main 10e62a5902a68cee5edc31b57847a5602078feb1, validated by workflow #709. Readiness is 8 PASS / 2 PARTIAL / 14 MISSING_EVIDENCE; production is NOT_PRODUCTION_CERTIFIED / NO-GO. The S3 probe regression uses a loopback protocol stub, not live provider lifecycle acceptance. PR #179 had no formal review submission or inline review thread."
   },
   "libraryRouteRefactor": {
     "reviewedAt": "2026-11-04",
@@ -2363,37 +2374,38 @@
   "latestMainSourceEvidence": {
     "reviewedAt": "2026-11-17",
     "version": "0.6.2",
-    "sourceRevision": "eb6fe4c8672dadd98892a62062ecf718ce9393b6",
-    "runtimeMergeRevision": "eb6fe4c8672dadd98892a62062ecf718ce9393b6",
-    "previousRuntimeMergeRevision": "fef8c9e19ceac14d965a3ed824250a7abbafc04f",
+    "sourceRevision": "10e62a5902a68cee5edc31b57847a5602078feb1",
+    "runtimeMergeRevision": "10e62a5902a68cee5edc31b57847a5602078feb1",
+    "previousRuntimeMergeRevision": "eb6fe4c8672dadd98892a62062ecf718ce9393b6",
     "latestRuntimeChange": {
-      "feature": "F1.41",
-      "issue": 175,
-      "pullRequest": 176,
-      "implementationHead": "c60c0448de676e06f7b22b399107a8e61674b8af",
-      "mergeCommit": "eb6fe4c8672dadd98892a62062ecf718ce9393b6",
-      "mergedAt": "2026-11-17T01:34:31Z"
+      "feature": "F1.42",
+      "issue": 178,
+      "pullRequest": 179,
+      "implementationHead": "2c20dafc1ffc28e67b7be0f73bbe989162c80c0f",
+      "implementationCommit": "19a4599db0087810550ea152bd509c80ce49e1bf",
+      "mergeCommit": "10e62a5902a68cee5edc31b57847a5602078feb1",
+      "mergedAt": "2026-11-17T06:32:01Z"
     },
     "workflow": {
       "name": "VirgoScorpio Hub CI",
-      "runId": 43996617110,
-      "runNumber": 703,
-      "url": "https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/43996617110",
+      "runId": 44031913251,
+      "runNumber": 709,
+      "url": "https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44031913251",
       "event": "push",
       "attempt": 1,
-      "completedAt": "2026-11-17T01:38:12Z",
+      "completedAt": "2026-11-17T06:35:30Z",
       "completedJobs": 7,
       "successfulJobs": 7,
-      "sourceRevision": "eb6fe4c8672dadd98892a62062ecf718ce9393b6"
+      "sourceRevision": "10e62a5902a68cee5edc31b57847a5602078feb1"
     },
     "results": {
       "node22HubTests": {
-        "passed": 646,
+        "passed": 655,
         "failed": 0,
         "skipped": 0
       },
       "node24HubTests": {
-        "passed": 646,
+        "passed": 655,
         "failed": 0,
         "skipped": 0
       },
@@ -2429,20 +2441,21 @@
     },
     "supplyChain": {
       "lockfileSha256": "8f3786bcfcd03d0b63761c7107e4d757ae5b45171ba2f6c086ff38c027c8b086",
+      "sbomSha256": "160e202d95587f70695c65fd944e33f68424c8f6d8c45a5aa2a0ce89ed97da63",
       "cyclonedx": "1.5",
       "npm": "11.19.1",
       "componentsPerRuntime": 200,
       "dependencyRecordsPerRuntime": 201,
       "attestations": {
-        "slsa": "https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/attestations/68411563",
-        "sbom": "https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/attestations/68411568"
+        "slsa": "https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/attestations/68489190",
+        "sbom": "https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/attestations/68489198"
       }
     },
     "readiness": {
-      "generatedAt": "2026-11-17T01:38:09.077Z",
-      "artifactId": 14290516898,
-      "archiveSha256": "1e9cf157025b2fc0338c624b28a971993152f441e732d2d5251c1b938583ba16",
-      "sourceRevision": "eb6fe4c8672dadd98892a62062ecf718ce9393b6",
+      "generatedAt": "2026-11-17T06:35:26.692Z",
+      "artifactId": 14304914480,
+      "archiveSha256": "2bee41c738b0dd9e1f0fd738e05591fae3dd223edb7579c92c65c47750b08019",
+      "sourceRevision": "10e62a5902a68cee5edc31b57847a5602078feb1",
       "pass": 8,
       "partial": 2,
       "blocked": 0,
@@ -2456,55 +2469,65 @@
     },
     "artifacts": {
       "readiness": {
-        "id": 14290516898,
-        "archiveSha256": "1e9cf157025b2fc0338c624b28a971993152f441e732d2d5251c1b938583ba16"
+        "id": 14304914480,
+        "archiveSha256": "2bee41c738b0dd9e1f0fd738e05591fae3dd223edb7579c92c65c47750b08019"
       },
       "node22Ci": {
-        "id": 14290272065,
-        "archiveSha256": "05785f5049800e39dc258b6ac9c4fc73a116dd910adf4a38152daf51ca0e4f19"
+        "id": 14305702555,
+        "archiveSha256": "54477a234cb1678445c0d841103db592a427dd3df15ccb75d65c4411b75dcae1"
       },
       "node24Ci": {
-        "id": 14289227766,
-        "archiveSha256": "ed11682abce36f2b385a82ac88914f85ac201777b1b8a00f516994f87b858b7f"
+        "id": 14305532776,
+        "archiveSha256": "f881a2012ed140a607211091a78ee838b553ec32f472aa4bea04ecd2cbdd6729"
       },
       "dependency22": {
-        "id": 14290242144,
-        "archiveSha256": "e4cabd6d8eb773a54fd4e2b9dbdcf1d0a281481e3cff5c4caaa9bb361e82fee3"
+        "id": 14305677498,
+        "archiveSha256": "b2727c2cfe821624d40085cc09c45baff3abc9d759d559ad70875b0749b10b84"
       },
       "dependency24": {
-        "id": 14289622488,
-        "archiveSha256": "22b725d587224e41cdb33310a9979e2ea7d788b78d0274f843945542d6056428"
+        "id": 14305842144,
+        "archiveSha256": "9175f16bf89c5a3b6436599b9d6780ca1805003e8ceab0f4d4aee12b503e3d0e"
       },
       "postgresMemgraph": {
-        "id": 14289519267,
-        "archiveSha256": "411bc3769c9ec9b5ae69eedf4b9c50119121a13c68505c8a774b956de8614715"
+        "id": 14305268510,
+        "archiveSha256": "e1a20084553cdc7b2558197354e513f4996083a6c019f919f2013c1afa5f22e4"
       },
       "liveIntegrationNode22": {
-        "id": 14290022564,
-        "archiveSha256": "62350aa70bbc9158c2296f170e6a665029f27f331c56106457f737ebdf29727b"
+        "id": 14305013820,
+        "archiveSha256": "6a82f424e9729b347ca46faa4ac4bee2bb7e2ac9bb246920bc4857973002e0e8"
       },
       "browser": {
-        "id": 14290366833,
-        "archiveSha256": "900e1f67cdb96cc9995ab7d414f70e793ea78148356ef56ab96e7871574f4f5d"
+        "id": 14304839302,
+        "archiveSha256": "d2bee0edb866a0ce482b178d110f995f5c70b2c2766f2ebea3a06a40b606bd55"
       },
       "codeql": {
-        "id": 14290810676,
-        "archiveSha256": "1c9a68d02ad3ce152d730021499cbf8216ef106cf30c8f30396ac6fef21af0b8"
+        "id": 14305078472,
+        "archiveSha256": "4b04e6ad6a532e8c4ef7179cf6d4f7cea538ecb4af21c64b50c0878889b72f9a"
       },
       "supplyChainAttestation": {
-        "id": 14289509139,
-        "archiveSha256": "62bad3d08f0aba4a711bf5d7975de9e06327afbbb05915c37550149ee22b6329"
+        "id": 14305947193,
+        "archiveSha256": "377cbee5eec324dc83171cc13d8c59115247733b72f40e26f48ed6793f26327c"
       }
     },
     "review": {
-      "runtimePullRequest": 176,
+      "runtimePullRequest": 179,
       "runtimeFormalReviews": 0,
       "runtimeInlineReviewThreads": 0,
-      "qualification": "Maintainer/automation evidence only; PR #176 has no formal review submissions or inline review threads."
+      "reviewDecision": "NONE",
+      "qualification": "PR #179 merged with no formal review submissions or inline review threads; maintainer/automation evidence only, not independent security/legal approval."
     },
-    "qualification": "Workflow #703 validates exact main after F1.41 PR #176. Stripe remains outside PostgreSQL; local persistence and correlated audit are transaction-atomic. Production remains NO-GO / NOT_PRODUCTION_CERTIFIED.",
+    "qualification": "Workflow #709 validates exact main after F1.42 PR #179. Cloud connection create, disable and post-probe health persistence are transaction-atomic with metadata-only audit; provider probes remain outside PostgreSQL. Live provider lifecycle and independent review remain separate gates. Production remains NO-GO / NOT_PRODUCTION_CERTIFIED.",
     "releaseGateReport": "docs/reports/2026-11-17-VirgoScorpio-Hub-0.6.2-Release-Gate-Report.md",
-    "f141MergeReport": "docs/reports/2026-11-17-F1-41-STRIPE-REFUND-AUDIT-ATOMICITY-MERGE-REPORT.md"
+    "f142MergeReport": "docs/reports/2026-11-17-F1-42-CLOUD-CONNECTION-AUDIT-ATOMICITY-IMPLEMENTATION-REPORT.md",
+    "candidateWorkflows": [
+      {
+        "runId": 44031408890,
+        "runNumber": 708,
+        "event": "pull_request",
+        "conclusion": "success",
+        "headSha": "2c20dafc1ffc28e67b7be0f73bbe989162c80c0f"
+      }
+    ]
   },
   "previousCandidateEvidence": {
     "reviewedAt": "2026-11-16",
@@ -2626,27 +2649,36 @@
   "latestMergedIncrementEvidence": {
     "reviewedAt": "2026-11-17",
     "version": "0.6.2",
-    "feature": "F1.41",
+    "feature": "F1.42",
     "issue": {
-      "number": 175,
-      "state": "OPEN",
-      "parentIssue": 124
+      "number": 178,
+      "state": "CLOSED",
+      "parentIssue": 124,
+      "closedAt": "2026-11-17T06:32:02Z",
+      "closeReason": "completed"
     },
-    "implementationCommit": "c60c0448de676e06f7b22b399107a8e61674b8af",
-    "mergeCommit": "eb6fe4c8672dadd98892a62062ecf718ce9393b6",
-    "pullRequest": 176,
-    "pullRequestHead": "f15af08e8a0647da56328a8be2717ea41c674ae0",
-    "mergedAt": "2026-11-17T01:34:31Z",
-    "mainlineWorkflow": 43996617110,
+    "branch": "security/f1-42-cloud-connection-audit-atomicity-2026-11-17",
+    "implementationCommit": "19a4599db0087810550ea152bd509c80ce49e1bf",
+    "mergeCommit": "10e62a5902a68cee5edc31b57847a5602078feb1",
+    "pullRequest": 179,
+    "pullRequestHead": "2c20dafc1ffc28e67b7be0f73bbe989162c80c0f",
+    "mergedAt": "2026-11-17T06:32:01Z",
+    "mainlineWorkflow": 44031913251,
+    "exactHeadWorkflow": 44031408890,
     "localFocusedTests": {
-      "passed": 17,
+      "passed": 16,
       "failed": 0,
       "skipped": 0
     },
     "localFullSuite": {
-      "passed": 643,
+      "passed": 652,
       "failed": 0,
       "skipped": 3
+    },
+    "localLiveIntegration": {
+      "passed": 114,
+      "failed": 0,
+      "skipped": 0
     },
     "hostedLiveIntegration": {
       "passed": 115,
@@ -2659,12 +2691,19 @@
     },
     "postgresBackedCollaborationPlaywright": 4,
     "browserSmoke": 9,
+    "tenantInventory": {
+      "families": 27,
+      "declaredRoutePatterns": 78,
+      "sourceFiles": 21,
+      "testFiles": 49
+    },
     "formalReviews": 0,
     "inlineReviewThreads": 0,
+    "reviewQualification": "PR #179 merged with no formal review submissions or inline review threads; maintainer/automation evidence only, not independent security/legal approval.",
     "productionCertified": false,
     "readyForProduction": false,
     "productionDecision": "NO_GO",
-    "report": "docs/reports/2026-11-17-F1-41-STRIPE-REFUND-AUDIT-ATOMICITY-MERGE-REPORT.md"
+    "report": "docs/reports/2026-11-17-F1-42-CLOUD-CONNECTION-AUDIT-ATOMICITY-IMPLEMENTATION-REPORT.md"
   },
   "historicalMainSourceEvidenceF140": {
     "reviewedAt": "2026-11-16",
