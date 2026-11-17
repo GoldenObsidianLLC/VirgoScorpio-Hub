@@ -76,10 +76,120 @@ test('page draft route writes one correlated audit through the store transaction
   }
 });
 
+test('revision restore writes its correlated draft audit through the save transaction callback', async () => {
+  const transactionClient = { query: async () => ({ rows: [] }) };
+  const auditCalls = [];
+  let storeReturned = false;
+  let saveInput;
+  const identityService = {
+    async authenticate(token) {
+      if (token !== 'restore-audit-session') return null;
+      return {
+        sessionId: 'restore-audit-session',
+        user: { id: ACTOR_ID, email: 'owner@example.test', displayName: 'Owner', status: 'active' },
+        memberships: [{ siteId: SITE_ID, siteSlug: 'restore-site', siteName: 'Restore Site', role: 'owner', roles: ['owner'], capabilities: ['*'] }],
+      };
+    },
+    async authorizeSite(userId, siteId) { return userId === ACTOR_ID && siteId === SITE_ID; },
+    async audit(event, options = {}) {
+      assert.equal(storeReturned, false, 'restore audit must complete before saveDraft returns');
+      auditCalls.push({ event, queryable: options.queryable });
+    },
+  };
+  const contentStore = {
+    async getById({ siteId, id }) {
+      assert.equal(siteId, SITE_ID);
+      assert.equal(id, CONTENT_ID);
+      return { id: CONTENT_ID, site_id: SITE_ID, created_by: ACTOR_ID, content_type: 'page', status: 'draft' };
+    },
+    async getRevision({ siteId, contentId, version }) {
+      assert.equal(siteId, SITE_ID);
+      assert.equal(contentId, CONTENT_ID);
+      assert.equal(version, 2);
+      return {
+        version: 2,
+        snapshot: {
+          title: 'Restored Draft',
+          slug: 'restored-draft',
+          locale: 'en',
+          contentType: 'page',
+          document: { schemaVersion: 1, documentId: 'restored-draft', type: 'page', title: 'Restored Draft', children: [] },
+        },
+      };
+    },
+    async saveDraft(input) {
+      saveInput = input;
+      assert.equal(typeof input.onDraftSaved, 'function', 'authenticated restore must provide the existing transactional audit callback');
+      const result = { id: CONTENT_ID, site_id: SITE_ID, title: 'Restored Draft', slug: 'restored-draft', locale: 'en', content_type: 'page', status: 'draft', version: 4, lock_version: 10, published_version: null };
+      await input.onDraftSaved({ queryable: transactionClient, result, previous: { version: 3 } });
+      storeReturned = true;
+      return result;
+    },
+  };
+  const server = createApiServer({
+    env: { NODE_ENV: 'test', AI_PROVIDER: 'mock', MAX_REQUEST_BYTES: '16384' },
+    logger: { error() {} },
+    identityService,
+    contentStore,
+  });
+  await new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', resolve);
+  });
+  try {
+    const response = await fetch('http://127.0.0.1:' + server.address().port + '/api/v1/pages/' + CONTENT_ID + '/restore/2', {
+      method: 'POST',
+      headers: {
+        authorization: 'Bearer restore-audit-session',
+        'x-virgoscorpio-hub-site-id': SITE_ID,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ expectedVersion: 3 }),
+    });
+    const payload = await response.json();
+    assert.equal(response.status, 200, JSON.stringify(payload));
+    assert.equal(payload.status, 'draft');
+    assert.equal(payload.restoredFromVersion, 2);
+    assert.equal(payload.content.id, CONTENT_ID);
+    assert.equal(auditCalls.length, 1);
+    assert.equal(auditCalls[0].queryable, transactionClient);
+    assert.deepEqual(auditCalls[0].event, {
+      siteId: SITE_ID,
+      actorId: ACTOR_ID,
+      action: 'content.draft_saved',
+      targetType: 'content',
+      targetId: CONTENT_ID,
+      requestId: payload.requestId,
+      details: { version: 4 },
+    });
+    assert.equal(saveInput.expectedVersion, 3);
+    assert.equal(saveInput.correlationId, payload.requestId);
+    assert.equal(saveInput.note, 'Restored revision 2');
+  } finally {
+    if (server.listening) await new Promise(resolve => server.close(resolve));
+    await server.virgoScorpioHub.close().catch(() => {});
+  }
+});
+
 test('page draft route keeps unauthenticated developer-token audit behavior optional', async () => {
   const devToken = 'draft-audit-developer-token';
   let saveInput;
   const contentStore = {
+    async getById() {
+      return { id: CONTENT_ID, site_id: SITE_ID, created_by: null, content_type: 'page', status: 'draft' };
+    },
+    async getRevision({ version }) {
+      return {
+        version,
+        snapshot: {
+          title: 'Developer Draft',
+          slug: 'developer-draft',
+          locale: 'en',
+          contentType: 'page',
+          document: { schemaVersion: 1, documentId: 'developer-draft', type: 'page', title: 'Developer Draft', children: [] },
+        },
+      };
+    },
     async saveDraft(input) {
       saveInput = input;
       return { id: CONTENT_ID, site_id: SITE_ID, title: 'Developer Draft', slug: 'developer-draft', locale: 'en', content_type: 'page', status: 'draft', version: 1, lock_version: 1, published_version: null };
@@ -103,6 +213,15 @@ test('page draft route keeps unauthenticated developer-token audit behavior opti
     assert.equal(response.status, 201);
     assert.equal(Object.hasOwn(saveInput, 'onDraftSaved'), true);
     assert.equal(saveInput.onDraftSaved, undefined, 'developer token has no persisted actor audit callback');
+
+    const restoreResponse = await fetch('http://127.0.0.1:' + server.address().port + '/api/v1/pages/' + CONTENT_ID + '/restore/1', {
+      method: 'POST',
+      headers: { authorization: 'Bearer ' + devToken, 'content-type': 'application/json' },
+      body: JSON.stringify({ expectedVersion: 1 }),
+    });
+    assert.equal(restoreResponse.status, 200);
+    assert.equal(Object.hasOwn(saveInput, 'onDraftSaved'), true);
+    assert.equal(saveInput.onDraftSaved, undefined, 'developer-token revision restore preserves the existing no-actor audit behavior');
   } finally {
     if (server.listening) await new Promise(resolve => server.close(resolve));
     await server.virgoScorpioHub.close().catch(() => {});
