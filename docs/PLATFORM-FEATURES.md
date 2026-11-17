@@ -60,6 +60,8 @@ Object storage adapters cover AWS S3 and S3-compatible endpoints (including depl
 
 A cloud connection marked `configured` means its configuration passed validation only. It does not mean that object-store permissions, bucket policy, network access, encryption, retention, lifecycle rules, credential resolution, or CDN delivery have been verified. The 0.6.2 sample configuration defaults to local storage. No S3/S3-compatible, R2/MinIO, GCS or Azure provider has been accepted through live least-privilege operations, lifecycle or restore testing; these adapters must not be represented as certified support.
 
+Cloud connection create, disable and health-check persistence are transaction-atomic with their metadata-only audit events. A provider health probe runs outside the database transaction; its local status/timestamp and `cloud.connection_tested` event are committed together afterward. Disabled status is sticky across health checks. This improves local audit/state consistency but does not qualify any live provider, secret manager, IAM policy, egress path or object lifecycle.
+
 ## AI integration
 
 AI can draft page documents, provide constrained content assistance, suggest SEO metadata, translate text, and help with preview/review workflows. AI output remains untrusted and is validated by VirgoScorpio Hub. Publication, billing, permissions, and plugin activation are not granted to AI tools by default. External provider use is disabled unless the operator opts in and configures the appropriate policy.

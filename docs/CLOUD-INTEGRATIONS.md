@@ -13,11 +13,17 @@ The storage layer supports put/get/delete with bounded object reads and provider
 
 Connection records store a provider name, bounded non-secret configuration, and a credential reference. The accepted configuration keys are `bucket`, `container`, `endpoint`, `region`, `forcePathStyle`, and `projectId`. Credentials, access tokens, connection strings, user-info in endpoints, and endpoint query/fragment tokens must not be stored in the configuration object.
 
-The live connection test performs a read-only provider operation: S3/S3-compatible uses `HeadBucket`, Google Cloud Storage reads bucket metadata, and Azure reads container properties. The response sanitizes SDK error messages. A failed connectivity probe does not expose the underlying SDK error.
+The live connection test performs a read-only provider operation: S3/S3-compatible uses `HeadBucket`, Google Cloud Storage reads bucket metadata, and Azure reads container properties. The response sanitizes SDK error messages. A failed connectivity probe does not expose the underlying SDK error. The route persists its observed health outcome and timestamp together with the `cloud.connection_tested` audit event after the probe completes; it does not hold a PostgreSQL transaction open during provider I/O.
 
 The current runtime supports `env://` references that point at provider-standard credential variables and provider-native workload identity for AWS/GCP. It rejects `vault://` references because a Vault resolver is not included, and Azure workload identity is not implemented in this version. A deployment must map secrets into the provider's standard variables or add an explicit secret-manager resolver; a reference string alone does not load a secret. S3 identity resolution depends on the AWS SDK credential chain; GCS uses Application Default Credentials; Azure expects `AZURE_STORAGE_CONNECTION_STRING`.
 
 The endpoint validator rejects malformed URLs, embedded URL credentials, query strings and fragments. Production endpoints must use HTTPS. This is not a complete SSRF protection by itself: restrict egress at the network level and limit who can manage cloud connection records, especially when self-hosted private object stores are allowed.
+
+## Cloud connection audit and state consistency
+
+Create, disable, and persisted health-check results use the shared PostgreSQL transaction helper and identity audit service. Each mutation and its corresponding `cloud.connection_created`, `cloud.connection_disabled`, or `cloud.connection_tested` event commit on the same transaction queryable. Audit details contain only allow-listed operational metadata; never include credential values/references, provider configuration, bucket/container names, endpoint URLs, raw provider responses or raw error messages. If audit persistence fails, the local mutation rolls back. A provider probe already completed before the health-check transaction cannot be rolled back; retry may repeat that read-only probe.
+
+A health check does not reactivate a connection that is already disabled or is disabled while the probe is in flight. The event distinguishes the observed probe result from the effective persisted connection status. This local transaction/audit guarantee does not establish provider IAM, upload/delete, encryption, lifecycle/retention, restore, CDN or production acceptance.
 
 ## Required production validation
 
