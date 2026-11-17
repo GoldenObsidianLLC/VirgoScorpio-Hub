@@ -30,26 +30,48 @@ function presentationValid(value) {
 }
 
 /**
- * Persist one cloud-connection mutation and its audit event on the same
- * PostgreSQL client. External provider I/O must finish before this helper is
- * called so the transaction stays short and rollback semantics stay local.
+ * Persist one site-scoped configuration mutation and its identity audit event
+ * on the same PostgreSQL client. Callers must finish provider I/O before
+ * entering this transaction so rollback semantics remain local and bounded.
  */
-function requireCloudConnectionAudit(identity, fail) {
+function requireIdentityAudit(identity, fail, message) {
   if (typeof identity?.audit !== 'function') {
-    throw fail(
-      503,
-      'ERR_VIRGOSCORPIO_HUB_AUDIT_UNAVAILABLE',
-      'Cloud connection changes require the identity audit service.',
-    );
+    throw fail(503, 'ERR_VIRGOSCORPIO_HUB_AUDIT_UNAVAILABLE', message);
   }
 }
 
-async function withCloudConnectionAudit({ localPool, identity, fail, mutate, audit }) {
-  requireCloudConnectionAudit(identity, fail);
+function requireCloudConnectionAudit(identity, fail) {
+  requireIdentityAudit(
+    identity,
+    fail,
+    'Cloud connection changes require the identity audit service.',
+  );
+}
+
+async function withIdentityAuditTransaction({
+  localPool,
+  identity,
+  fail,
+  unavailableMessage,
+  mutate,
+  audit,
+}) {
+  requireIdentityAudit(identity, fail, unavailableMessage);
   return withTransaction(localPool, async queryable => {
     const result = await mutate(queryable);
     await identity.audit(audit(result), { queryable });
     return result;
+  });
+}
+
+async function withCloudConnectionAudit({ localPool, identity, fail, mutate, audit }) {
+  return withIdentityAuditTransaction({
+    localPool,
+    identity,
+    fail,
+    unavailableMessage: 'Cloud connection changes require the identity audit service.',
+    mutate,
+    audit,
   });
 }
 
@@ -393,8 +415,118 @@ async function handlePlatformRoute(ctx) {
     }
   }
 
-  const megaMenus=pathName.match(/^\/api\/v1\/sites\/([0-9a-f-]{36})\/mega-menus(?:\/([a-z0-9][a-z0-9-]{0,100}))?$/i);
-  if(megaMenus&&((!megaMenus[2]&&['GET','POST'].includes(method))||(megaMenus[2]&&['PUT','DELETE'].includes(method)) )){if(!localPool)throw fail(503,'ERR_VIRGOSCORPIO_HUB_DATABASE_DISABLED','Mega menus require PostgreSQL.');const siteId=megaMenus[1],body=['POST','PUT'].includes(method)?await readJson(req,Math.min(maxBody,256_000)):{};await siteIdFor({ req, url, body, actor, routeSiteId: siteId });await requireCapability(actor,siteId,method==='GET'?'content:read':'site:manage');if(!megaMenus[2]&&method==='GET'){const q=await localPool.query("SELECT id,slug,name,version,items,presentation,created_at,updated_at FROM navigation_menus WHERE site_id=$1 AND presentation->>'megaMenu'='true' ORDER BY name",[siteId]);return sendJson(res,200,{menus:q.rows,requestId});}if(!megaMenus[2]&&method==='POST'||megaMenus[2]&&method==='PUT'){if(!/^[a-z0-9][a-z0-9-]{0,100}$/.test(String(body.slug||megaMenus[2]||''))||typeof body.name!=='string'||!body.name.trim()||body.name.length>180)throw fail(400,'ERR_VIRGOSCORPIO_HUB_MEGA_MENU_METADATA','Mega menu slug and name are required.');const validItems=validateMenuItems(body.items||[]);if(!validItems.valid)throw fail(422,'ERR_VIRGOSCORPIO_HUB_MENU_INVALID','Mega-menu items failed validation.',validItems.errors);const presentation={megaMenu:true,layout:'columns',width:'wide',columns:3,showDescriptions:false,showImages:false,showIcons:true,mobileMode:'accordion',trigger:'click',...(body.presentation||{})};const v=presentationValid(presentation);if(!v.valid)throw fail(422,'ERR_VIRGOSCORPIO_HUB_MEGA_MENU_PRESENTATION','Mega-menu presentation failed validation.',v.errors);if(method==='POST'){const q=await localPool.query('INSERT INTO navigation_menus(site_id,slug,name,items,presentation,updated_by) VALUES($1,$2,$3,$4::jsonb,$5::jsonb,$6) RETURNING id,slug,name,version,items,presentation,created_at,updated_at',[siteId,body.slug,body.name.trim(),JSON.stringify(body.items||[]),JSON.stringify(presentation),actor.user.id||null]);return sendJson(res,201,{menu:q.rows[0],requestId});}const q=await localPool.query('UPDATE navigation_menus SET name=$3,items=$4::jsonb,presentation=$5::jsonb,version=version+1,updated_by=$6,updated_at=now() WHERE site_id=$1 AND slug=$2 AND version=$7 RETURNING id,slug,name,version,items,presentation,created_at,updated_at',[siteId,megaMenus[2],body.name.trim(),JSON.stringify(body.items||[]),JSON.stringify(presentation),actor.user.id||null,Number(body.expectedVersion)]);if(!q.rows[0])throw fail(409,'ERR_VIRGOSCORPIO_HUB_VERSION_CONFLICT','Mega menu is missing or stale.');return sendJson(res,200,{menu:q.rows[0],requestId});}const q=await localPool.query("DELETE FROM navigation_menus WHERE site_id=$1 AND slug=$2 AND presentation->>'megaMenu'='true' RETURNING slug",[siteId,megaMenus[2]]);if(!q.rows[0])throw fail(404,'ERR_VIRGOSCORPIO_HUB_MEGA_MENU_NOT_FOUND','Mega menu not found.');return sendJson(res,200,{deleted:true,requestId});}
+  const megaMenus = pathName.match(/^\/api\/v1\/sites\/([0-9a-f-]{36})\/mega-menus(?:\/([a-z0-9][a-z0-9-]{0,100}))?$/i);
+  if (
+    megaMenus &&
+    ((!megaMenus[2] && ['GET', 'POST'].includes(method)) ||
+      (megaMenus[2] && ['PUT', 'DELETE'].includes(method)))
+  ) {
+    if (!localPool) {
+      throw fail(503, 'ERR_VIRGOSCORPIO_HUB_DATABASE_DISABLED', 'Mega menus require PostgreSQL.');
+    }
+    const siteId = megaMenus[1];
+    const body = ['POST', 'PUT'].includes(method)
+      ? await readJson(req, Math.min(maxBody, 256_000))
+      : {};
+    await siteIdFor({ req, url, body, actor, routeSiteId: siteId });
+    await requireCapability(actor, siteId, method === 'GET' ? 'content:read' : 'site:manage');
+
+    if (!megaMenus[2] && method === 'GET') {
+      const result = await localPool.query(
+        "SELECT id,slug,name,version,items,presentation,created_at,updated_at FROM navigation_menus WHERE site_id=$1 AND presentation->>'megaMenu'='true' ORDER BY name",
+        [siteId],
+      );
+      return sendJson(res, 200, { menus: result.rows, requestId });
+    }
+
+    const isCreate = !megaMenus[2] && method === 'POST';
+    if (isCreate || (megaMenus[2] && method === 'PUT')) {
+      const slug = String(body.slug || megaMenus[2] || '');
+      if (!/^[a-z0-9][a-z0-9-]{0,100}$/.test(slug) ||
+          typeof body.name !== 'string' || !body.name.trim() || body.name.length > 180) {
+        throw fail(400, 'ERR_VIRGOSCORPIO_HUB_MEGA_MENU_METADATA', 'Mega menu slug and name are required.');
+      }
+      const validItems = validateMenuItems(body.items || []);
+      if (!validItems.valid) {
+        throw fail(422, 'ERR_VIRGOSCORPIO_HUB_MENU_INVALID', 'Mega-menu items failed validation.', validItems.errors);
+      }
+      const presentation = {
+        megaMenu: true,
+        layout: 'columns',
+        width: 'wide',
+        columns: 3,
+        showDescriptions: false,
+        showImages: false,
+        showIcons: true,
+        mobileMode: 'accordion',
+        trigger: 'click',
+        ...(body.presentation || {}),
+      };
+      const validatedPresentation = presentationValid(presentation);
+      if (!validatedPresentation.valid) {
+        throw fail(422, 'ERR_VIRGOSCORPIO_HUB_MEGA_MENU_PRESENTATION', 'Mega-menu presentation failed validation.', validatedPresentation.errors);
+      }
+
+      const menu = await withIdentityAuditTransaction({
+        localPool,
+        identity,
+        fail,
+        unavailableMessage: 'Mega-menu changes require the identity audit service.',
+        mutate: async queryable => {
+          const result = isCreate
+            ? await queryable.query(
+              'INSERT INTO navigation_menus(site_id,slug,name,items,presentation,updated_by) VALUES($1,$2,$3,$4::jsonb,$5::jsonb,$6) RETURNING id,slug,name,version,items,presentation,created_at,updated_at',
+              [siteId, slug, body.name.trim(), JSON.stringify(body.items || []), JSON.stringify(presentation), actor.user.id || null],
+            )
+            : await queryable.query(
+              'UPDATE navigation_menus SET name=$3,items=$4::jsonb,presentation=$5::jsonb,version=version+1,updated_by=$6,updated_at=now() WHERE site_id=$1 AND slug=$2 AND version=$7 RETURNING id,slug,name,version,items,presentation,created_at,updated_at',
+              [siteId, megaMenus[2], body.name.trim(), JSON.stringify(body.items || []), JSON.stringify(presentation), actor.user.id || null, Number(body.expectedVersion)],
+            );
+          if (!result.rows[0]) {
+            throw fail(409, 'ERR_VIRGOSCORPIO_HUB_VERSION_CONFLICT', 'Mega menu is missing or stale.');
+          }
+          return result.rows[0];
+        },
+        audit: saved => ({
+          siteId,
+          actorId: actor.user.id,
+          action: isCreate ? 'navigation.mega_menu_created' : 'navigation.mega_menu_updated',
+          targetType: 'navigation-menu',
+          targetId: saved.id,
+          requestId,
+          details: { slug: saved.slug, version: saved.version },
+        }),
+      });
+      return sendJson(res, isCreate ? 201 : 200, { menu, requestId });
+    }
+
+    await withIdentityAuditTransaction({
+      localPool,
+      identity,
+      fail,
+      unavailableMessage: 'Mega-menu changes require the identity audit service.',
+      mutate: async queryable => {
+        const result = await queryable.query(
+          "DELETE FROM navigation_menus WHERE site_id=$1 AND slug=$2 AND presentation->>'megaMenu'='true' RETURNING id,slug,version",
+          [siteId, megaMenus[2]],
+        );
+        if (!result.rows[0]) {
+          throw fail(404, 'ERR_VIRGOSCORPIO_HUB_MEGA_MENU_NOT_FOUND', 'Mega menu not found.');
+        }
+        return result.rows[0];
+      },
+      audit: removed => ({
+        siteId,
+        actorId: actor.user.id,
+        action: 'navigation.mega_menu_deleted',
+        targetType: 'navigation-menu',
+        targetId: removed.id,
+        requestId,
+        details: { slug: removed.slug, version: removed.version },
+      }),
+    });
+    return sendJson(res, 200, { deleted: true, requestId });
+  }
 
   return false;
 }

@@ -1191,24 +1191,28 @@
         "navigation_menus"
       ],
       "sideEffects": [
-        "Create/update/delete versioned navigation configuration"
+        "Create/update/delete versioned navigation configuration",
+        "Metadata-only navigation.mega_menu_created, navigation.mega_menu_updated and navigation.mega_menu_deleted identity audit events"
       ],
       "sourceRefs": [
         {
           "file": "apps/api/src/platform-routes.js",
           "anchors": [
-            "const megaMenus"
+            "const megaMenus",
+            "withIdentityAuditTransaction("
           ]
         }
       ],
       "tests": [
         "test/tenant-route-capabilities.test.js",
         "test/api.test.js",
-        "test/integration/tenant-mega-menu-isolation.integration.test.js"
+        "test/integration/tenant-mega-menu-isolation.integration.test.js",
+        "test/mega-menu-audit-atomicity.test.js",
+        "test/integration/mega-menu-audit-atomicity.integration.test.js"
       ],
       "coverage": {
-        "level": "targeted-two-site-route-tests",
-        "limits": "Live PostgreSQL A/B route tests cover scoped listing, create, versioned update and delete with the same slug present in both sites. Foreign-site list/update/delete attempts and conflicting header/query/body selectors are rejected before mutation; snapshots prove both tenants remain unchanged after denial. The merged PR #92 regression races two updates with the same expected version and requires exactly one success, one version conflict, one version increment and a final row matching the winning request; the Site B same-slug row must remain unchanged. Consumer rendering/cache invalidation and every presentation variant remain separate review items."
+        "level": "targeted-two-site-plus-transactional-audit-rollback",
+        "limits": "Live PostgreSQL A/B route tests cover scoped listing, create, versioned update and delete with the same slug present in both sites. Foreign-site list/update/delete attempts and conflicting header/query/body selectors are rejected before mutation; snapshots prove both tenants remain unchanged after denial. The merged PR #92 regression races two updates with the same expected version and requires exactly one success, one version conflict, one version increment and a final row matching the winning request; the Site B same-slug row remains unchanged. F1.45 adds metadata-only identity audit events for create/update/delete on the same transaction queryable; unit tests prove callback ordering, fail-closed audit availability, stale-version behavior and rollback/retry for all three actions, while the live PostgreSQL route test injects audit_events trigger failures and proves database rollback plus exactly-one-event retry. Consumer rendering/cache invalidation, every presentation variant and independent adversarial review remain separate gates."
       },
       "methods": [
         "GET",
