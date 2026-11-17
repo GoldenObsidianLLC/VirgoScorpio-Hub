@@ -29,6 +29,30 @@ function presentationValid(value) {
   return {valid:errors.length===0,errors};
 }
 
+/**
+ * Persist one cloud-connection mutation and its audit event on the same
+ * PostgreSQL client. External provider I/O must finish before this helper is
+ * called so the transaction stays short and rollback semantics stay local.
+ */
+function requireCloudConnectionAudit(identity, fail) {
+  if (typeof identity?.audit !== 'function') {
+    throw fail(
+      503,
+      'ERR_VIRGOSCORPIO_HUB_AUDIT_UNAVAILABLE',
+      'Cloud connection changes require the identity audit service.',
+    );
+  }
+}
+
+async function withCloudConnectionAudit({ localPool, identity, fail, mutate, audit }) {
+  requireCloudConnectionAudit(identity, fail);
+  return withTransaction(localPool, async queryable => {
+    const result = await mutate(queryable);
+    await identity.audit(audit(result), { queryable });
+    return result;
+  });
+}
+
 async function handlePlatformRoute(ctx) {
   const { req,res,url,actor,siteIdFor,requireCapability,readJson,sendJson,fail,requestId,localPool,firewall,env,identity,maxBody } = ctx;
   const communityWorkflowHandled = await handleCommunityWorkflowRoute(ctx);
@@ -128,8 +152,246 @@ async function handlePlatformRoute(ctx) {
     return sendJson(res, 200, { deleted: true, requestId });
   }
 
-  const cloudConnections=pathName.match(/^\/api\/v1\/sites\/([0-9a-f-]{36})\/cloud\/connections(?:\/([0-9a-f-]{36})\/(test|disable))?$/i);
-  if(cloudConnections&&((!cloudConnections[2]&&['GET','POST'].includes(method))||(cloudConnections[2]&&method==='POST'))){if(!localPool)throw fail(503,'ERR_VIRGOSCORPIO_HUB_DATABASE_DISABLED','Cloud integration settings require PostgreSQL.');const siteId=cloudConnections[1],body=method==='POST'?await readJson(req,Math.min(maxBody,32_000)):{};await siteIdFor({ req, url, body, actor, routeSiteId: siteId });await requireCapability(actor,siteId,'cloud:manage');if(!cloudConnections[2]&&method==='GET'){const q=await localPool.query('SELECT id,site_id,provider,name,config,credential_reference,status,last_health_check_at,created_at,updated_at FROM cloud_connections WHERE site_id=$1 ORDER BY created_at DESC',[siteId]);return sendJson(res,200,{connections:q.rows,availableProviders:['aws-s3','s3-compatible','google-cloud-storage','azure-blob','cloudflare-r2','minio'],requestId});}if(!cloudConnections[2]&&method==='POST'){const validation=cloudConfigStatus({provider:body.provider,credentialReference:body.credentialReference,config:body.config||{}});const endpointAllowed=!(body.config||{}).endpoint||cloudEndpointAllowed((body.config||{}).endpoint,env);if(!validation.valid||!endpointAllowed)throw fail(422,'ERR_VIRGOSCORPIO_HUB_CLOUD_CONFIG_INVALID','Cloud connection failed validation.',[...validation.errors,...(!endpointAllowed?['endpoint must match the deployment allowlist in production']:[])]);if(typeof body.name!=='string'||!body.name.trim()||body.name.length>180)throw fail(400,'ERR_VIRGOSCORPIO_HUB_CLOUD_CONFIG_INVALID','Connection name is required.');const q=await localPool.query('INSERT INTO cloud_connections(site_id,provider,name,config,credential_reference,status) VALUES($1,$2,$3,$4::jsonb,$5,\'configured\') RETURNING id,site_id,provider,name,config,credential_reference,status,created_at,updated_at',[siteId,body.provider,body.name.trim(),JSON.stringify(body.config||{}),body.credentialReference]);return sendJson(res,201,{connection:q.rows[0],note:'Credentials are held by the configured secret manager; this record does not store secret values.',requestId});}if(cloudConnections[3]==='disable'){const q=await localPool.query("UPDATE cloud_connections SET status='disabled',updated_at=now() WHERE site_id=$1 AND id=$2 RETURNING id,status",[siteId,cloudConnections[2]]);if(!q.rows[0])throw fail(404,'ERR_VIRGOSCORPIO_HUB_CLOUD_CONNECTION_NOT_FOUND','Cloud connection not found.');return sendJson(res,200,{connection:q.rows[0],requestId});}if(cloudConnections[3]==='test'){const q=await localPool.query('SELECT id,provider,config,credential_reference,status FROM cloud_connections WHERE site_id=$1 AND id=$2',[siteId,cloudConnections[2]]);if(!q.rows[0])throw fail(404,'ERR_VIRGOSCORPIO_HUB_CLOUD_CONNECTION_NOT_FOUND','Cloud connection not found.');const connection=q.rows[0];const credentialStatus=resolveCloudCredentialReference({provider:connection.provider,reference:connection.credential_reference,env});const configured=credentialStatus.ok;let test={status:'unhealthy',provider:connection.provider,credentialReferenceConfigured:configured,credentialReferenceMode:credentialStatus.mode||'unsupported',liveProbeAttempted:false,liveObjectStoreOperationPerformed:false};if(configured){try{const config=connection.config||{};const providerMap={'aws-s3':'aws-s3','s3-compatible':'s3-compatible','cloudflare-r2':'cloudflare-r2','minio':'minio','google-cloud-storage':'google-cloud-storage','azure-blob':'azure-blob'};const expected=providerMap[connection.provider];if(!expected)throw new Error('unsupported provider');const bucket=config.bucket||env.LIBRARY_STORAGE_BUCKET||env.S3_BUCKET||env.GCS_BUCKET;const container=config.container||env.LIBRARY_STORAGE_CONTAINER||env.AZURE_STORAGE_CONTAINER;if(['aws-s3','s3-compatible','cloudflare-r2','minio','google-cloud-storage'].includes(expected)&&(!bucket||typeof bucket!=='string'))throw new Error('bucket is not configured');if(expected==='azure-blob'&&(!container||typeof container!=='string'))throw new Error('container is not configured');const probeEnv={...env,LIBRARY_STORAGE_PROVIDER:expected,LIBRARY_STORAGE_BUCKET:bucket,LIBRARY_STORAGE_CONTAINER:container,LIBRARY_STORAGE_ENDPOINT:config.endpoint||env.LIBRARY_STORAGE_ENDPOINT,LIBRARY_STORAGE_REGION:config.region||env.LIBRARY_STORAGE_REGION,S3_FORCE_PATH_STYLE:config.forcePathStyle===true?'true':(config.forcePathStyle===false?'false':env.S3_FORCE_PATH_STYLE),GOOGLE_CLOUD_PROJECT:config.projectId||env.GOOGLE_CLOUD_PROJECT};const adapter=createCloudStorageAdapterFromEnv({env:probeEnv});test={...test,liveProbeAttempted:Boolean(adapter)};const result=await probeCloudStorageAdapter(adapter);test={status:'healthy',provider:connection.provider,credentialReferenceConfigured:true,credentialReferenceMode:credentialStatus.mode,liveProbeAttempted:true,liveObjectStoreOperationPerformed:true,probe:result};}catch(error){test={...test,status:'unhealthy',errorCode:error.code||'ERR_VIRGOSCORPIO_HUB_CLOUD_PROBE_FAILED',message:'Live storage probe failed. Verify provider credentials, bucket/container configuration, and permissions.'};}}else test={...test,status:'unhealthy',message:credentialStatus.message||'Credential reference could not be resolved by this runtime.'};await localPool.query('UPDATE cloud_connections SET status=$3,last_health_check_at=now(),updated_at=now() WHERE site_id=$1 AND id=$2',[siteId,cloudConnections[2],test.status]);return sendJson(res,200,{test,requestId});}}
+  const cloudConnections = pathName.match(
+    /^\/api\/v1\/sites\/([0-9a-f-]{36})\/cloud\/connections(?:\/([0-9a-f-]{36})\/(test|disable))?$/i,
+  );
+  if (
+    cloudConnections &&
+    ((!cloudConnections[2] && ['GET', 'POST'].includes(method)) ||
+      (cloudConnections[2] && method === 'POST'))
+  ) {
+    if (!localPool) throw fail(503, 'ERR_VIRGOSCORPIO_HUB_DATABASE_DISABLED', 'Cloud integration settings require PostgreSQL.');
+
+    const siteId = cloudConnections[1];
+    const body = method === 'POST' ? await readJson(req, Math.min(maxBody, 32_000)) : {};
+    await siteIdFor({ req, url, body, actor, routeSiteId: siteId });
+    await requireCapability(actor, siteId, 'cloud:manage');
+
+    // Fail before provider I/O or a cloud write if the audit service is absent.
+    if (method === 'POST') requireCloudConnectionAudit(identity, fail);
+
+    if (!cloudConnections[2] && method === 'GET') {
+      const q = await localPool.query(
+        'SELECT id,site_id,provider,name,config,credential_reference,status,last_health_check_at,created_at,updated_at FROM cloud_connections WHERE site_id=$1 ORDER BY created_at DESC',
+        [siteId],
+      );
+      return sendJson(res, 200, {
+        connections: q.rows,
+        availableProviders: ['aws-s3', 's3-compatible', 'google-cloud-storage', 'azure-blob', 'cloudflare-r2', 'minio'],
+        requestId,
+      });
+    }
+
+    if (!cloudConnections[2] && method === 'POST') {
+      const validation = cloudConfigStatus({
+        provider: body.provider,
+        credentialReference: body.credentialReference,
+        config: body.config || {},
+      });
+      const endpointAllowed = !(body.config || {}).endpoint || cloudEndpointAllowed((body.config || {}).endpoint, env);
+      if (!validation.valid || !endpointAllowed) {
+        throw fail(422, 'ERR_VIRGOSCORPIO_HUB_CLOUD_CONFIG_INVALID', 'Cloud connection failed validation.', [
+          ...validation.errors,
+          ...(!endpointAllowed ? ['endpoint must match the deployment allowlist in production'] : []),
+        ]);
+      }
+      if (typeof body.name !== 'string' || !body.name.trim() || body.name.length > 180) {
+        throw fail(400, 'ERR_VIRGOSCORPIO_HUB_CLOUD_CONFIG_INVALID', 'Connection name is required.');
+      }
+
+      const connection = await withCloudConnectionAudit({
+        localPool,
+        identity,
+        fail,
+        mutate: async queryable => {
+          const q = await queryable.query(
+            "INSERT INTO cloud_connections(site_id,provider,name,config,credential_reference,status) VALUES($1,$2,$3,$4::jsonb,$5,'configured') RETURNING id,site_id,provider,name,config,credential_reference,status,created_at,updated_at",
+            [siteId, body.provider, body.name.trim(), JSON.stringify(body.config || {}), body.credentialReference],
+          );
+          return q.rows[0];
+        },
+        audit: saved => ({
+          siteId,
+          actorId: actor?.user?.id || null,
+          action: 'cloud.connection_created',
+          targetType: 'cloud-connection',
+          targetId: saved.id,
+          requestId,
+          details: { provider: saved.provider, status: saved.status },
+        }),
+      });
+
+      return sendJson(res, 201, {
+        connection,
+        note: 'Credentials are held by the configured secret manager; this record does not store secret values.',
+        requestId,
+      });
+    }
+
+    const connectionId = cloudConnections[2];
+    const action = cloudConnections[3];
+
+    if (action === 'disable') {
+      const connection = await withCloudConnectionAudit({
+        localPool,
+        identity,
+        fail,
+        mutate: async queryable => {
+          const q = await queryable.query(
+            "UPDATE cloud_connections SET status='disabled',updated_at=now() WHERE site_id=$1 AND id=$2 RETURNING id,provider,status",
+            [siteId, connectionId],
+          );
+          if (!q.rows[0]) {
+            throw fail(404, 'ERR_VIRGOSCORPIO_HUB_CLOUD_CONNECTION_NOT_FOUND', 'Cloud connection not found.');
+          }
+          return q.rows[0];
+        },
+        audit: saved => ({
+          siteId,
+          actorId: actor?.user?.id || null,
+          action: 'cloud.connection_disabled',
+          targetType: 'cloud-connection',
+          targetId: saved.id,
+          requestId,
+          details: { provider: saved.provider, status: saved.status },
+        }),
+      });
+
+      // Preserve the established response contract (id and status only).
+      return sendJson(res, 200, {
+        connection: { id: connection.id, status: connection.status },
+        requestId,
+      });
+    }
+
+    if (action === 'test') {
+      const q = await localPool.query(
+        'SELECT id,provider,config,credential_reference,status FROM cloud_connections WHERE site_id=$1 AND id=$2',
+        [siteId, connectionId],
+      );
+      if (!q.rows[0]) {
+        throw fail(404, 'ERR_VIRGOSCORPIO_HUB_CLOUD_CONNECTION_NOT_FOUND', 'Cloud connection not found.');
+      }
+
+      const connection = q.rows[0];
+      const credentialStatus = resolveCloudCredentialReference({
+        provider: connection.provider,
+        reference: connection.credential_reference,
+        env,
+      });
+      const configured = credentialStatus.ok;
+      let result = {
+        status: 'unhealthy',
+        provider: connection.provider,
+        credentialReferenceConfigured: configured,
+        credentialReferenceMode: credentialStatus.mode || 'unsupported',
+        liveProbeAttempted: false,
+        liveObjectStoreOperationPerformed: false,
+      };
+
+      if (configured) {
+        try {
+          const config = connection.config || {};
+          const providerMap = {
+            'aws-s3': 'aws-s3',
+            's3-compatible': 's3-compatible',
+            'cloudflare-r2': 'cloudflare-r2',
+            minio: 'minio',
+            'google-cloud-storage': 'google-cloud-storage',
+            'azure-blob': 'azure-blob',
+          };
+          const expected = providerMap[connection.provider];
+          if (!expected) throw new Error('unsupported provider');
+
+          const bucket = config.bucket || env.LIBRARY_STORAGE_BUCKET || env.S3_BUCKET || env.GCS_BUCKET;
+          const container = config.container || env.LIBRARY_STORAGE_CONTAINER || env.AZURE_STORAGE_CONTAINER;
+          if (
+            ['aws-s3', 's3-compatible', 'cloudflare-r2', 'minio', 'google-cloud-storage'].includes(expected) &&
+            (!bucket || typeof bucket !== 'string')
+          ) {
+            throw new Error('bucket is not configured');
+          }
+          if (expected === 'azure-blob' && (!container || typeof container !== 'string')) {
+            throw new Error('container is not configured');
+          }
+
+          const probeEnv = {
+            ...env,
+            LIBRARY_STORAGE_PROVIDER: expected,
+            LIBRARY_STORAGE_BUCKET: bucket,
+            LIBRARY_STORAGE_CONTAINER: container,
+            LIBRARY_STORAGE_ENDPOINT: config.endpoint || env.LIBRARY_STORAGE_ENDPOINT,
+            LIBRARY_STORAGE_REGION: config.region || env.LIBRARY_STORAGE_REGION,
+            S3_FORCE_PATH_STYLE: config.forcePathStyle === true
+              ? 'true'
+              : (config.forcePathStyle === false ? 'false' : env.S3_FORCE_PATH_STYLE),
+            GOOGLE_CLOUD_PROJECT: config.projectId || env.GOOGLE_CLOUD_PROJECT,
+          };
+          const adapter = createCloudStorageAdapterFromEnv({ env: probeEnv });
+          result = { ...result, liveProbeAttempted: Boolean(adapter) };
+          const probe = await probeCloudStorageAdapter(adapter);
+          result = {
+            status: 'healthy',
+            provider: connection.provider,
+            credentialReferenceConfigured: true,
+            credentialReferenceMode: credentialStatus.mode,
+            liveProbeAttempted: true,
+            liveObjectStoreOperationPerformed: true,
+            probe,
+          };
+        } catch (error) {
+          result = {
+            ...result,
+            status: 'unhealthy',
+            errorCode: error.code || 'ERR_VIRGOSCORPIO_HUB_CLOUD_PROBE_FAILED',
+            message: 'Live storage probe failed. Verify provider credentials, bucket/container configuration, and permissions.',
+          };
+        }
+      } else {
+        result = {
+          ...result,
+          status: 'unhealthy',
+          message: credentialStatus.message || 'Credential reference could not be resolved by this runtime.',
+        };
+      }
+
+      // Provider I/O is complete. Persist only its safe outcome and audit
+      // metadata in a short transaction; never hold a DB client during the probe.
+      await withCloudConnectionAudit({
+        localPool,
+        identity,
+        fail,
+        mutate: async queryable => {
+          const updated = await queryable.query(
+            "UPDATE cloud_connections SET status=CASE WHEN status='disabled' THEN 'disabled' ELSE $3 END,last_health_check_at=now(),updated_at=now() WHERE site_id=$1 AND id=$2 RETURNING id,provider,status",
+            [siteId, connectionId, result.status],
+          );
+          if (!updated.rows[0]) {
+            throw fail(404, 'ERR_VIRGOSCORPIO_HUB_CLOUD_CONNECTION_NOT_FOUND', 'Cloud connection not found.');
+          }
+          return updated.rows[0];
+        },
+        audit: saved => ({
+          siteId,
+          actorId: actor?.user?.id || null,
+          action: 'cloud.connection_tested',
+          targetType: 'cloud-connection',
+          targetId: saved.id,
+          requestId,
+          details: {
+            provider: saved.provider,
+            probeStatus: result.status,
+            connectionStatus: saved.status,
+            credentialReferenceMode: String(result.credentialReferenceMode || 'unsupported'),
+            liveProbeAttempted: result.liveProbeAttempted === true,
+            liveObjectStoreOperationPerformed: result.liveObjectStoreOperationPerformed === true,
+          },
+        }),
+      });
+
+      return sendJson(res, 200, { test: result, requestId });
+    }
+  }
 
   const megaMenus=pathName.match(/^\/api\/v1\/sites\/([0-9a-f-]{36})\/mega-menus(?:\/([a-z0-9][a-z0-9-]{0,100}))?$/i);
   if(megaMenus&&((!megaMenus[2]&&['GET','POST'].includes(method))||(megaMenus[2]&&['PUT','DELETE'].includes(method)) )){if(!localPool)throw fail(503,'ERR_VIRGOSCORPIO_HUB_DATABASE_DISABLED','Mega menus require PostgreSQL.');const siteId=megaMenus[1],body=['POST','PUT'].includes(method)?await readJson(req,Math.min(maxBody,256_000)):{};await siteIdFor({ req, url, body, actor, routeSiteId: siteId });await requireCapability(actor,siteId,method==='GET'?'content:read':'site:manage');if(!megaMenus[2]&&method==='GET'){const q=await localPool.query("SELECT id,slug,name,version,items,presentation,created_at,updated_at FROM navigation_menus WHERE site_id=$1 AND presentation->>'megaMenu'='true' ORDER BY name",[siteId]);return sendJson(res,200,{menus:q.rows,requestId});}if(!megaMenus[2]&&method==='POST'||megaMenus[2]&&method==='PUT'){if(!/^[a-z0-9][a-z0-9-]{0,100}$/.test(String(body.slug||megaMenus[2]||''))||typeof body.name!=='string'||!body.name.trim()||body.name.length>180)throw fail(400,'ERR_VIRGOSCORPIO_HUB_MEGA_MENU_METADATA','Mega menu slug and name are required.');const validItems=validateMenuItems(body.items||[]);if(!validItems.valid)throw fail(422,'ERR_VIRGOSCORPIO_HUB_MENU_INVALID','Mega-menu items failed validation.',validItems.errors);const presentation={megaMenu:true,layout:'columns',width:'wide',columns:3,showDescriptions:false,showImages:false,showIcons:true,mobileMode:'accordion',trigger:'click',...(body.presentation||{})};const v=presentationValid(presentation);if(!v.valid)throw fail(422,'ERR_VIRGOSCORPIO_HUB_MEGA_MENU_PRESENTATION','Mega-menu presentation failed validation.',v.errors);if(method==='POST'){const q=await localPool.query('INSERT INTO navigation_menus(site_id,slug,name,items,presentation,updated_by) VALUES($1,$2,$3,$4::jsonb,$5::jsonb,$6) RETURNING id,slug,name,version,items,presentation,created_at,updated_at',[siteId,body.slug,body.name.trim(),JSON.stringify(body.items||[]),JSON.stringify(presentation),actor.user.id||null]);return sendJson(res,201,{menu:q.rows[0],requestId});}const q=await localPool.query('UPDATE navigation_menus SET name=$3,items=$4::jsonb,presentation=$5::jsonb,version=version+1,updated_by=$6,updated_at=now() WHERE site_id=$1 AND slug=$2 AND version=$7 RETURNING id,slug,name,version,items,presentation,created_at,updated_at',[siteId,megaMenus[2],body.name.trim(),JSON.stringify(body.items||[]),JSON.stringify(presentation),actor.user.id||null,Number(body.expectedVersion)]);if(!q.rows[0])throw fail(409,'ERR_VIRGOSCORPIO_HUB_VERSION_CONFLICT','Mega menu is missing or stale.');return sendJson(res,200,{menu:q.rows[0],requestId});}const q=await localPool.query("DELETE FROM navigation_menus WHERE site_id=$1 AND slug=$2 AND presentation->>'megaMenu'='true' RETURNING slug",[siteId,megaMenus[2]]);if(!q.rows[0])throw fail(404,'ERR_VIRGOSCORPIO_HUB_MEGA_MENU_NOT_FOUND','Mega menu not found.');return sendJson(res,200,{deleted:true,requestId});}
