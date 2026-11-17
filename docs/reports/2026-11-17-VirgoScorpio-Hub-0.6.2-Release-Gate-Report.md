@@ -1,9 +1,10 @@
 # VirgoScorpio Hub 0.6.2 — Full release-gate report
 
 **Assessment snapshot:** 17 November 2026 UTC / 17 November 2026 America/Chicago
-**Current mainline source:** `00b78a85ddf33b92878a7fcbdddca8e2fc812f66` (F1.44 / PR #184)
-**Latest exact-main CI:** [workflow #718](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44081171818) — successful, 7/7 jobs
+**Current mainline source:** `68cfd2f0e05e5c43ccb617770124a39c9226db9c` (F1.44 follow-up / PR #186)
+**Latest exact-main CI:** [workflow #721](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44092600637) — successful, 7/7 jobs
 **Latest runtime merge:** F1.44 / PR #184 at `00b78a85ddf33b92878a7fcbdddca8e2fc812f66`, implementation commit `905e5f06e6929b0aa2ef2c4c65ce7a17e34a7e19`
+**Latest mainline follow-up:** test/documentation PR #186 at `68cfd2f0e05e5c43ccb617770124a39c9226db9c`, commit `565654ac4aecc314ff58decdb9bee092c77923bf`
 **Decision:** **PRODUCTION NO-GO / NOT_PRODUCTION_CERTIFIED**
 
 > This report separates engineering implementation and CI evidence from the independent, provider, product, legal, governance and operational acceptance gates required for production. Passing CI, database regressions, CodeQL or signed attestations do not constitute independent security or legal approval.
@@ -12,9 +13,9 @@
 
 VirgoScorpio Hub `0.6.2` remains a private, unreleased developer-preview candidate. `readyForProduction` is `false`. No SemVer increment, release tag, GitHub Release, npm publication, production deployment or claim of production certification is authorized.
 
-Current mainline includes F1.38 (PR #166), F1.39 (PR #169), F1.40 reusable-component mutation/audit atomicity (PR #172), F1.41 Stripe refund audit atomicity (PR #176), F1.42 cloud connection audit atomicity (PR #179), F1.43 site invitation audit atomicity (PR #182), and F1.44 content revision restore audit atomicity (PR #184). F1.43 implementation commit `1b98867fc3b191eecd888fb53ef52552dbc0df7b` merged at `82ace7f0413842a9d92156f6d4be3692e3913ce5`; F1.44 implementation commit `905e5f06e6929b0aa2ef2c4c65ce7a17e34a7e19` merged at current main `00b78a85ddf33b92878a7fcbdddca8e2fc812f66`. Issues #181, #183 and #178 are CLOSED. Exact-main workflow #715 passed all seven jobs after F1.43; exact-main workflow #718 passed all seven jobs on the F1.44 merge SHA, covering Node.js 22/24, live PostgreSQL/Memgraph/Redis integration, migrations, PostgreSQL-backed collaboration/browser checks, CodeQL, signed mainline attestations and exact-source evidence consolidation. PRs #182 and #184 recorded no formal review submissions or inline review threads; implementation and automation evidence are not independent security approval.
+Current mainline includes F1.38 (PR #166), F1.39 (PR #169), F1.40 reusable-component mutation/audit atomicity (PR #172), F1.41 Stripe refund audit atomicity (PR #176), F1.42 cloud connection audit atomicity (PR #179), F1.43 site invitation audit atomicity (PR #182), and F1.44 content revision restore audit atomicity (PR #184) with its live rollback/retry test follow-up (PR #186). F1.43 implementation commit `1b98867fc3b191eecd888fb53ef52552dbc0df7b` merged at `82ace7f0413842a9d92156f6d4be3692e3913ce5`; F1.44 runtime commit `905e5f06e6929b0aa2ef2c4c65ce7a17e34a7e19` merged at `00b78a85ddf33b92878a7fcbdddca8e2fc812f66`; the F1.44 test/documentation commit `565654ac4aecc314ff58decdb9bee092c77923bf` then merged at current main `68cfd2f0e05e5c43ccb617770124a39c9226db9c`. Issues #185, #181, #183 and #178 are CLOSED. Exact-main workflow #715 passed all seven jobs after F1.43, #718 passed after F1.44 runtime merge, and exact-main [workflow #721](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44092600637) passed all seven jobs on current main. Workflow #721 passed Node.js 22/24 (659/659 Hub and 94/94 EnginEx each), live PostgreSQL/Memgraph/Redis 120/120 with zero failures/skips, fresh/idempotent migrations 18/18 each, collaboration Playwright 4/4, browser smoke 9/9, CodeQL, signed mainline attestations and exact-source evidence consolidation. PR #186 had no formal review submission or inline thread and was merged by the repository account; PRs #182/#184 likewise have no formal review record. These are maintainer/automation results, not independent security approval.
 
-The last published canonical readiness artifact 14304914480 was generated at `2026-11-17T06:35:26.692Z`, source-bound to the prior F1.42 main SHA `10e62a5902a68cee5edc31b57847a5602078feb1` (not the current F1.44 SHA); archive SHA-256 is `2bee41c738b0dd9e1f0fd738e05591fae3dd223edb7579c92c65c47750b08019`. The classification below is the last recorded snapshot pending refresh against the newer source:
+The current-source canonical release-readiness bundle (artifact 14331649622; archive SHA-256 `058d9d4f20dfd3b63fdd6e1a1625a4cf5086ef222cbbe1cfab371e4fe2b45c94`) was generated at `2026-11-17T13:29:01.329Z` and is bound to main SHA `68cfd2f0e05e5c43ccb617770124a39c9226db9c`. Its `release-readiness.json` SHA-256 is `f602fbd76d988d7713daf36c12248156d70eec620977d420b98a107d6f7526b0`; classification remains 8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN, `readyForProduction=false`, `NOT_PRODUCTION_CERTIFIED`. This is a refreshed source-current engineering/readiness snapshot, not production approval. The curated tenant-isolation route inventory is also regenerated for current main: 27 route/flow families, 78 declared route patterns, 21 implementation source files and 52 referenced test files; implementation-source digest `3bc206f26809fbb6c9d3720d6f9e718414c52073753b2b17c8680812b39b8b50`, referenced-test digest `b9991fff8a8e1800ad1e0556ee60a1c54aee6eb64bc02812e2976aa593fbadf2`. The generated inventory `--check` passes. Its test references are maintainer navigation, not independent approval.
 
 | Classification | Count |
 |---|---:|
@@ -24,44 +25,44 @@ The last published canonical readiness artifact 14304914480 was generated at `20
 | MISSING_EVIDENCE | 14 |
 | NOT_RUN | 0 |
 
-In that prior F1.42 snapshot, the two PARTIAL classifications were (1) incomplete qualified human lockfile/dependency/license review, and (2) service-less integration diagnostics with 40 skipped tests per supported Node runtime. Those skips are not live integration passes and remain separate from the 115/115 zero-skip PostgreSQL/Memgraph producer evidence recorded by prior workflow #709. Do not interpret this stale source-bound classification as refreshed release approval for F1.44.
+The two current PARTIAL classifications are (1) incomplete qualified human lockfile/dependency/license review and (2) service-less integration diagnostics with 42 skipped tests in the 43-test diagnostic suite per supported Node runtime. Those skips are not live integration passes. They are distinct from workflow #721's 120/120 zero-skip live PostgreSQL/Memgraph/Redis tests and 18/18 fresh plus 18/18 idempotent migration checks. The fourteen MISSING_EVIDENCE gates remain unchanged; green maintainer CI and a current readiness snapshot do not close independent or production acceptance gates.
 
-## Latest exact-main source validation — workflow #718 (F1.44 merged)
+## Latest exact-main source validation — workflow #721 (F1.44 follow-up merged)
 
-Workflow [#718](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44081171818) validated exact current main SHA `00b78a85ddf33b92878a7fcbdddca8e2fc812f66` and completed all seven required jobs successfully after F1.44 merged. The run passed the supported Node.js 22/24 jobs, live PostgreSQL/Memgraph/Redis integration, fresh/idempotent migration validation, PostgreSQL-backed collaboration and browser/accessibility checks, CodeQL, signed mainline provenance/SBOM attestations and exact-source evidence consolidation.
+Workflow [#721](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44092600637) validated exact current main SHA `68cfd2f0e05e5c43ccb617770124a39c9226db9c` and completed all seven required jobs successfully after F1.44 follow-up PR #186 merged. The run passed both supported Node.js 22/24 matrices (659/659 Hub and 94/94 EnginEx tests per runtime), 120/120 live PostgreSQL/Memgraph/Redis integration tests with zero failures/skips, 18/18 fresh migrations and 18/18 idempotent second-pass checks, PostgreSQL-backed collaboration Playwright 4/4, browser/accessibility smoke 9/9, CodeQL, signed mainline provenance/SBOM attestations and exact-source evidence consolidation.
 
 | Producer / job | Result | Qualification |
 |---|---|---|
-| Node.js 22.23.4 | PASS | Supported Node 22 validation job succeeded on the exact F1.44 source; see workflow #718 logs for the run-bound test summary. |
-| Node.js 24.22.1 | PASS | Supported Node 24 validation job succeeded on the exact F1.44 source; see workflow #718 logs for the run-bound test summary. |
-| PostgreSQL / Memgraph / Redis | PASS | Exact-main live integration job succeeded. The F1.44-specific authenticated restore-route audit failure/retry case is separately tracked under #185 and is not attributed to this mainline run. |
-| Fresh migrations | PASS | Mainline migration validation job succeeded. The dedicated local follow-up test independently applied all 18 migrations before its PostgreSQL route regression. |
-| PostgreSQL-backed collaboration browser suite | PASS | The exact-main collaboration Playwright job succeeded. |
-| Browser editor/accessibility smoke | PASS | The exact-main browser/accessibility job succeeded; not full manual WCAG/assistive-technology acceptance. |
+| Node.js 22.23.4 | PASS | 659/659 Hub tests and 94/94 EnginEx tests; zero failures or skips. |
+| Node.js 24.22.1 | PASS | 659/659 Hub tests and 94/94 EnginEx tests; zero failures or skips. |
+| PostgreSQL / Memgraph / Redis | PASS | 120/120 live integration tests; zero failures/skips. Includes the authenticated revision-restore audit failure/rollback/retry test and its test-database safety guard. |
+| Fresh migrations | PASS | 18/18 migrations applied; 18/18 idempotent second-pass checks passed. |
+| PostgreSQL-backed collaboration browser suite | PASS | 4/4 Playwright tests. |
+| Browser editor/accessibility smoke | PASS | 9/9 Playwright smoke tests; not full manual WCAG/assistive-technology acceptance. |
 | CodeQL | PASS | Static analysis succeeded; not independent application-security review. |
-| Mainline attestations | PASS | Signed SLSA provenance and CycloneDX SBOM attestations were created, uploaded and verified against the exact F1.44 mainline subjects. |
-| Evidence consolidation | PASS | Exact-source producer manifests/checksums validated and evidence consolidation completed. This is distinct from refreshing the canonical production-readiness decision. |
+| Mainline attestations | PASS | Signed SLSA provenance and CycloneDX SBOM attestations were created, uploaded and verified against exact F1.44 follow-up mainline subjects. |
+| Evidence consolidation | PASS | Exact-source producer manifests/checksums validated; current-source CI evidence consolidation completed. |
 
-The run-bound audit results and SBOM/provenance subjects are retained in workflow #718. The attestation links, lockfile digest and CycloneDX digest retained from the prior report revision are artifacts of F1.42 workflow #709, not hashes for the newer F1.44 source; they are not carried forward as current-source identifiers here.
+Workflow #721's current-source readiness bundle is artifact 14331649622 (archive SHA-256 `058d9d4f20dfd3b63fdd6e1a1625a4cf5086ef222cbbe1cfab371e4fe2b45c94`); its source-bound JSON is SHA-256 `f602fbd76d988d7713daf36c12248156d70eec620977d420b98a107d6f7526b0`. The PostgreSQL/Memgraph producer manifest SHA-256 is `7f25b74e0697da0b92b9dcd75bce1b016081361f82721c2ff3a0646f36d95dba`. Node, integration, browser, CodeQL and signed-attestation artifacts are retained by workflow #721; their archive identities are recorded in the workflow's artifact listing.
 
 ### Canonical readiness and retained workflow artifacts
 
-The last published canonical readiness artifact listed below is source-bound to the prior F1.42 main SHA `10e62a5902a68cee5edc31b57847a5602078feb1`; it has not been refreshed to the F1.44 source `00b78a85ddf33b92878a7fcbdddca8e2fc812f66`. Its 8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE classification is therefore the last recorded gate snapshot, not a source-current certification. Workflow #718's successful evidence consolidation and signed attestations do not change that limitation or certify production.
+The current-source canonical readiness artifact listed below is bound to main SHA `68cfd2f0e05e5c43ccb617770124a39c9226db9c`; it reports 8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN and `readyForProduction=false`. Workflow #721's successful evidence consolidation and signed attestations do not constitute independent security, legal, provider or operational approval and do not certify production.
 
 | Evidence | Artifact ID | Archive SHA-256 |
 |---|---:|---|
-| Canonical release-readiness bundle | 14304914480 | `2bee41c738b0dd9e1f0fd738e05591fae3dd223edb7579c92c65c47750b08019` |
-| PostgreSQL/Memgraph producer | 14305268510 | `e1a20084553cdc7b2558197354e513f4996083a6c019f919f2013c1afa5f22e4` |
-| Live PostgreSQL/Memgraph tests (Node 22) | 14305013820 | `6a82f424e9729b347ca46faa4ac4bee2bb7e2ac9bb246920bc4857973002e0e8` |
-| Node.js 22 CI evidence | 14305702555 | `54477a234cb1678445c0d841103db592a427dd3df15ccb75d65c4411b75dcae1` |
-| Node.js 24 CI evidence | 14305532776 | `f881a2012ed140a607211091a78ee838b553ec32f472aa4bea04ecd2cbdd6729` |
-| Browser/editor evidence | 14304839302 | `d2bee0edb866a0ce482b178d110f995f5c70b2c2766f2ebea3a06a40b606bd55` |
-| CodeQL evidence | 14305078472 | `4b04e6ad6a532e8c4ef7179cf6d4f7cea538ecb4af21c64b50c0878889b72f9a` |
-| Signed mainline dependency/SBOM attestations | 14305947193 | `377cbee5eec324dc83171cc13d8c59115247733b72f40e26f48ed6793f26327c` |
-| Node.js 22 dependency evidence | 14305677498 | `b2727c2cfe821624d40085cc09c45baff3abc9d759d559ad70875b0749b10b84` |
-| Node.js 24 dependency evidence | 14305842144 | `9175f16bf89c5a3b6436599b9d6780ca1805003e8ceab0f4d4aee12b503e3d0e` |
+| Canonical release-readiness bundle | 14331649622 | `058d9d4f20dfd3b63fdd6e1a1625a4cf5086ef222cbbe1cfab371e4fe2b45c94` |
+| PostgreSQL/Memgraph producer | 14333210247 | `a5c82fe386e4a2cb299c31663a25f9793d25803dd6af34d480e8ef5ba4448b75` |
+| Live PostgreSQL/Memgraph tests (Node 22) | 14332446496 | `2306ce63a400c831c2c41cd7ccf6c75435ba4e79ac4617d6e9921ca235da31af` |
+| Node.js 22 CI evidence | 14332407124 | `cc90a0af66655f402e314d0c888f56abda2ede6fa0b1682b46d4952cb206ae6c` |
+| Node.js 24 CI evidence | 14331848676 | `10e9623328190facfaa4be0c2afda2ea3d85e161f9b4adee4cd1abf6f353dd63` |
+| Browser/editor evidence | 14333270021 | `d0dc4334610e0738097de0e486320f592f2abbb252918e10cda5c15c711be1b1` |
+| CodeQL evidence | 14331409856 | `fc203c9b2691cc14a85501c0f454f010be1ae48562e55b11f95d2013084f0682` |
+| Signed mainline dependency/SBOM attestations | 14332042892 | `e952409cde5ffbcf88f6f9db9c40279af6733060136d76f751ea4291a5613fad` |
+| Node.js 22 dependency evidence | 14331128839 | `9c938c54549f7104862bf1bbc7f217854bbc1d438ef81d6bd290177bfe1c0361` |
+| Node.js 24 dependency evidence | 14331474067 | `0e9b452948f7295479ab61f40111835ba2b41fc8f66e2e542553be371f5e7f35` |
 
-The listed hashes are GitHub artifact ZIP archive digests, not hashes of files inside each ZIP. Workflow #709 producer records and run-bound source identity are authoritative for this snapshot.
+The listed hashes are GitHub artifact ZIP archive digests, not hashes of files inside each ZIP. Workflow #721 producer records and run-bound source identity are authoritative for this snapshot.
 
 ## Previous exact-main source validation — workflow #703 (F1.41 merged; historical snapshot)
 
@@ -159,6 +160,6 @@ No formal PR review submissions or inline review threads were recorded for PR #1
 
 F1.21–F1.44 are 24 consecutive bounded engineering increments merged to main, covering site-owner concurrency, site capabilities/SSE revocation, invitation and audit recovery, content-type registry concurrency, Redis reconnect behavior, editorial ownership, membership/site creation/design-system/taxonomy/relationship/AI-policy/workflow audit atomicity, plugin lifecycle locking/audit consistency, firewall rule/audit consistency, page-draft persistence/audit atomicity, library asset upload/version audit atomicity, legacy media upload/audit atomicity, reusable-component mutation/audit atomicity, Stripe refund audit/recovery atomicity, cloud connection mutation/audit atomicity, site invitation creation/audit atomicity (F1.43), and content revision restore/audit atomicity (F1.44).
 
-F1.44 is the latest runtime merge; issues #181, #183 and #178 are CLOSED. Issue #175 remains OPEN for maintainer close-out. Issue #185 tracks an additional live PostgreSQL route-level fault-injection regression for authenticated revision restore; the test has passed 1/1 with zero skips on a disposable PostgreSQL 18 database after 18/18 migrations, but it remains on an isolated follow-up branch and is not yet part of main. Complete its exact-head CI and human review before merge; do not self-approve. Next, inspect remaining OPEN items under parent #124 and the source-anchored tenant inventory to reproduce a concrete F1.45 route, authorization, transaction or recovery gap before selecting further runtime scope. Independent reviews #14/#25 and qualified dependency/license review #23 remain separate assurance gates. Continue non-production resilience and operations preparation under #24/#26 without implying production readiness.
+F1.44 remains the latest runtime hardening increment (PR #184); its authenticated restore rollback/retry evidence follow-up (PR #186) is now merged and issue #185 is CLOSED. Exact-main workflow #721 passed all seven jobs and included the new live restore integration regression in its 120/120 PostgreSQL/Memgraph/Redis results. PR #186 has no formal review submission or inline thread and was merged by the repository account; this does not represent independent security approval. Issue #175 remains OPEN for maintainer close-out. Next, inspect remaining OPEN items under parent #124 and the source-anchored tenant inventory to reproduce a concrete F1.45 route, authorization, transaction, tenant-boundary or recovery gap before selecting runtime scope. Independent reviews #14/#25 and qualified dependency/license review #23 remain separate assurance gates. Continue non-production resilience and operations preparation under #24/#26 without implying production readiness.
 
 No meaningful overall completion percentage or delivery date is asserted: these gates have different scope and evidence weight, and green CI must not be conflated with external product or production acceptance. Package `0.6.2` remains private and unreleased; production remains **NO-GO / NOT_PRODUCTION_CERTIFIED**.
