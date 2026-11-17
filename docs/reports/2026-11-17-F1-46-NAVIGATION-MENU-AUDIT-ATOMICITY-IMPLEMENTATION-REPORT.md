@@ -4,7 +4,7 @@
 **Issue:** [#190](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/190) — OPEN
 **Baseline main SHA:** `60cca7645dd5f65a2c459742b05af7eb9016eee5` (F1.45 / PR #189 merged)
 **Branch:** `security/f1-46-navigation-menu-audit-atomicity-2026-11-17`
-**Status:** Local implementation and static/unit checks complete; focused live PostgreSQL validation and exact-head CI are pending. No PR has been opened yet.
+**Status:** [Draft PR #191](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/191) is open; issue #190 remains OPEN. Initial exact-head push/PR workflows #728/#729 exposed integration-fixture failures; the fixtures are corrected and candidate CI rerun is pending. No human review, merge or release is claimed.
 
 ## Executive summary
 
@@ -59,6 +59,10 @@ The tenant-isolation route inventory was regenerated: 28 route/flow families, 80
 | Focused live PostgreSQL route test | NOT RUN / BLOCKED LOCALLY | Disposable Docker PostgreSQL was ready inside the container, but Windows-host Node.js connections to the published port terminated during startup. No shared database was changed and the disposable containers were removed. Hosted exact-head PostgreSQL validation is required. |
 
 The local root unit suite does not include `test/integration/**`; the new test is syntax-checked and is wired into the existing live integration runner by file discovery. No local live-pass is claimed for F1.46.
+
+## Hosted candidate CI iteration
+
+Draft [PR #191](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/191) was opened against current main; issue #190 remains open. Initial exact-head push workflow [#728](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44155254865) and pull-request workflow [#729](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44155764226) completed their PostgreSQL/Memgraph integration jobs with failures in the new navigation-menu suite. The failure was in the test fixtures, not a route implementation regression: the existing regular-menu PUT contract requires the `slug` field in its request body, which was absent from the stale/update fixtures and caused 400 responses before the expected conflict or mutation path; the suite also expected five request IDs while issuing six correlated requests. The fixtures now include `slug: 'site-navigation'` on both PUT requests and assert six request IDs. The regenerated inventory and root suite were rerun after this correction; `NODE_OPTIONS=--max-old-space-size=4096 npm run check` passed 667/0/3-platform-skips. A new push is required to run the corrected PostgreSQL integration suite in hosted CI. Do not mark F1.46 accepted or merge PR #191 until all seven candidate jobs pass and the live PostgreSQL/Memgraph/Redis producer reports zero failures, skips and TODOs. No formal review has been recorded yet.
 
 ## Release and assurance boundary
 

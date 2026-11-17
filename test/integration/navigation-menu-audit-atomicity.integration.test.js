@@ -198,6 +198,7 @@ test(
       assert.deepEqual(Object.keys(audit.rows[0].details).sort(), ['slug', 'version']);
       const staleRequestId = nextRequestId('stale-version');
       const stale = await request(session, 'PUT', item, {
+        slug: 'site-navigation',
         expectedVersion: 0,
         name: 'Stale navigation overwrite',
         items: [{ id: 'stale', label: 'Stale', type: 'url', url: '/stale' }],
@@ -213,6 +214,7 @@ test(
       assert.ok(before);
       const requestId = nextRequestId('update');
       const updateBody = {
+        slug: 'site-navigation',
         expectedVersion: before.version,
         name: 'Updated site navigation',
         items: [{ id: 'about', label: 'About', type: 'url', url: '/about' }],
@@ -262,6 +264,6 @@ test(
       assert.equal((await auditFor('navigation.menu_deleted', missingRequestId)).rowCount, 0);
     });
 
-    assert.equal(requestIds.size, 5);
+    assert.equal(requestIds.size, 6);
   },
 );

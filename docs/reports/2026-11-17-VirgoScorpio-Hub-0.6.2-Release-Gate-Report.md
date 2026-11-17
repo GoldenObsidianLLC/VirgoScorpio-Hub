@@ -4,7 +4,7 @@
 **Current mainline source:** `60cca7645dd5f65a2c459742b05af7eb9016eee5` (F1.45 / PR #189 merged; F1.46 / issue #190 is an unmerged candidate)
 **Latest exact-main CI:** [workflow #727](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44139631658) — successful, 7/7 jobs
 **Latest runtime merge:** F1.45 / PR #189 at `60cca7645dd5f65a2c459742b05af7eb9016eee5`, implementation commit `3fdd09a053c6a1252e1eb0bbb655b4e284b769ed`
-**Next engineering candidate:** F1.46 regular navigation-menu audit atomicity, issue [#190](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/190), branch `security/f1-46-navigation-menu-audit-atomicity-2026-11-17`; candidate PR/hosted CI pending
+**Current engineering candidate:** F1.46 regular navigation-menu audit atomicity, issue [#190](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/190), draft [PR #191](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/191), branch `security/f1-46-navigation-menu-audit-atomicity-2026-11-17`; initial workflows #728/#729 exposed PUT-fixture omissions that are fixed in the candidate worktree; corrected hosted CI rerun is pending.
 **Decision:** **PRODUCTION NO-GO / NOT_PRODUCTION_CERTIFIED**
 
 > This report separates engineering implementation and CI evidence from the independent, provider, product, legal, governance and operational acceptance gates required for production. Passing CI, database regressions, CodeQL or signed attestations do not constitute independent security or legal approval.
@@ -188,7 +188,7 @@ The two PARTIAL items are not included in the missing-gate count: service-less i
 - **#26 — operations/release-owner acceptance:** OPEN.
 - **#32 — operating reserve, compensation and capital controls:** OPEN.
 
-No formal PR review submissions or inline review threads were recorded for PR #189, PR #179, PR #176, PR #172 or documentation PR #173. Mainline attestations, CodeQL and automated tests are not independent security or legal approval. F1.46 issue #190 is OPEN and its candidate PR has not yet been created; no review or merge is claimed. No production gate is waived by this report.
+No formal PR review submissions or inline review threads were recorded for PR #189, PR #179, PR #176, PR #172 or documentation PR #173. Mainline attestations, CodeQL and automated tests are not independent security or legal approval. F1.46 issue #190 remains OPEN and draft PR #191 has no formal review submission or inline thread; no merge is claimed. Initial workflows #728/#729 exposed missing `slug` fields in the PostgreSQL integration test's PUT fixtures and an incorrect request-ID count. The fixtures are corrected in the worktree and the post-correction root unit suite passes 667/670 with three Windows-specific skips; corrected hosted candidate CI remains pending. No production gate is waived by this report.
 
 ## Engineering roadmap
 
