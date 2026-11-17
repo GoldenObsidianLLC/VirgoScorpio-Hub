@@ -236,6 +236,15 @@ async function handleCommerceRoute(ctx) {
           [siteId, orderId]
         );
       }
+      await identity?.audit({
+        siteId,
+        actorId: actor?.user?.id || null,
+        action: 'commerce.refund_requested',
+        targetType: 'commerce-refund',
+        targetId: savedRefund.id,
+        requestId,
+        details: { amountMinor: Number(savedRefund.amount_minor), currency: String(savedRefund.currency).toUpperCase(), status: savedRefund.status }
+      }, { queryable: persist });
       await persist.query('COMMIT');
     } catch (error) {
       await persist.query('ROLLBACK').catch(() => {});
@@ -245,15 +254,7 @@ async function handleCommerceRoute(ctx) {
       persist.release();
     }
 
-    await identity?.audit({
-      siteId,
-      actorId: actor?.user?.id || null,
-      action: 'commerce.refund_requested',
-      targetType: 'commerce-refund',
-      targetId: savedRefund.id,
-      requestId,
-      details: { amountMinor: Number(savedRefund.amount_minor), currency: String(savedRefund.currency).toUpperCase(), status: savedRefund.status }
-    });
+
     return sendJson(res, 200, {
       refund: {
         id: savedRefund.id,
