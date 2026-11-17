@@ -1817,7 +1817,13 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
         const revision = await store.getRevision({ siteId, contentId: restoreMatch[1], version: Number(restoreMatch[2]) });
         if (!revision) return sendJson(res, 404, { error: 'Revision not found.', code: 'ERR_VIRGOSCORPIO_HUB_REVISION_NOT_FOUND', requestId });
         const snap = revision.snapshot;
-        const saved = await store.saveDraft({ siteId, id: restoreMatch[1], title: snap.title, slug: snap.slug, locale: snap.locale, contentType: snap.contentType || 'page', document: snap.document, authorId: actor.user.id, expectedVersion: body.expectedVersion, note: `Restored revision ${revision.version}`, correlationId: requestId });
+        const onDraftSaved = identity && actor.user.id
+          ? async ({ queryable, result }) => identity.audit(
+            { siteId, actorId: actor.user.id, action: 'content.draft_saved', targetType: 'content', targetId: result.id, requestId, details: { version: result.version } },
+            { queryable },
+          )
+          : undefined;
+        const saved = await store.saveDraft({ siteId, id: restoreMatch[1], title: snap.title, slug: snap.slug, locale: snap.locale, contentType: snap.contentType || 'page', document: snap.document, authorId: actor.user.id, expectedVersion: body.expectedVersion, note: `Restored revision ${revision.version}`, correlationId: requestId, onDraftSaved });
         return sendJson(res, 200, { status: 'draft', restoredFromVersion: revision.version, content: saved, requestId });
       }
 

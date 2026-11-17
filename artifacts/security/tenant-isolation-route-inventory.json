@@ -8,7 +8,7 @@
   "generatedBy": "scripts/generate-tenant-isolation-route-inventory.js",
   "sourceTree": {
     "fileCount": 21,
-    "sha256": "8b48b480b8abfc5846a448f22b66d32303d80710c11fc1e27254597c8a2f594a",
+    "sha256": "3bc206f26809fbb6c9d3720d6f9e718414c52073753b2b17c8680812b39b8b50",
     "files": [
       "apps/api/src/ai-task-routes.js",
       "apps/api/src/auth-routes.js",
@@ -35,7 +35,7 @@
   },
   "testTree": {
     "fileCount": 49,
-    "sha256": "978df1344e3cb8fdeec26aa8487f88fd8703a7231529ed4aa83784500e40d8b4",
+    "sha256": "c7089734e07978f792cea185f873586b0218adf0b815d0fe92370520840cdff8",
     "files": [
       "test/ai-queue-worker.test.js",
       "test/ai-task-queue.test.js",
@@ -198,7 +198,7 @@
                 1710,
                 1737,
                 1816,
-                1833
+                1839
               ]
             }
           ]
@@ -447,7 +447,7 @@
             {
               "anchor": "const siteMembershipHandled = await handleSiteMembershipRoute({",
               "lines": [
-                1863
+                1869
               ]
             }
           ]
@@ -752,7 +752,7 @@
             {
               "anchor": "const workflowMatch",
               "lines": [
-                1824
+                1830
               ]
             },
             {
@@ -1551,19 +1551,19 @@
             {
               "anchor": "url.pathname === '/api/v1/plugins'",
               "lines": [
-                1880
+                1886
               ]
             },
             {
               "anchor": "url.pathname === '/api/v1/plugins/register'",
               "lines": [
-                1886
+                1892
               ]
             },
             {
               "anchor": "const pluginActionMatch",
               "lines": [
-                1923
+                1929
               ]
             }
           ]
@@ -1834,7 +1834,7 @@
             {
               "anchor": "upgradePath = url.pathname",
               "lines": [
-                2055
+                2061
               ]
             },
             {
