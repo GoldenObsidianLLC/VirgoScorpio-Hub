@@ -6,7 +6,7 @@
 
 **Technical hand-off:** [TENANT-ISOLATION-ASSESSMENT-BRIEF.md](TENANT-ISOLATION-ASSESSMENT-BRIEF.md)
 
-**Last checked mainline baseline before the F1.47 maintainer-test candidate:** `4ad1117fbe235fdc4cc879c8ccde775bb5241482`. This is not an approved assessment pin. Issue #193 tracks F1.47 test-only candidate work. A selected assessor and project owner must confirm the exact clean, authorized `main` SHA at any future funded engagement start and record it in the final report.
+**Last checked mainline baseline after F1.47 merged:** `b68f5f90e99d7d14c50f6bf89c94ea1b9c0eb83e` (PR #194; exact-main workflow #44206129439 passed all seven jobs, including signed provenance/SBOM verification). This is not an approved assessment pin. Issue #193 is CLOSED for maintainer-authored regression work only; issue #14 remains OPEN / NOT PERFORMED. A selected assessor and project owner must confirm the exact clean, authorized `main` SHA at any future properly funded engagement start and record it in the final report.
 
 ## 1. Engagement sought
 
