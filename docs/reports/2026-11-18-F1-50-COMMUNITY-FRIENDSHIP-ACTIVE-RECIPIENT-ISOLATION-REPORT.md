@@ -7,7 +7,11 @@
 - **Platform security-review gate:** [#25](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/25) — OPEN / NOT PERFORMED
 - **Candidate branch:** `security/f1-50-community-friendship-recipient-state-2026-11-18`
 - **Baseline main SHA:** `1c9b9c8b23e5e3cffe8f8a67aca4f55cbb8d1623`
-- **Status:** Runtime correction and focused local disposable-PostgreSQL validation complete; full-project validation, hosted exact-head CI, review and merge pending.
+- **Implementation commit:** `a8f549d29da8d56a9fe8300b19bd23921ee97bba`
+- **Merged main SHA:** `c6853c29e9ca71fc3fab472cbf95dfdcb5ac0741`
+- **Pull request:** [#202](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/202) — MERGED
+- **Issue:** [#201](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/201) — CLOSED
+- **Status:** Merged and exact-main CI validated; maintainer-authored regression only. No formal review submissions or inline review threads were recorded.
 
 > **Assurance boundary:** This is maintainer-authored route hardening and regression coverage. It is not an independent security assessment, risk acceptance, waiver, or production-certification evidence.
 
@@ -55,7 +59,8 @@ A newly created disposable PostgreSQL 18 container and isolated test database we
 | Tenant inventory generation | PASS | 28 route/flow families, 80 declared route patterns, 21 implementation source files, 57 referenced test files. |
 | Inventory freshness check | PASS | `node scripts/generate-tenant-isolation-route-inventory.js --check` confirmed 28 families / 80 route patterns. |
 | Full `npm run check` | PASS — 670 tests, 667 passed, 0 failed, 3 Windows-specific skips | Windows / Node.js 26.12.1; artifact verification passed 238 required paths and 268 JavaScript syntax checks. |
-| Hosted exact-head CI | PENDING | Required before merge; no hosted validation is claimed. |
+| Candidate exact-head workflows | PASS | Push #44255755533 and PR #44255883671 passed all six applicable jobs each; mainline-only signing job skipped by design on candidate runs. |
+| Exact-main validation | PASS — 7/7 jobs | [Workflow #44256828598](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44256828598) on merge SHA; details below. |
 
 The pre-fix failure is recorded as regression evidence, not a final test failure. The post-fix live test passes on the same disposable database and route/API setup.
 
@@ -68,7 +73,25 @@ The source-anchored `community-conversations-moderation-notifications` catalog f
 
 The generated inventory currently records **28 route/flow families, 80 route patterns, 21 implementation source files and 57 referenced tests**.
 
-The changelog, current project/implementation roadmaps, maintainer assurance notes and assessor hand-off materials are being reconciled to the F1.49 mainline baseline and F1.50 candidate state. Historical baselines remain historical; F1.50 is not described as merged or independently reviewed.
+The changelog, project/implementation roadmaps, maintainer assurance notes and assessor hand-off materials now record PR #202 merged at main `c6853c29e9ca71fc3fab472cbf95dfdcb5ac0741` and exact-main workflow #44256828598. Historical baselines remain historical. F1.50 is explicitly identified as maintainer-authored hardening, not independent review or production approval.
+
+## Hosted exact-head and mainline validation
+
+Candidate source `a8f549d29da8d56a9fe8300b19bd23921ee97bba` was validated by both push [workflow #44255755533](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44255755533) and pull-request [workflow #44255883671](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44255883671). All six applicable jobs passed in each run; the mainline-only signing/attestation job was skipped on candidate runs by design. The live PostgreSQL/Memgraph/Redis integration passed **142/142, 0 failed, 0 skipped** in each run, and the friendship inactive-recipient subtest passed.
+
+After PR #202 merged at `c6853c29e9ca71fc3fab472cbf95dfdcb5ac0741`, exact-main [workflow #44256828598](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44256828598) passed **7/7 jobs**:
+
+| Validation | Mainline result |
+|---|---|
+| Node.js 22.23.4 | 670/670 Hub tests; 94/94 EnginEx tests; 0 dependency-audit vulnerabilities. |
+| Node.js 24.22.1 | 670/670 Hub tests; 94/94 EnginEx tests; 0 dependency-audit vulnerabilities. |
+| PostgreSQL/Memgraph/Redis | 142/142 live integration tests, 0 failures, 0 skips; 18/18 fresh migrations and 18/18 idempotent second pass. |
+| Browser editor/accessibility smoke | 9/9 passed. |
+| CodeQL | Passed. |
+| Supply-chain attestations | Signed provenance and CycloneDX SBOM created and verified against the exact source revision, lockfile and generated SBOM bytes. |
+| Exact-source evidence consolidation | Passed. |
+
+The mainline readiness artifact `14405414387` (SHA-256 `ddea9ac215b8be004cc745660df5e62cc6b6f181dbea4485c989c73c7fef18a8`) reports `CI EVIDENCE: PASS`, `FINAL RELEASE READINESS: NOT_PRODUCTION_CERTIFIED`, and `PRODUCTION CERTIFICATION: NO`. This successful CI run does not satisfy independent reviews #14 or #25 or other missing release gates.
 
 ## Assurance and release boundaries
 
