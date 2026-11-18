@@ -1,12 +1,16 @@
 # F1.47 — Regular navigation-menu tenant-isolation regression report
 
-- **Date:** 17 November 2026
-- **Issue:** [#193](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/193) — OPEN
+- **Implementation date:** 17 November 2026
+- **Merge and evidence close-out:** 18 November 2026
+- **Issue:** [#193](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/193) — CLOSED (implementation complete)
 - **Parent maintainer-hardening tracker:** [#124](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/124)
 - **Independent tenant-review gate:** [#14](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/14) — OPEN / NOT PERFORMED
-- **Candidate branch:** `security/f1-47-tenant-isolation-review-prep-2026-11-17`
-- **Baseline main SHA:** `4ad1117fbe235fdc4cc879c8ccde775bb5241482`
-- **Status:** Local implementation and focused disposable-PostgreSQL validation complete; candidate not yet hosted-validated, reviewed, or merged.
+- **Implementation branch:** `security/f1-47-tenant-isolation-review-prep-2026-11-17`
+- **Implementation baseline main SHA:** `4ad1117fbe235fdc4cc879c8ccde775bb5241482`
+- **Merged main SHA:** `b68f5f90e99d7d14c50f6bf89c94ea1b9c0eb83e`
+- **Merged PR:** [#194](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/194)
+- **Exact-main CI:** [workflow #44206129439](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44206129439)
+- **Status:** Merged and exact-main CI validated on 18 November 2026. PR #194 had no formal review submissions or inline review threads. This is maintainer/automation evidence, not independent review.
 
 > **Assurance boundary:** This is maintainer-authored regression coverage and inventory maintenance. It is not an independent security assessment, a risk acceptance, a waiver, or production-certification evidence.
 
@@ -55,13 +59,16 @@ The generated inventory remains explicitly maintainer-prepared, not independentl
 | Inventory freshness | PASS | `node scripts/generate-tenant-isolation-route-inventory.js --check`. |
 | Artifact verifier | PASS | 238 required paths and 267 JavaScript files syntax-checked. |
 | Full `npm run check` | PASS — 670 tests, 667 passed, 0 failed, 3 Windows-specific skips | Windows / Node.js 26.12.1. |
-| Hosted exact-head CI | NOT RUN | Required before merge; no hosted validation is claimed here. |
+| Exact-head push and PR workflows | PASS | #44205286171 and #44205366141 each passed all six applicable jobs; the mainline-only signed-attestation job was skipped by design on feature-branch events. |
+| Exact-main post-merge CI | PASS — 7/7 jobs | Workflow #44206129439 on merge SHA `b68f5f90e99d7d14c50f6bf89c94ea1b9c0eb83e`; includes mainline signed lockfile/SBOM attestations, CodeQL and exact-source evidence consolidation. |
+| Hosted live PostgreSQL/Memgraph/Redis integration | PASS — 130/130, 0 failures, 0 skips | Exact-head candidate push and PR runs, and exact-main post-merge run. The new F1.47 test passed explicitly in each database run. |
+| Hosted Node.js matrices | PASS | Node 22.23.4 and 24.22.1 each passed 670/670 Hub and 94/94 EnginEx tests with zero skips; dependency audits passed. |
 
 The focused PostgreSQL test was executed against a newly created disposable local PostgreSQL 18 instance, not a shared or production database. The initial run exposed only the expected-code assertion mismatch described above; after correcting the assertion to the unchanged route contract, the live test passed. A final rerun after adding outbox snapshot assertions also passed 1/1 with zero skips.
 
 ## Assurance and release boundaries
 
-F1.47 expands one maintainer-authored regression scenario. It does not establish complete route enumeration, exhaustive role/capability coverage, cache or rendering isolation, provider IAM, asynchronous/realtime security, or production deployment controls.
+F1.47 expands one maintainer-authored regression scenario. PR #194 is merged and issue #193 is CLOSED. GitHub records no formal review submission or inline review thread for the PR. The exact-main workflow passed, but automated CI and maintainer-authored tests are not independent security approval. F1.47 does not establish complete route enumeration, exhaustive role/capability coverage, cache or rendering isolation, provider IAM, asynchronous/realtime security, or production deployment controls.
 
 Issue #14 remains OPEN / NOT PERFORMED. Platform-wide security assessment #25 remains OPEN / NOT PERFORMED. F1.47 does not populate `artifacts/evidence/tenant-isolation-review.json` and must not be represented as satisfying the independent-review acceptance criteria.
 

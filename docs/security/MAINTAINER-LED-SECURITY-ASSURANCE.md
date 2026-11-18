@@ -3,7 +3,7 @@
 > **Status:** Active internal engineering control for the restricted VirgoScorpio Hub 0.6.2 developer preview.
 > **Assessment type:** Maintainer-authored and automated checks only.
 > **Production certification:** **NOT CERTIFIED — NO-GO.**
-> **Current checked mainline evidence baseline:** `4ad1117fbe235fdc4cc879c8ccde775bb5241482` (F1.46 runtime PR #191 plus docs-only PR #192; exact-main workflow #735 passed 7/7 jobs on 17 November 2026).
+> **Current checked mainline evidence baseline:** `b68f5f90e99d7d14c50f6bf89c94ea1b9c0eb83e` (F1.47 PR #194 merged 18 November 2026; exact-main workflow #44206129439 passed 7/7 jobs, including signed lockfile/SBOM attestations and exact-source evidence consolidation).
 
 ## 1. Purpose and decision
 
@@ -95,7 +95,7 @@ Do not create parallel authorization systems, duplicate canonical identifier or 
 
 ## 5. Current maintainer-led tenant work
 
-F1.47 is a bounded maintainer-authored regression candidate tracked by [issue #193](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/193), based on mainline `4ad1117fbe235fdc4cc879c8ccde775bb5241482`. It adds two-site, same-slug CRUD denial and positive-control coverage for the regular navigation-menu /menus routes, with menu, navigation-audit and outbox before/after snapshots. The focused disposable PostgreSQL 18 run passed 1/1 with zero skips after all 18 migrations. This is regression coverage only: it does not prove exhaustive tenant isolation, does not populate issue #14 evidence, and does not alter the independent-review or production NO-GO gates. Keep the source-anchored inventory in sync through its existing generator.
+F1.47 is a bounded maintainer-authored regression merged through [PR #194](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/194) at main commit `b68f5f90e99d7d14c50f6bf89c94ea1b9c0eb83e`; issue #193 is CLOSED. It adds two-site, same-slug CRUD denial and positive-control coverage for the regular navigation-menu /menus routes, with menu, navigation-audit and outbox before/after snapshots. Exact-main workflow #44206129439 passed all seven jobs, including signed lockfile/SBOM attestations and evidence consolidation; the live database suite passed 130/130 with zero skips. This is regression coverage only: it does not prove exhaustive tenant isolation, does not populate issue #14 evidence, and does not alter the independent-review or production NO-GO gates. The source-anchored inventory was regenerated and its freshness check passed.
 
 The latest targeted improvement serializes site membership removals on the site's PostgreSQL row before checking the active owner count. This prevents two concurrent site owners from observing the same count and removing each other.
 
