@@ -8,8 +8,8 @@ Maintainer-prepared route, capability, data-access, and regression-test navigati
 
 - Status: MAINTAINER_PREPARED_NOT_INDEPENDENTLY_REVIEWED.
 - Generated from the current working-tree implementation anchors and the catalog at docs/security/tenant-isolation-route-inventory.catalog.json.
-- Implementation-source digest: 81de40a423ff1275e6137e0e5239dfbf8c8b35c0598196ef5e73fadb5ab12382 across 21 files.
-- Referenced-test digest: 965a7a5e9c3ac2dfc89e909a9d5301610c80d67bbb074110c5fa91cee2bd2796 across 57 files.
+- Implementation-source digest: e7562e65f88c84e97632e83666cc3c2751a76ec4afa66dd6c261c8a3ee1a36f7 across 21 files.
+- Referenced-test digest: f24a4abfe44237e07de7017d21a3817a6c52aac107146b948ab5fc35b131deaa across 57 files.
 - Inventory size: 28 route/flow families, 80 declared route patterns, 21 source files, and 57 test files.
 - Regenerate with npm run security:tenant-inventory; CI checks freshness with node scripts/generate-tenant-isolation-route-inventory.js --check.
 
@@ -295,9 +295,9 @@ Tests: test/content-type-routes.test.js, test/collaboration-api.test.js, test/re
 - Capabilities/controls: Site membership, community:moderate
 - Data-access boundary: social conversations and members; messages; blocks/friendships; reports/moderation actions; notifications
 - Side effects: Message creation/read markers; Report/moderation transitions; Notification fan-out/read state
-- Source: packages/community/src/workflows.js (lines 21, 375)
+- Source: packages/community/src/workflows.js (lines 21, 375); apps/api/src/platform-routes.js (lines 347)
 - Test references: test/community-workflows.test.js, test/integration/community-workflows.integration.test.js, test/integration/tenant-community-object-isolation.integration.test.js
-- Coverage characterization: **targeted-two-site-direct-message-recipient-and-no-side-effects**. Existing A/B cases cover selected conversation/message/block/report/moderation/notification access and side effects. F1.49 adds live PostgreSQL coverage for POST /community/conversations: a Site B-only actor using a Site A-only recipient ID receives the existing non-disclosing 404 before the conversation transaction begins; deep before/after snapshots for both sites cover conversations, members, messages, notifications and the complete shared community-state projection; a same-site Site B create/reuse positive control returns the existing conversation without duplicate rows or notification fan-out. Complete workflow state transitions, other recipient variants, event fan-out outside the direct-create transaction, and independent adversarial/provider/realtime review remain separate.
+- Coverage characterization: **targeted-two-site-active-recipient-direct-message-and-friendship-no-side-effects**. Existing A/B cases cover selected conversation/message/block/report/moderation/notification access and side effects. F1.49 adds live PostgreSQL coverage for POST /community/conversations: a Site B-only actor using a Site A-only recipient ID receives the existing non-disclosing 404 before the conversation transaction begins; deep before/after snapshots for both sites cover conversations, members, messages, notifications and the complete shared community-state projection; a same-site Site B create/reuse positive control returns the existing conversation without duplicate rows or notification fan-out. Complete workflow state transitions, other recipient variants, event fan-out outside the direct-create transaction, and independent adversarial/provider/realtime review remain separate. F1.50 adds a live PostgreSQL A/B regression for POST /api/v1/sites/{siteId}/community/friends/{userId}. Site B retains membership rows for invited and disabled users; the route must reject both, and foreign-site recipients, with the existing non-disclosing 404 before any friendship is written. Deep Site A/Site B snapshots prove denied attempts do not modify friendships or other community state. An active same-site recipient remains a positive control and produces one pending friendship. The friendship route implementation is in apps/api/src/platform-routes.js (friendRequest), while conversation workflows remain in packages/community/src/workflows.js. Broader friendship lifecycle, membership revocation races and independent adversarial/provider/realtime review remain separate.
 
 ### 18. Plugin registry, approvals, security review, activation and invocation
 
