@@ -8,7 +8,7 @@
   "generatedBy": "scripts/generate-tenant-isolation-route-inventory.js",
   "sourceTree": {
     "fileCount": 21,
-    "sha256": "e7562e65f88c84e97632e83666cc3c2751a76ec4afa66dd6c261c8a3ee1a36f7",
+    "sha256": "39e17e2496fd8b9ae6e40551f4a455a3f061cc1836eb8c4e15580dcfb6b1c7f4",
     "files": [
       "apps/api/src/ai-task-routes.js",
       "apps/api/src/auth-routes.js",
@@ -35,7 +35,7 @@
   },
   "testTree": {
     "fileCount": 57,
-    "sha256": "f24a4abfe44237e07de7017d21a3817a6c52aac107146b948ab5fc35b131deaa",
+    "sha256": "a8513e1d3c93f88eb48b31e8fef3cdfc9100ff5eb40766e90647cb6e27cdc24a",
     "files": [
       "test/ai-queue-worker.test.js",
       "test/ai-task-queue.test.js",
@@ -1456,8 +1456,8 @@
         "test/integration/community-feed-privacy.integration.test.js"
       ],
       "coverage": {
-        "level": "targeted-two-site-group-privacy-comment-parent-and-legacy-scope-isolation",
-        "limits": "F1.48 adds disposable PostgreSQL coverage for private/hidden group posts with default and caller-broadened visibility, public-group and non-group visibility controls, private-group comments, same-site and non-deleted parent requirements, caller-supplied scope mismatch denial, nested comment ancestry, and legacy comments whose stored scope widens or moves away from a private-group parent. Feed reads and comment writes reuse shared visibility predicates and validate every ancestor for site, deletion, exact group/visibility scope, actor visibility, and a top-level non-comment root; cyclic or malformed parent chains fail closed. Denied writes preserve activity, group, membership, audit-event and outbox snapshots. Existing tenant-community-object-isolation.integration.test.js also snapshots social_activities for cross-site/no-side-effect checks. Profile privacy, every social workflow and broader adversarial/provider/realtime coverage remain separate review concerns."
+        "level": "targeted-two-site-group-privacy-comment-parent-join-idempotency-state-and-side-effect-isolation",
+        "limits": "F1.48 adds disposable PostgreSQL coverage for private/hidden group posts with default and caller-broadened visibility, public-group and non-group visibility controls, private-group comments, same-site and non-deleted parent requirements, caller-supplied scope mismatch denial, nested comment ancestry, and legacy comments whose stored scope widens or moves away from a private-group parent. Feed reads and comment writes reuse shared visibility predicates and validate every ancestor for site, deletion, exact group/visibility scope, actor visibility, and a top-level non-comment root; cyclic or malformed parent chains fail closed. Denied writes preserve activity, group, membership, audit-event and outbox snapshots. Existing tenant-community-object-isolation.integration.test.js also snapshots social_activities for cross-site/no-side-effect checks. Profile privacy and broader adversarial/provider/realtime coverage remain separate. F1.51 reproduces and fixes private-group join idempotency: an existing active member remains active with the stored role across repeated joins; existing pending private-group requests remain pending; banned members remain banned and receive the existing generic 403; first-time private-group joins remain pending; and public-group joins remain active. The shared two-site community snapshot includes groups, group memberships, conversations, members, messages, blocks, reports, friendships, activities, notifications, outbox events and moderation actions. Before/after assertions prove retries do not create duplicate notification/outbox or other community side effects and leave both sites at the original fixture state. This is maintainer-authored regression coverage, not an exhaustive group-membership lifecycle or independent adversarial review."
       },
       "methods": [
         "GET",

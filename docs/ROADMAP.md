@@ -1,4 +1,12 @@
-## Current 0.6.2 continuation — 18 November 2026 UTC / 18 November America/Chicago (F1.50 merged; issue #201 CLOSED; main `c6853c29e9ca71fc3fab472cbf95dfdcb5ac0741`)
+## Current 0.6.2 continuation — 18 November 2026 (F1.50 merged; docs PR #203 merged; current main `f24734330be289f89f19057049d4df5287e94bd3`)
+
+### F1.51 candidate - issue #204 OPEN (not merged)
+
+The current mainline source review and live PostgreSQL reproduction exposed a private-group join idempotency defect. Retrying POST /api/v1/sites/{siteId}/community/groups/{groupId}/join for an existing active member of a private group changed the persisted membership status to pending. The existing membership upsert now preserves existing active and banned states while continuing to apply the requested status for new/pending memberships.
+
+The existing two-site community object-isolation fixture verifies repeated active-owner and pending-member joins, banned-member denial, first-time private-group joins remaining pending, and public-group joins remaining active. Full snapshots include notifications and site-scoped outbox events and prove that retries do not create duplicate or unrelated side effects. The pre-fix disposable PostgreSQL 18 reproduction failed on the active-state assertion; the corrected focused suite passes 10/10 with zero skips after all 18 migrations.
+
+The tenant inventory was regenerated and freshness-checked at 28 families / 80 route patterns / 21 implementation sources / 57 referenced tests. Full local npm run check passed 670 tests (667 passed, 0 failed, 3 Windows-specific skips); artifact verification passed 238 required paths / 268 JavaScript files; npm ls --depth=0, syntax checks and inventory freshness passed. See the [F1.51 implementation report](reports/2026-11-18-F1-51-COMMUNITY-GROUP-JOIN-IDEMPOTENCY-REPORT.md). Final Markdown link validation passed 94 relative links across eight changed documents with zero broken targets; `git diff --check` passed. Hosted exact-head CI remains required before merge. This is maintainer regression evidence only; independent reviews #14/#25 remain OPEN / NOT PERFORMED. Package 0.6.2 remains private/unreleased; production remains NOT_PRODUCTION_CERTIFIED / NO-GO. No schema, migration, dependency, lockfile, public API or SemVer change.
 
 ### F1.50 merged maintainer hardening — [PR #202](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/202) (issue #201 CLOSED)
 
