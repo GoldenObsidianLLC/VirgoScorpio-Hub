@@ -6,6 +6,10 @@
 
 ## 1. Candidate and boundaries
 
+> **Current mainline check (18 November 2026):** `main` is `584831648b7e96d00ccec77bb4565d4bfb4730a6` after docs-only PR #206. Exact-main workflow #44361023104 / run 762 passed all seven jobs, including 143/143 live PostgreSQL/Memgraph/Redis tests with zero skips, CodeQL, signed provenance/SBOM and exact-source evidence consolidation. The older F1.50 row below is a historical packet baseline, not the current assessor target. F1.52 / issue #207 is an unmerged maintainer candidate and must not be treated as an independent review pin. At engagement start, the authorized assessor and project owner must agree the reviewed SHA, checkout it cleanly and record that exact revision in the signed report.
+
+> **Current mainline check (18 November 2026):** `main` is `584831648b7e96d00ccec77bb4565d4bfb4730a6` after docs-only PR #206. Exact-main workflow #44361023104 / run 762 passed all seven jobs, including 143/143 live PostgreSQL/Memgraph/Redis tests with zero skips, CodeQL, signed provenance/SBOM and exact-source evidence consolidation. The older F1.50 row below is a historical packet baseline, not the current assessor target. F1.52 / issue #207 is an unmerged maintainer candidate and must not be treated as an independent review pin. At engagement start, the authorized assessor and project owner must agree the reviewed SHA, checkout it cleanly and record that exact revision in the signed report.
+
 | Field | Value |
 |---|---|
 | Repository | `GoldenObsidianLLC/VirgoScorpio-Hub` |

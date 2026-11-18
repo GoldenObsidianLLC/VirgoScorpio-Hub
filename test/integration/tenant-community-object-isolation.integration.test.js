@@ -617,6 +617,26 @@ test(
       assert.equal(activeFriendPayload.friendship.status, 'pending');
       await assertSiteAUnchanged();
 
+      const addresseeSession = await identity.login({
+        email: userB2.email,
+        password: 'Isolation-Password-2026',
+        ip: '127.0.0.1',
+        userAgent: 'tenant-community-friendship-acceptance-test',
+      });
+      assert.equal(addresseeSession.mfaRequired, false);
+      const addresseeHeaders = {
+        authorization: `Bearer ${addresseeSession.token}`,
+        'x-virgoscorpio-hub-site-id': siteB,
+      };
+      const acceptActiveFriend = await fetch(`${base}/api/v1/sites/${siteB}/community/friends/${actorB.id}`, {
+        method: 'PUT',
+        headers: addresseeHeaders,
+      });
+      assert.equal(acceptActiveFriend.status, 200);
+      const acceptedActiveFriendPayload = await acceptActiveFriend.json();
+      assert.equal(acceptedActiveFriendPayload.friendship.requester_id, actorB.id);
+      assert.equal(acceptedActiveFriendPayload.friendship.addressee_id, userB2.id);
+      assert.equal(acceptedActiveFriendPayload.friendship.status, 'accepted');
       const siteBAfterActiveFriend = await snapshotCommunitySite(pool, siteB);
       const inactiveFriendshipAttempts = [];
       for (const recipient of [
@@ -649,6 +669,50 @@ test(
         await snapshotCommunitySite(pool, siteB),
         siteBAfterActiveFriend,
         'inactive-recipient denials must not create friendships or any other community side effects'
+      );
+
+      const inactiveRequesterSession = await identity.login({
+        email: userBPublicJoinControl.email,
+        password: 'Isolation-Password-2026',
+        ip: '127.0.0.1',
+        userAgent: 'tenant-community-inactive-friendship-requester-test',
+      });
+      assert.equal(inactiveRequesterSession.mfaRequired, false);
+      const inactiveRequesterHeaders = {
+        authorization: `Bearer ${inactiveRequesterSession.token}`,
+        'x-virgoscorpio-hub-site-id': siteB,
+      };
+      const createPendingFriendship = await fetch(`${base}/api/v1/sites/${siteB}/community/friends/${userB2.id}`, {
+        method: 'POST',
+        headers: inactiveRequesterHeaders,
+      });
+      assert.equal(createPendingFriendship.status, 201);
+      const pendingFriendshipPayload = await createPendingFriendship.json();
+      assert.equal(pendingFriendshipPayload.friendship.requester_id, userBPublicJoinControl.id);
+      assert.equal(pendingFriendshipPayload.friendship.addressee_id, userB2.id);
+      assert.equal(pendingFriendshipPayload.friendship.status, 'pending');
+
+      await pool.query("UPDATE users SET status='disabled' WHERE id=$1", [userBPublicJoinControl.id]);
+      const beforeInactiveRequesterAcceptanceA = await snapshotCommunitySite(pool, siteA);
+      const beforeInactiveRequesterAcceptanceB = await snapshotCommunitySite(pool, siteB);
+      const acceptInactiveRequester = await fetch(`${base}/api/v1/sites/${siteB}/community/friends/${userBPublicJoinControl.id}`, {
+        method: 'PUT',
+        headers: addresseeHeaders,
+      });
+      assert.equal(acceptInactiveRequester.status, 404);
+      const inactiveRequesterAcceptancePayload = await acceptInactiveRequester.json();
+      assert.equal(inactiveRequesterAcceptancePayload.code, 'ERR_VIRGOSCORPIO_HUB_FRIEND_REQUEST_NOT_FOUND');
+      assert.doesNotMatch(JSON.stringify(inactiveRequesterAcceptancePayload), new RegExp(userBPublicJoinControl.id));
+      assert.doesNotMatch(JSON.stringify(inactiveRequesterAcceptancePayload), new RegExp(userBPublicJoinControl.display_name));
+      assert.deepEqual(
+        await snapshotCommunitySite(pool, siteA),
+        beforeInactiveRequesterAcceptanceA,
+        'accepting a friendship from an inactive requester must not change Site A state'
+      );
+      assert.deepEqual(
+        await snapshotCommunitySite(pool, siteB),
+        beforeInactiveRequesterAcceptanceB,
+        'an inactive requester denial must leave the pending friendship and all Site B community state unchanged'
       );
     });
 

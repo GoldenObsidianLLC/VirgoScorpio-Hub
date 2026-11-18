@@ -3,7 +3,7 @@
 > **Status:** Active internal engineering control for the restricted VirgoScorpio Hub 0.6.2 developer preview.
 > **Assessment type:** Maintainer-authored and automated checks only.
 > **Production certification:** **NOT CERTIFIED — NO-GO.**
-> **Current checked mainline evidence baseline:** `a95b6dc4acbb3adcb64cfec8d05ec0831d9adb9a` (F1.51 / PR #205 merged; exact-main workflow #44342489370 passed 7/7 jobs, including 143/143 live integrations, CodeQL and signed mainline provenance/SBOM attestations).
+> **Current checked mainline evidence baseline:** `584831648b7e96d00ccec77bb4565d4bfb4730a6` (F1.51 runtime PR #205 merged at `a95b6dc4acbb3adcb64cfec8d05ec0831d9adb9a`; docs-only PR #206 synced the current mainline; exact-main workflow #44361023104 / run 762 passed 7/7 jobs, including 143/143 live integrations, CodeQL and signed mainline provenance/SBOM attestations). F1.52 / issue #207 is an unmerged maintainer candidate and is not independent assurance or current-main evidence.
 
 ## 1. Purpose and decision
 

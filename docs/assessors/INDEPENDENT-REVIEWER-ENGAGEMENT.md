@@ -6,7 +6,7 @@
 
 **Technical hand-off:** [TENANT-ISOLATION-ASSESSMENT-BRIEF.md](TENANT-ISOLATION-ASSESSMENT-BRIEF.md)
 
-**Last checked mainline baseline after F1.51 / PR #205 merged:** `a95b6dc4acbb3adcb64cfec8d05ec0831d9adb9a` (exact-main workflow #44342489370 passed all seven jobs, including 143/143 live PostgreSQL/Memgraph/Redis tests with zero skips, CodeQL, and signed provenance/SBOM verification). F1.51 is maintainer-authored regression coverage and is not independent assessment evidence. This is not an approved assessment pin. Issues #14/#25 remain OPEN / NOT PERFORMED. A selected assessor and project owner must confirm the exact clean, authorized `main` SHA at any future properly funded engagement start and record it in the final report.
+**Last checked mainline baseline after F1.51 / PR #205 and documentation PR #206:** `584831648b7e96d00ccec77bb4565d4bfb4730a6` (exact-main workflow #44361023104 / run 762 passed all seven jobs, including 143/143 live PostgreSQL/Memgraph/Redis tests with zero skips, CodeQL, and signed provenance/SBOM verification). F1.51 and PR #206 are maintainer/automation evidence, not independent assessment evidence. F1.52 / issue #207 remains an unmerged maintainer candidate and is not part of this mainline evidence. This is not an approved assessment pin. Issues #14/#25 remain OPEN / NOT PERFORMED. A selected assessor and project owner must confirm the exact clean, authorized `main` SHA at any future properly funded engagement start and record it in the final report.
 
 ## 1. Engagement sought
 
