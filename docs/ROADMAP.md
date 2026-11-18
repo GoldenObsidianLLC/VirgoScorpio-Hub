@@ -1,3 +1,9 @@
+## Current unmerged candidate — F1.52 community friendship requester-lifecycle validation (issue #207 OPEN; based on main `584831648b7e96d00ccec77bb4565d4bfb4730a6`)
+
+F1.52 is a bounded candidate on branch `security/f1-52-friendship-acceptance-active-requester-2026-11-18`. It closes a requester-lifecycle gap in `PUT /api/v1/sites/{siteId}/community/friends/{requesterId}`: acceptance now requires that the pending requester still has an active account and same-site membership at the UPDATE transition. The existing generic 404 contract remains unchanged. The existing two-site PostgreSQL fixture covers active acceptance, disabled-after-request denial, identity non-disclosure and unchanged Site A/Site B snapshots.
+
+Local red/green PostgreSQL 18 validation reproduced the pre-fix HTTP 200 and passes 10/10 after the fix, with 18/18 fresh plus 18/18 idempotent migrations. Local `npm run check` passed 667/670 (zero failures, three Windows-specific skips); the 28-family / 80-route / 21-source / 57-test tenant inventory is regenerated and current. Exact-head hosted CI and PR review are pending. This candidate is not mainline release evidence. No schema, migration, dependency, lockfile, public API or SemVer change. See the [F1.52 implementation report](reports/2026-11-18-F1-52-FRIENDSHIP-ACTIVE-REQUESTER-ACCEPTANCE-REPORT.md) and issue [#207](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/207).
+
 ## Current 0.6.2 continuation — 18 November 2026 (F1.51 merged; PR #205; main `a95b6dc4acbb3adcb64cfec8d05ec0831d9adb9a`)
 
 ### F1.51 merged maintainer hardening — [PR #205](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/205) (issue #204 CLOSED)

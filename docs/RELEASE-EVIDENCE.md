@@ -1,4 +1,31 @@
-### Current exact-main evidence snapshot — 18 November 2026 UTC / 18 November America/Chicago (0.6.2, F1.51 merged; workflow #44342489370)
+### Current exact-main evidence snapshot — 18 November 2026 UTC / America/Chicago (0.6.2, documentation PR #206 synced; workflow #762)
+
+Current main is `584831648b7e96d00ccec77bb4565d4bfb4730a6`. F1.51 runtime changes merged through [PR #205](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/205) at `a95b6dc4acbb3adcb64cfec8d05ec0831d9adb9a`; documentation-only [PR #206](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/206) reconciled the mainline documentation and merged at the current SHA. Exact-main [workflow #44361023104 / run 762](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44361023104), attempt 1, completed all seven jobs successfully on `584831648b7e96d00ccec77bb4565d4bfb4730a6`.
+
+- Node.js 22.23.4 and 24.22.1 each passed 670/670 Hub tests and 94/94 EnginEx 7.0.0 tests with zero failures/skips. Both full and production-only npm audit scopes reported zero vulnerabilities.
+- PostgreSQL/Memgraph/Redis passed 143/143 live integration tests with zero failures, skips or TODOs. Fresh migrations applied all 18 migrations; the idempotent second pass recognized all 18 as already applied.
+- Browser editor/accessibility smoke passed 9/9. CodeQL passed.
+- Signed mainline SLSA provenance and CycloneDX SBOM attestations were created and verified. Exact-source evidence consolidation passed.
+- Consolidated readiness artifact **14456350424** (archive SHA-256 `64a9805f9b70f16d5f55eb8f77d5ff621db9ba59cb991ccab31ad34bb65296ed`) is source-bound to current main `584831648b7e96d00ccec77bb4565d4bfb4730a6`. It reports `CI EVIDENCE: PASS`, `FINAL RELEASE READINESS: NOT_PRODUCTION_CERTIFIED`, `PRODUCTION CERTIFICATION: NO`, **8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN**, and `readyForProduction=false`.
+- Live database producer artifact **14454905774** (SHA-256 `137e1967340fe6aca1cb37849cc108ef1609aff836daeb7a0fb47cfe4e49fda5`); database CI evidence artifact **14456640215** (SHA-256 `fefd1b94ed4fece7c8459e615cad7ee69d0ab40a9fee8489621360ecf4deea86`); signed supply-chain evidence artifact **14455045762** (SHA-256 `3388745fb6b40e023be846cd1e310042787be1c6f1d1be481d43f14c8a26e02c`).
+
+| Workflow #762 evidence | Artifact ID | Archive SHA-256 |
+|---|---:|---|
+| Consolidated readiness / CI evidence | 14456350424 | `64a9805f9b70f16d5f55eb8f77d5ff621db9ba59cb991ccab31ad34bb65296ed` |
+| PostgreSQL/Memgraph/Redis live integration | 14454905774 | `137e1967340fe6aca1cb37849cc108ef1609aff836daeb7a0fb47cfe4e49fda5` |
+| Database CI evidence | 14456640215 | `fefd1b94ed4fece7c8459e615cad7ee69d0ab40a9fee8489621360ecf4deea86` |
+| Signed supply-chain attestations | 14455045762 | `3388745fb6b40e023be846cd1e310042787be1c6f1d1be481d43f14c8a26e02c` |
+| CodeQL / static analysis | 14455915364 | See workflow #762 artifact metadata. |
+| Browser/editor smoke | 14454755815 | See workflow #762 artifact metadata. |
+| Node.js 22.23.4 CI / dependency | 14455690459 / 14455350512 | See workflow #762 artifact metadata. |
+| Node.js 24.22.1 CI / dependency | 14454715930 / 14454236420 | See workflow #762 artifact metadata. |
+
+The two PARTIAL rows remain incomplete qualified human dependency/license review and service-less integration diagnostics; skipped diagnostic cases are not live passes. The 14 production evidence gates remain missing as recorded in [authoritative readiness](RELEASE_READINESS.md). Independent tenant review #14 and platform security assessment #25 remain OPEN / NOT PERFORMED; dependency/license review #23 remains OPEN / PARTIAL. PR #205 and docs PR #206 record no formal review submissions or inline review threads; CI, CodeQL and signed attestations are maintainer/automation evidence, not independent approval. Package 0.6.2 remains private and unreleased; production remains NO-GO / NOT_PRODUCTION_CERTIFIED.
+
+F1.52 / issue #207 is a separate unmerged candidate and is not included in this exact-main source/evidence record. Candidate-local test results must remain in its implementation report until exact-head hosted CI and merge validation are complete.
+
+### Historical exact-main evidence snapshot — 18 November 2026 UTC / America/Chicago (F1.51 runtime merge before docs PR #206; workflow #759; superseded by #762)
+
 
 Current main is `a95b6dc4acbb3adcb64cfec8d05ec0831d9adb9a`. F1.51 merged through [PR #205](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/205); implementation commit `b91c972d22c366c37d8d49d223ba399442fb073f`; issue #204 is CLOSED. Exact-main [workflow #44342489370](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44342489370), run ID 44342489370, completed all seven required jobs successfully on this exact revision.
 

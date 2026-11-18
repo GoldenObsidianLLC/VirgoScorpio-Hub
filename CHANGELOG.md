@@ -4,6 +4,15 @@ All notable project-level changes should be recorded here. This changelog does n
 
 ## 0.6.2 (unreleased patch candidate)
 
+### Community friendship acceptance revalidates requester status (F1.52; issue #207 OPEN; candidate not merged)
+
+- A route review found that `PUT /api/v1/sites/{siteId}/community/friends/{requesterId}` accepted a pending request without rechecking whether its requester account remained active. A requester disabled after creating a pending request could still be accepted.
+- The existing friendship UPDATE now requires a same-site membership joined to an active user row at transition time. The existing generic, non-disclosing `404 ERR_VIRGOSCORPIO_HUB_FRIEND_REQUEST_NOT_FOUND` response, successful active-requester acceptance behavior, route shape and response contract are preserved.
+- The existing two-site PostgreSQL fixture now covers active same-site acceptance, the disabled-after-request denial, identity non-disclosure and unchanged Site A/Site B community snapshots. The red control returned HTTP 200 before the predicate; the fixed local live suite passes 10/10 with zero skips.
+- Candidate-local `npm run check` passes 667 tests, 0 failures and 3 Windows-specific skips; artifact verification passes 238 required paths / 268 JavaScript files. The tenant inventory is regenerated and current at 28 families / 80 route patterns / 21 source files / 57 test references. Exact-head hosted CI and review are pending.
+- No schema, migration, endpoint, response-contract, dependency, lockfile, package-version or SemVer change. Maintainer-only candidate; independent reviews #14/#25 remain OPEN / NOT PERFORMED. See the [F1.52 implementation report](docs/reports/2026-11-18-F1-52-FRIENDSHIP-ACTIVE-REQUESTER-ACCEPTANCE-REPORT.md).
+
+
 ### Private-group membership retry preserves active authorization state (F1.51; [PR #205 MERGED](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/205); issue #204 CLOSED)
 
 - Reproduced on main f24734330be289f89f19057049d4df5287e94bd3: retrying the private-group join endpoint for an existing active member downgraded the persisted membership to pending. Implementation commit `b91c972d22c366c37d8d49d223ba399442fb073f` merged through PR #205 at main commit `a95b6dc4acbb3adcb64cfec8d05ec0831d9adb9a` on 18 November 2026.

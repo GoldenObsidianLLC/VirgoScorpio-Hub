@@ -2,6 +2,11 @@
 
 ## Current status and repository assurance
 
+- [Current full 0.6.2 release-gate report — 18 November 2026](reports/2026-11-18-VirgoScorpio-Hub-0.6.2-Release-Gate-Report.md) — exact-main `584831648b7e96d00ccec77bb4565d4bfb4730a6` / workflow #44361023104; CI evidence PASS, but 8 PASS / 2 PARTIAL / 14 MISSING_EVIDENCE and production remains NO-GO / NOT_PRODUCTION_CERTIFIED.
+- [F1.52 friendship active-requester acceptance report](reports/2026-11-18-F1-52-FRIENDSHIP-ACTIVE-REQUESTER-ACCEPTANCE-REPORT.md) — issue #207 OPEN; candidate-only local PostgreSQL red/green regression and full-suite validation. Not merged, not exact-main evidence, and hosted candidate CI remains pending.
+- [Authoritative 0.6.2 readiness](RELEASE_READINESS.md) and [exact-source evidence ledger](RELEASE-EVIDENCE.md) are current through docs PR #206 and workflow #44361023104 / run 762. The 17 November release-gate report below is retained as a historical snapshot.
+
+
 - [F1.48 community-feed privacy and comment-parent hardening — merged implementation report](reports/2026-11-18-F1-48-COMMUNITY-FEED-PRIVACY-REGRESSION-REPORT.md) — PR #197 merged at main `37f0bfff82c53e4d616ba87ce94f5d7a784200fe`; issue #196 CLOSED. Exact-main workflow #44235945030 passed 7/7 jobs, including 141/141 live PostgreSQL/Memgraph/Redis tests with zero skips, Node 22/24, fresh/idempotent migrations, browser 9/9, CodeQL, signed attestations and evidence consolidation.
 - [F1.48 exact-main validation and release-gate report](reports/2026-11-18-F1-48-MAINLINE-VALIDATION-REPORT.md) — source-bound CI evidence PASS; 8 PASS / 2 PARTIAL / 14 MISSING_EVIDENCE; production remains NO-GO / NOT_PRODUCTION_CERTIFIED.
 - [F1.47 regular navigation-menu two-site isolation regression](reports/2026-11-17-F1-47-REGULAR-NAVIGATION-MENU-TENANT-ISOLATION-REGRESSION-REPORT.md) — PR #194 merged; issue #193 CLOSED. The A/B same-slug test remains in the 141-test live mainline suite.
