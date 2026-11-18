@@ -1,13 +1,13 @@
 # F1.48 — Community feed privacy and comment-parent isolation
 
-**Date:** 17 November 2026 (America/Chicago)
-**Issue:** [#196](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/196) — OPEN
+**Date:** 18 November 2026 UTC / 17 November 2026 America/Chicago
+**Issue:** [#196](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/196) — CLOSED
 **Parent maintainer-hardening tracker:** [#124](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/124)
+**Runtime PR:** [#197](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/197) — MERGED
 **Independent tenant-review gate:** [#14](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/14) — OPEN / NOT PERFORMED
-**Candidate branch:** security/f1-48-community-feed-privacy-2026-11-18
-**Base main SHA:** fba84b91bdb4e6791f4c66f7a90acaa466f74aa3
-**Status:** Maintainer implementation and local live-PostgreSQL validation complete; exact-head hosted CI, review and merge remain pending.
-
+**Implementation commit:** 4fa49b7403db3881ac50d9827223fb1d912b5b44
+**Main merge SHA:** 37f0bfff82c53e4d616ba87ce94f5d7a784200fe
+**Status:** Merged and exact-main validated; maintainer-authored evidence only.
 > **Assurance boundary:** F1.48 is maintainer-authored route hardening and regression coverage. It is not an independent security assessment, risk acceptance, waiver, or production-certification evidence.
 
 ## Executive summary
@@ -66,7 +66,7 @@ The existing two-site community object-isolation suite remains in place and now 
 | Full local npm run check | PASS — 670 tests, 667 passed, 0 failed, 3 Windows-specific skips | Windows / Node.js 26.12.1; artifact verification passed 238 required paths and 268 JavaScript syntax checks. |
 | Tenant-isolation inventory generation | PASS | 28 families / 80 route patterns / 21 implementation sources / 57 referenced tests. |
 | Inventory freshness | PASS | Existing generator --check. |
-| Exact-head hosted CI | NOT RUN | Required before merge. |
+| Candidate push / PR workflows | PASS | PR #197 candidate jobs passed; exact-main evidence is recorded below. |
 
 The confirmed red regression was observed against the candidate read predicate before the recursive parent-chain guard was added. After the fix, the focused integration passed with zero skips. Additional live assertions verify that a two-row cyclic legacy comment chain terminates and remains hidden, that detached/non-comment roots cannot validate a reply chain, and that denied writes leave site data, audit events and outbox events unchanged.
 
@@ -77,3 +77,31 @@ The source-anchored community route family now references the new integration te
 Independent tenant review #14 and platform security assessment #25 remain OPEN / NOT PERFORMED. F1.48 does not populate the independent evidence contract. Other community profile, workflow, moderation, asynchronous, provider, cache and realtime surfaces still require their own coverage and/or independent assessment.
 
 Package virgoscorpio-hub@0.6.2 remains private and unreleased. Production remains **NO-GO / NOT_PRODUCTION_CERTIFIED**. No SemVer increment, schema, migration, dependency, lockfile, release, tag, publication, deployment, assessor engagement or spending is authorized.
+## Merge and exact-main validation — 18 November 2026 UTC / 17 November America/Chicago
+
+PR #197 merged at main SHA `37f0bfff82c53e4d616ba87ce94f5d7a784200fe` from implementation commit `4fa49b7403db3881ac50d9827223fb1d912b5b44`; issue #196 is CLOSED. Exact-main [workflow #44235945030](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44235945030) completed **7/7 jobs successfully** on the exact main revision.
+
+| Mainline validation | Result |
+|---|---|
+| Node.js 22.23.4 and 24.22.1 | Each passed 670/670 Hub tests and 94/94 EnginEx tests; zero failures or skips. |
+| Dependency audit | Full and production-only npm audit scopes reported zero vulnerabilities on both runtimes. |
+| Live PostgreSQL/Memgraph/Redis | **141/141 passed; zero failures, zero skips, zero TODOs**. F1.48 private-group/comment-parent cases and the F1.47 two-site regular-menu isolation regression both passed. |
+| Fresh / idempotent migrations | 18/18 applied to a fresh disposable database; 18/18 recognized as already applied on the second pass. |
+| Browser/editor smoke | 9/9 passed. |
+| CodeQL | Passed; scanned 268 JavaScript, 1 GitHub Actions and 2 HTML files. |
+| Mainline supply-chain attestations | Signed provenance and CycloneDX SBOM attestations were created and verified against the exact lockfile and SBOM. |
+| Exact-source evidence consolidation | Passed; CI evidence is PASS and final readiness remains NOT_PRODUCTION_CERTIFIED. |
+
+Run-bound artifacts:
+
+| Evidence | Artifact ID | SHA-256 |
+|---|---:|---|
+| Consolidated readiness / CI evidence | 14396544068 | `578b6f06cf15d15a0ed7750b74613bf03d2b14d632e1d9a1b04ecfc10b8b7df8` |
+| Live PostgreSQL/Memgraph integration | 14398020197 | `e25342847d246e51b55644dbe75b726abc59cb1e3c514d568bd3dfa0e451d3fb` |
+| Signed supply-chain evidence | 14397825231 | `ef1b0abc4e1ba9b2e49c552b880516786380d7a55b6d115bc3dd000aee0f7d0c` |
+| Browser/editor smoke evidence | 14397257485 | `06ea2b3d199fcd9204fed2e32c2704053e101723dcea1ec81aa881c5d2c4003c` |
+| CodeQL evidence | 14396334182 | `923969ce91a561a624a8e089dcc1bc8c3be4797e9c6da1ed8517e784f99766cd` |
+
+The exact-source readiness artifact is bound to `37f0bfff82c53e4d616ba87ce94f5d7a784200fe`: **8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN**, with `readyForProduction=false` and `releaseClassification=NOT_PRODUCTION_CERTIFIED`. The PARTIAL rows remain human dependency/license review and a service-less integration diagnostic (46 skipped of 47 tests per runtime); those diagnostic skips are not live integration results. The separate live integration producer passed 141/141 with zero skips.
+
+PR #197 has no formal review submissions or inline review threads. Merge and CI are maintainer/automation evidence, not independent security approval. Independent tenant review #14 and platform security assessment #25 remain OPEN / NOT PERFORMED; F1.48 does not populate either evidence contract. Package 0.6.2 remains private/unreleased and production remains NO-GO.
