@@ -1016,6 +1016,12 @@
             "function sitePath(pathName)",
             "async function handleCommunityWorkflowRoute("
           ]
+        },
+        {
+          "file": "apps/api/src/platform-routes.js",
+          "anchors": [
+            "const friendRequest="
+          ]
         }
       ],
       "tests": [
@@ -1024,8 +1030,8 @@
         "test/integration/tenant-community-object-isolation.integration.test.js"
       ],
       "coverage": {
-        "level": "targeted-two-site-direct-message-recipient-and-no-side-effects",
-        "limits": "Existing A/B cases cover selected conversation/message/block/report/moderation/notification access and side effects. F1.49 adds live PostgreSQL coverage for POST /community/conversations: a Site B-only actor using a Site A-only recipient ID receives the existing non-disclosing 404 before the conversation transaction begins; deep before/after snapshots for both sites cover conversations, members, messages, notifications and the complete shared community-state projection; a same-site Site B create/reuse positive control returns the existing conversation without duplicate rows or notification fan-out. Complete workflow state transitions, other recipient variants, event fan-out outside the direct-create transaction, and independent adversarial/provider/realtime review remain separate."
+        "level": "targeted-two-site-active-recipient-direct-message-and-friendship-no-side-effects",
+        "limits": "Existing A/B cases cover selected conversation/message/block/report/moderation/notification access and side effects. F1.49 adds live PostgreSQL coverage for POST /community/conversations: a Site B-only actor using a Site A-only recipient ID receives the existing non-disclosing 404 before the conversation transaction begins; deep before/after snapshots for both sites cover conversations, members, messages, notifications and the complete shared community-state projection; a same-site Site B create/reuse positive control returns the existing conversation without duplicate rows or notification fan-out. Complete workflow state transitions, other recipient variants, event fan-out outside the direct-create transaction, and independent adversarial/provider/realtime review remain separate. F1.50 adds a live PostgreSQL A/B regression for POST /api/v1/sites/{siteId}/community/friends/{userId}. Site B retains membership rows for invited and disabled users; the route must reject both, and foreign-site recipients, with the existing non-disclosing 404 before any friendship is written. Deep Site A/Site B snapshots prove denied attempts do not modify friendships or other community state. An active same-site recipient remains a positive control and produces one pending friendship. The friendship route implementation is in apps/api/src/platform-routes.js (friendRequest), while conversation workflows remain in packages/community/src/workflows.js. Broader friendship lifecycle, membership revocation races and independent adversarial/provider/realtime review remain separate."
       },
       "methods": [
         "GET",

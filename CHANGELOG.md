@@ -4,13 +4,18 @@ All notable project-level changes should be recorded here. This changelog does n
 
 ## 0.6.2 (unreleased patch candidate)
 
-### Direct-message recipient tenant isolation (F1.49; issue #199 OPEN; candidate only)
+### Community friendship active-recipient isolation (F1.50; issue #201 OPEN; candidate only)
 
-- Based on mainline `00c60fd1380123f7af436e4bfcb6b515bfbc2e34`. Adds a two-site live PostgreSQL regression to the existing community object-isolation fixture for `POST /api/v1/sites/{siteId}/community/conversations`.
-- A Site B-only actor attempting to create a conversation with a Site A-only recipient receives the existing non-disclosing `404 ERR_VIRGOSCORPIO_HUB_COMMUNITY_USER_NOT_FOUND`; deep Site A and Site B community snapshots remain unchanged. A same-site Site B create/reuse control returns the existing conversation without duplicate records or notifications.
-- Focused disposable PostgreSQL 18 integration passed 9/9 with zero skips; the combined direct-message/community regression set passed 18/18 with zero skips. All 18 migrations were applied fresh. Inventory generator and freshness check pass (28 families / 80 patterns / 21 sources / 57 test references).
-- This is maintainer-authored regression coverage only, not independent assessment #14/#25. No runtime, schema, migration, API, dependency, lockfile, package version or SemVer change. Hosted exact-head CI is still required before merge. Package 0.6.2 remains private/unreleased; production remains NO-GO / NOT_PRODUCTION_CERTIFIED.
+- Based on exact mainline `1c9b9c8b23e5e3cffe8f8a67aca4f55cbb8d1623`. The friendship-create route now requires an active user joined to the membership in the requested site; retained memberships for invited or disabled accounts are not sufficient.
+- A disposable PostgreSQL 18 regression reproduced the pre-fix gap: both invited and disabled Site B recipients returned 201. After the route predicate was corrected, both receive the existing generic non-disclosing 404, the active same-site positive control still creates a pending friendship, and deep Site A/Site B community snapshots remain unchanged after denials.
+- Focused post-fix PostgreSQL integration passed 9/9 with zero skips after all 18 migrations were freshly applied. Both changed JavaScript files pass syntax checks. The source-anchored inventory was regenerated at 28 families / 80 route patterns / 21 source files / 57 test references; the inventory generator `--check` passed; full `npm run check` passed 670 tests (667 passed, 0 failed, 3 Windows-specific skips), with 238 required paths and 268 JavaScript files syntax-checked.
+- This is maintainer-authored hardening only, not independent assessment #14/#25. No schema, migration, API contract, dependency, lockfile, package version or SemVer change. Hosted exact-head CI is required before merge. Package 0.6.2 remains private/unreleased; production remains NO-GO / NOT_PRODUCTION_CERTIFIED.
 
+### Direct-message recipient tenant isolation (F1.49; PR #200 MERGED; issue #199 CLOSED)
+
+- Based on mainline `1c9b9c8b23e5e3cffe8f8a67aca4f55cbb8d1623`. PR #200 merged at this SHA; issue #199 is CLOSED. The two-site live PostgreSQL regression proves that a Site B-only actor cannot create a direct conversation with a Site A-only recipient, while preserving the existing non-disclosing 404 and same-site Site B create/reuse control.
+- Exact-main [workflow #44246177550](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44246177550) passed all seven jobs: Node 22/24 each passed 670/670 Hub and 94/94 EnginEx tests; live PostgreSQL/Memgraph/Redis passed 142/142 with zero skips; 18/18 fresh and idempotent migrations, browser smoke, CodeQL, signed provenance/SBOM and exact-source evidence consolidation passed.
+- Maintainer/automation evidence only; independent tenant and platform reviews #14/#25 remain OPEN / NOT PERFORMED. Package 0.6.2 remains private/unreleased and production remains NO-GO / NOT_PRODUCTION_CERTIFIED.
 ### Community-feed privacy and comment-parent isolation (F1.48; PR #197 MERGED; issue #196 CLOSED)
 
 - Based on mainline fba84b91bdb4e6791f4c66f7a90acaa466f74aa3; implementation commit `4fa49b7403db3881ac50d9827223fb1d912b5b44` merged through [PR #197](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/197) at main merge commit `37f0bfff82c53e4d616ba87ce94f5d7a784200fe` on 18 November 2026 UTC (17 November America/Chicago). Issue #196 is CLOSED.

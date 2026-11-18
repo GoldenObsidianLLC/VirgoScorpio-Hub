@@ -132,17 +132,17 @@ test(
     );
     roleId = roleResult.rows[0].id;
 
-    async function createUser(label, withPassword = false) {
+    async function createUser(label, withPassword = false, status = 'active') {
       const email = `tenant-community-${label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${randomUUID()}@example.test`;
       const result = await pool.query(
         withPassword
           ? `INSERT INTO users(email,display_name,password_hash,status)
-             VALUES($1,$2,$3,'active') RETURNING id,email,display_name`
+             VALUES($1,$2,$3,$4) RETURNING id,email,display_name`
           : `INSERT INTO users(email,display_name,status)
-             VALUES($1,$2,'active') RETURNING id,email,display_name`,
+             VALUES($1,$2,$3) RETURNING id,email,display_name`,
         withPassword
-          ? [email, label, await hashPassword('Isolation-Password-2026')]
-          : [email, label]
+          ? [email, label, await hashPassword('Isolation-Password-2026'), status]
+          : [email, label, status]
       );
       userIds.push(result.rows[0].id);
       return result.rows[0];
@@ -152,10 +152,12 @@ test(
     const userA2 = await createUser('Site A Target');
     const actorB = await createUser('Site B Moderator', true);
     const userB2 = await createUser('Site B Member');
+    const userBInvited = await createUser('Site B Invited Recipient', false, 'invited');
+    const userBDisabled = await createUser('Site B Disabled Recipient', false, 'disabled');
 
     await pool.query(
-      'INSERT INTO site_memberships(site_id,user_id,role_id) VALUES($1,$2,$3),($1,$4,$3),($5,$6,$3),($5,$7,$3)',
-      [siteA, userA.id, roleId, userA2.id, siteB, actorB.id, userB2.id]
+      'INSERT INTO site_memberships(site_id,user_id,role_id) VALUES($1,$2,$3),($1,$4,$3),($5,$6,$3),($5,$7,$3),($5,$8,$3),($5,$9,$3)',
+      [siteA, userA.id, roleId, userA2.id, siteB, actorB.id, userB2.id, userBInvited.id, userBDisabled.id]
     );
 
     const groupAResult = await pool.query(
@@ -376,7 +378,7 @@ test(
       await assertSiteBUnchanged();
     });
 
-    await t.test('foreign block and friendship targets cannot be listed, created, changed, or removed', async () => {
+    await t.test('friendship requests reject foreign, invited, and disabled recipients without side effects', async () => {
       const blocks = await fetch(`${base}/api/v1/sites/${siteB}/community/blocks`, { headers });
       assert.equal(blocks.status, 200);
       assert.deepEqual((await blocks.json()).blocks, []);
@@ -400,12 +402,12 @@ test(
       assert.equal(friends.status, 200);
       assert.deepEqual((await friends.json()).friendships, []);
 
-      const createFriend = await fetch(`${base}/api/v1/sites/${siteB}/community/friends/${userA.id}`, {
+      const createForeignFriend = await fetch(`${base}/api/v1/sites/${siteB}/community/friends/${userA.id}`, {
         method: 'POST',
         headers,
       });
-      assert.equal(createFriend.status, 404);
-      assert.equal((await createFriend.json()).code, 'ERR_VIRGOSCORPIO_HUB_COMMUNITY_USER_NOT_FOUND');
+      assert.equal(createForeignFriend.status, 404);
+      assert.equal((await createForeignFriend.json()).code, 'ERR_VIRGOSCORPIO_HUB_COMMUNITY_USER_NOT_FOUND');
 
       const acceptForeign = await fetch(`${base}/api/v1/sites/${siteB}/community/friends/${userA.id}`, {
         method: 'PUT',
@@ -414,6 +416,65 @@ test(
       assert.equal(acceptForeign.status, 404);
       assert.equal((await acceptForeign.json()).code, 'ERR_VIRGOSCORPIO_HUB_FRIEND_REQUEST_NOT_FOUND');
       await assertSiteAUnchanged();
+      await assertSiteBUnchanged();
+
+      const inactiveMemberships = await pool.query(
+        'SELECT sm.user_id,u.status FROM site_memberships sm JOIN users u ON u.id=sm.user_id WHERE sm.site_id=$1 AND sm.user_id=ANY($2::uuid[]) ORDER BY u.status',
+        [siteB, [userBInvited.id, userBDisabled.id]]
+      );
+      assert.deepEqual(
+        inactiveMemberships.rows,
+        [
+          { user_id: userBDisabled.id, status: 'disabled' },
+          { user_id: userBInvited.id, status: 'invited' },
+        ],
+        'both inactive recipient accounts deliberately retain Site B membership rows'
+      );
+
+      const createActiveFriend = await fetch(`${base}/api/v1/sites/${siteB}/community/friends/${userB2.id}`, {
+        method: 'POST',
+        headers,
+      });
+      assert.equal(createActiveFriend.status, 201);
+      const activeFriendPayload = await createActiveFriend.json();
+      assert.equal(activeFriendPayload.friendship.requester_id, actorB.id);
+      assert.equal(activeFriendPayload.friendship.addressee_id, userB2.id);
+      assert.equal(activeFriendPayload.friendship.status, 'pending');
+      await assertSiteAUnchanged();
+
+      const siteBAfterActiveFriend = await snapshotCommunitySite(pool, siteB);
+      const inactiveFriendshipAttempts = [];
+      for (const recipient of [
+        { user: userBInvited, expectedStatus: 'invited' },
+        { user: userBDisabled, expectedStatus: 'disabled' },
+      ]) {
+        const response = await fetch(`${base}/api/v1/sites/${siteB}/community/friends/${recipient.user.id}`, {
+          method: 'POST',
+          headers,
+        });
+        inactiveFriendshipAttempts.push({
+          recipient,
+          status: response.status,
+          payload: await response.json(),
+        });
+      }
+
+      assert.deepEqual(
+        inactiveFriendshipAttempts.map(attempt => attempt.status),
+        [404, 404],
+        'invited and disabled recipients must both be rejected'
+      );
+      for (const attempt of inactiveFriendshipAttempts) {
+        assert.equal(attempt.payload.code, 'ERR_VIRGOSCORPIO_HUB_COMMUNITY_USER_NOT_FOUND');
+        assert.doesNotMatch(JSON.stringify(attempt.payload), new RegExp(attempt.recipient.user.id));
+        assert.doesNotMatch(JSON.stringify(attempt.payload), new RegExp(attempt.recipient.user.display_name));
+      }
+      assert.deepEqual(await snapshotCommunitySite(pool, siteA), before, 'inactive-recipient denials must not change Site A state');
+      assert.deepEqual(
+        await snapshotCommunitySite(pool, siteB),
+        siteBAfterActiveFriend,
+        'inactive-recipient denials must not create friendships or any other community side effects'
+      );
     });
 
     await t.test('foreign report target and review IDs cannot reveal or change site A reports', async () => {
