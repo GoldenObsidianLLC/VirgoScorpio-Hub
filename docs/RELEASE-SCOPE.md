@@ -18,16 +18,17 @@ The package remains at **0.6.2**. This scope/documentation reconciliation is not
 
 ## 2. Candidate and evidence baseline
 
-The full current exact-main readiness matrix, evidence hashes, artifact inventory, open production gates and F1.31–F1.35 merge evidence are maintained in the [15 November 2026 release-gate report](reports/2026-11-15-VirgoScorpio-Hub-0.6.2-Release-Gate-Report.md).
+The current exact-main readiness matrix, evidence hashes and artifact inventory are maintained in [authoritative release readiness](RELEASE_READINESS.md) and [release evidence](RELEASE-EVIDENCE.md). The scope recommendation below was originally documented against the F1.35 baseline; the current implementation/evidence context is separately recorded below so historical scope approval is not confused with current mainline state.
 
 | Field | Current value |
 |---|---|
 | Repository | `GoldenObsidianLLC/VirgoScorpio-Hub` |
 | Version | `0.6.2` |
 | Package state | Unreleased candidate; `private: true` in package metadata |
-| Current main baseline | 233f8e9cf61f391cb46d269c2dd3f87ff75d1023 (F1.35 PR #157 merge; exact-main workflow #655 passed all seven jobs) |
-| Runtime code baseline | 233f8e9cf61f391cb46d269c2dd3f87ff75d1023 (F1.35 plugin registration/upsert and approve/security-review/activate/disable mutations are atomic with audit; PR #157 merged; validated by exact-main workflow #655) |
-| Latest maintainer increment | F1.35 / PR #157, issue #156 CLOSED; main 233f8e9cf61f391cb46d269c2dd3f87ff75d1023 | Plugin registration and four admin lifecycle transitions commit with correlated audit; lifecycle validation is row-locked. Exact-head workflows #653/#654 and exact-main #655 passed; #655 includes 100/100 live PostgreSQL/Memgraph tests, 18 fresh/idempotent migrations, both runtime suites, Playwright, CodeQL, signed mainline attestations and evidence consolidation. No formal PR review submission; maintainer/automation evidence only. |
+| Historical scope-recommendation baseline | 233f8e9cf61f391cb46d269c2dd3f87ff75d1023 (F1.35 PR #157; workflow #655) |
+| Historical runtime baseline for this scope recommendation | 233f8e9cf61f391cb46d269c2dd3f87ff75d1023 (F1.35 plugin registration/upsert and audit-atomicity lifecycle changes) |
+| Latest implementation increment | F1.51 / PR #205; issue #204 CLOSED; main a95b6dc4acbb3adcb64cfec8d05ec0831d9adb9a | Private-group join retries now preserve active/banned memberships; exact-main workflow #44342489370 passed 7/7 jobs including 143/143 live integrations and signed mainline provenance/SBOM. This is maintainer/automation evidence only; independent reviews #14/#25 remain OPEN / NOT PERFORMED. |
+| Current runtime / evidence context | F1.51 / PR #205, main `a95b6dc4acbb3adcb64cfec8d05ec0831d9adb9a`; exact-main workflow #44342489370; canonical readiness artifact 14445280897 | CI EVIDENCE: PASS; 8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN; `readyForProduction=false`, `NOT_PRODUCTION_CERTIFIED`. F1.51 changes no product scope or release authorization. |
 | Manifest release state | `EXPANDED_DEVELOPER_PREVIEW_NOT_PRODUCTION_CERTIFIED` |
 | Semantic version change | None; remains 0.6.2 |
 | Runtime minimum | Node.js `>=22.23.4` |

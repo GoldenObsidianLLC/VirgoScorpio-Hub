@@ -1,12 +1,14 @@
 # F1.51 - Private-group membership join idempotency report
 
 - **Date:** 18 November 2026
-- **Issue:** [#204](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/204) - OPEN
+- **Issue:** [#204](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/204) - CLOSED
 - **Parent maintainer-hardening tracker:** [#124](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/124)
 - **Independent assurance gates:** [tenant review #14](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/14) and [platform security review #25](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/25) - OPEN / NOT PERFORMED
-- **Candidate branch:** `security/f1-51-community-group-join-idempotency-2026-11-18`
-- **Baseline main SHA:** `f24734330be289f89f19057049d4df5287e94bd3`
-- **Status:** Runtime fix, focused live PostgreSQL validation, full local project check, tenant inventory freshness, dependency consistency, Markdown links, and syntax checks complete; hosted exact-head verification remains pending.
+- **Implementation branch:** `security/f1-51-community-group-join-idempotency-2026-11-18`
+- **Implementation commit:** `b91c972d22c366c37d8d49d223ba399442fb073f`
+- **Merged main commit:** `a95b6dc4acbb3adcb64cfec8d05ec0831d9adb9a` via [PR #205](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/205)
+- **Pre-fix baseline:** `f24734330be289f89f19057049d4df5287e94bd3`
+- **Status:** Merged and exact-main CI validated; documentation and issue-tracker reconciliation complete.
 
 > **Assurance boundary:** This is maintainer-authored bug-fix and regression evidence. It is not an independent application-security assessment, a waiver, risk acceptance, or production certification.
 
@@ -48,11 +50,26 @@ No new fixture framework, helper abstraction, dependency, public endpoint, migra
 | Artifact verifier | **PASS** | 238 required paths and 268 JavaScript files syntax-checked. |
 | Tenant inventory generation and freshness | **PASS** | 28 families / 80 route patterns / 21 implementation sources / 57 referenced tests; generator `--check` reports current. |
 | Syntax and dependency consistency | **PASS** | Runtime and integration test `node --check`; `npm ls --depth=0` clean. No package or lockfile change. |
-| Markdown relative links | **PASS** | 94 relative links across eight changed Markdown files; zero broken targets. |
-| `git diff --check` | **PASS** | Re-run after final documentation reconciliation; no whitespace errors. |
-| Hosted exact-head CI | PENDING | Required before merge; no hosted validation is claimed here. |
+| Markdown relative links | **PASS** | Final reconciliation checked 184 relative links across 11 changed Markdown documents; zero broken targets. |
+| `git diff --check` | **PASS** | Final post-merge reconciliation diff checked with no whitespace errors. |
+| Candidate exact-head CI | **PASS** | Push #44324380682 and PR #44324468402; each live PostgreSQL/Memgraph/Redis suite 143/143 with zero skips; Node 22/24, CodeQL, browser smoke and evidence consolidation passed. |
 
 The focused integration suite also retains its conversation, friendship, report, moderation, notification, and cross-site community isolation controls in the same live PostgreSQL fixture.
+
+## Hosted validation and mainline evidence
+
+The implementation merged through [PR #205](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/205) at main commit a95b6dc4acbb3adcb64cfec8d05ec0831d9adb9a. The PR recorded no formal review submission or inline review thread; this is maintainer/repository-account work and automation evidence, not independent security approval.
+
+Exact-main [workflow #44342489370](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44342489370) completed with **7/7 jobs passing** on the exact merge commit:
+
+- Node.js 22.23.4 and 24.22.1 each passed 670/670 Hub tests and 94/94 EnginEx tests; npm audits reported zero vulnerabilities.
+- PostgreSQL/Memgraph/Redis integration passed **143/143 with zero failures, skips or TODOs**, including the F1.51 private-group join retry regression.
+- Fresh migration pass applied all 18 migrations; idempotent re-entry verified the full 18-migration set.
+- Browser/editor smoke passed 9/9; CodeQL passed.
+- Signed SLSA provenance and CycloneDX SBOM attestations were created and verified. Lockfile SHA-256 remains `8f3786bcfcd03d0b63761c7107e4d757ae5b45171ba2f6c086ff38c027c8b086`; SBOM SHA-256 is `553b9bf190a4fd75aaa750f0014f3f31b04fe0466ce186233e39267e4b7873ae` (200 components / 201 dependency records). Provenance and SBOM attestations are recorded at [69220003](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/attestations/69220003) and [69220027](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/attestations/69220027).
+- Exact-source evidence consolidation passed. Mainline artifacts: readiness `14445280897` (SHA-256 `a7e64f309cfc9cd953303ef6d7f9f3fbfb8bc11766e5974e9803603ffb27d23b`); live integration `14443973032` (SHA-256 `c3c0b7edba84d858e60a5a2d5df16e8d1ba439c1abb50920420395e80a3919e3`); DB CI evidence `14443434296` (SHA-256 `12a8e694354c8d13cb6b53fb002cc730da09a7b049bf36972693cccc4f69ab1e`); signed supply-chain evidence `14443912964` (SHA-256 `e08795489f7a58bce71a452759e5a2cfd6937176a999b7b9ad58e87d2ba426f4`).
+
+The canonical readiness JSON in artifact `14445280897` is bound to source revision `a95b6dc4acbb3adcb64cfec8d05ec0831d9adb9a`: `releaseClassification=NOT_PRODUCTION_CERTIFIED`, `readyForProduction=false`, and **8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN**. CI evidence is PASS; this does not constitute production certification. Issues #14/#25 and the other independent release/governance gates remain open.
 
 ## Inventory and release boundary
 

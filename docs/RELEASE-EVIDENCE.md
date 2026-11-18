@@ -1,23 +1,22 @@
-### Current exact-main evidence snapshot — 18 November 2026 UTC / 17 November America/Chicago (0.6.2, F1.48 merged; workflow #44235945030)
+### Current exact-main evidence snapshot — 18 November 2026 UTC / 18 November America/Chicago (0.6.2, F1.51 merged; workflow #44342489370)
 
-Current main is `37f0bfff82c53e4d616ba87ce94f5d7a784200fe`. F1.48 merged through [PR #197](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/197); implementation commit `4fa49b7403db3881ac50d9827223fb1d912b5b44`; issue #196 is CLOSED. Exact-main [workflow #44235945030](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44235945030), run ID 44235945030, completed all seven required jobs successfully on this exact revision.
+Current main is `a95b6dc4acbb3adcb64cfec8d05ec0831d9adb9a`. F1.51 merged through [PR #205](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/205); implementation commit `b91c972d22c366c37d8d49d223ba399442fb073f`; issue #204 is CLOSED. Exact-main [workflow #44342489370](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44342489370), run ID 44342489370, completed all seven required jobs successfully on this exact revision.
 
 - Node.js 22.23.4 and 24.22.1 each passed 670/670 Hub tests and 94/94 EnginEx 7.0.0 tests with zero failures/skips. Full and production-only npm audit scopes each reported zero vulnerabilities.
-- PostgreSQL/Memgraph/Redis passed 141/141 live integration tests with zero failures, skips or TODOs. F1.48 private-group/comment-parent cases passed, and F1.47's two-site same-slug regular navigation-menu isolation regression passed in the same suite.
-- Fresh migrations applied all 18 migrations; the idempotent second pass recognized all 18 as already applied. Browser editor/accessibility smoke passed 9/9; CodeQL scanned 268 JavaScript, 1 GitHub Actions and 2 HTML files.
-- Signed mainline provenance and CycloneDX SBOM attestations were created and verified. The lockfile SHA-256 remains `8f3786bcfcd03d0b63761c7107e4d757ae5b45171ba2f6c086ff38c027c8b086`.
-- Consolidated readiness artifact 14396544068 (archive SHA-256 `578b6f06cf15d15a0ed7750b74613bf03d2b14d632e1d9a1b04ecfc10b8b7df8`) is source-bound to main `37f0bfff82c53e4d616ba87ce94f5d7a784200fe`. It reports `CI EVIDENCE: PASS`, `FINAL RELEASE READINESS: NOT_PRODUCTION_CERTIFIED`, and `PRODUCTION CERTIFICATION: NO`. The finalized summary is 8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN; `readyForProduction` is false.
-- Live database producer artifact 14398020197 (archive SHA-256 `e25342847d246e51b55644dbe75b726abc59cb1e3c514d568bd3dfa0e451d3fb`). Signed supply-chain evidence artifact 14397825231 (archive SHA-256 `ef1b0abc4e1ba9b2e49c552b880516786380d7a55b6d115bc3dd000aee0f7d0c`). Browser smoke artifact 14397257485 (SHA-256 `06ea2b3d199fcd9204fed2e32c2704053e101723dcea1ec81aa881c5d2c4003c`). CodeQL artifact 14396334182 (SHA-256 `923969ce91a561a624a8e089dcc1bc8c3be4797e9c6da1ed8517e784f99766cd`).
+- PostgreSQL/Memgraph/Redis passed 143/143 live integration tests with zero failures, skips or TODOs, including the F1.51 private-group join idempotency regression. Candidate push #44324380682 and PR #44324468402 also passed the six applicable jobs; each candidate live suite passed 143/143 with zero skips.
+- Fresh migrations applied all 18 migrations; the idempotent second pass recognized all 18 as already applied. Browser editor/accessibility smoke passed 9/9; CodeQL passed.
+- Signed mainline SLSA provenance and CycloneDX SBOM attestations were created and verified. The lockfile SHA-256 remains `8f3786bcfcd03d0b63761c7107e4d757ae5b45171ba2f6c086ff38c027c8b086`; SBOM SHA-256 is `553b9bf190a4fd75aaa750f0014f3f31b04fe0466ce186233e39267e4b7873ae` (200 components / 201 dependency records). Attestations: [SLSA provenance #69220003](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/attestations/69220003) and [CycloneDX SBOM #69220027](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/attestations/69220027).
+- Consolidated readiness artifact 14445280897 (SHA-256 `a7e64f309cfc9cd953303ef6d7f9f3fbfb8bc11766e5974e9803603ffb27d23b`) is source-bound to main `a95b6dc4acbb3adcb64cfec8d05ec0831d9adb9a`. It reports CI EVIDENCE: PASS, FINAL RELEASE READINESS: NOT_PRODUCTION_CERTIFIED, PRODUCTION CERTIFICATION: NO; the finalized summary is 8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN and readyForProduction=false.
+- Live database producer artifact 14443973032 (SHA-256 `c3c0b7edba84d858e60a5a2d5df16e8d1ba439c1abb50920420395e80a3919e3`). Signed supply-chain evidence artifact 14443912964 (SHA-256 `e08795489f7a58bce71a452759e5a2cfd6937176a999b7b9ad58e87d2ba426f4`). Database CI evidence artifact 14443434296 (SHA-256 `12a8e694354c8d13cb6b53fb002cc730da09a7b049bf36972693cccc4f69ab1e`).
 
-| Workflow #44235945030 evidence | Artifact ID | Archive SHA-256 |
+| Workflow #44342489370 evidence | Artifact ID | SHA-256 |
 |---|---:|---|
-| Consolidated readiness / CI evidence | 14396544068 | `578b6f06cf15d15a0ed7750b74613bf03d2b14d632e1d9a1b04ecfc10b8b7df8` |
-| PostgreSQL/Memgraph live integration producer | 14398020197 | `e25342847d246e51b55644dbe75b726abc59cb1e3c514d568bd3dfa0e451d3fb` |
-| Signed supply-chain attestations | 14397825231 | `ef1b0abc4e1ba9b2e49c552b880516786380d7a55b6d115bc3dd000aee0f7d0c` |
-| Browser/editor smoke | 14397257485 | `06ea2b3d199fcd9204fed2e32c2704053e101723dcea1ec81aa881c5d2c4003c` |
-| CodeQL | 14396334182 | `923969ce91a561a624a8e089dcc1bc8c3be4797e9c6da1ed8517e784f99766cd` |
+| Consolidated readiness / CI evidence | 14445280897 | `a7e64f309cfc9cd953303ef6d7f9f3fbfb8bc11766e5974e9803603ffb27d23b` |
+| PostgreSQL/Memgraph/Redis live integration | 14443973032 | `c3c0b7edba84d858e60a5a2d5df16e8d1ba439c1abb50920420395e80a3919e3` |
+| Signed supply-chain attestations | 14443912964 | `e08795489f7a58bce71a452759e5a2cfd6937176a999b7b9ad58e87d2ba426f4` |
+| Database CI evidence | 14443434296 | `12a8e694354c8d13cb6b53fb002cc730da09a7b049bf36972693cccc4f69ab1e` |
 
-This is maintainer/automation evidence, not independent security approval. Independent review #14 and platform security review #25 remain OPEN / NOT PERFORMED; dependency/license review #23 remains OPEN / PARTIAL. The two PARTIAL rows in canonical readiness are human dependency/license review and the service-less integration diagnostic (46 skips out of 47 per runtime); those skips are not live integration results. The distinct live integration producer passed 141/141 with zero skips.
+This is maintainer/automation evidence, not independent security approval. Independent review #14 and platform security review #25 remain OPEN / NOT PERFORMED; dependency/license review #23 remains OPEN / PARTIAL. The two PARTIAL rows in canonical readiness remain qualified human dependency/license review and the service-less integration diagnostic; diagnostic skips are not live integration results. The separate live database producer passed 143/143 with zero skips. Production remains NO-GO / NOT_PRODUCTION_CERTIFIED.
 
 ### Historical exact-main evidence snapshot — 17 November 2026 UTC / 17 November America/Chicago (0.6.2, F1.46 merged; workflow #732)
 
