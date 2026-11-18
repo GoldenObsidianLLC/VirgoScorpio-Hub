@@ -1,4 +1,10 @@
-## Current 0.6.2 continuation — 18 November 2026 UTC / 17 November America/Chicago (F1.48 merged; issue #196 CLOSED; main `37f0bfff82c53e4d616ba87ce94f5d7a784200fe`)
+## Current 0.6.2 continuation — 18 November 2026 UTC / 17 November America/Chicago (F1.48 merged; issue #196 CLOSED; main `00c60fd1380123f7af436e4bfcb6b515bfbc2e34` after docs-only PR #198)
+
+### F1.49 maintainer candidate — issue #199 OPEN (not merged)
+
+Based on exact mainline `00c60fd1380123f7af436e4bfcb6b515bfbc2e34`, branch `security/f1-49-community-direct-message-recipient-isolation-2026-11-18`. Extends the existing two-site community object-isolation integration test for direct-conversation creation. A Site B-only actor using a Site A-only recipient ID must receive the existing generic 404; before/after snapshots across both sites prove no conversation, membership, message, notification or other community state changes. A same-site Site B reuse positive control must return the existing conversation without duplicate notification fan-out. No runtime code change was indicated.
+
+Local validation: disposable PostgreSQL 18, all 18 migrations applied fresh; focused tenant community suite **9/9 passed, 0 failed, 0 skipped**; combined community workflow / tenant object isolation / unit set **18/18 passed, 0 failed, 0 skipped**. Tenant inventory regeneration and freshness check pass at **28 families / 80 route patterns / 21 source files / 57 referenced tests**. See the [F1.49 implementation report](reports/2026-11-18-F1-49-DIRECT-MESSAGE-RECIPIENT-ISOLATION-REPORT.md). Exact-head hosted push/PR validation remains required before merge. This is maintainer regression coverage only, not independent reviews #14/#25. Package 0.6.2 remains private/unreleased; production remains NOT_PRODUCTION_CERTIFIED / NO-GO.
 
 ### F1.48 merged maintainer hardening — [PR #197](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/197) (issue #196 CLOSED)
 

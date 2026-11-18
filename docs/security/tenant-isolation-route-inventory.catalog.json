@@ -1024,8 +1024,8 @@
         "test/integration/tenant-community-object-isolation.integration.test.js"
       ],
       "coverage": {
-        "level": "targeted-two-site",
-        "limits": "A/B cases cover selected conversation/message/block/report/moderation/notification access and side effects. Complete workflow state transitions, group-private post visibility and event fan-out require further review."
+        "level": "targeted-two-site-direct-message-recipient-and-no-side-effects",
+        "limits": "Existing A/B cases cover selected conversation/message/block/report/moderation/notification access and side effects. F1.49 adds live PostgreSQL coverage for POST /community/conversations: a Site B-only actor using a Site A-only recipient ID receives the existing non-disclosing 404 before the conversation transaction begins; deep before/after snapshots for both sites cover conversations, members, messages, notifications and the complete shared community-state projection; a same-site Site B create/reuse positive control returns the existing conversation without duplicate rows or notification fan-out. Complete workflow state transitions, other recipient variants, event fan-out outside the direct-create transaction, and independent adversarial/provider/realtime review remain separate."
       },
       "methods": [
         "GET",
