@@ -14,6 +14,132 @@ const { isUuid } = require('../../../packages/domain/src/identifiers');
 const { withTransaction } = require('../../../packages/db/src/transaction');
 
 const validUuid = isUuid;
+
+/**
+ * Build the shared site/group/visibility predicate for a community activity.
+ * The aliases and parameter placeholder are source-controlled SQL fragments;
+ * request values remain bound parameters.
+ */
+function communityActivityVisibilitySql(activityAlias, groupAlias, actorParameter) {
+  return `(
+    ${activityAlias}.visibility IN ('public','members','private','group')
+    AND (
+      (${activityAlias}.group_id IS NOT NULL
+        AND ${groupAlias}.privacy IN ('private','hidden')
+        AND EXISTS (
+          SELECT 1 FROM social_group_memberships gm
+          WHERE gm.group_id=${activityAlias}.group_id
+            AND gm.user_id=${actorParameter}
+            AND gm.status='active'
+        )
+        AND (${activityAlias}.visibility <> 'private' OR ${activityAlias}.actor_id=${actorParameter})
+      )
+      OR
+      ((${activityAlias}.group_id IS NULL OR ${groupAlias}.privacy='public')
+        AND (
+          ${activityAlias}.actor_id=${actorParameter}
+          OR ${activityAlias}.visibility IN ('public','members')
+          OR (${activityAlias}.visibility='group'
+            AND ${activityAlias}.group_id IS NOT NULL
+            AND EXISTS (
+              SELECT 1 FROM social_group_memberships gm
+              WHERE gm.group_id=${activityAlias}.group_id
+                AND gm.user_id=${actorParameter}
+                AND gm.status='active'
+            )
+          )
+        )
+      )
+    )
+  )`;
+}
+/**
+ * Return a visibility predicate for a comment and every ancestor in its
+ * thread. Each comment must retain the same group and visibility as its
+ * parent, and every ancestor must remain visible to the requesting actor.
+ * The walk requires a top-level non-comment root; UNION makes the recursion
+ * finite and parent cycles fail closed rather than exposing malformed threads.
+ */
+function communityCommentParentVisibleSql(activityAlias, actorParameter) {
+  return `(
+    (${activityAlias}.activity_type <> 'comment' AND ${activityAlias}.parent_id IS NULL)
+    OR (
+      ${activityAlias}.activity_type = 'comment'
+      AND ${activityAlias}.parent_id IS NOT NULL
+      AND EXISTS (
+        WITH RECURSIVE community_comment_parent_chain AS (
+          SELECT
+            parent.id AS ancestor_id,
+            parent.parent_id AS next_parent_id,
+            parent.site_id,
+            parent.actor_id,
+            parent.group_id,
+            parent.activity_type,
+            parent.visibility,
+            (
+              ${activityAlias}.group_id IS NOT DISTINCT FROM parent.group_id
+              AND ${activityAlias}.visibility = parent.visibility
+            ) AS scope_matches
+          FROM social_activities parent
+          WHERE parent.id = ${activityAlias}.parent_id
+            AND parent.site_id = ${activityAlias}.site_id
+            AND parent.deleted_at IS NULL
+
+          UNION
+
+          SELECT
+            next_parent.id AS ancestor_id,
+            next_parent.parent_id AS next_parent_id,
+            next_parent.site_id,
+            next_parent.actor_id,
+            next_parent.group_id,
+            next_parent.activity_type,
+            next_parent.visibility,
+            (
+              chain.scope_matches
+              AND chain.group_id IS NOT DISTINCT FROM next_parent.group_id
+              AND chain.visibility = next_parent.visibility
+            ) AS scope_matches
+          FROM community_comment_parent_chain chain
+          JOIN social_activities next_parent
+            ON next_parent.id = chain.next_parent_id
+            AND next_parent.site_id = chain.site_id
+            AND next_parent.deleted_at IS NULL
+          WHERE chain.next_parent_id IS NOT NULL
+        )
+        SELECT 1
+        FROM community_comment_parent_chain chain
+        LEFT JOIN social_groups chain_group
+          ON chain_group.id = chain.group_id
+          AND chain_group.site_id = chain.site_id
+        HAVING COUNT(*) > 0
+          AND BOOL_OR(chain.next_parent_id IS NULL AND chain.activity_type <> 'comment')
+          AND BOOL_AND(
+            chain.scope_matches
+            AND ${communityActivityVisibilitySql('chain', 'chain_group', actorParameter)}
+            AND (
+              (
+                chain.next_parent_id IS NULL
+                AND chain.activity_type <> 'comment'
+              )
+              OR (
+                chain.next_parent_id IS NOT NULL
+                AND chain.activity_type = 'comment'
+                AND EXISTS (
+                  SELECT 1
+                  FROM social_activities next_parent
+                  WHERE next_parent.id = chain.next_parent_id
+                    AND next_parent.site_id = chain.site_id
+                    AND next_parent.deleted_at IS NULL
+                )
+              )
+            )
+          )
+      )
+    )
+  )`;
+}
+
 function presentationValid(value) {
   const errors=[]; if (!isBoundedJsonObject(value, 16_384)) return { valid:false, errors:['presentation must be a small JSON object'] };
   const allowed=new Set(['megaMenu','layout','width','columns','showDescriptions','showImages','showIcons','featuredContentId','mobileMode','trigger']);
@@ -115,7 +241,109 @@ async function handlePlatformRoute(ctx) {
     if(groups[3]==='members'){await requireCapability(actor,siteId,'community:moderate');const q=await localPool.query('SELECT u.id,u.display_name,u.email,gm.role,gm.status,gm.created_at FROM social_group_memberships gm JOIN users u ON u.id=gm.user_id JOIN social_groups g ON g.id=gm.group_id WHERE g.site_id=$1 AND g.id=$2 ORDER BY gm.created_at',[siteId,groups[2]]);return sendJson(res,200,{members:q.rows,requestId});}
   }
   const feed=pathName.match(/^\/api\/v1\/sites\/([0-9a-f-]{36})\/community\/feed$/i);
-  if(feed&&['GET','POST'].includes(method)){if(!localPool||!actor.user.id)throw fail(503,'ERR_VIRGOSCORPIO_HUB_COMMUNITY_DISABLED','Community feed requires PostgreSQL and a signed-in user.');const siteId=feed[1],body=method==='POST'?await readJson(req,Math.min(maxBody,32_000)):{};await siteIdFor({ req, url, body, actor, routeSiteId: siteId });if(method==='GET'){const q=await localPool.query(`SELECT a.id,a.actor_id,u.display_name,a.group_id,a.activity_type,a.body,a.visibility,a.parent_id,a.metadata,a.created_at FROM social_activities a JOIN users u ON u.id=a.actor_id WHERE a.site_id=$1 AND a.deleted_at IS NULL AND (a.visibility='public' OR a.visibility='members' OR a.actor_id=$2 OR (a.group_id IS NOT NULL AND EXISTS(SELECT 1 FROM social_group_memberships gm WHERE gm.group_id=a.group_id AND gm.user_id=$2 AND gm.status='active'))) ORDER BY a.created_at DESC LIMIT $3`,[siteId,actor.user.id,Math.min(100,Math.max(1,Number(url.searchParams.get('limit'))||30))]);return sendJson(res,200,{activities:q.rows,requestId});}const text=cleanText(body.body,10000);if(!text)throw fail(400,'ERR_VIRGOSCORPIO_HUB_ACTIVITY_INVALID','Activity body must contain 1–10000 characters.');const visibility=body.visibility||'members';if(!['public','members','private','group'].includes(visibility))throw fail(400,'ERR_VIRGOSCORPIO_HUB_ACTIVITY_INVALID','Activity visibility is invalid.');if(visibility==='group'&&!validUuid(body.groupId))throw fail(400,'ERR_VIRGOSCORPIO_HUB_ACTIVITY_GROUP_REQUIRED','A group is required for group visibility.');if(body.groupId){const member=await localPool.query("SELECT 1 FROM social_group_memberships gm JOIN social_groups g ON g.id=gm.group_id WHERE g.site_id=$1 AND gm.group_id=$2 AND gm.user_id=$3 AND gm.status='active'",[siteId,body.groupId,actor.user.id]);if(!member.rows[0])throw fail(403,'ERR_VIRGOSCORPIO_HUB_GROUP_MEMBERSHIP','Active group membership is required to post in this group.');}const q=await localPool.query('INSERT INTO social_activities(site_id,actor_id,group_id,activity_type,body,visibility,parent_id,metadata) VALUES($1,$2,$3,$4,$5,$6,$7,$8::jsonb) RETURNING id,site_id,actor_id,group_id,activity_type,body,visibility,parent_id,metadata,created_at',[siteId,actor.user.id,body.groupId||null,body.activityType==='comment'?'comment':body.groupId?'group_post':'status',text,visibility,body.parentId||null,JSON.stringify({})]);return sendJson(res,201,{activity:q.rows[0],requestId});}
+  if (feed && ['GET', 'POST'].includes(method)) {
+    if (!localPool || !actor.user.id) {
+      throw fail(503, 'ERR_VIRGOSCORPIO_HUB_COMMUNITY_DISABLED', 'Community feed requires PostgreSQL and a signed-in user.');
+    }
+    const siteId = feed[1];
+    const body = method === 'POST' ? await readJson(req, Math.min(maxBody, 32_000)) : {};
+    await siteIdFor({ req, url, body, actor, routeSiteId: siteId });
+
+    if (method === 'GET') {
+      const q = await localPool.query(
+        "SELECT a.id,a.actor_id,u.display_name,a.group_id,a.activity_type,a.body,a.visibility,a.parent_id,a.metadata,a.created_at " +
+        "FROM social_activities a JOIN users u ON u.id=a.actor_id " +
+        "LEFT JOIN social_groups g ON g.id=a.group_id AND g.site_id=a.site_id " +
+        "WHERE a.site_id=$1 AND a.deleted_at IS NULL AND " +
+        communityActivityVisibilitySql('a', 'g', '$2') +
+        " AND " + communityCommentParentVisibleSql('a', '$2') + " " +
+        "ORDER BY a.created_at DESC LIMIT $3",
+        [siteId, actor.user.id, Math.min(100, Math.max(1, Number(url.searchParams.get('limit')) || 30))]
+      );
+      return sendJson(res, 200, { activities: q.rows, requestId });
+    }
+
+    const text = cleanText(body.body, 10000);
+    if (!text) {
+      throw fail(400, 'ERR_VIRGOSCORPIO_HUB_ACTIVITY_INVALID', 'Activity body must contain 1-10000 characters.');
+    }
+
+    const activityType = body.activityType === 'comment'
+      ? 'comment'
+      : body.groupId
+        ? 'group_post'
+        : 'status';
+    const requestedVisibility = body.visibility || 'members';
+    if (!['public', 'members', 'private', 'group'].includes(requestedVisibility)) {
+      throw fail(400, 'ERR_VIRGOSCORPIO_HUB_ACTIVITY_INVALID', 'Activity visibility is invalid.');
+    }
+
+    let groupId = null;
+    let parentId = null;
+    let visibility = requestedVisibility;
+
+    if (activityType === 'comment') {
+      if (!validUuid(body.parentId)) {
+        throw fail(400, 'ERR_VIRGOSCORPIO_HUB_ACTIVITY_PARENT_REQUIRED', 'A valid parent activity is required for comments.');
+      }
+
+      const parentResult = await localPool.query(
+        "SELECT a.id,a.group_id,a.visibility,g.privacy " +
+        "FROM social_activities a LEFT JOIN social_groups g ON g.id=a.group_id AND g.site_id=a.site_id " +
+        "WHERE a.site_id=$1 AND a.id=$2 AND a.deleted_at IS NULL AND " +
+        communityActivityVisibilitySql('a', 'g', '$3') +
+        " AND " + communityCommentParentVisibleSql('a', '$3') +
+        " LIMIT 1",
+        [siteId, body.parentId, actor.user.id]
+      );
+      const parent = parentResult.rows[0];
+      if (!parent) {
+        throw fail(404, 'ERR_VIRGOSCORPIO_HUB_ACTIVITY_NOT_FOUND', 'Activity not found.');
+      }
+      if (body.groupId != null && body.groupId !== parent.group_id) {
+        throw fail(400, 'ERR_VIRGOSCORPIO_HUB_ACTIVITY_PARENT_SCOPE_MISMATCH', 'A comment must remain in its parent activity scope.');
+      }
+
+      parentId = parent.id;
+      groupId = parent.group_id;
+      visibility = parent.visibility;
+    } else {
+      if (body.parentId != null) {
+        throw fail(400, 'ERR_VIRGOSCORPIO_HUB_ACTIVITY_PARENT_INVALID', 'Only comments may reference a parent activity.');
+      }
+
+      if (body.groupId != null) {
+        if (!validUuid(body.groupId)) {
+          throw fail(400, 'ERR_VIRGOSCORPIO_HUB_ACTIVITY_GROUP_INVALID', 'A valid group is required.');
+        }
+        const membership = await localPool.query(
+          "SELECT g.id,g.privacy FROM social_groups g " +
+          "JOIN social_group_memberships gm ON gm.group_id=g.id " +
+          "WHERE g.site_id=$1 AND g.id=$2 AND gm.user_id=$3 AND gm.status='active' LIMIT 1",
+          [siteId, body.groupId, actor.user.id]
+        );
+        if (!membership.rows[0]) {
+          throw fail(403, 'ERR_VIRGOSCORPIO_HUB_GROUP_MEMBERSHIP', 'Active group membership is required to post in this group.');
+        }
+        groupId = membership.rows[0].id;
+        if (membership.rows[0].privacy !== 'public' && visibility !== 'private') {
+          visibility = 'group';
+        }
+      } else if (visibility === 'group') {
+        throw fail(400, 'ERR_VIRGOSCORPIO_HUB_ACTIVITY_GROUP_REQUIRED', 'A group is required for group visibility.');
+      }
+    }
+
+    const q = await localPool.query(
+      "INSERT INTO social_activities " +
+      "(site_id,actor_id,group_id,activity_type,body,visibility,parent_id,metadata) " +
+      "VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb) " +
+      "RETURNING id,site_id,actor_id,group_id,activity_type,body,visibility,parent_id,metadata,created_at",
+      [siteId, actor.user.id, groupId, activityType, text, visibility, parentId, JSON.stringify({})]
+    );
+    return sendJson(res, 201, { activity: q.rows[0], requestId });
+  }
+
   const friendRequest=pathName.match(/^\/api\/v1\/sites\/([0-9a-f-]{36})\/community\/friends(?:\/([0-9a-f-]{36}))?$/i);
   if(friendRequest&&['GET','POST','PUT','DELETE'].includes(method)){if(!localPool||!actor.user.id)throw fail(503,'ERR_VIRGOSCORPIO_HUB_COMMUNITY_DISABLED','Friendships require PostgreSQL and a signed-in user.');const siteId=friendRequest[1],target=friendRequest[2];await siteIdFor({ req, url, body: {}, actor, routeSiteId: siteId });if(method==='GET'){const q=await localPool.query(`SELECT f.requester_id,f.addressee_id,f.status,f.created_at,u1.display_name AS requester_name,u2.display_name AS addressee_name FROM social_friendships f JOIN users u1 ON u1.id=f.requester_id JOIN users u2 ON u2.id=f.addressee_id WHERE f.site_id=$1 AND (f.requester_id=$2 OR f.addressee_id=$2) ORDER BY f.created_at DESC LIMIT 200`,[siteId,actor.user.id]);return sendJson(res,200,{friendships:q.rows,requestId});}if(!target||!validUuid(target)||target===actor.user.id)throw fail(400,'ERR_VIRGOSCORPIO_HUB_FRIEND_INVALID','A different valid user ID is required.');if(method==='POST'){const member=await localPool.query('SELECT 1 FROM site_memberships WHERE site_id=$1 AND user_id=$2',[siteId,target]);if(!member.rows[0])throw fail(404,'ERR_VIRGOSCORPIO_HUB_COMMUNITY_USER_NOT_FOUND','User is not a member of this site.');const q=await localPool.query("INSERT INTO social_friendships(site_id,requester_id,addressee_id,status) VALUES($1,$2,$3,'pending') ON CONFLICT(site_id,requester_id,addressee_id) DO UPDATE SET status=CASE WHEN social_friendships.status='blocked' THEN 'blocked' ELSE social_friendships.status END,updated_at=now() RETURNING *",[siteId,actor.user.id,target]);return sendJson(res,201,{friendship:q.rows[0],requestId});}if(method==='PUT'){const q=await localPool.query("UPDATE social_friendships SET status='accepted',updated_at=now() WHERE site_id=$1 AND requester_id=$2 AND addressee_id=$3 AND status='pending' RETURNING *",[siteId,target,actor.user.id]);if(!q.rows[0])throw fail(404,'ERR_VIRGOSCORPIO_HUB_FRIEND_REQUEST_NOT_FOUND','Pending friend request not found.');return sendJson(res,200,{friendship:q.rows[0],requestId});}const q=await localPool.query('DELETE FROM social_friendships WHERE site_id=$1 AND ((requester_id=$2 AND addressee_id=$3) OR (requester_id=$3 AND addressee_id=$2)) RETURNING site_id',[siteId,actor.user.id,target]);return sendJson(res,200,{removed:Boolean(q.rowCount),requestId});}
 

@@ -48,6 +48,10 @@ async function snapshotCommunitySite(pool, siteId) {
       'SELECT site_id,requester_id,addressee_id,status,created_at,updated_at FROM social_friendships WHERE site_id=$1 ORDER BY requester_id,addressee_id',
       [siteId],
     ],
+    activities: [
+      'SELECT id,site_id,actor_id,group_id,activity_type,body,visibility,parent_id,metadata,created_at,deleted_at FROM social_activities WHERE site_id=$1 ORDER BY id',
+      [siteId],
+    ],
     notifications: [
       'SELECT id,site_id,user_id,notification_type,payload,read_at,created_at FROM social_notifications WHERE site_id=$1 ORDER BY id',
       [siteId],

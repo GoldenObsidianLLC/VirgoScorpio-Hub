@@ -6,7 +6,7 @@
 
 **Technical hand-off:** [TENANT-ISOLATION-ASSESSMENT-BRIEF.md](TENANT-ISOLATION-ASSESSMENT-BRIEF.md)
 
-**Last checked mainline baseline after F1.47 merged:** `b68f5f90e99d7d14c50f6bf89c94ea1b9c0eb83e` (PR #194; exact-main workflow #44206129439 passed all seven jobs, including signed provenance/SBOM verification). This is not an approved assessment pin. Issue #193 is CLOSED for maintainer-authored regression work only; issue #14 remains OPEN / NOT PERFORMED. A selected assessor and project owner must confirm the exact clean, authorized `main` SHA at any future properly funded engagement start and record it in the final report.
+**Last checked mainline baseline after F1.47 docs reconciliation:** `fba84b91bdb4e6791f4c66f7a90acaa466f74aa3` (docs-only PR #195; exact-main workflow #44209891213 passed all seven jobs). This is not an approved assessment pin. F1.48 is a test/route-hardening candidate on branch `security/f1-48-community-feed-privacy-2026-11-18` under issue #196; it is not yet merged and is not an independent assessment. Issues #14/#25 remain OPEN / NOT PERFORMED. A selected assessor and project owner must confirm the exact clean, authorized `main` SHA at any future properly funded engagement start and record it in the final report.
 
 ## 1. Engagement sought
 
