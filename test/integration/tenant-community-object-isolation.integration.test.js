@@ -56,6 +56,10 @@ async function snapshotCommunitySite(pool, siteId) {
       'SELECT id,site_id,user_id,notification_type,payload,read_at,created_at FROM social_notifications WHERE site_id=$1 ORDER BY id',
       [siteId],
     ],
+    outbox: [
+      'SELECT id,site_id,actor_id,aggregate_type,aggregate_id,aggregate_version,event_type,payload,status,attempts,correlation_id,classification,created_at FROM outbox_events WHERE site_id=$1 ORDER BY created_at,id',
+      [siteId],
+    ],
     moderation: [
       'SELECT id,site_id,actor_id,target_type,target_id,action,reason,created_at FROM virgoscorpio_hub_moderation_actions WHERE site_id=$1 ORDER BY id',
       [siteId],
@@ -151,13 +155,18 @@ test(
     const userA = await createUser('Site A Member');
     const userA2 = await createUser('Site A Target');
     const actorB = await createUser('Site B Moderator', true);
-    const userB2 = await createUser('Site B Member');
+    const userB2 = await createUser('Site B Member', true);
     const userBInvited = await createUser('Site B Invited Recipient', false, 'invited');
     const userBDisabled = await createUser('Site B Disabled Recipient', false, 'disabled');
+    const userBPublicJoinControl = await createUser('Site B Public Join Control', true);
 
     await pool.query(
       'INSERT INTO site_memberships(site_id,user_id,role_id) VALUES($1,$2,$3),($1,$4,$3),($5,$6,$3),($5,$7,$3),($5,$8,$3),($5,$9,$3)',
       [siteA, userA.id, roleId, userA2.id, siteB, actorB.id, userB2.id, userBInvited.id, userBDisabled.id]
+    );
+    await pool.query(
+      'INSERT INTO site_memberships(site_id,user_id,role_id) VALUES($1,$2,$3)',
+      [siteB, userBPublicJoinControl.id, roleId]
     );
 
     const groupAResult = await pool.query(
@@ -181,6 +190,32 @@ test(
     await pool.query(
       "INSERT INTO social_group_memberships(group_id,user_id,role,status) VALUES($1,$2,'owner','active')",
       [groupB, actorB.id]
+    );
+
+    const privateGroupBResult = await pool.query(
+      `INSERT INTO social_groups(site_id,slug,name,description,privacy,created_by)
+       VALUES($1,$2,$3,'Private group join idempotency control','private',$4) RETURNING id`,
+      [siteB, `private-control-b-${randomUUID().slice(0, 8)}`, 'Site B Private Group Control', actorB.id]
+    );
+    const privateGroupB = privateGroupBResult.rows[0].id;
+    await pool.query(
+      "INSERT INTO social_group_memberships(group_id,user_id,role,status) VALUES($1,$2,'owner','active')",
+      [privateGroupB, actorB.id]
+    );
+    await pool.query(
+      "INSERT INTO social_group_memberships(group_id,user_id,role,status) VALUES($1,$2,'member','pending')",
+      [privateGroupB, userB2.id]
+    );
+
+    const freshPrivateGroupBResult = await pool.query(
+      `INSERT INTO social_groups(site_id,slug,name,description,privacy,created_by)
+       VALUES($1,$2,$3,'Fresh private-group join control','private',$4) RETURNING id`,
+      [siteB, `private-fresh-b-${randomUUID().slice(0, 8)}`, 'Site B Fresh Private Join Control', actorB.id]
+    );
+    const freshPrivateGroupB = freshPrivateGroupBResult.rows[0].id;
+    await pool.query(
+      "INSERT INTO social_group_memberships(group_id,user_id,role,status) VALUES($1,$2,'owner','active')",
+      [freshPrivateGroupB, actorB.id]
     );
 
     const conversationAResult = await pool.query(
@@ -318,6 +353,146 @@ test(
       );
       assert.equal(membership.rows.length, 0);
       await assertSiteAUnchanged();
+    });
+
+    await t.test('private-group join retries preserve active, pending, and banned membership states', async () => {
+      const activeRetrySnapshot = await snapshotCommunitySite(pool, siteB);
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        const response = await fetch(`${base}/api/v1/sites/${siteB}/community/groups/${privateGroupB}/join`, {
+          method: 'POST',
+          headers: { ...headers, 'content-type': 'application/json' },
+          body: JSON.stringify({}),
+        });
+        const payload = await response.json();
+        assert.equal(response.status, 200);
+        assert.equal(payload.membership.status, 'active', 'an active private-group member must not be downgraded to pending by retrying join');
+        assert.equal(payload.membership.role, 'owner', 'rejoining must preserve the existing group role');
+      }
+      assert.deepEqual(
+        await snapshotCommunitySite(pool, siteB),
+        activeRetrySnapshot,
+        'repeated active-member joins must not create notifications or other community side effects'
+      );
+
+      const pendingSession = await identity.login({
+        email: userB2.email,
+        password: 'Isolation-Password-2026',
+        ip: '127.0.0.1',
+        userAgent: 'tenant-community-private-group-pending-join-test',
+      });
+      assert.equal(pendingSession.mfaRequired, false);
+      const pendingHeaders = {
+        authorization: `Bearer ${pendingSession.token}`,
+        'x-virgoscorpio-hub-site-id': siteB,
+        'content-type': 'application/json',
+      };
+      const pendingRetrySnapshot = await snapshotCommunitySite(pool, siteB);
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        const response = await fetch(`${base}/api/v1/sites/${siteB}/community/groups/${privateGroupB}/join`, {
+          method: 'POST',
+          headers: pendingHeaders,
+          body: JSON.stringify({}),
+        });
+        const payload = await response.json();
+        assert.equal(response.status, 200);
+        assert.equal(payload.membership.status, 'pending', 'a pending private-group request must remain pending on retry');
+        assert.equal(payload.membership.role, 'member');
+      }
+      assert.deepEqual(
+        await snapshotCommunitySite(pool, siteB),
+        pendingRetrySnapshot,
+        'repeated pending-member joins must not create notifications or other community side effects'
+      );
+
+      const membershipBeforeBannedRetry = await pool.query(
+        'UPDATE social_group_memberships SET status=$3 WHERE group_id=$1 AND user_id=$2 RETURNING status,role',
+        [privateGroupB, userB2.id, 'banned']
+      );
+      assert.deepEqual(membershipBeforeBannedRetry.rows, [{ status: 'banned', role: 'member' }]);
+      const bannedSnapshot = await snapshotCommunitySite(pool, siteB);
+      const bannedRetry = await fetch(`${base}/api/v1/sites/${siteB}/community/groups/${privateGroupB}/join`, {
+        method: 'POST',
+        headers: pendingHeaders,
+        body: JSON.stringify({}),
+      });
+      assert.equal(bannedRetry.status, 403);
+      assert.equal((await bannedRetry.json()).code, 'ERR_VIRGOSCORPIO_HUB_GROUP_BANNED');
+      assert.deepEqual(
+        await snapshotCommunitySite(pool, siteB),
+        bannedSnapshot,
+        'a banned member retry must neither change the banned state nor create community side effects'
+      );
+
+      await pool.query(
+        'UPDATE social_group_memberships SET status=$3 WHERE group_id=$1 AND user_id=$2',
+        [privateGroupB, userB2.id, 'pending']
+      );
+
+      const publicJoinSession = await identity.login({
+        email: userBPublicJoinControl.email,
+        password: 'Isolation-Password-2026',
+        ip: '127.0.0.1',
+        userAgent: 'tenant-community-public-group-join-test',
+      });
+      assert.equal(publicJoinSession.mfaRequired, false);
+      const publicJoinHeaders = {
+        authorization: 'Bearer ' + publicJoinSession.token,
+        'x-virgoscorpio-hub-site-id': siteB,
+        'content-type': 'application/json',
+      };
+
+      const freshPrivateJoin = await fetch(
+        base + '/api/v1/sites/' + siteB + '/community/groups/' + freshPrivateGroupB + '/join',
+        { method: 'POST', headers: publicJoinHeaders, body: JSON.stringify({}) }
+      );
+      assert.equal(freshPrivateJoin.status, 200);
+      const freshPrivatePayload = await freshPrivateJoin.json();
+      assert.equal(freshPrivatePayload.membership.status, 'pending', 'a first-time private-group join must remain pending');
+      assert.equal(freshPrivatePayload.membership.role, 'member');
+      const freshPrivateJoinSnapshot = await snapshotCommunitySite(pool, siteB);
+      const freshPrivateRetry = await fetch(
+        base + '/api/v1/sites/' + siteB + '/community/groups/' + freshPrivateGroupB + '/join',
+        { method: 'POST', headers: publicJoinHeaders, body: JSON.stringify({}) }
+      );
+      assert.equal(freshPrivateRetry.status, 200);
+      const freshPrivateRetryPayload = await freshPrivateRetry.json();
+      assert.equal(freshPrivateRetryPayload.membership.status, 'pending');
+      assert.equal(freshPrivateRetryPayload.membership.role, 'member');
+      assert.deepEqual(
+        await snapshotCommunitySite(pool, siteB),
+        freshPrivateJoinSnapshot,
+        'retrying a fresh private-group request must not add notifications or unrelated community side effects'
+      );
+
+      const publicFirstJoin = await fetch(
+        base + '/api/v1/sites/' + siteB + '/community/groups/' + groupB + '/join',
+        { method: 'POST', headers: publicJoinHeaders, body: JSON.stringify({}) }
+      );
+      assert.equal(publicFirstJoin.status, 200);
+      const publicFirstPayload = await publicFirstJoin.json();
+      assert.equal(publicFirstPayload.membership.status, 'active', 'a first-time public-group join must remain active');
+      assert.equal(publicFirstPayload.membership.role, 'member');
+      const publicJoinSnapshot = await snapshotCommunitySite(pool, siteB);
+      const publicRetry = await fetch(
+        base + '/api/v1/sites/' + siteB + '/community/groups/' + groupB + '/join',
+        { method: 'POST', headers: publicJoinHeaders, body: JSON.stringify({}) }
+      );
+      assert.equal(publicRetry.status, 200);
+      const publicRetryPayload = await publicRetry.json();
+      assert.equal(publicRetryPayload.membership.status, 'active', 'repeated public-group joins must remain active');
+      assert.equal(publicRetryPayload.membership.role, 'member');
+      assert.deepEqual(
+        await snapshotCommunitySite(pool, siteB),
+        publicJoinSnapshot,
+        'repeated public-group joins must not add notifications or unrelated community side effects'
+      );
+
+      await pool.query(
+        'DELETE FROM social_group_memberships WHERE group_id=ANY($1::uuid[]) AND user_id=$2',
+        [[freshPrivateGroupB, groupB], userBPublicJoinControl.id]
+      );
+      await assertSiteAUnchanged();
+      await assertSiteBUnchanged();
     });
 
     await t.test('foreign conversation list, messages, send, and read do not cross sites', async () => {
