@@ -967,11 +967,12 @@
       "tests": [
         "test/community-workflows.test.js",
         "test/integration/tenant-community-object-isolation.integration.test.js",
-        "test/tenant-route-capabilities.test.js"
+        "test/tenant-route-capabilities.test.js",
+        "test/integration/community-feed-privacy.integration.test.js"
       ],
       "coverage": {
-        "level": "targeted-two-site",
-        "limits": "A/B tests cover selected groups, joins, friendships and feed operations. Group-post/comment, profile privacy and all visibility combinations require reviewer expansion."
+        "level": "targeted-two-site-group-privacy-comment-parent-and-legacy-scope-isolation",
+        "limits": "F1.48 adds disposable PostgreSQL coverage for private/hidden group posts with default and caller-broadened visibility, public-group and non-group visibility controls, private-group comments, same-site and non-deleted parent requirements, caller-supplied scope mismatch denial, nested comment ancestry, and legacy comments whose stored scope widens or moves away from a private-group parent. Feed reads and comment writes reuse shared visibility predicates and validate every ancestor for site, deletion, exact group/visibility scope, actor visibility, and a top-level non-comment root; cyclic or malformed parent chains fail closed. Denied writes preserve activity, group, membership, audit-event and outbox snapshots. Existing tenant-community-object-isolation.integration.test.js also snapshots social_activities for cross-site/no-side-effect checks. Profile privacy, every social workflow and broader adversarial/provider/realtime coverage remain separate review concerns."
       },
       "methods": [
         "GET",
