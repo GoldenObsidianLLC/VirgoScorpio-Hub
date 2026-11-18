@@ -34,8 +34,8 @@
     ]
   },
   "testTree": {
-    "fileCount": 55,
-    "sha256": "c2cf9ada0fc4d8eb8eabcce4423af6fe865920b48833ff69c91bccb70dbca3bc",
+    "fileCount": 56,
+    "sha256": "fbfe8235265ecd72f643c1113161094430b537919a35ba405591a9da9f9fffe6",
     "files": [
       "test/ai-queue-worker.test.js",
       "test/ai-task-queue.test.js",
@@ -75,6 +75,7 @@
       "test/integration/tenant-library-media-isolation.integration.test.js",
       "test/integration/tenant-mega-menu-isolation.integration.test.js",
       "test/integration/tenant-membership-administration-isolation.integration.test.js",
+      "test/integration/tenant-navigation-menu-isolation.integration.test.js",
       "test/integration/tenant-plugin-registry-isolation.integration.test.js",
       "test/integration/tenant-public-catalog-isolation.integration.test.js",
       "test/integration/tenant-public-query-loop-isolation.integration.test.js",
@@ -100,7 +101,7 @@
     "nonHttpFamilyCount": 4,
     "declaredRoutePatternCount": 80,
     "sourceFileCount": 21,
-    "testFileCount": 55
+    "testFileCount": 56
   },
   "commonControls": [
     {
@@ -1794,11 +1795,12 @@
       ],
       "tests": [
         "test/tenant-route-capabilities.test.js",
-        "test/integration/navigation-menu-audit-atomicity.integration.test.js"
+        "test/integration/navigation-menu-audit-atomicity.integration.test.js",
+        "test/integration/tenant-navigation-menu-isolation.integration.test.js"
       ],
       "coverage": {
-        "level": "transactional-audit-rollback-retry",
-        "limits": "The route-capability suite verifies site:manage authorization before tenant data access. The dedicated PostgreSQL integration injects audit_events trigger failures for create, update and delete, verifies the menu mutation and audit row roll back together, then verifies safe retry commits exactly one metadata-only correlated event. Stale updates preserve 409 without audit; missing deletes preserve 404 without audit. The dedicated suite is single-site; independent two-site adversarial review, cache/rendering behavior and production certification remain separate gates."
+        "level": "targeted-two-site-same-slug-crud-plus-audit-no-side-effects",
+        "limits": "The route-capability suite verifies site:manage authorization before tenant data access. The F1.46 dedicated PostgreSQL integration injects audit_events trigger failures for create, update and delete, verifies the menu mutation and audit row roll back together, then verifies safe retry commits exactly one metadata-only correlated event; stale updates preserve 409 without audit and missing deletes preserve 404 without audit. The F1.47 two-site PostgreSQL regression uses identical slugs in Site A and Site B, an A-only actor, non-disclosing cross-site list/update/delete denials, menu and navigation-audit snapshots proving denied requests have no side effects, and positive Site A CRUD while preserving Site B state. Selector conflicts remain covered by tenant-isolation.integration.test.js. Cache/rendering behavior, broader role combinations and independent adversarial review remain separate gates."
       },
       "methods": [
         "GET",

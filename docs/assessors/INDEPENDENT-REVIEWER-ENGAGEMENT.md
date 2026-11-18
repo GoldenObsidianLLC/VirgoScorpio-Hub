@@ -1,4 +1,4 @@
-# VirgoScorpio Hub 0.5.1 — Independent Assessor Engagement Brief
+# VirgoScorpio Hub 0.6.2 — Independent Assessor Engagement Brief
 
 **Status:** procurement preparation only. No vendor has been contacted, retained, or approved. No independent review has been performed.
 
@@ -6,11 +6,11 @@
 
 **Technical hand-off:** [TENANT-ISOLATION-ASSESSMENT-BRIEF.md](TENANT-ISOLATION-ASSESSMENT-BRIEF.md)
 
-**Current source baseline when this procurement brief was prepared:** `05a4d050696b5d06d66a5b3dce184935037ee3d6`. This is not a pre-approved assessment pin. The selected assessor and project owner must confirm the exact clean `main` SHA at engagement start and record it in the final report.
+**Last checked mainline baseline before the F1.47 maintainer-test candidate:** `4ad1117fbe235fdc4cc879c8ccde775bb5241482`. This is not an approved assessment pin. Issue #193 tracks F1.47 test-only candidate work. A selected assessor and project owner must confirm the exact clean, authorized `main` SHA at any future funded engagement start and record it in the final report.
 
 ## 1. Engagement sought
 
-Engage an external, independent application-security assessor to perform a manual, source-assisted (white-box/grey-box) tenant-isolation and authorization review of VirgoScorpio Hub 0.5.1.
+Engage an external, independent application-security assessor to perform a manual, source-assisted (white-box/grey-box) tenant-isolation and authorization review of VirgoScorpio Hub 0.6.2.
 
 This is not a generic vulnerability scan, a compliance checklist, or a short unauthenticated perimeter test. The highest-value questions concern broken object-level authorization (BOLA/IDOR), tenant-context confusion, role/capability escalation, and tenant data or side effects leaking through asynchronous and realtime paths.
 
@@ -113,11 +113,11 @@ Ask each candidate to answer these points in writing:
 
 ## 6. Initial outreach template
 
-**Subject:** Proposal request — independent multi-tenant application security assessment (VirgoScorpio Hub 0.5.1)
+**Subject:** Proposal request — independent multi-tenant application security assessment (VirgoScorpio Hub 0.6.2)
 
 Hello,
 
-Golden Obsidian LLC is seeking an independent application-security assessor for VirgoScorpio Hub 0.5.1, a Node.js/PostgreSQL application with multi-site tenancy, background/outbox processing, graph projections, Redis-backed realtime collaboration, and object-library storage.
+Golden Obsidian LLC is seeking an independent application-security assessor for VirgoScorpio Hub 0.6.2, a Node.js/PostgreSQL application with multi-site tenancy, background/outbox processing, graph projections, Redis-backed realtime collaboration, and object-library storage.
 
 We are looking for a manual, source-assisted review focused on tenant/site isolation and authorization: route/capability coverage, BOLA/IDOR, privilege boundaries, cross-tenant data access and side effects, and tenant context propagation through workers, events, caches, graph projections and SSE/WebSocket collaboration.
 
@@ -152,6 +152,6 @@ Golden Obsidian LLC
 
 ### Immediate action
 
-The project owner should approve a spend ceiling and authorize outreach to the shortlisted firms. Once that authority exists, send the same RFP to each candidate, compare written proposals using the scorecard, complete conflict checks, and select the named assessor. Do not close issue #14 or create a passing evidence file until the review and required retesting are complete.
+No outreach, vendor contact, assessor engagement, testing, or spending is currently authorized. Issue #32 records the zero-reserve funding and governance boundary: there is no approved assessor budget or spending authority. This shortlist, RFP and scorecard are non-binding procurement-preparation materials only. Revisit them only after the governing authority and transaction-specific funding approval exist, with a written scope, independence/conflict checks, statement of work and rules of engagement. No unpaid assessment work is requested or authorized. Do not close issue #14 or create a passing evidence file until a properly authorized and funded independent review, required remediation, and retesting are complete.
 
-VirgoScorpio Hub 0.5.1 remains **NOT_PRODUCTION_CERTIFIED / NO-GO**.
+VirgoScorpio Hub 0.6.2 remains private and unreleased, **NOT_PRODUCTION_CERTIFIED / NO-GO**. This document authorizes no outreach, spending, or assessor work.

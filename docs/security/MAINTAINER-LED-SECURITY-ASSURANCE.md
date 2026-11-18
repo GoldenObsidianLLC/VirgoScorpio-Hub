@@ -3,7 +3,7 @@
 > **Status:** Active internal engineering control for the restricted VirgoScorpio Hub 0.6.2 developer preview.
 > **Assessment type:** Maintainer-authored and automated checks only.
 > **Production certification:** **NOT CERTIFIED — NO-GO.**
-> **Current mainline evidence baseline:** `212df05a2c2af5b222eb6a06a798f2ce5ba6cabc` (F1.37 merged through PR #163; exact-main workflow #667 passed 7/7 jobs, including signed mainline dependency/SBOM attestations, on 15 November 2026).
+> **Current checked mainline evidence baseline:** `4ad1117fbe235fdc4cc879c8ccde775bb5241482` (F1.46 runtime PR #191 plus docs-only PR #192; exact-main workflow #735 passed 7/7 jobs on 17 November 2026).
 
 ## 1. Purpose and decision
 
@@ -94,6 +94,8 @@ The assurance process preserves the existing system boundaries:
 Do not create parallel authorization systems, duplicate canonical identifier or transaction helpers, or broad abstractions that erase provider, queue, storage or worker differences.
 
 ## 5. Current maintainer-led tenant work
+
+F1.47 is a bounded maintainer-authored regression candidate tracked by [issue #193](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/193), based on mainline `4ad1117fbe235fdc4cc879c8ccde775bb5241482`. It adds two-site, same-slug CRUD denial and positive-control coverage for the regular navigation-menu /menus routes, with menu, navigation-audit and outbox before/after snapshots. The focused disposable PostgreSQL 18 run passed 1/1 with zero skips after all 18 migrations. This is regression coverage only: it does not prove exhaustive tenant isolation, does not populate issue #14 evidence, and does not alter the independent-review or production NO-GO gates. Keep the source-anchored inventory in sync through its existing generator.
 
 The latest targeted improvement serializes site membership removals on the site's PostgreSQL row before checking the active owner count. This prevents two concurrent site owners from observing the same count and removing each other.
 
