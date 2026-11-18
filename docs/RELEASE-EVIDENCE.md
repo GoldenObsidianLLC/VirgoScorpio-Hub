@@ -1,4 +1,27 @@
-### Current exact-main evidence snapshot — 18 November 2026 UTC / America/Chicago (0.6.2, documentation PR #206 synced; workflow #762)
+### Current exact-main evidence snapshot — 18 November 2026 UTC / America/Chicago (0.6.2, F1.52 PR #208 merged; workflow #765)
+
+Current main is `ccd454c0fa8bc49a91526756819af451c1a390d2`. F1.52 runtime changes merged through [PR #208](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/208); implementation commit `99886cc4d8db22109bd036b80091fa4054387d93`, merged PR head `8230b9946d2edaf91039cdb878c2eb9e8d08d867`; issue #207 is CLOSED. Exact-main [workflow #44407304492 / run 765](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44407304492), attempt 1, completed all seven jobs successfully on the exact merge SHA.
+
+- Node.js 22.23.4 and 24.22.1 each passed 670/670 Hub tests and 94/94 EnginEx 7.0.0 tests with zero failures/skips. Both full and production-only npm audit scopes reported zero vulnerabilities.
+- PostgreSQL/Memgraph/Redis passed 143/143 live integration tests with zero failures, skips or TODOs. Fresh migrations applied all 18 migrations; the idempotent second pass recognized all 18 as already applied.
+- Browser editor/accessibility smoke passed 9/9. CodeQL passed. Mainline SLSA provenance and CycloneDX SBOM attestations were created and verified; exact-source CI evidence consolidation passed.
+- Consolidated readiness artifact **14476181217** (archive SHA-256 `36aadc37cea1c9684f9572d7ad9574d80e904a6ab782d4d4bf3644786779c3ae`) contains final readiness JSON SHA-256 `733972ee378321ebb34072b0789ca76a49c5951680cf863f9e5ddd90d79ffa22` and is source-bound to `ccd454c0fa8bc49a91526756819af451c1a390d2`. It reports CI EVIDENCE: PASS; FINAL RELEASE READINESS: NOT_PRODUCTION_CERTIFIED; PRODUCTION CERTIFICATION: NO; **8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN**; `readyForProduction=false`.
+- Mainline artifact digests are recorded in `RELEASE-MANIFEST.json`; the readiness archive, Node 22/24 CI evidence, live database producer, database evidence, browser smoke, CodeQL, dependency evidence and signed supply-chain artifacts are linked to run 765. PR #208 has zero formal review submissions and zero inline threads; maintainer/automation evidence only.
+
+| Workflow #765 evidence | Artifact ID | Archive SHA-256 |
+|---|---:|---|
+| Consolidated readiness / CI evidence | 14476181217 | `36aadc37cea1c9684f9572d7ad9574d80e904a6ab782d4d4bf3644786779c3ae` |
+| Node.js 22.23.4 CI evidence | 14475266962 | `1db1ec678ea3da5a2d16834995a0aa355fc05cd6808850139439e1232d352d16` |
+| Node.js 24.22.1 CI evidence | 14476865559 | `3110b596e875012f47cf90fba1280fba4a3265c0151cc3ad31eac3fa26cfa0b0` |
+| PostgreSQL/Memgraph integration CI evidence | 14475941150 | `3f456a9828134eec8bd8e22b94fca1eaf4505113c2baa297dc258ad3c568e852` |
+| Live PostgreSQL/Memgraph integration producer | 14475826269 | `8eb01d834906ad02199cd994d7fe61ba8d034fc2ed304556ee322f47564e55ac` |
+| Browser editor/accessibility smoke | 14475346683 | `4b418589bf00e2e7c867b4c2f44f647fd3252cc5abfa25e4b93a082388f8a2fd` |
+| CodeQL static analysis | 14475666234 | `712a76c10ad91fe6349badc6435513dee381169c3fbc5de6038c77887e5d92a0` |
+| Signed supply-chain evidence | 14476260899 | `7585a18b5d962a6c04a89f5b55b33615797a883bebf644187bf8e72efaf7ee8b` |
+
+The F1.52 two-site regression adds no new route family or pattern. The source-anchored tenant-isolation inventory remains 28 families, 80 declared route patterns, 21 implementation source files and 57 referenced test files. This navigation/drift-detection artifact does not satisfy independent review #14.
+
+### Historical exact-main evidence snapshot — F1.51 after documentation PR #206 (main `584831648b7e96d00ccec77bb4565d4bfb4730a6`; workflow #762; superseded by F1.52 / #765)
 
 Current main is `584831648b7e96d00ccec77bb4565d4bfb4730a6`. F1.51 runtime changes merged through [PR #205](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/205) at `a95b6dc4acbb3adcb64cfec8d05ec0831d9adb9a`; documentation-only [PR #206](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/206) reconciled the mainline documentation and merged at the current SHA. Exact-main [workflow #44361023104 / run 762](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44361023104), attempt 1, completed all seven jobs successfully on `584831648b7e96d00ccec77bb4565d4bfb4730a6`.
 
@@ -22,9 +45,9 @@ Current main is `584831648b7e96d00ccec77bb4565d4bfb4730a6`. F1.51 runtime change
 
 The two PARTIAL rows remain incomplete qualified human dependency/license review and service-less integration diagnostics; skipped diagnostic cases are not live passes. The 14 production evidence gates remain missing as recorded in [authoritative readiness](RELEASE_READINESS.md). Independent tenant review #14 and platform security assessment #25 remain OPEN / NOT PERFORMED; dependency/license review #23 remains OPEN / PARTIAL. PR #205 and docs PR #206 record no formal review submissions or inline review threads; CI, CodeQL and signed attestations are maintainer/automation evidence, not independent approval. Package 0.6.2 remains private and unreleased; production remains NO-GO / NOT_PRODUCTION_CERTIFIED.
 
-F1.52 / issue #207 is a separate unmerged candidate and is not included in this exact-main source/evidence record. Candidate-local test results must remain in its implementation report until exact-head hosted CI and merge validation are complete.
+F1.52 / issue #207 / [PR #208](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/208) merged at main `ccd454c0fa8bc49a91526756819af451c1a390d2`; issue #207 is CLOSED. Runtime implementation commit `99886cc4d8db22109bd036b80091fa4054387d93`, merged PR head `8230b9946d2edaf91039cdb878c2eb9e8d08d867`, merge time 2026-11-18T22:00:38Z. Exact-main [workflow #44407304492 / run 765](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44407304492) passed 7/7 jobs on the merge SHA. Source-bound readiness remains 8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN and NOT_PRODUCTION_CERTIFIED / NO-GO. PR #208 recorded zero formal review submissions and zero inline review threads; CI/automation is maintainer evidence only, not independent security or legal approval. See the [F1.52 implementation and mainline report](reports/2026-11-18-F1-52-FRIENDSHIP-ACTIVE-REQUESTER-ACCEPTANCE-REPORT.md).
 
-### Historical exact-main evidence snapshot — 18 November 2026 UTC / America/Chicago (F1.51 runtime merge before docs PR #206; workflow #759; superseded by #762)
+### Historical exact-main evidence snapshot — F1.51 runtime merge before docs PR #206 (workflow #759; superseded by #762 and then #765)
 
 
 Current main is `a95b6dc4acbb3adcb64cfec8d05ec0831d9adb9a`. F1.51 merged through [PR #205](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/205); implementation commit `b91c972d22c366c37d8d49d223ba399442fb073f`; issue #204 is CLOSED. Exact-main [workflow #44342489370](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44342489370), run ID 44342489370, completed all seven required jobs successfully on this exact revision.

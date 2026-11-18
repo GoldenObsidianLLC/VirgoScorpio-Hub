@@ -2,9 +2,9 @@
 
 ## Current status and repository assurance
 
-- [Current full 0.6.2 release-gate report — 18 November 2026](reports/2026-11-18-VirgoScorpio-Hub-0.6.2-Release-Gate-Report.md) — exact-main `584831648b7e96d00ccec77bb4565d4bfb4730a6` / workflow #44361023104; CI evidence PASS, but 8 PASS / 2 PARTIAL / 14 MISSING_EVIDENCE and production remains NO-GO / NOT_PRODUCTION_CERTIFIED.
-- [F1.52 friendship active-requester acceptance report](reports/2026-11-18-F1-52-FRIENDSHIP-ACTIVE-REQUESTER-ACCEPTANCE-REPORT.md) — issue #207 OPEN; candidate-only local PostgreSQL red/green regression and full-suite validation. Not merged, not exact-main evidence, and hosted candidate CI remains pending.
-- [Authoritative 0.6.2 readiness](RELEASE_READINESS.md) and [exact-source evidence ledger](RELEASE-EVIDENCE.md) are current through docs PR #206 and workflow #44361023104 / run 762. The 17 November release-gate report below is retained as a historical snapshot.
+- [Current full 0.6.2 release-gate report — 18 November 2026](reports/2026-11-18-VirgoScorpio-Hub-0.6.2-Release-Gate-Report.md) — exact-main `ccd454c0fa8bc49a91526756819af451c1a390d2` / workflow #44407304492 (run 765); 7/7 jobs passed, CI evidence PASS, but 8 PASS / 2 PARTIAL / 14 MISSING_EVIDENCE and production remains NO-GO / NOT_PRODUCTION_CERTIFIED.
+- [F1.52 friendship active-requester acceptance report](reports/2026-11-18-F1-52-FRIENDSHIP-ACTIVE-REQUESTER-ACCEPTANCE-REPORT.md) — [PR #208 MERGED](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/208), issue #207 CLOSED; main `ccd454c0fa8bc49a91526756819af451c1a390d2`; exact-main workflow #765 passed 7/7 jobs. Maintainer regression evidence only; no formal PR review submission/inline thread was recorded.
+- [Authoritative 0.6.2 readiness](RELEASE_READINESS.md) and [exact-source evidence ledger](RELEASE-EVIDENCE.md) are current through F1.52 PR #208 and workflow #44407304492 / run 765. The 17 November release-gate report below is retained as a historical snapshot.
 
 
 - [F1.48 community-feed privacy and comment-parent hardening — merged implementation report](reports/2026-11-18-F1-48-COMMUNITY-FEED-PRIVACY-REGRESSION-REPORT.md) — PR #197 merged at main `37f0bfff82c53e4d616ba87ce94f5d7a784200fe`; issue #196 CLOSED. Exact-main workflow #44235945030 passed 7/7 jobs, including 141/141 live PostgreSQL/Memgraph/Redis tests with zero skips, Node 22/24, fresh/idempotent migrations, browser 9/9, CodeQL, signed attestations and evidence consolidation.
