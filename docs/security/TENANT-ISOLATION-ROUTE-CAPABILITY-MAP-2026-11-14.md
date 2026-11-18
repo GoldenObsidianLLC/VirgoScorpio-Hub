@@ -9,7 +9,7 @@ Maintainer-prepared route, capability, data-access, and regression-test navigati
 - Status: MAINTAINER_PREPARED_NOT_INDEPENDENTLY_REVIEWED.
 - Generated from the current working-tree implementation anchors and the catalog at docs/security/tenant-isolation-route-inventory.catalog.json.
 - Implementation-source digest: 81de40a423ff1275e6137e0e5239dfbf8c8b35c0598196ef5e73fadb5ab12382 across 21 files.
-- Referenced-test digest: 2a2e130c158468c6b1638f5c8330d3641491381d4ccd279742a35e4610f611fb across 57 files.
+- Referenced-test digest: 965a7a5e9c3ac2dfc89e909a9d5301610c80d67bbb074110c5fa91cee2bd2796 across 57 files.
 - Inventory size: 28 route/flow families, 80 declared route patterns, 21 source files, and 57 test files.
 - Regenerate with npm run security:tenant-inventory; CI checks freshness with node scripts/generate-tenant-isolation-route-inventory.js --check.
 
@@ -297,7 +297,7 @@ Tests: test/content-type-routes.test.js, test/collaboration-api.test.js, test/re
 - Side effects: Message creation/read markers; Report/moderation transitions; Notification fan-out/read state
 - Source: packages/community/src/workflows.js (lines 21, 375)
 - Test references: test/community-workflows.test.js, test/integration/community-workflows.integration.test.js, test/integration/tenant-community-object-isolation.integration.test.js
-- Coverage characterization: **targeted-two-site**. A/B cases cover selected conversation/message/block/report/moderation/notification access and side effects. Complete workflow state transitions, group-private post visibility and event fan-out require further review.
+- Coverage characterization: **targeted-two-site-direct-message-recipient-and-no-side-effects**. Existing A/B cases cover selected conversation/message/block/report/moderation/notification access and side effects. F1.49 adds live PostgreSQL coverage for POST /community/conversations: a Site B-only actor using a Site A-only recipient ID receives the existing non-disclosing 404 before the conversation transaction begins; deep before/after snapshots for both sites cover conversations, members, messages, notifications and the complete shared community-state projection; a same-site Site B create/reuse positive control returns the existing conversation without duplicate rows or notification fan-out. Complete workflow state transitions, other recipient variants, event fan-out outside the direct-create transaction, and independent adversarial/provider/realtime review remain separate.
 
 ### 18. Plugin registry, approvals, security review, activation and invocation
 

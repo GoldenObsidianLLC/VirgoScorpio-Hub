@@ -278,9 +278,14 @@ test(
       'x-virgoscorpio-hub-site-id': siteB,
     };
     const before = await snapshotCommunitySite(pool, siteA);
+    const beforeSiteB = await snapshotCommunitySite(pool, siteB);
 
     async function assertSiteAUnchanged() {
       assert.deepEqual(await snapshotCommunitySite(pool, siteA), before);
+    }
+
+    async function assertSiteBUnchanged() {
+      assert.deepEqual(await snapshotCommunitySite(pool, siteB), beforeSiteB);
     }
 
     await t.test('site B group listing and member reads do not reveal a foreign group', async () => {
@@ -339,7 +344,36 @@ test(
       });
       assert.equal(read.status, 404);
       assert.equal((await read.json()).code, 'ERR_VIRGOSCORPIO_HUB_CONVERSATION_NOT_FOUND');
+
+    });
+
+    await t.test('direct conversation creation rejects foreign recipients without side effects and preserves same-site reuse', async () => {
+      const foreignRecipientCreate = await fetch(`${base}/api/v1/sites/${siteB}/community/conversations`, {
+        method: 'POST',
+        headers: { ...headers, 'content-type': 'application/json' },
+        body: JSON.stringify({ recipientId: userA.id }),
+      });
+      const foreignRecipientPayload = await foreignRecipientCreate.json();
+      const serializedForeignRecipientPayload = JSON.stringify(foreignRecipientPayload);
+      assert.equal(foreignRecipientCreate.status, 404);
+      assert.equal(foreignRecipientPayload.code, 'ERR_VIRGOSCORPIO_HUB_COMMUNITY_USER_NOT_FOUND');
+      assert.ok(!serializedForeignRecipientPayload.includes(userA.id), 'the response must not disclose the foreign recipient ID');
+      assert.ok(!serializedForeignRecipientPayload.includes(siteA), 'the response must not disclose the foreign site ID');
+      assert.doesNotMatch(serializedForeignRecipientPayload, /PRIVATE_SITE_A|Site A Member/);
       await assertSiteAUnchanged();
+      await assertSiteBUnchanged();
+
+      const sameSiteReuse = await fetch(`${base}/api/v1/sites/${siteB}/community/conversations`, {
+        method: 'POST',
+        headers: { ...headers, 'content-type': 'application/json' },
+        body: JSON.stringify({ recipientId: userB2.id }),
+      });
+      assert.equal(sameSiteReuse.status, 200);
+      const sameSiteReusePayload = await sameSiteReuse.json();
+      assert.equal(sameSiteReusePayload.created, false);
+      assert.equal(sameSiteReusePayload.conversation.id, conversationB);
+      await assertSiteAUnchanged();
+      await assertSiteBUnchanged();
     });
 
     await t.test('foreign block and friendship targets cannot be listed, created, changed, or removed', async () => {

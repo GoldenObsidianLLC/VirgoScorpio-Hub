@@ -35,7 +35,7 @@
   },
   "testTree": {
     "fileCount": 57,
-    "sha256": "2a2e130c158468c6b1638f5c8330d3641491381d4ccd279742a35e4610f611fb",
+    "sha256": "965a7a5e9c3ac2dfc89e909a9d5301610c80d67bbb074110c5fa91cee2bd2796",
     "files": [
       "test/ai-queue-worker.test.js",
       "test/ai-task-queue.test.js",
@@ -1519,8 +1519,8 @@
         "test/integration/tenant-community-object-isolation.integration.test.js"
       ],
       "coverage": {
-        "level": "targeted-two-site",
-        "limits": "A/B cases cover selected conversation/message/block/report/moderation/notification access and side effects. Complete workflow state transitions, group-private post visibility and event fan-out require further review."
+        "level": "targeted-two-site-direct-message-recipient-and-no-side-effects",
+        "limits": "Existing A/B cases cover selected conversation/message/block/report/moderation/notification access and side effects. F1.49 adds live PostgreSQL coverage for POST /community/conversations: a Site B-only actor using a Site A-only recipient ID receives the existing non-disclosing 404 before the conversation transaction begins; deep before/after snapshots for both sites cover conversations, members, messages, notifications and the complete shared community-state projection; a same-site Site B create/reuse positive control returns the existing conversation without duplicate rows or notification fan-out. Complete workflow state transitions, other recipient variants, event fan-out outside the direct-create transaction, and independent adversarial/provider/realtime review remain separate."
       },
       "methods": [
         "GET",

@@ -4,6 +4,13 @@ All notable project-level changes should be recorded here. This changelog does n
 
 ## 0.6.2 (unreleased patch candidate)
 
+### Direct-message recipient tenant isolation (F1.49; issue #199 OPEN; candidate only)
+
+- Based on mainline `00c60fd1380123f7af436e4bfcb6b515bfbc2e34`. Adds a two-site live PostgreSQL regression to the existing community object-isolation fixture for `POST /api/v1/sites/{siteId}/community/conversations`.
+- A Site B-only actor attempting to create a conversation with a Site A-only recipient receives the existing non-disclosing `404 ERR_VIRGOSCORPIO_HUB_COMMUNITY_USER_NOT_FOUND`; deep Site A and Site B community snapshots remain unchanged. A same-site Site B create/reuse control returns the existing conversation without duplicate records or notifications.
+- Focused disposable PostgreSQL 18 integration passed 9/9 with zero skips; the combined direct-message/community regression set passed 18/18 with zero skips. All 18 migrations were applied fresh. Inventory generator and freshness check pass (28 families / 80 patterns / 21 sources / 57 test references).
+- This is maintainer-authored regression coverage only, not independent assessment #14/#25. No runtime, schema, migration, API, dependency, lockfile, package version or SemVer change. Hosted exact-head CI is still required before merge. Package 0.6.2 remains private/unreleased; production remains NO-GO / NOT_PRODUCTION_CERTIFIED.
+
 ### Community-feed privacy and comment-parent isolation (F1.48; PR #197 MERGED; issue #196 CLOSED)
 
 - Based on mainline fba84b91bdb4e6791f4c66f7a90acaa466f74aa3; implementation commit `4fa49b7403db3881ac50d9827223fb1d912b5b44` merged through [PR #197](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/197) at main merge commit `37f0bfff82c53e4d616ba87ce94f5d7a784200fe` on 18 November 2026 UTC (17 November America/Chicago). Issue #196 is CLOSED.
