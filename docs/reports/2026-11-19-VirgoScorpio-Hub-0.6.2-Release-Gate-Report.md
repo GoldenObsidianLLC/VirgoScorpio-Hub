@@ -2,19 +2,19 @@
 
 **Assessment snapshot:** 19 November 2026 America/Chicago
 **Repository:** `GoldenObsidianLLC/VirgoScorpio-Hub`
-**Current repository main HEAD:** `22213e40f63b5cef4a281c9fbdbfb401afa54d93` (documentation-only PR #221 after F1.56; runtime unchanged)
-**F1.56 runtime merge SHA:** `f789444d769e9adf94adb5ef494c1a038a0c7261` (PR #220 merge; exact-main workflow #794 source)
-**Latest merged runtime source:** F1.56 / PR #220, merge `f789444d769e9adf94adb5ef494c1a038a0c7261`; issue #219 CLOSED
-**Latest merged runtime CI:** [workflow #44566086887 / run #794](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44566086887) — SUCCESS, 7/7 jobs, exact merge SHA `f789444d769e9adf94adb5ef494c1a038a0c7261`
-**Latest consolidated mainline readiness artifact:** #14552870585; SHA-256 `f163616fabae6e3ad704158c8c3f208a0e043370180398c451d88aae3f4cc31a`; readiness JSON SHA-256 `4d6bb9ad49f260a94574149d49f055a25c827f405c702c43914fbd7ad08804c7`
+**Current repository main HEAD:** `f60d454e80273262c9020940575aae4328fb9149` (F1.57 / PR #224 runtime merge; issue #222 CLOSED)
+**F1.57 runtime merge SHA:** `f60d454e80273262c9020940575aae4328fb9149` (PR #224 squash merge; F1.56 predecessor `f789444d769e9adf94adb5ef494c1a038a0c7261`)
+**Latest merged runtime source:** F1.57 / PR #224, merge `f60d454e80273262c9020940575aae4328fb9149`; issue #222 CLOSED
+**Latest merged runtime CI:** [workflow #44638362224](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44638362224) - SUCCESS, 7/7 jobs, exact main SHA `f60d454e80273262c9020940575aae4328fb9149`
+**Latest consolidated mainline readiness artifact:** #14585192352; SHA-256 `1fa3223aed7fab8c4f2b662105866da751d466f0fd43cbded0ab771769d56da5`; readiness JSON SHA-256 `a4aa0cdd8f57d921b1e088909927b81e44df75f798a402431f849155f43ff95f`
 **Decision:** **PRODUCTION NO-GO / NOT_PRODUCTION_CERTIFIED**
 **Package:** `virgoscorpio-hub@0.6.2`, private and unreleased
 
- > This report records F1.56 as a merged maintainer runtime increment and separates its mainline CI evidence from independent, provider, product, legal, governance and operational acceptance. Passing local tests, hosted CI, database regressions, CodeQL or signed attestations does not constitute independent security approval or production authorization.
+> This report records F1.57 as the latest merged maintainer runtime increment and separates its exact-main CI evidence from independent, provider, product, legal, governance and operational acceptance. Passing local tests, hosted CI, database regressions, CodeQL or signed attestations does not constitute independent security approval or production authorization.
 
 ## 1. Executive decision
 
-VirgoScorpio Hub 0.6.2 remains a **private, unreleased expanded developer-preview**. The authoritative source-bound readiness classification after F1.56 merge remains:
+VirgoScorpio Hub 0.6.2 remains a **private, unreleased expanded developer-preview**. The authoritative source-bound readiness classification after F1.57 merge remains:
 
 | Readiness classification | Count |
 |---|---:|
@@ -34,20 +34,20 @@ No SemVer increment, tag, GitHub Release, npm publication, production deployment
 
 ### 2.1 Source baseline
 
-F1.56 is the latest merged runtime increment. Its implementation commit `032122c5377712ae76d2ef9c8327c6e3aa43f883` merged through [PR #220](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/220) at `f789444d769e9adf94adb5ef494c1a038a0c7261`, closing issue #219. The friendship DELETE now locks the authenticated actor user row and then the actor's selected-site membership rows, and revalidates active-account and membership eligibility within the final write. Only the actor is revalidated, so an eligible user can still unlink an inactive/departed counterpart. Focused PostgreSQL 18 regression passed 35/35 with zero skips. See the [F1.56 implementation report](2026-11-19-F1-56-COMMUNITY-FRIENDSHIP-REMOVAL-AUTHORIZATION-RACE-REPORT.md). F1.55 / PR #216 remains the previous merged increment.
+F1.57 is the latest merged runtime increment. The community group-create authorization revalidation fix merged through [PR #224](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/224) at `f60d454e80273262c9020940575aae4328fb9149`, closing issue #222. The transaction takes a selected-site `FOR KEY SHARE` lock before creator authorization locks, matching membership removal's site-before-membership order, and then locks/revalidates the active creator, all selected-site membership rows and associated role capabilities. Existing `content:create`, `site:manage` and `*` capability semantics and atomic group/initial-owner write are preserved. Pre-fix PostgreSQL 18 injection reproduced HTTP 201 after membership revocation; exact-main live integration passed 169/169 with zero skips. See the [F1.57 implementation report](2026-11-19-F1-57-COMMUNITY-GROUP-CREATE-AUTHORIZATION-RACE-REPORT.md).
 
 F1.55 closes the friendship-acceptance authorization race: the final friendship UPDATE locks both participant user rows and selected-site membership rows, then rechecks both active accounts and memberships before accepting a pending relationship. The focused PostgreSQL 18 integration passed 26/26 with zero skips. The merged change preserves route, response and generic non-disclosing 404 contracts. See the [F1.55 implementation report](2026-11-19-F1-55-FRIENDSHIP-ACCEPTANCE-AUTHORIZATION-RACE-REPORT.md).
 
-### 2.2 Workflow #794 result
+### 2.2 Workflow #44638362224 result
 
-Exact-main [workflow #44566086887 / run #794](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44566086887) passed all seven jobs on `f789444d769e9adf94adb5ef494c1a038a0c7261`.
+Exact-main [workflow #44638362224](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44638362224) passed all seven jobs on F1.57 main/runtime SHA `f60d454e80273262c9020940575aae4328fb9149`.
 
 | Producer / gate | Result | Qualification |
 |---|---|---|
 | Node.js 22.23.4 | PASS | 670/670 Hub and 94/94 EnginEx 7.0.0 tests; zero failures/skips. |
 | Node.js 24.22.1 | PASS | 670/670 Hub and 94/94 EnginEx 7.0.0 tests; zero failures/skips. |
 | npm audit scopes | PASS | Zero reported vulnerabilities in the two supported runtime jobs. |
-| PostgreSQL / Memgraph / Redis live integration | PASS | 168/168 live integration tests; zero failures, skips or TODOs. |
+| PostgreSQL / Memgraph / Redis live integration | PASS | 169/169 live integration tests; zero failures, skips or TODOs. |
 | Fresh migrations | PASS | All 18 migrations applied against a disposable fresh PostgreSQL database. |
 | Idempotent migrations | PASS | Second pass verified all 18 migrations were already applied. |
 | Browser editor/accessibility smoke | PASS | Playwright smoke 9/9; not full manual WCAG or assistive-technology acceptance. |
@@ -55,11 +55,11 @@ Exact-main [workflow #44566086887 / run #794](https://github.com/GoldenObsidianL
 | Signed provenance / SBOM | PASS | Mainline supply-chain attestations created and verified for the source-bound package evidence. |
 | Exact-source evidence consolidation | PASS | Run/attempt identities, producer manifests, checksums, live database evidence, migrations and final readiness artifacts validated. |
 
-The exact-source readiness artifact #14552870585 is bound to F1.56 merge SHA `f789444d769e9adf94adb5ef494c1a038a0c7261`. CI artifact SHA-256: `f163616fabae6e3ad704158c8c3f208a0e043370180398c451d88aae3f4cc31a`; canonical readiness JSON SHA-256: `4d6bb9ad49f260a94574149d49f055a25c827f405c702c43914fbd7ad08804c7`. It reports **8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN**, `readyForProduction=false`, `NOT_PRODUCTION_CERTIFIED`.
+The exact-source readiness artifact #14585192352 is bound to F1.57 merge SHA `f60d454e80273262c9020940575aae4328fb9149`. CI artifact SHA-256: `1fa3223aed7fab8c4f2b662105866da751d466f0fd43cbded0ab771769d56da5`; canonical readiness JSON SHA-256: `a4aa0cdd8f57d921b1e088909927b81e44df75f798a402431f849155f43ff95f`. It reports **8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN**, `readyForProduction=false`, `NOT_PRODUCTION_CERTIFIED`.
 
 The two PARTIAL classifications are:
 1. Qualified human dependency/license/SBOM review remains incomplete under issue #23.
-2. The service-less integration diagnostic contains 47 cases per supported Node runtime, with 1 pass and 46 skips. Those skips are not live integration results. The separate live PostgreSQL/Memgraph/Redis producer passed **168/168** with zero skips.
+2. The service-less integration diagnostic contains 47 cases per supported Node runtime, with 1 pass and 46 skips. Those skips are not live integration results. The separate live PostgreSQL/Memgraph/Redis producer passed **169/169** with zero skips.
 
 The tenant-isolation navigation inventory on mainline remains 28 route/flow families, 80 declared route patterns, 21 implementation source files and 57 referenced test files. This source-anchored inventory is a maintainer navigation and drift-detection aid; it does not prove exhaustive discovery or satisfy independent review #14.
 
@@ -79,7 +79,7 @@ The candidate's final parameterized DELETE uses materialized CTEs to lock only t
 | Artifact verification | 238 required paths and 268 JavaScript files syntax-checked. |
 | Tenant-isolation inventory | Regenerated and current: 28 families / 80 patterns / 21 sources / 57 test references. |
 | Runtime scope | One existing route statement changed; no endpoint, response, schema, migration, runtime dependency, lockfile or package version change. |
-| Exact-main CI | PASS | Workflow #794 passed 7/7 jobs, including Node 22/24, 168/168 live integration, 18/18 fresh/idempotent migrations, browser 9/9, CodeQL, SLSA lockfile/SBOM attestation and final evidence consolidation. |
+| Exact-main CI | PASS | Workflow #44638362224 passed 7/7 jobs on F1.57 main SHA `f60d454e80273262c9020940575aae4328fb9149`: Node 22/24 each 670/670 Hub and 94/94 EnginEx; 169/169 live database integration; 18/18 fresh/idempotent migrations; browser 9/9; CodeQL; signed mainline lockfile/SBOM attestation; exact-source evidence consolidation. |
 | Independent review | Not performed; #14 and #25 remain separate independent-assurance gates. |
 
 The focused fixture proves the final DELETE waits for concurrent account disablement and membership revocation, then denies removal; the relationship remains available for later unlink by an eligible actor. It also proves that a disabled or departed counterpart can still be unlinked and that repeat DELETE remains idempotent. The test harness raises its own request limit to 1000 for the expanded test server only; production defaults are unchanged.
