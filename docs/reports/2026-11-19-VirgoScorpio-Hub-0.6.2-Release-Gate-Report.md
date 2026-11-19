@@ -2,7 +2,8 @@
 
 **Assessment snapshot:** 19 November 2026 America/Chicago
 **Repository:** `GoldenObsidianLLC/VirgoScorpio-Hub`
-**F1.56 runtime merge SHA:** `f789444d769e9adf94adb5ef494c1a038a0c7261` (PR #220 merge)
+**Current repository main HEAD:** `22213e40f63b5cef4a281c9fbdbfb401afa54d93` (documentation-only PR #221 after F1.56; runtime unchanged)
+**F1.56 runtime merge SHA:** `f789444d769e9adf94adb5ef494c1a038a0c7261` (PR #220 merge; exact-main workflow #794 source)
 **Latest merged runtime source:** F1.56 / PR #220, merge `f789444d769e9adf94adb5ef494c1a038a0c7261`; issue #219 CLOSED
 **Latest merged runtime CI:** [workflow #44566086887 / run #794](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44566086887) — SUCCESS, 7/7 jobs, exact merge SHA `f789444d769e9adf94adb5ef494c1a038a0c7261`
 **Latest consolidated mainline readiness artifact:** #14552870585; SHA-256 `f163616fabae6e3ad704158c8c3f208a0e043370180398c451d88aae3f4cc31a`; readiness JSON SHA-256 `4d6bb9ad49f260a94574149d49f055a25c827f405c702c43914fbd7ad08804c7`
