@@ -64,7 +64,7 @@ The tenant-isolation navigation inventory on mainline remains 28 route/flow fami
 
 ## 3. F1.56 unmerged maintainer candidate — separate from mainline readiness
 
-Issue [#219 — Revalidate friendship-removal actor at the write boundary](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/219) is OPEN under parent tracker #124. The local branch is `security/f1-56-community-friendship-removal-2026-11-19`, based on current main `54bd8112f571c5ce623c6780600bb7fc9806e8cd`. Its implementation and regression report are not merged and are not part of artifact #14508174935 or workflow #785.
+Issue [#219 — Revalidate friendship-removal actor at the write boundary](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/219) is OPEN under parent tracker #124. The local branch is `security/f1-56-community-friendship-removal-2026-11-19`, based on current main `54bd8112f571c5ce623c6780600bb7fc9806e8cd`; implementation commit `032122c5377712ae76d2ef9c8327c6e3aa43f883`. Its implementation and regression report are not merged and are not part of artifact #14508174935 or workflow #785.
 
 F1.56 addresses a reproduced DELETE-path time-of-check/time-of-use gap. The original friendship-removal route performed a bare DELETE after site preflight. Disabling the authenticated actor or revoking their selected-site membership after preflight still allowed the friendship to be removed.
 

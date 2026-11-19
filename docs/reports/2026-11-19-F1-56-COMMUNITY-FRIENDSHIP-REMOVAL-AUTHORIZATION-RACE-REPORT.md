@@ -7,7 +7,7 @@
 **Branch:** `security/f1-56-community-friendship-removal-2026-11-19`
 **Base:** current main `54bd8112f571c5ce623c6780600bb7fc9806e8cd`
 **Latest merged runtime baseline:** F1.55 / PR #216, merge `db0b641880a5c842ffdcc2cf1dda6bedde58d033`
-**Candidate implementation commit:** pending local commit; this report is not a merge or mainline validation record
+**Implementation commit:** `032122c5377712ae76d2ef9c8327c6e3aa43f883`; branch commit includes the runtime correction, regression coverage, regenerated inventory and synchronized candidate documentation. This commit is not merged or a mainline validation record.
 
 ## Summary
 
