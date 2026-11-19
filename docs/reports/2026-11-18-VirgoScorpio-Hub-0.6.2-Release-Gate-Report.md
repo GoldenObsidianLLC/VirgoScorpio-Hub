@@ -2,12 +2,12 @@
 
 **Assessment snapshot:** 18 November 2026 UTC / 18 November 2026 America/Chicago
 **Repository:** `GoldenObsidianLLC/VirgoScorpio-Hub`
-**Current repository main HEAD:** `c07c10763f0660c3d0d60b755de0429211f75b14` (documentation-only PR #209 merged)
-**Latest merged runtime source / readiness baseline:** `ccd454c0fa8bc49a91526756819af451c1a390d2` (F1.52 runtime PR #208 merged)
-**Latest runtime merge:** F1.52 / [PR #208](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/208), implementation commit `99886cc4d8db22109bd036b80091fa4054387d93`, PR head `8230b9946d2edaf91039cdb878c2eb9e8d08d867`, merge SHA `ccd454c0fa8bc49a91526756819af451c1a390d2`; issue #207 CLOSED
-**Latest current-main CI:** [workflow #44421404827 / run #768](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44421404827) — SUCCESS, 7/7 jobs, bound to documentation-only main HEAD `c07c10763f0660c3d0d60b755de0429211f75b14`
-**Latest exact-main runtime/readiness CI:** [workflow #44407304492 / run #765](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44407304492) — SUCCESS, 7/7 jobs, bound to F1.52 runtime source `ccd454c0fa8bc49a91526756819af451c1a390d2`
-**Latest consolidated readiness artifact:** `14476181217`, archive SHA-256 `36aadc37cea1c9684f9572d7ad9574d80e904a6ab782d4d4bf3644786779c3ae`; readiness JSON SHA-256 `733972ee378321ebb34072b0789ca76a49c5951680cf863f9e5ddd90d79ffa22`
+**Current repository main HEAD:** `e8913fa812304e80dc4c8846f7ea637a2fa4e4d1` (F1.53 / PR #211 merged 18 November 2026 America/Chicago)
+**Latest merged runtime source / readiness baseline:** `e8913fa812304e80dc4c8846f7ea637a2fa4e4d1` (F1.53 / PR #211; issue #210 CLOSED)
+**Latest runtime merge:** F1.53 / [PR #211 MERGED](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/211), implementation commit `5ddae486ff39635f33b0594475626542643d18fb`, merge SHA `e8913fa812304e80dc4c8846f7ea637a2fa4e4d1`; issue #210 CLOSED
+**Latest current-main CI:** [workflow #44445082339 / run #776](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44445082339) — SUCCESS, 7/7 jobs, exact-source main SHA `e8913fa812304e80dc4c8846f7ea637a2fa4e4d1`
+**Latest exact-main runtime/readiness CI:** workflow #776 / run 44445082339; Node 22/24 each 670/670 Hub and 94/94 EnginEx; live PostgreSQL/Memgraph 153/153 zero skips; 18 fresh and 18 idempotent migrations; browser smoke; CodeQL; signed mainline attestations; evidence consolidation
+**Latest consolidated readiness artifact:** `14493590005`, archive SHA-256 `38a8d9b4c479cff4ac6145cbe31afd715e04f9c69c661762addd6bf2a90ed7b9`; readiness JSON SHA-256 `d9d0ed95c4fe60d50ccb4054d0c7b6d75aa67ea88e13bad1c8043e13633987a0`
 **Decision:** **PRODUCTION NO-GO / NOT_PRODUCTION_CERTIFIED**
 
 > This report distinguishes maintainer engineering work and exact-source CI evidence from independent, provider, product, legal, governance, and operational acceptance. Passing CI, database regressions, CodeQL, or signed attestations do not constitute independent security approval or production authorization.
@@ -30,38 +30,44 @@ No SemVer increment, release tag, GitHub Release, npm publication, production de
 
 ## 2. Current mainline and exact-source engineering evidence
 
-Repository `main` is currently `c07c10763f0660c3d0d60b755de0429211f75b14` after documentation-only PR #209. Current-main workflow #768 passed all 7/7 jobs on that exact docs-only HEAD. The source-bound readiness artifact and detailed runtime qualification below remain bound to the latest merged runtime source, F1.52 SHA `ccd454c0fa8bc49a91526756819af451c1a390d2`; the documentation-only run does not replace or rebind that artifact.
+Repository main is e8913fa812304e80dc4c8846f7ea637a2fa4e4d1 after F1.53 / PR #211 merged. Issue #210 is CLOSED. The implementation commit is 5ddae486ff39635f33b0594475626542643d18fb; the code-bearing candidate head validated by workflows #771/#772 was 62b14371ca430f9d7723bf816924b74568060af8. Documentation-only follow-up workflows #773/#774 passed on PR head f4193675fc729cc5d1648a7054f2443ff4378f08.
 
-F1.52 is the latest merged runtime increment. It closes a requester-lifecycle gap in the friendship acceptance route: the existing UPDATE now revalidates that the pending requester still has an active user account and membership in the same site at transition time. The existing generic non-disclosing 404 remains unchanged. Runtime PR #208 merged at `ccd454c0fa8bc49a91526756819af451c1a390d2` (implementation commit `99886cc4d8db22109bd036b80091fa4054387d93`; PR head `8230b9946d2edaf91039cdb878c2eb9e8d08d867`); issue #207 is CLOSED. No endpoint, response contract, schema, migration, dependency, lockfile or package-version change was made.
-
-Exact-main workflow [#44407304492](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44407304492) / run #765 completed all seven required jobs successfully on the exact current main SHA:
+Exact-main [workflow #44445082339 / run #776](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44445082339) completed all seven required jobs successfully on the exact merge SHA:
 
 | Producer / job | Result | Qualification |
 |---|---|---|
 | Node.js 22.23.4 | PASS | 670/670 Hub tests and 94/94 EnginEx 7.0.0 tests; npm audit scopes reported zero vulnerabilities. |
 | Node.js 24.22.1 | PASS | 670/670 Hub tests and 94/94 EnginEx 7.0.0 tests; npm audit scopes reported zero vulnerabilities. |
-| PostgreSQL / Memgraph / Redis | PASS | 143/143 live integration tests; zero failures, skips, or TODOs. |
+| PostgreSQL / Memgraph | PASS | 153/153 live integration tests; zero failures, skips, or TODOs. |
 | Fresh migrations | PASS | All 18 migrations applied to a disposable fresh PostgreSQL database. |
 | Idempotent migrations | PASS | Second pass verified all 18 migrations as already applied. |
-| Browser editor/accessibility smoke | PASS | 9/9 Playwright smoke tests; this is not full manual WCAG or assistive-technology acceptance. |
+| Browser editor/accessibility smoke | PASS | Hosted browser smoke completed successfully; this is not full manual WCAG or assistive-technology acceptance. |
 | CodeQL | PASS | Static analysis completed; this is not an independent application-security review. |
-| Signed supply-chain attestations | PASS | Mainline SLSA provenance and CycloneDX SBOM were created and verified. |
+| Signed supply-chain attestations | PASS | Mainline SLSA provenance and CycloneDX SBOM were created and verified against the lockfile and generated SBOM subjects. |
 | Evidence consolidation | PASS | Exact-source producer evidence and checksums validated; CI evidence is PASS. |
 
-The exact-source readiness artifact `14476181217` is bound to main `ccd454c0fa8bc49a91526756819af451c1a390d2`. Its archive SHA-256 is `36aadc37cea1c9684f9572d7ad9574d80e904a6ab782d4d4bf3644786779c3ae`; final readiness JSON SHA-256 is `733972ee378321ebb34072b0789ca76a49c5951680cf863f9e5ddd90d79ffa22`. Related retained workflow artifacts are:
+The exact-source readiness artifact 14493590005 is bound to main e8913fa812304e80dc4c8846f7ea637a2fa4e4d1. Its archive SHA-256 is 38a8d9b4c479cff4ac6145cbe31afd715e04f9c69c661762addd6bf2a90ed7b9; final readiness JSON SHA-256 is d9d0ed95c4fe60d50ccb4054d0c7b6d75aa67ea88e13bad1c8043e13633987a0. It reports CI EVIDENCE: PASS; FINAL RELEASE READINESS: NOT_PRODUCTION_CERTIFIED; PRODUCTION CERTIFICATION: NO; **8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN**; readyForProduction=false.
 
-| Evidence | Artifact ID | SHA-256 |
+| Evidence | Artifact ID | Archive SHA-256 |
 |---|---:|---|
-| Consolidated readiness | 14476181217 | `36aadc37cea1c9684f9572d7ad9574d80e904a6ab782d4d4bf3644786779c3ae` |
-| Live PostgreSQL/Memgraph/Redis integration | 14475826269 | `8eb01d834906ad02199cd994d7fe61ba8d034fc2ed304556ee322f47564e55ac` |
-| Database CI evidence | 14475941150 | `3f456a9828134eec8bd8e22b94fca1eaf4505113c2baa297dc258ad3c568e852` |
-| Signed supply-chain evidence | 14476260899 | `7585a18b5d962a6c04a89f5b55b33615797a883bebf644187bf8e72efaf7ee8b` |
+| Consolidated readiness / CI evidence | 14493590005 | 38a8d9b4c479cff4ac6145cbe31afd715e04f9c69c661762addd6bf2a90ed7b9 |
+| Node.js 22.23.4 CI evidence | 14492758685 | e06e4d3cf97fa402e0d67f6d77e8b971bdfa71279562dceccaa784822d49f221 |
+| Node.js 24.22.1 CI evidence | 14492004699 | 0dab246990a47573d1d4c2a9f558bf95b0966e48c456fb319e778296b03e8d77 |
+| PostgreSQL/Memgraph integration CI evidence | 14492579021 | 9786d3d23e092512d29fe49346004c6e6199a0585828ac324aa01c85d49e9c4c |
+| Live PostgreSQL/Memgraph integration producer | 14493420448 | 658319f1ea631f1628535325f047dd129a0d6d334516a39843959a370099411b |
+| Browser editor/accessibility smoke | 14492643732 | 27713cea8484fe6eeaf2250c71ebb5f7d85e96692da7d725c20e3ee1364cfd00 |
+| CodeQL static analysis | 14492368071 | 876cdd04f5c3ce78c82a1c81a53247195abc7cc74d3d6a786796f5be2ed4b058 |
+| Signed supply-chain evidence | 14492644016 | 9eb838845b9543918e724b6e9d016eabf4cec731586ef6a1ff2c37c06e9fd71d |
+| Node.js 22.23.4 dependency evidence | 14492269418 | 364f7ace15e7107d4cca12bf4bddf4a35bc7047daf956a910604887328342497 |
+| Node.js 24.22.1 dependency evidence | 14492079686 | f942a3dba0affceb2e0c46349821730641b0dccd0883c413bce8d5bb5f50c783 |
 
-The tenant-isolation navigation inventory at the F1.52 baseline contains 28 route/flow families, 80 declared route patterns, 21 implementation source files, and 57 referenced test files. F1.52 adds no new route family or route pattern. This maintainer-authored navigation and drift-detection evidence does not prove exhaustive route discovery or satisfy independent review #14.
+The source-bound lockfile SHA-256 is 8f3786bcfcd03d0b63761c7107e4d757ae5b45171ba2f6c086ff38c027c8b086. CycloneDX 1.5 SBOM SHA-256 is f19ed6da7d2f19bffb012aba566bb13eb0d75f1537cf3500262f3829cc12aac8 (200 components / 201 dependency records). The signed verification summary confirms package-lock.json and the SBOM are the verified attestation subjects.
+
+The tenant-isolation navigation inventory remains 28 route/flow families, 80 declared route patterns, 21 implementation source files and 57 referenced test files. F1.53 adds no new route family or route pattern. This maintainer-authored navigation and drift-detection evidence does not prove exhaustive route discovery or satisfy independent review #14.
 
 ### 2.1 Interpretation of the two PARTIAL classifications
 
-The two PARTIAL rows are (1) incomplete qualified human dependency, lockfile, and license review, and (2) the service-less integration diagnostic. Skipped service-less cases are not live integration passes. They remain distinct from exact-main workflow #765's separate 143/143 live PostgreSQL/Memgraph/Redis result with zero skips. Do not promote either PARTIAL item based on the successful live producer or automated checks.
+The two PARTIAL rows are (1) incomplete qualified human dependency, lockfile and license review, and (2) the service-less integration diagnostic. Skipped service-less cases are not live integration passes. They remain distinct from workflow #776's separate 153/153 live PostgreSQL/Memgraph result with zero skips. Do not promote either PARTIAL item based on successful CI, live producer, or automated attestations.
 
 ## 3. Production evidence matrix — 14 missing gates
 
@@ -125,18 +131,20 @@ PR #208 merged to main at `ccd454c0fa8bc49a91526756819af451c1a390d2`; implementa
 
 PR #208 recorded zero formal review submissions and zero inline review threads. This merged work remains maintainer-led regression hardening, not independent security/legal approval. It does not complete reviews #14/#25 or any other release gate. No schema, migration, endpoint, response-contract, dependency, lockfile, package-version, or SemVer change was made.
 
-## 7. F1.53 current maintainer candidate — [PR #211 OPEN](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/211); issue #210 OPEN
+## 7. F1.53 merged maintainer increment — [PR #211 MERGED](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/211); issue #210 CLOSED
 
-F1.53 addresses a write-boundary time-of-check/time-of-use race in `POST /api/v1/sites/{siteId}/community/friends/{userId}`. The former route checked the addressee's active account and same-site membership in a preflight SELECT, then inserted the friendship separately; requester eligibility could also change between request authorization and persistence. The candidate retains the early preflight and changes only the final friendship write to a parameterized `INSERT ... SELECT`.
+F1.53 fixes a write-boundary time-of-check/time-of-use race in POST /api/v1/sites/{siteId}/community/friends/{userId}. The former route checked the target participant's active account and same-site membership in a preflight SELECT, then inserted the friendship separately; requester eligibility could also change between request authorization and persistence. The merged fix retains the early preflight and changes the final friendship write to a parameterized INSERT ... SELECT.
 
-The write materializes and locks both participant user rows in deterministic UUID order, then materializes and locks all matching requested-site membership rows in deterministic user-ID / role-ID order. It requires both accounts to remain active and both same-site memberships to remain present. Membership `EXISTS` predicates prevent multiple role rows from multiplying the insert source. The existing blocked-state conflict behavior, generic non-disclosing `404 ERR_VIRGOSCORPIO_HUB_COMMUNITY_USER_NOT_FOUND`, route, HTTP status and response shape remain unchanged. No helper/API, schema, migration, dependency, lockfile, package-version or SemVer change is introduced.
+The write materializes and locks both participant user rows in deterministic UUID order, then all matching requested-site membership rows in deterministic user-ID / role-ID order. It requires both accounts to remain active and both same-site memberships to remain present. Membership EXISTS predicates prevent multiple role rows from multiplying the INSERT source. Existing blocked-state conflict behavior, generic non-disclosing 404 ERR_VIRGOSCORPIO_HUB_COMMUNITY_USER_NOT_FOUND, route, HTTP status and response shape remain unchanged. No helper/API, schema, migration, dependency, lockfile, package-version or SemVer change was introduced.
 
-The regression fixture covers addressee/requester disablement after preflight/authorization, revocation of either participant's same-site membership, actual row-lock waits for concurrent disablement and membership deletion, multiple-role membership, blocked-state preservation, ID/display-name non-disclosure, and unchanged Site A/Site B snapshots. Local focused PostgreSQL integration passed **20/20** with zero failures/skips/TODOs. Local `npm run check` passed **667/670** with zero failures and three Windows-specific skips (Node.js 26.12.1 with a 4 GiB V8 heap); artifact verification passed **238 required paths / 268 JavaScript files**; the tenant inventory is current at **28 families / 80 route patterns / 21 source files / 57 test files**; the updated Markdown link audit checked **241 relative links across all 9 Markdown files in the PR diff with zero broken links**; and `git diff --check` passed. All 18 migrations were already applied in the disposable local database; no fresh-migration claim is made.
+The regression fixture covers addressee/requester disablement after preflight/authorization, revocation of either participant's same-site membership, actual row-lock waits for concurrent disablement and membership deletion, multiple-role membership, blocked-state preservation, ID/display-name non-disclosure, and unchanged Site A/Site B snapshots. Focused local PostgreSQL integration passed 20/20 with zero failures/skips/TODOs. Local npm run check passed 667/670 with zero failures and three Windows-specific skips on Node.js 26.12.1; artifact verification passed 238 required paths / 268 JavaScript files; tenant inventory is current at 28 families / 80 route patterns / 21 source files / 57 test files.
 
-Candidate branch `security/f1-53-community-friendship-create-race-2026-11-18` contains runtime implementation commit `5ddae486ff39635f33b0594475626542643d18fb`; current PR head is `62b14371ca430f9d7723bf816924b74568060af8`. Exact-head push workflow [#44434648866 / run #771](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44434648866) and PR workflow [#44434656869 / run #772](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44434656869) both completed successfully. In each run, all six applicable candidate jobs passed: Node.js 22.23.4, Node.js 24.22.1, PostgreSQL/Memgraph integration, browser editor/accessibility smoke, CodeQL, and candidate evidence consolidation. The mainline-only dependency/SBOM attestation job was skipped by design for candidate events; no candidate attestation or exact-main readiness result is claimed. The current mainline readiness artifact remains the F1.52 source-bound record described above until F1.53 is merged and independently revalidated on main.
+Candidate branch security/f1-53-community-friendship-create-race-2026-11-18 contains runtime implementation commit 5ddae486ff39635f33b0594475626542643d18fb. Code-bearing candidate head 62b14371ca430f9d7723bf816924b74568060af8 passed exact-head workflows #771/#772; documentation-only follow-up head f4193675fc729cc5d1648a7054f2443ff4378f08 passed #773/#774, six applicable jobs each. PR #211 merged at main SHA e8913fa812304e80dc4c8846f7ea637a2fa4e4d1, closing issue #210. Exact-main workflow #776 passed 7/7 jobs on that SHA, including Node 22/24 (670/670 Hub and 94/94 EnginEx tests each), 153/153 live PostgreSQL/Memgraph tests, 18/18 fresh and idempotent migrations, browser smoke, CodeQL, signed mainline provenance/SBOM and exact-source evidence consolidation. Canonical readiness artifact #14493590005 is bound to the merge SHA and reports 8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN, readyForProduction=false.
 
-GitHub records **zero formal review submissions and zero inline review threads** on PR #211. These CI and regression results are maintainer/automation evidence only. They do not satisfy independent tenant/site review #14 or broader platform security assessment #25; both remain OPEN / NOT PERFORMED. Issue #210 remains OPEN until the PR is merged. F1.53 is not yet merged or included in canonical release readiness. Package 0.6.2 remains private/unreleased and production remains **NO-GO / NOT_PRODUCTION_CERTIFIED**.
+GitHub records zero formal review submissions and zero inline review threads on PR #211. These CI and regression results are maintainer/automation evidence only. They do not satisfy independent tenant/site review #14 or broader platform security assessment #25; both remain OPEN / NOT PERFORMED. Package 0.6.2 remains private/unreleased and production remains NO-GO / NOT_PRODUCTION_CERTIFIED.
+
+F1.54 / issue #212 is a separate local maintainer candidate addressing a reproduced community group-join membership race. It is not merged, has no hosted candidate workflow result yet, and is not included in the canonical mainline readiness assessment.
 
 ## 8. Release decision
 
-**NO-GO / NOT_PRODUCTION_CERTIFIED.** Do not publish, tag, deploy, or represent VirgoScorpio Hub 0.6.2 as production-ready. F1.52 / [PR #208](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/208) remains the latest merged runtime increment; exact-main workflow #765 passed 7/7 jobs on its runtime merge SHA, and current-main docs-only workflow #768 passed 7/7 jobs on `c07c10763f0660c3d0d60b755de0429211f75b14`. F1.53 / [PR #211](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/211) has passing exact-head candidate workflows #771/#772 but remains unmerged, with zero formal review submissions or inline threads. All are maintainer/automation evidence only. Independent assurance, dependency/license review, provider, product, operations, governance, and authorized release-owner obligations remain open; production remains NO-GO.
+**NO-GO / NOT_PRODUCTION_CERTIFIED.** Do not publish, tag, deploy, or represent VirgoScorpio Hub 0.6.2 as production-ready. F1.53 / [PR #211](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/211) is the latest merged runtime increment at exact main SHA e8913fa812304e80dc4c8846f7ea637a2fa4e4d1; exact-main workflow #776 passed 7/7 jobs, and post-producer readiness artifact #14493590005 records 8 PASS / 2 PARTIAL / 14 MISSING_EVIDENCE. PR #211 has zero formal review submissions or inline threads. All results are maintainer/automation evidence only. Independent assurance, dependency/license review, provider, product, operations, governance, and authorized release-owner obligations remain open; production remains NO-GO.

@@ -591,6 +591,109 @@ test(
         'content-type': 'application/json',
       };
 
+      const groupJoinMutations = [
+        {
+          description: 'site membership revoked after authorization',
+          mutate: async query => {
+            const r = await query('DELETE FROM site_memberships WHERE site_id=$1 AND user_id=$2 RETURNING role_id', [siteB, userBPublicJoinControl.id]);
+            assert.ok(r.rows.length > 0);
+          },
+          restore: async query => query('INSERT INTO site_memberships(site_id,user_id,role_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING', [siteB, userBPublicJoinControl.id, roleId]),
+        },
+        {
+          description: 'user disabled after authorization',
+          mutate: async query => {
+            const r = await query("UPDATE users SET status='disabled' WHERE id=$1 RETURNING id", [userBPublicJoinControl.id]);
+            assert.equal(r.rows.length, 1);
+          },
+          restore: async query => query("UPDATE users SET status='active' WHERE id=$1", [userBPublicJoinControl.id]),
+        },
+      ];
+      for (const scenario of groupJoinMutations) {
+        const beforeA = await snapshotCommunitySite(pool, siteA);
+        const beforeB = await snapshotCommunitySite(pool, siteB);
+        const descriptor = Object.getOwnPropertyDescriptor(pool, 'query');
+        const query = pool.query.bind(pool);
+        const eligibility = await query('SELECT u.status, count(sm.role_id)::int AS membership_count FROM users u LEFT JOIN site_memberships sm ON sm.user_id=u.id AND sm.site_id=$1 WHERE u.id=$2 GROUP BY u.id,u.status', [siteB, userBPublicJoinControl.id]);
+        assert.equal(eligibility.rows[0]?.status, 'active', scenario.description + ': actor is active before the injected race');
+        assert.ok(eligibility.rows[0]?.membership_count > 0, scenario.description + ': actor has site membership before the injected race');
+        let mutationStarted = false;
+        let mutationApplied = false;
+        pool.query = async (sql, params) => {
+          if (!mutationApplied && typeof sql === 'string' && sql.toUpperCase().includes('INSERT INTO SOCIAL_GROUP_MEMBERSHIPS')) {
+            mutationStarted = true;
+            await scenario.mutate(query);
+            mutationApplied = true;
+          }
+          return query(sql, params);
+        };
+        try {
+          const response = await fetch(base + '/api/v1/sites/' + siteB + '/community/groups/' + freshPrivateGroupB + '/join', { method: 'POST', headers: publicJoinHeaders, body: JSON.stringify({}) });
+          const payload = await response.json();
+          assert.equal(mutationApplied, true, scenario.description + ': mutate immediately before final INSERT (response ' + response.status + ', code ' + payload.code + ')');
+          assert.equal(response.status, 404, scenario.description + ': join must fail closed');
+          assert.equal(payload.code, 'ERR_VIRGOSCORPIO_HUB_GROUP_NOT_FOUND');
+          const q = await query('SELECT 1 FROM social_group_memberships WHERE group_id=$1 AND user_id=$2', [freshPrivateGroupB, userBPublicJoinControl.id]);
+          assert.equal(q.rows.length, 0, scenario.description + ': group membership must not be persisted');
+        } finally {
+          if (descriptor) Object.defineProperty(pool, 'query', descriptor); else delete pool.query;
+          if (mutationStarted) await scenario.restore(query);
+          await query('DELETE FROM social_group_memberships WHERE group_id=$1 AND user_id=$2', [freshPrivateGroupB, userBPublicJoinControl.id]);
+        }
+        assert.deepEqual(await snapshotCommunitySite(pool, siteA), beforeA);
+        assert.deepEqual(await snapshotCommunitySite(pool, siteB), beforeB);
+      }
+      {
+        const beforeA = await snapshotCommunitySite(pool, siteA);
+        const beforeB = await snapshotCommunitySite(pool, siteB);
+        const descriptor = Object.getOwnPropertyDescriptor(pool, 'query');
+        const query = pool.query.bind(pool);
+        const client = await pool.connect();
+        let transactionOpen = false;
+        let requestPromise = null;
+        let writeStarted = false;
+        try {
+          await client.query('BEGIN');
+          transactionOpen = true;
+          const locked = await client.query('SELECT role_id FROM site_memberships WHERE site_id=$1 AND user_id=$2 ORDER BY role_id FOR UPDATE', [siteB, userBPublicJoinControl.id]);
+          assert.ok(locked.rowCount > 0, 'the join actor has a site-membership row to lock');
+          pool.query = async (sql, params) => {
+            if (!writeStarted && typeof sql === 'string' && sql.toUpperCase().includes('INSERT INTO SOCIAL_GROUP_MEMBERSHIPS')) writeStarted = true;
+            return query(sql, params);
+          };
+          requestPromise = fetch(base + '/api/v1/sites/' + siteB + '/community/groups/' + freshPrivateGroupB + '/join', { method: 'POST', headers: publicJoinHeaders, body: JSON.stringify({}) });
+          const writeDeadline = Date.now() + 5000;
+          while (!writeStarted && Date.now() < writeDeadline) await new Promise(resolve => setTimeout(resolve, 20));
+          assert.equal(writeStarted, true, 'group join reaches the final PostgreSQL write');
+          let waitingOnLock = false;
+          const lockDeadline = Date.now() + 5000;
+          while (!waitingOnLock && Date.now() < lockDeadline) {
+            const activity = await client.query("SELECT wait_event_type FROM pg_stat_activity WHERE datname=current_database() AND pid<>pg_backend_pid() AND query ILIKE '%INSERT INTO social_group_memberships%' ORDER BY query_start DESC LIMIT 1");
+            waitingOnLock = activity.rows[0]?.wait_event_type === 'Lock';
+            if (!waitingOnLock) await new Promise(resolve => setTimeout(resolve, 20));
+          }
+          assert.equal(waitingOnLock, true, 'group-join write waits for the locked site-membership row');
+          const removed = await client.query('DELETE FROM site_memberships WHERE site_id=$1 AND user_id=$2 RETURNING role_id', [siteB, userBPublicJoinControl.id]);
+          assert.ok(removed.rows.length > 0, 'competing transaction removes the locked site membership');
+          await client.query('COMMIT');
+          transactionOpen = false;
+          const response = await requestPromise;
+          const payload = await response.json();
+          assert.equal(response.status, 404, 'join fails closed after the competing membership deletion commits');
+          assert.equal(payload.code, 'ERR_VIRGOSCORPIO_HUB_GROUP_NOT_FOUND');
+          const membership = await query('SELECT 1 FROM social_group_memberships WHERE group_id=$1 AND user_id=$2', [freshPrivateGroupB, userBPublicJoinControl.id]);
+          assert.equal(membership.rows.length, 0, 'no group membership is created after the serialized revocation');
+        } finally {
+          if (transactionOpen) await client.query('ROLLBACK').catch(() => {});
+          if (descriptor) Object.defineProperty(pool, 'query', descriptor); else delete pool.query;
+          if (requestPromise) await requestPromise.catch(() => {});
+          await query('DELETE FROM social_group_memberships WHERE group_id=$1 AND user_id=$2', [freshPrivateGroupB, userBPublicJoinControl.id]);
+          await query('INSERT INTO site_memberships(site_id,user_id,role_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING', [siteB, userBPublicJoinControl.id, roleId]);
+          client.release();
+        }
+        assert.deepEqual(await snapshotCommunitySite(pool, siteA), beforeA);
+        assert.deepEqual(await snapshotCommunitySite(pool, siteB), beforeB);
+      }
       const freshPrivateJoin = await fetch(
         base + '/api/v1/sites/' + siteB + '/community/groups/' + freshPrivateGroupB + '/join',
         { method: 'POST', headers: publicJoinHeaders, body: JSON.stringify({}) }

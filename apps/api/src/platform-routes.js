@@ -237,7 +237,61 @@ async function handlePlatformRoute(ctx) {
   ) {if(!localPool||!actor.user.id)throw fail(503,'ERR_VIRGOSCORPIO_HUB_COMMUNITY_DISABLED','Community groups require PostgreSQL and a signed-in user.');const siteId=groups[1],body=method==='POST'?await readJson(req,Math.min(maxBody,32_000)):{};await siteIdFor({ req, url, body, actor, routeSiteId: siteId });
     if(!groups[2]&&method==='GET'){const q=await localPool.query(`SELECT g.id,g.slug,g.name,g.description,g.privacy,g.created_by,g.created_at,(SELECT count(*)::int FROM social_group_memberships gm WHERE gm.group_id=g.id AND gm.status='active') member_count,(SELECT status FROM social_group_memberships gm WHERE gm.group_id=g.id AND gm.user_id=$2) my_status FROM social_groups g WHERE g.site_id=$1 AND (g.privacy='public' OR g.created_by=$2 OR EXISTS(SELECT 1 FROM social_group_memberships gm WHERE gm.group_id=g.id AND gm.user_id=$2 AND gm.status='active')) ORDER BY g.created_at DESC LIMIT 200`,[siteId,actor.user.id]);return sendJson(res,200,{groups:q.rows,requestId});}
     if(!groups[2]&&method==='POST'){await requireCapability(actor,siteId,'content:create');const v=validateGroup(body);if(!v.valid)throw fail(422,'ERR_VIRGOSCORPIO_HUB_GROUP_INVALID','Group validation failed.',v.errors);const client=await localPool.connect();try{await client.query('BEGIN');const q=await client.query('INSERT INTO social_groups(site_id,slug,name,description,privacy,created_by) VALUES($1,$2,$3,$4,$5,$6) RETURNING *',[siteId,body.slug,body.name.trim(),body.description||'',body.privacy||'public',actor.user.id]);await client.query("INSERT INTO social_group_memberships(group_id,user_id,role,status) VALUES($1,$2,'owner','active')",[q.rows[0].id,actor.user.id]);await client.query('COMMIT');return sendJson(res,201,{group:q.rows[0],requestId});}catch(e){await client.query('ROLLBACK').catch(()=>{});throw e;}finally{client.release();}}
-    if(groups[3]==='join'){const g=await localPool.query('SELECT id,privacy FROM social_groups WHERE site_id=$1 AND id=$2',[siteId,groups[2]]);if(!g.rows[0])throw fail(404,'ERR_VIRGOSCORPIO_HUB_GROUP_NOT_FOUND','Group not found.');const status=g.rows[0].privacy==='public'?'active':'pending';const q=await localPool.query('INSERT INTO social_group_memberships(group_id,user_id,role,status) VALUES($1,$2,\'member\',$3) ON CONFLICT(group_id,user_id) DO UPDATE SET status=CASE WHEN social_group_memberships.status IN (\'banned\',\'active\') THEN social_group_memberships.status ELSE EXCLUDED.status END RETURNING group_id,user_id,role,status,created_at',[groups[2],actor.user.id,status]);if(q.rows[0].status==='banned')throw fail(403,'ERR_VIRGOSCORPIO_HUB_GROUP_BANNED','You cannot rejoin this group.');return sendJson(res,200,{membership:q.rows[0],requestId});}
+    if (groups[3] === 'join') {
+      // Resolve and lock eligibility at the same write boundary as the membership mutation.
+      // Preserve a stable lock order: user, site memberships, then group.
+      const q = await localPool.query(
+        `WITH participant_users AS MATERIALIZED (
+          SELECT u.id, u.status
+          FROM users u
+          WHERE u.id = $3
+          ORDER BY u.id
+          FOR UPDATE OF u
+        ), participant_memberships AS MATERIALIZED (
+          SELECT sm.user_id, sm.role_id
+          FROM site_memberships sm
+          JOIN participant_users pu ON pu.id = sm.user_id
+          WHERE sm.site_id = $1
+          ORDER BY sm.user_id, sm.role_id
+          FOR UPDATE OF sm
+        ), target_group AS MATERIALIZED (
+          SELECT g.id, g.privacy
+          FROM social_groups g
+          WHERE g.site_id = $1 AND g.id = $2
+            AND EXISTS (
+              SELECT 1 FROM participant_users pu
+              WHERE pu.id = $3 AND pu.status = 'active'
+            )
+            AND EXISTS (
+              SELECT 1 FROM participant_memberships pm
+              WHERE pm.user_id = $3
+            )
+          FOR UPDATE OF g
+        )
+        INSERT INTO social_group_memberships(group_id,user_id,role,status)
+        SELECT g.id, pu.id, 'member',
+               CASE WHEN g.privacy = 'public' THEN 'active' ELSE 'pending' END
+        FROM target_group g
+        JOIN participant_users pu ON pu.id = $3 AND pu.status = 'active'
+        WHERE EXISTS (
+          SELECT 1 FROM participant_memberships pm WHERE pm.user_id = pu.id
+        )
+        ON CONFLICT(group_id,user_id)
+        DO UPDATE SET status = CASE
+          WHEN social_group_memberships.status IN ('banned','active') THEN social_group_memberships.status
+          ELSE EXCLUDED.status
+        END
+        RETURNING group_id,user_id,role,status,created_at`,
+        [siteId, groups[2], actor.user.id]
+      );
+      if (!q.rows[0]) {
+        throw fail(404, 'ERR_VIRGOSCORPIO_HUB_GROUP_NOT_FOUND', 'Group not found.');
+      }
+      if (q.rows[0].status === 'banned') {
+        throw fail(403, 'ERR_VIRGOSCORPIO_HUB_GROUP_BANNED', 'You cannot rejoin this group.');
+      }
+      return sendJson(res, 200, { membership: q.rows[0], requestId });
+    }
     if(groups[3]==='members'){await requireCapability(actor,siteId,'community:moderate');const q=await localPool.query('SELECT u.id,u.display_name,u.email,gm.role,gm.status,gm.created_at FROM social_group_memberships gm JOIN users u ON u.id=gm.user_id JOIN social_groups g ON g.id=gm.group_id WHERE g.site_id=$1 AND g.id=$2 ORDER BY gm.created_at',[siteId,groups[2]]);return sendJson(res,200,{members:q.rows,requestId});}
   }
   const feed=pathName.match(/^\/api\/v1\/sites\/([0-9a-f-]{36})\/community\/feed$/i);
