@@ -1,13 +1,13 @@
 # F1.56 — Community friendship-removal authorization-race report
 
 **Date:** 19 November 2026
-**Status:** Local maintainer candidate; not merged
-**Issue:** [#219 — Revalidate friendship-removal actor at the write boundary](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/219) — OPEN
+**Status:** Merged to main through PR #220; exact-main workflow #794 passed 7/7 jobs. Maintainer/automation evidence only; the PR had no formal review submissions.
+**Issue:** [#219](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/219) — CLOSED by [PR #220](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/220)
 **Parent:** [#124 — Continue maintainer-led tenant isolation hardening](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/124)
 **Branch:** `security/f1-56-community-friendship-removal-2026-11-19`
-**Base:** current main `54bd8112f571c5ce623c6780600bb7fc9806e8cd`
-**Latest merged runtime baseline:** F1.55 / PR #216, merge `db0b641880a5c842ffdcc2cf1dda6bedde58d033`
-**Implementation commit:** `032122c5377712ae76d2ef9c8327c6e3aa43f883`; branch commit includes the runtime correction, regression coverage, regenerated inventory and synchronized candidate documentation. This commit is not merged or a mainline validation record.
+**PR base:** main at branch creation `54bd8112f571c5ce623c6780600bb7fc9806e8cd`
+**Latest merged runtime baseline:** F1.56 / PR #220, merge `f789444d769e9adf94adb5ef494c1a038a0c7261`; previous increment F1.55 / PR #216
+**Implementation commit:** `032122c5377712ae76d2ef9c8327c6e3aa43f883`; merge commit `f789444d769e9adf94adb5ef494c1a038a0c7261`. Exact-main hosted validation is recorded separately below.
 
 ## Summary
 
@@ -69,16 +69,16 @@ The test fixture now sets its own bounded `RATE_LIMIT_MAX_REQUESTS=1000` value. 
 | Artifact verification | Passed: 238 required paths and 268 JavaScript files syntax-checked. |
 | Tenant-isolation inventory | Regenerated successfully and verified current: 28 families / 80 declared route patterns / 21 implementation source files / 57 referenced test files. |
 | PostgreSQL setup | Disposable PostgreSQL 18 container bound to loopback on a dynamically assigned host port, with a temporary in-memory data directory; 18 repository migrations applied. |
-| Hosted candidate CI | Not yet run. Exact-head push and pull-request workflows remain required after branch publication. |
+| Exact-main hosted CI | **PASS** — workflow #794 / run 44566086887 passed 7/7 jobs on merge SHA `f789444d769e9adf94adb5ef494c1a038a0c7261`: both Node matrices, 168/168 live PostgreSQL/Memgraph/Redis tests, 18/18 fresh and idempotent migrations, browser smoke 9/9, CodeQL, SLSA lockfile/SBOM attestation and evidence consolidation. |
 | Independent review | Not performed by this maintainer change; issues #14 and #25 remain OPEN / NOT PERFORMED. |
 
 The first post-edit full check correctly detected stale generated inventory files. The project inventory generator was run, refreshed the artifact and source-derived capability map, and the repeat full check passed. The initial focused red run also exposed the fixture's request-rate ceiling; the fixture-only limit was then raised and the final focused suite passed. Neither finding changed the production rate-limiting policy.
 
 ## Source and assurance boundaries
 
-F1.56 is a maintainer-led authorization regression fix. It is not an independent tenant-isolation review, a platform security assessment, a risk acceptance, or a production certification. Candidate CI, formal review, and merge evidence must be appended only after those events actually occur.
+F1.56 is a maintainer-led authorization regression fix. It is not an independent tenant-isolation review, a platform security assessment, a risk acceptance, or production certification. PR #220 had no formal review submissions. Exact-main workflow #794 passed 7/7 jobs, but maintainer/automation evidence does not replace independent assurance #14/#25 or qualified dependency/license review #23.
 
-The current mainline readiness artifact remains source-bound to F1.55 merge `db0b641880a5c842ffdcc2cf1dda6bedde58d033`; documentation-only PR #218 subsequently advanced main to `54bd8112f571c5ce623c6780600bb7fc9806e8cd`. The F1.55 exact-main workflow #785 is not evidence for this unmerged F1.56 branch.
+The current exact-main readiness artifact is source-bound to F1.56 merge `f789444d769e9adf94adb5ef494c1a038a0c7261`, finalized by workflow #794 / run 44566086887. Canonical readiness artifact #14552870585 has SHA-256 `f163616fabae6e3ad704158c8c3f208a0e043370180398c451d88aae3f4cc31a`; readiness JSON SHA-256 is `4d6bb9ad49f260a94574149d49f055a25c827f405c702c43914fbd7ad08804c7`. Readiness remains 8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN, `NOT_PRODUCTION_CERTIFIED`, production NO-GO.
 
 Independent tenant-isolation review [#14](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/14) and platform-wide security assessment [#25](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/25) remain OPEN / NOT PERFORMED. Dependency/license review [#23](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/23) remains OPEN / PARTIAL. The other product/provider, load/restore, observability, operational and governance gates remain separate.
 
