@@ -484,7 +484,38 @@ async function handlePlatformRoute(ctx) {
         throw fail(404, 'ERR_VIRGOSCORPIO_HUB_FRIEND_REQUEST_NOT_FOUND', 'Pending friend request not found.');
       }
       return sendJson(res, 200, { friendship: q.rows[0], requestId });
-    }const q=await localPool.query('DELETE FROM social_friendships WHERE site_id=$1 AND ((requester_id=$2 AND addressee_id=$3) OR (requester_id=$3 AND addressee_id=$2)) RETURNING site_id',[siteId,actor.user.id,target]);return sendJson(res,200,{removed:Boolean(q.rowCount),requestId});}
+    }const q=await localPool.query(
+      `WITH participant_users AS MATERIALIZED (
+        SELECT u.id, u.status
+        FROM users u
+        WHERE u.id = $2
+        ORDER BY u.id
+        FOR UPDATE OF u
+      ), participant_memberships AS MATERIALIZED (
+        SELECT sm.user_id, sm.role_id
+        FROM site_memberships sm
+        JOIN participant_users pu ON pu.id = sm.user_id
+        WHERE sm.site_id = $1
+        ORDER BY sm.user_id, sm.role_id
+        FOR UPDATE OF sm
+      )
+      DELETE FROM social_friendships AS friendship
+      USING participant_users AS actor
+      WHERE friendship.site_id = $1
+        AND (
+          (friendship.requester_id = $2 AND friendship.addressee_id = $3)
+          OR (friendship.requester_id = $3 AND friendship.addressee_id = $2)
+        )
+        AND actor.id = $2
+        AND actor.status = $4
+        AND EXISTS (
+          SELECT 1
+          FROM participant_memberships membership
+          WHERE membership.user_id = actor.id
+        )
+      RETURNING friendship.site_id`,
+      [siteId, actor.user.id, target, 'active']
+    );return sendJson(res,200,{removed:Boolean(q.rowCount),requestId});}
 
   const firewallCollection=pathName.match(/^\/api\/v1\/sites\/([0-9a-f-]{36})\/security\/firewall-rules$/i);
   const firewallItem=pathName.match(/^\/api\/v1\/sites\/([0-9a-f-]{36})\/security\/firewall-rules\/([0-9a-f-]{36})$/i);

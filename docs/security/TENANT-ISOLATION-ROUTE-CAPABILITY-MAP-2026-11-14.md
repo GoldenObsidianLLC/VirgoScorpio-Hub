@@ -8,8 +8,8 @@ Maintainer-prepared route, capability, data-access, and regression-test navigati
 
 - Status: MAINTAINER_PREPARED_NOT_INDEPENDENTLY_REVIEWED.
 - Generated from the current working-tree implementation anchors and the catalog at docs/security/tenant-isolation-route-inventory.catalog.json.
-- Implementation-source digest: b8d9939306de65425d027b2e3cac2047da7a6327c161bf77921801ad7db58269 across 21 files.
-- Referenced-test digest: b06d2194537d01501cc7c7a4dd5721f663fd848f2d540bcb8b673b31d0aa74e1 across 57 files.
+- Implementation-source digest: 314f945529320bedb8d45171f1a4df907a22bfdf88fd9f84509f6098624cd99d across 21 files.
+- Referenced-test digest: 19a8e26d88df526795feb39f4fbc1644f0b2c4a991c26c00453bd701f8dac331 across 57 files.
 - Inventory size: 28 route/flow families, 80 declared route patterns, 21 source files, and 57 test files.
 - Regenerate with npm run security:tenant-inventory; CI checks freshness with node scripts/generate-tenant-isolation-route-inventory.js --check.
 
@@ -323,7 +323,7 @@ Tests: test/content-type-routes.test.js, test/collaboration-api.test.js, test/re
 - Capabilities/controls: security:manage
 - Data-access boundary: firewall_rules; shared firewall cache; site_security_events
 - Side effects: Rule create/delete; Cache invalidation; Security event write
-- Source: apps/api/src/platform-routes.js (lines 489)
+- Source: apps/api/src/platform-routes.js (lines 520)
 - Test references: test/tenant-route-capabilities.test.js, test/tenant-route-capabilities.test.js
 - Coverage characterization: **targeted**. Denied capability is tested before tenant data access. Global/site precedence, cross-site rule visibility and cache invalidation require reviewer verification.
 
@@ -337,7 +337,7 @@ Tests: test/content-type-routes.test.js, test/collaboration-api.test.js, test/re
 - Capabilities/controls: cloud:manage
 - Data-access boundary: cloud_connections; secret-manager credential references; object-storage provider adapters
 - Side effects: Configuration writes; Read-only provider probe; Connection status/health timestamp update
-- Source: apps/api/src/platform-routes.js (lines 544)
+- Source: apps/api/src/platform-routes.js (lines 575)
 - Test references: test/release-hardening.test.js, test/security-boundaries.test.js, test/tenant-route-capabilities.test.js, test/integration/tenant-isolation.integration.test.js
 - Coverage characterization: **targeted**. Live PostgreSQL coverage verifies Site A/B listing isolation, non-disclosing 404s for foreign test/disable IDs, selector mismatch rejection with unchanged row state, and Site B positive controls using deliberately unresolved vault:// references so no provider calls occur. Real provider lifecycle, least-privilege provider IAM, egress/SSRF and live secret-manager behavior remain unverified.
 
@@ -351,7 +351,7 @@ Tests: test/content-type-routes.test.js, test/collaboration-api.test.js, test/re
 - Capabilities/controls: content:read, site:manage
 - Data-access boundary: navigation_menus
 - Side effects: Create/update/delete versioned navigation configuration; Metadata-only navigation.mega_menu_created, navigation.mega_menu_updated and navigation.mega_menu_deleted identity audit events
-- Source: apps/api/src/platform-routes.js (lines 177, 194, 785, 837, 870)
+- Source: apps/api/src/platform-routes.js (lines 177, 194, 816, 868, 901)
 - Test references: test/tenant-route-capabilities.test.js, test/api.test.js, test/integration/tenant-mega-menu-isolation.integration.test.js, test/mega-menu-audit-atomicity.test.js, test/integration/mega-menu-audit-atomicity.integration.test.js
 - Coverage characterization: **targeted-two-site-plus-transactional-audit-rollback**. Live PostgreSQL A/B route tests cover scoped listing, create, versioned update and delete with the same slug present in both sites. Foreign-site list/update/delete attempts and conflicting header/query/body selectors are rejected before mutation; snapshots prove both tenants remain unchanged after denial. The merged PR #92 regression races two updates with the same expected version and requires exactly one success, one version conflict, one version increment and a final row matching the winning request; the Site B same-slug row remains unchanged. F1.45 adds metadata-only identity audit events for create/update/delete on the same transaction queryable; unit tests prove callback ordering, fail-closed audit availability, stale-version behavior and rollback/retry for all three actions, while the live PostgreSQL route test injects audit_events trigger failures and proves database rollback plus exactly-one-event retry. Consumer rendering/cache invalidation, every presentation variant and independent adversarial review remain separate gates. F1.45 specifically validates the /mega-menus route family; the separate regular /menus route is tracked independently in the navigation-menus family.
 
