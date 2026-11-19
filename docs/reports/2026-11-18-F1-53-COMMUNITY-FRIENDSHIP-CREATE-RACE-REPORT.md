@@ -1,6 +1,8 @@
 # F1.53 — Community friendship creation race revalidation
 
-**Status:** Maintainer implementation candidate; issue [#210](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/210) remains OPEN pending review and merge.
+**Status:** Maintainer implementation candidate; [PR #211](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/211) is OPEN and closes issue [#210](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/210) when merged.
+
+**Candidate commit:** `5ddae486ff39635f33b0594475626542643d18fb`.
 
 **Candidate branch:** `security/f1-53-community-friendship-create-race-2026-11-18`
 
@@ -58,7 +60,7 @@ Local Windows host, Node.js 26.12.1, disposable/local PostgreSQL 18 test databas
 - Tenant-isolation inventory regenerated and freshness-checked: **28 families / 80 declared route patterns / 21 source files / 57 test files**.
 - `git diff --check`: passed.
 - All 18 repository migrations were already present in the local test database; the migration command confirmed 18/18 existing migrations as already applied. This is not a fresh-database migration claim.
-- Exact-head hosted CI has not yet completed for this candidate. No exact-main readiness claim is made for F1.53.
+- Hosted candidate CI for [PR #211](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/211) is tracked on the pull request; the local results above do not substitute for hosted Node 22/24, live-service, CodeQL, or candidate CI evidence. No exact-main readiness claim is made for F1.53.
 
 ## Security and release boundary
 
