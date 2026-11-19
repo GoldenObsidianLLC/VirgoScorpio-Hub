@@ -345,7 +345,41 @@ async function handlePlatformRoute(ctx) {
   }
 
   const friendRequest=pathName.match(/^\/api\/v1\/sites\/([0-9a-f-]{36})\/community\/friends(?:\/([0-9a-f-]{36}))?$/i);
-  if(friendRequest&&['GET','POST','PUT','DELETE'].includes(method)){if(!localPool||!actor.user.id)throw fail(503,'ERR_VIRGOSCORPIO_HUB_COMMUNITY_DISABLED','Friendships require PostgreSQL and a signed-in user.');const siteId=friendRequest[1],target=friendRequest[2];await siteIdFor({ req, url, body: {}, actor, routeSiteId: siteId });if(method==='GET'){const q=await localPool.query(`SELECT f.requester_id,f.addressee_id,f.status,f.created_at,u1.display_name AS requester_name,u2.display_name AS addressee_name FROM social_friendships f JOIN users u1 ON u1.id=f.requester_id JOIN users u2 ON u2.id=f.addressee_id WHERE f.site_id=$1 AND (f.requester_id=$2 OR f.addressee_id=$2) ORDER BY f.created_at DESC LIMIT 200`,[siteId,actor.user.id]);return sendJson(res,200,{friendships:q.rows,requestId});}if(!target||!validUuid(target)||target===actor.user.id)throw fail(400,'ERR_VIRGOSCORPIO_HUB_FRIEND_INVALID','A different valid user ID is required.');if(method==='POST'){const member=await localPool.query('SELECT 1 FROM site_memberships sm JOIN users u ON u.id=sm.user_id WHERE sm.site_id=$1 AND sm.user_id=$2 AND u.status=$3 LIMIT 1',[siteId,target,'active']);if(!member.rows[0])throw fail(404,'ERR_VIRGOSCORPIO_HUB_COMMUNITY_USER_NOT_FOUND','User is not a member of this site.');const q=await localPool.query("INSERT INTO social_friendships(site_id,requester_id,addressee_id,status) VALUES($1,$2,$3,'pending') ON CONFLICT(site_id,requester_id,addressee_id) DO UPDATE SET status=CASE WHEN social_friendships.status='blocked' THEN 'blocked' ELSE social_friendships.status END,updated_at=now() RETURNING *",[siteId,actor.user.id,target]);return sendJson(res,201,{friendship:q.rows[0],requestId});}if(method==='PUT'){const q=await localPool.query("UPDATE social_friendships SET status='accepted',updated_at=now() WHERE site_id=$1 AND requester_id=$2 AND addressee_id=$3 AND status='pending' AND EXISTS (SELECT 1 FROM site_memberships sm JOIN users u ON u.id=sm.user_id WHERE sm.site_id=$1 AND sm.user_id=$2 AND u.status=$4) RETURNING *",[siteId,target,actor.user.id,'active']);if(!q.rows[0])throw fail(404,'ERR_VIRGOSCORPIO_HUB_FRIEND_REQUEST_NOT_FOUND','Pending friend request not found.');return sendJson(res,200,{friendship:q.rows[0],requestId});}const q=await localPool.query('DELETE FROM social_friendships WHERE site_id=$1 AND ((requester_id=$2 AND addressee_id=$3) OR (requester_id=$3 AND addressee_id=$2)) RETURNING site_id',[siteId,actor.user.id,target]);return sendJson(res,200,{removed:Boolean(q.rowCount),requestId});}
+  if(friendRequest&&['GET','POST','PUT','DELETE'].includes(method)){if(!localPool||!actor.user.id)throw fail(503,'ERR_VIRGOSCORPIO_HUB_COMMUNITY_DISABLED','Friendships require PostgreSQL and a signed-in user.');const siteId=friendRequest[1],target=friendRequest[2];await siteIdFor({ req, url, body: {}, actor, routeSiteId: siteId });if(method==='GET'){const q=await localPool.query(`SELECT f.requester_id,f.addressee_id,f.status,f.created_at,u1.display_name AS requester_name,u2.display_name AS addressee_name FROM social_friendships f JOIN users u1 ON u1.id=f.requester_id JOIN users u2 ON u2.id=f.addressee_id WHERE f.site_id=$1 AND (f.requester_id=$2 OR f.addressee_id=$2) ORDER BY f.created_at DESC LIMIT 200`,[siteId,actor.user.id]);return sendJson(res,200,{friendships:q.rows,requestId});}if(!target||!validUuid(target)||target===actor.user.id)throw fail(400,'ERR_VIRGOSCORPIO_HUB_FRIEND_INVALID','A different valid user ID is required.');if(method==='POST'){
+      const member=await localPool.query('SELECT 1 FROM site_memberships sm JOIN users u ON u.id=sm.user_id WHERE sm.site_id=$1 AND sm.user_id=$2 AND u.status=$3 LIMIT 1',[siteId,target,'active']);
+      if(!member.rows[0])throw fail(404,'ERR_VIRGOSCORPIO_HUB_COMMUNITY_USER_NOT_FOUND','User is not a member of this site.');
+      const q=await localPool.query(`WITH participant_users AS MATERIALIZED (
+        SELECT u.id, u.status
+        FROM users u
+        WHERE u.id = ANY($2::uuid[])
+        ORDER BY u.id
+        FOR UPDATE OF u
+      ), participant_memberships AS MATERIALIZED (
+        SELECT sm.user_id, sm.role_id
+        FROM site_memberships sm
+        JOIN participant_users pu ON pu.id = sm.user_id
+        WHERE sm.site_id = $1
+        ORDER BY sm.user_id, sm.role_id
+        FOR UPDATE OF sm
+      )
+      INSERT INTO social_friendships(site_id,requester_id,addressee_id,status)
+      SELECT $1, requester.id, addressee.id, 'pending'
+      FROM participant_users requester
+      JOIN participant_users addressee ON addressee.id = $3
+      WHERE requester.id = $4
+        AND requester.status = 'active'
+        AND addressee.status = 'active'
+        AND EXISTS (SELECT 1 FROM participant_memberships pm WHERE pm.user_id = requester.id)
+        AND EXISTS (SELECT 1 FROM participant_memberships pm WHERE pm.user_id = addressee.id)
+      ON CONFLICT(site_id,requester_id,addressee_id)
+      DO UPDATE SET status=CASE
+        WHEN social_friendships.status='blocked' THEN 'blocked'
+        ELSE social_friendships.status
+      END, updated_at=now()
+      RETURNING *`,[siteId,[actor.user.id,target],target,actor.user.id]);
+      if(!q.rows[0])throw fail(404,'ERR_VIRGOSCORPIO_HUB_COMMUNITY_USER_NOT_FOUND','User is not an active member of this site.');
+      return sendJson(res,201,{friendship:q.rows[0],requestId});
+    }if(method==='PUT'){const q=await localPool.query("UPDATE social_friendships SET status='accepted',updated_at=now() WHERE site_id=$1 AND requester_id=$2 AND addressee_id=$3 AND status='pending' AND EXISTS (SELECT 1 FROM site_memberships sm JOIN users u ON u.id=sm.user_id WHERE sm.site_id=$1 AND sm.user_id=$2 AND u.status=$4) RETURNING *",[siteId,target,actor.user.id,'active']);if(!q.rows[0])throw fail(404,'ERR_VIRGOSCORPIO_HUB_FRIEND_REQUEST_NOT_FOUND','Pending friend request not found.');return sendJson(res,200,{friendship:q.rows[0],requestId});}const q=await localPool.query('DELETE FROM social_friendships WHERE site_id=$1 AND ((requester_id=$2 AND addressee_id=$3) OR (requester_id=$3 AND addressee_id=$2)) RETURNING site_id',[siteId,actor.user.id,target]);return sendJson(res,200,{removed:Boolean(q.rowCount),requestId});}
 
   const firewallCollection=pathName.match(/^\/api\/v1\/sites\/([0-9a-f-]{36})\/security\/firewall-rules$/i);
   const firewallItem=pathName.match(/^\/api\/v1\/sites\/([0-9a-f-]{36})\/security\/firewall-rules\/([0-9a-f-]{36})$/i);

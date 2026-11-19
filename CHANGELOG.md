@@ -4,6 +4,14 @@ All notable project-level changes should be recorded here. This changelog does n
 
 ## 0.6.2 (unreleased patch candidate)
 
+### Community friendship creation revalidates both participants at the write boundary (F1.53 candidate; issue #210 OPEN)
+
+- A stale preflight-to-write window in `POST /api/v1/sites/{siteId}/community/friends/{userId}` allowed a participant to be disabled or lose same-site membership after authorization checks but before the friendship INSERT.
+- The existing route retains its preflight and performs a final parameterized `INSERT ... SELECT` that materializes and locks both user rows in UUID order, then all participant membership rows in user/role order. It inserts only when both accounts are still active and both same-site memberships still exist. Membership `EXISTS` predicates avoid multiplying the INSERT source when a participant has multiple role rows.
+- Deterministic PostgreSQL regressions cover account disablement and membership revocation for both requester and addressee immediately before the write, plus real row-lock contention, multiple-role membership, existing blocked-state preservation, generic 404/non-disclosure, and unchanged Site A/Site B snapshots. The focused live fixture passes 20/20 with zero skips.
+- Full local `npm run check` passes 670 tests (667 passed, 0 failed, 3 Windows-specific skips) on Node.js 26.12.1 with a 4 GiB V8 heap; artifact verification passes 238 required paths / 268 JavaScript files. The tenant inventory is generated and current at 28 families / 80 route patterns / 21 source files / 57 test files.
+- This is an OPEN maintainer candidate in issue #210; hosted candidate CI and human review remain pending. No schema, migration, endpoint, response-contract, dependency, lockfile, package-version or SemVer change. Package 0.6.2 remains private/unreleased and production remains NO-GO / NOT_PRODUCTION_CERTIFIED. Independent reviews #14/#25 remain OPEN / NOT PERFORMED. See the [F1.53 implementation report](docs/reports/2026-11-18-F1-53-COMMUNITY-FRIENDSHIP-CREATE-RACE-REPORT.md).
+
 ### Community friendship acceptance revalidates requester status (F1.52; [PR #208 MERGED](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/208); issue #207 CLOSED)
 
 - A route review found that `PUT /api/v1/sites/{siteId}/community/friends/{requesterId}` accepted a pending request without rechecking whether its requester account remained active. A requester disabled after creating a pending request could still be accepted.
