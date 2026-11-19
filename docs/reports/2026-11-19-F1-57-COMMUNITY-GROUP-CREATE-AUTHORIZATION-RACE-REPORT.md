@@ -5,7 +5,8 @@
 **Issue:** [#222 — Revalidate creator authorization at the community group-create write boundary](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/222) — OPEN<br>
 **Parent:** [#124 — Continue maintainer-led tenant isolation hardening](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/124)<br>
 **Branch:** `security/f1-57-community-group-create-auth-2026-11-19`<br>
-**Base main:** `f789444d769e9adf94adb5ef494c1a038a0c7261` (F1.56 / PR #220)<br>
+**Current main HEAD:** `eae64f13a61613614f54dca7d7dffff4a98bfe00` (documentation-only PRs #221/#223)<br>
+**Runtime baseline:** `f789444d769e9adf94adb5ef494c1a038a0c7261` (F1.56 / PR #220)<br>
 **Package:** `virgoscorpio-hub@0.6.2`, private and unreleased
 
 ## Summary
