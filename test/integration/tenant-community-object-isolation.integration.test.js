@@ -73,6 +73,25 @@ async function snapshotCommunitySite(pool, siteId) {
   return result;
 }
 
+async function waitForDatabaseWriteLock(client, sqlFragment) {
+  const deadline = Date.now() + 5000;
+  while (Date.now() < deadline) {
+    const activity = await client.query(
+      `SELECT wait_event_type
+         FROM pg_stat_activity
+        WHERE datname = current_database()
+          AND pid <> pg_backend_pid()
+          AND query ILIKE $1
+        ORDER BY query_start DESC
+        LIMIT 1`,
+      [`%${sqlFragment.toLowerCase()}%`]
+    );
+    if (activity.rows[0]?.wait_event_type === 'Lock') return true;
+    await new Promise(resolve => setTimeout(resolve, 20));
+  }
+  return false;
+}
+
 test(
   'tenant isolation: community object IDs, moderation, conversations, and notifications stay site-scoped',
   { skip: !enabled },
@@ -450,22 +469,7 @@ test(
         }
         assert.equal(writeStarted, true, `${description}: friendship write must reach PostgreSQL`);
 
-        let waitingOnLock = false;
-        const lockDeadline = Date.now() + 5000;
-        while (!waitingOnLock && Date.now() < lockDeadline) {
-          const activity = await client.query(
-            `SELECT wait_event_type
-               FROM pg_stat_activity
-              WHERE datname = current_database()
-                AND pid <> pg_backend_pid()
-                AND query ILIKE $1
-              ORDER BY query_start DESC
-              LIMIT 1`,
-            [`%${writeSql.toLowerCase()}%`]
-          );
-          waitingOnLock = activity.rows[0]?.wait_event_type === 'Lock';
-          if (!waitingOnLock) await new Promise(resolve => setTimeout(resolve, 20));
-        }
+        const waitingOnLock = await waitForDatabaseWriteLock(client, writeSql);
         assert.equal(
           waitingOnLock,
           true,
@@ -497,6 +501,415 @@ test(
         if (requestPromise) await requestPromise.catch(() => {});
       }
     }
+
+    await t.test('community group creation revalidates creator eligibility at the write boundary', async () => {
+      const groupsUrl = `${base}/api/v1/sites/${siteB}/community/groups`;
+      const groupHeaders = { ...headers, 'content-type': 'application/json' };
+      const makeGroup = label => ({
+        slug: `f1-57-${label}-${randomUUID().slice(0, 8)}`,
+        name: `F1.57 ${label}`,
+        privacy: 'public',
+      });
+      const deleteGroupBySlug = async (query, group) => {
+        await query(
+          'DELETE FROM social_group_memberships WHERE group_id IN (SELECT id FROM social_groups WHERE site_id=$1 AND slug=$2)',
+          [siteB, group.slug]
+        );
+        await query('DELETE FROM social_groups WHERE site_id=$1 AND slug=$2', [siteB, group.slug]);
+      };
+      const originalCapabilities = (await pool.query(
+        'SELECT capabilities FROM roles WHERE id=$1',
+        [roleId]
+      )).rows[0].capabilities;
+      const restoreCapabilities = query => query(
+        'UPDATE roles SET capabilities=$2::jsonb WHERE id=$1',
+        [roleId, JSON.stringify(originalCapabilities)]
+      );
+
+      async function createGroupAndAssertOwner(label) {
+        const group = makeGroup(label);
+        try {
+          const response = await fetch(groupsUrl, {
+            method: 'POST',
+            headers: groupHeaders,
+            body: JSON.stringify(group),
+          });
+          const payload = await response.json();
+          assert.equal(response.status, 201, `${label}: authorized group creation must succeed (${JSON.stringify(payload)})`);
+          assert.equal(payload.group.site_id, siteB);
+          assert.equal(payload.group.created_by, actorB.id);
+          const owner = await pool.query(
+            'SELECT role,status FROM social_group_memberships WHERE group_id=$1 AND user_id=$2',
+            [payload.group.id, actorB.id]
+          );
+          assert.deepEqual(owner.rows, [{ role: 'owner', status: 'active' }]);
+        } finally {
+          await deleteGroupBySlug(pool.query.bind(pool), group);
+        }
+      }
+
+      async function assertGroupCreationRace(scenario) {
+        const beforeA = await snapshotCommunitySite(pool, siteA);
+        const beforeB = await snapshotCommunitySite(pool, siteB);
+        const group = makeGroup(scenario.label);
+        const originalConnectDescriptor = Object.getOwnPropertyDescriptor(pool, 'connect');
+        const connect = pool.connect.bind(pool);
+        const query = pool.query.bind(pool);
+        let mutationStarted = false;
+        let mutationApplied = false;
+
+        pool.connect = function (callback) {
+          if (typeof callback === 'function') return connect(callback);
+          return connect().then(client => ({
+            query: async (sql, params) => {
+              if (
+                !mutationStarted &&
+                typeof sql === 'string' &&
+                sql.toUpperCase().includes('INSERT INTO SOCIAL_GROUPS')
+              ) {
+                mutationStarted = true;
+                await scenario.mutate(query);
+                mutationApplied = true;
+              }
+              return client.query(sql, params);
+            },
+            release: (...args) => client.release(...args),
+          }));
+        };
+
+        try {
+          const response = await fetch(groupsUrl, {
+            method: 'POST',
+            headers: groupHeaders,
+            body: JSON.stringify(group),
+          });
+          const payload = await response.json();
+          assert.equal(mutationStarted, true, `${scenario.description}: mutation must be injected immediately before the group write`);
+          assert.equal(mutationApplied, true, `${scenario.description}: injected authorization change must commit before the write`);
+          assert.equal(response.status, 403, `${scenario.description}: stale authorization must be rejected`);
+          assert.equal(payload.code, 'ERR_VIRGOSCORPIO_HUB_FORBIDDEN');
+          await scenario.verify(query);
+          const persisted = await query(
+            'SELECT id FROM social_groups WHERE site_id=$1 AND slug=$2',
+            [siteB, group.slug]
+          );
+          assert.equal(persisted.rowCount, 0, `${scenario.description}: no group may persist`);
+        } finally {
+          if (originalConnectDescriptor) Object.defineProperty(pool, 'connect', originalConnectDescriptor);
+          else delete pool.connect;
+          try {
+            if (mutationStarted) await scenario.restore(query);
+          } finally {
+            await deleteGroupBySlug(query, group);
+            assert.deepEqual(await snapshotCommunitySite(pool, siteA), beforeA);
+            assert.deepEqual(await snapshotCommunitySite(pool, siteB), beforeB);
+          }
+        }
+      }
+
+      async function assertGroupCreationSerializesChange(scenario) {
+        const beforeA = await snapshotCommunitySite(pool, siteA);
+        const beforeB = await snapshotCommunitySite(pool, siteB);
+        const group = makeGroup(scenario.label);
+        const blocker = await pool.connect();
+        const originalConnectDescriptor = Object.getOwnPropertyDescriptor(pool, 'connect');
+        const connect = pool.connect.bind(pool);
+        const query = pool.query.bind(pool);
+        let transactionOpen = false;
+        let mutationCommitted = false;
+        let writeStarted = false;
+        let requestPromise = null;
+
+        try {
+          await blocker.query('BEGIN');
+          transactionOpen = true;
+          const locked = await blocker.query(scenario.lockSql, scenario.lockParams);
+          assert.ok(locked.rowCount > 0, `${scenario.description}: the fixture authorization row must exist`);
+
+          pool.connect = function (callback) {
+            if (typeof callback === 'function') return connect(callback);
+            return connect().then(client => ({
+              query: (sql, params) => {
+                if (
+                  !writeStarted &&
+                  typeof sql === 'string' &&
+                  sql.toUpperCase().includes('INSERT INTO SOCIAL_GROUPS')
+                ) {
+                  writeStarted = true;
+                }
+                return client.query(sql, params);
+              },
+              release: (...args) => client.release(...args),
+            }));
+          };
+
+          requestPromise = fetch(groupsUrl, {
+            method: 'POST',
+            headers: groupHeaders,
+            body: JSON.stringify(group),
+          });
+          const writeDeadline = Date.now() + 5000;
+          while (!writeStarted && Date.now() < writeDeadline) {
+            await new Promise(resolve => setTimeout(resolve, 20));
+          }
+          assert.equal(writeStarted, true, `${scenario.description}: group creation must reach its final PostgreSQL write`);
+          const writeWaitsForAuthorizationRow = await waitForDatabaseWriteLock(
+            blocker,
+            'WITH participant_users AS MATERIALIZED'
+          );
+          assert.equal(
+            writeWaitsForAuthorizationRow,
+            true,
+            `${scenario.description}: the group write must wait for the authorization row lock`
+          );
+
+          await scenario.mutate(blocker);
+          await blocker.query('COMMIT');
+          transactionOpen = false;
+          mutationCommitted = true;
+
+          const response = await requestPromise;
+          const payload = await response.json();
+          assert.equal(response.status, 403, `${scenario.description}: the post-lock authorization change must be observed`);
+          assert.equal(payload.code, 'ERR_VIRGOSCORPIO_HUB_FORBIDDEN');
+          await scenario.verify(query);
+          const persisted = await query(
+            'SELECT id FROM social_groups WHERE site_id=$1 AND slug=$2',
+            [siteB, group.slug]
+          );
+          assert.equal(persisted.rowCount, 0, `${scenario.description}: no group may persist`);
+        } finally {
+          if (transactionOpen) await blocker.query('ROLLBACK').catch(() => {});
+          if (originalConnectDescriptor) Object.defineProperty(pool, 'connect', originalConnectDescriptor);
+          else delete pool.connect;
+          if (requestPromise) await requestPromise.catch(() => {});
+          blocker.release();
+          try {
+            if (mutationCommitted) await scenario.restore(query);
+          } finally {
+            await deleteGroupBySlug(query, group);
+            assert.deepEqual(await snapshotCommunitySite(pool, siteA), beforeA);
+            assert.deepEqual(await snapshotCommunitySite(pool, siteB), beforeB);
+          }
+        }
+      }
+
+      try {
+        await createGroupAndAssertOwner('content-create-control');
+
+        const additionalRoleSlug = `f1-57-multi-role-${randomUUID().replace(/-/g, '').slice(0, 12)}`;
+        const additionalRole = await pool.query(
+          'INSERT INTO roles(slug,label,capabilities) VALUES($1,$2,$3::jsonb) RETURNING id',
+          [additionalRoleSlug, 'F1.57 Additional Creator Role', JSON.stringify(['content:create'])]
+        );
+        try {
+          await pool.query(
+            'INSERT INTO site_memberships(site_id,user_id,role_id) VALUES($1,$2,$3)',
+            [siteB, actorB.id, additionalRole.rows[0].id]
+          );
+          await createGroupAndAssertOwner('multiple-creator-roles');
+        } finally {
+          await pool.query(
+            'DELETE FROM site_memberships WHERE site_id=$1 AND user_id=$2 AND role_id=$3',
+            [siteB, actorB.id, additionalRole.rows[0].id]
+          );
+          await pool.query('DELETE FROM roles WHERE id=$1', [additionalRole.rows[0].id]);
+        }
+
+        const rollbackGroup = makeGroup('owner-insert-rollback');
+        const triggerSuffix = randomUUID().replace(/-/g, '');
+        const triggerName = `f1_57_reject_owner_${triggerSuffix}`;
+        const functionName = `f1_57_reject_owner_fn_${triggerSuffix}`;
+        const rollbackBeforeA = await snapshotCommunitySite(pool, siteA);
+        const rollbackBeforeB = await snapshotCommunitySite(pool, siteB);
+        let ownerFailureFunctionCreated = false;
+        let ownerFailureTriggerCreated = false;
+        try {
+          await pool.query(
+            `CREATE FUNCTION public.${functionName}() RETURNS trigger
+               LANGUAGE plpgsql AS $body$
+               BEGIN
+                 RAISE EXCEPTION 'F1.57 forced owner-membership failure' USING ERRCODE = '23514';
+               END;
+               $body$`
+          );
+          ownerFailureFunctionCreated = true;
+          await pool.query(
+            `CREATE TRIGGER ${triggerName}
+               BEFORE INSERT ON social_group_memberships
+               FOR EACH ROW
+               WHEN (NEW.user_id = '${actorB.id}'::uuid AND NEW.role = 'owner')
+               EXECUTE FUNCTION public.${functionName}()`
+          );
+          ownerFailureTriggerCreated = true;
+
+          const response = await fetch(groupsUrl, {
+            method: 'POST',
+            headers: groupHeaders,
+            body: JSON.stringify(rollbackGroup),
+          });
+          assert.notEqual(response.status, 201, 'owner-membership failure must not return a successful group creation');
+          const persisted = await pool.query(
+            'SELECT id FROM social_groups WHERE site_id=$1 AND slug=$2',
+            [siteB, rollbackGroup.slug]
+          );
+          assert.equal(persisted.rowCount, 0, 'owner-membership failure must roll back the group row');
+          assert.deepEqual(await snapshotCommunitySite(pool, siteA), rollbackBeforeA);
+          assert.deepEqual(await snapshotCommunitySite(pool, siteB), rollbackBeforeB);
+        } finally {
+          if (ownerFailureTriggerCreated) {
+            await pool.query(`DROP TRIGGER IF EXISTS ${triggerName} ON social_group_memberships`);
+          }
+          if (ownerFailureFunctionCreated) {
+            await pool.query(`DROP FUNCTION IF EXISTS public.${functionName}()`);
+          }
+          await deleteGroupBySlug(pool.query.bind(pool), rollbackGroup);
+        }
+
+        await pool.query(
+          'UPDATE roles SET capabilities=$2::jsonb WHERE id=$1',
+          [roleId, JSON.stringify(['site:manage'])]
+        );
+        try {
+          await createGroupAndAssertOwner('site-manage-capability-control');
+        } finally {
+          await restoreCapabilities(pool.query.bind(pool));
+        }
+
+        await pool.query(
+          'UPDATE roles SET capabilities=$2::jsonb WHERE id=$1',
+          [roleId, JSON.stringify(['*'])]
+        );
+        try {
+          await createGroupAndAssertOwner('wildcard-capability-control');
+        } finally {
+          await restoreCapabilities(pool.query.bind(pool));
+        }
+
+        const writeBoundaryRaces = [
+          {
+            label: 'membership-revoked',
+            description: 'selected-site membership revocation after preflight',
+            mutate: query => query(
+              'DELETE FROM site_memberships WHERE site_id=$1 AND user_id=$2',
+              [siteB, actorB.id]
+            ),
+            restore: query => query(
+              'INSERT INTO site_memberships(site_id,user_id,role_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING',
+              [siteB, actorB.id, roleId]
+            ),
+            verify: async query => {
+              const result = await query(
+                'SELECT 1 FROM site_memberships WHERE site_id=$1 AND user_id=$2',
+                [siteB, actorB.id]
+              );
+              assert.equal(result.rowCount, 0);
+            },
+          },
+          {
+            label: 'account-disabled',
+            description: 'creator account disablement after preflight',
+            mutate: query => query(
+              "UPDATE users SET status='disabled' WHERE id=$1",
+              [actorB.id]
+            ),
+            restore: query => query(
+              "UPDATE users SET status='active' WHERE id=$1",
+              [actorB.id]
+            ),
+            verify: async query => {
+              const result = await query('SELECT status FROM users WHERE id=$1', [actorB.id]);
+              assert.equal(result.rows[0]?.status, 'disabled');
+            },
+          },
+          {
+            label: 'capability-revoked',
+            description: 'content:create capability removal after preflight',
+            mutate: query => query(
+              "UPDATE roles SET capabilities=capabilities - 'content:create' WHERE id=$1",
+              [roleId]
+            ),
+            restore: restoreCapabilities,
+            verify: async query => {
+              const result = await query('SELECT capabilities FROM roles WHERE id=$1', [roleId]);
+              assert.equal(result.rows[0]?.capabilities.includes('content:create'), false);
+              assert.equal(result.rows[0]?.capabilities.includes('site:manage'), false);
+              assert.equal(result.rows[0]?.capabilities.includes('*'), false);
+            },
+          },
+        ];
+
+        for (const scenario of writeBoundaryRaces) {
+          await assertGroupCreationRace(scenario);
+        }
+
+        const lockSerializationCases = [
+          {
+            label: 'user-lock-contention',
+            description: 'concurrent creator account disablement',
+            lockSql: 'SELECT id FROM users WHERE id=$1 FOR UPDATE',
+            lockParams: [actorB.id],
+            mutate: client => client.query(
+              "UPDATE users SET status='disabled' WHERE id=$1",
+              [actorB.id]
+            ),
+            restore: query => query(
+              "UPDATE users SET status='active' WHERE id=$1",
+              [actorB.id]
+            ),
+            verify: async query => {
+              const result = await query('SELECT status FROM users WHERE id=$1', [actorB.id]);
+              assert.equal(result.rows[0]?.status, 'disabled');
+            },
+          },
+          {
+            label: 'membership-lock-contention',
+            description: 'concurrent selected-site membership revocation',
+            lockSql: 'SELECT user_id FROM site_memberships WHERE site_id=$1 AND user_id=$2 ORDER BY role_id FOR UPDATE',
+            lockParams: [siteB, actorB.id],
+            mutate: client => client.query(
+              'DELETE FROM site_memberships WHERE site_id=$1 AND user_id=$2',
+              [siteB, actorB.id]
+            ),
+            restore: query => query(
+              'INSERT INTO site_memberships(site_id,user_id,role_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING',
+              [siteB, actorB.id, roleId]
+            ),
+            verify: async query => {
+              const result = await query(
+                'SELECT 1 FROM site_memberships WHERE site_id=$1 AND user_id=$2',
+                [siteB, actorB.id]
+              );
+              assert.equal(result.rowCount, 0);
+            },
+          },
+          {
+            label: 'role-lock-contention',
+            description: 'concurrent removal of the creator effective capability',
+            lockSql: 'SELECT id FROM roles WHERE id=$1 FOR UPDATE',
+            lockParams: [roleId],
+            mutate: client => client.query(
+              "UPDATE roles SET capabilities=capabilities - 'content:create' WHERE id=$1",
+              [roleId]
+            ),
+            restore: restoreCapabilities,
+            verify: async query => {
+              const result = await query('SELECT capabilities FROM roles WHERE id=$1', [roleId]);
+              assert.equal(result.rows[0]?.capabilities.includes('content:create'), false);
+            },
+          },
+        ];
+
+        for (const scenario of lockSerializationCases) {
+          await assertGroupCreationSerializesChange(scenario);
+        }
+      } finally {
+        await restoreCapabilities(pool.query.bind(pool));
+      }
+
+      await assertSiteAUnchanged();
+      await assertSiteBUnchanged();
+    });
 
     await t.test('site B group listing and member reads do not reveal a foreign group', async () => {
       const response = await fetch(`${base}/api/v1/sites/${siteB}/community/groups`, { headers });
