@@ -1,8 +1,10 @@
 # F1.53 — Community friendship creation race revalidation
 
-**Status:** Maintainer implementation candidate; [PR #211](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/211) is OPEN and closes issue [#210](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/210) when merged.
+**Status:** Maintainer implementation candidate; [PR #211](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/211) is OPEN and closes issue [#210](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/210) when merged. Candidate CI passed on current PR head; no formal PR review or independent assessment is recorded.
 
-**Candidate commit:** `5ddae486ff39635f33b0594475626542643d18fb`.
+**Runtime implementation commit:** `5ddae486ff39635f33b0594475626542643d18fb`.
+
+**Current PR head:** `62b14371ca430f9d7723bf816924b74568060af8`.
 
 **Candidate branch:** `security/f1-53-community-friendship-create-race-2026-11-18`
 
@@ -59,8 +61,9 @@ Local Windows host, Node.js 26.12.1, disposable/local PostgreSQL 18 test databas
 - Artifact verification: **238 required paths** and **268 JavaScript files** syntax-checked.
 - Tenant-isolation inventory regenerated and freshness-checked: **28 families / 80 declared route patterns / 21 source files / 57 test files**.
 - `git diff --check`: passed.
+- Updated Markdown link audit across all 9 Markdown files in the PR diff: **241 relative links checked, 0 broken targets**.
 - All 18 repository migrations were already present in the local test database; the migration command confirmed 18/18 existing migrations as already applied. This is not a fresh-database migration claim.
-- Hosted candidate CI for [PR #211](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/211) is tracked on the pull request; the local results above do not substitute for hosted Node 22/24, live-service, CodeQL, or candidate CI evidence. No exact-main readiness claim is made for F1.53.
+- Exact-head push workflow [#44434648866 / run #771](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44434648866) and PR workflow [#44434656869 / run #772](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44434656869) both passed on PR head `62b14371ca430f9d7723bf816924b74568060af8`. Each run passed all six applicable jobs: Node.js 22.23.4, Node.js 24.22.1, PostgreSQL/Memgraph integration, browser editor/accessibility smoke, CodeQL and candidate evidence consolidation. The mainline-only dependency/SBOM attestation job was skipped by design on candidate events; no exact-main readiness or signed mainline attestation is claimed for F1.53.
 
 ## Security and release boundary
 
