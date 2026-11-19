@@ -18,6 +18,11 @@ The package remains at **0.6.2**. This scope/documentation reconciliation is not
 
 ## 2. Candidate and evidence baseline
 
+### Current unmerged maintainer candidate — F1.56
+
+Issue [#219](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/219) tracks a local candidate to close the friendship-removal actor authorization race. The final DELETE now revalidates the authenticated actor's active account and selected-site membership under the established user-then-membership lock order. Counterpart account/membership status is deliberately not required, so an eligible actor can unlink a disabled or departed counterpart. Focused PostgreSQL 18 integration passed 35/35; the full local `npm run check` passed 667/670 with zero failures and three Windows-specific skips; the tenant inventory is current at 28/80/21/57. The candidate is not merged, has no hosted exact-head CI result yet, and is excluded from the current-main readiness source baseline. See the [F1.56 implementation report](reports/2026-11-19-F1-56-COMMUNITY-FRIENDSHIP-REMOVAL-AUTHORIZATION-RACE-REPORT.md) and [19 November full release-gate report](reports/2026-11-19-VirgoScorpio-Hub-0.6.2-Release-Gate-Report.md).
+
+
 The current exact-main readiness matrix, evidence hashes and artifact inventory are maintained in [authoritative release readiness](RELEASE_READINESS.md) and [release evidence](RELEASE-EVIDENCE.md). The scope recommendation below was originally documented against the F1.35 baseline; the current implementation/evidence context is separately recorded below so historical scope approval is not confused with current mainline state.
 
 | Field | Current value |

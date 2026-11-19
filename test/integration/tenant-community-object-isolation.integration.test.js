@@ -90,6 +90,7 @@ test(
       ...process.env,
       NODE_ENV: 'test',
       DATABASE_URL: process.env.DATABASE_URL,
+      RATE_LIMIT_MAX_REQUESTS: '1000',
       REQUIRE_VERIFIED_EMAIL: 'false',
       AI_PROVIDER: 'mock',
     };
@@ -325,41 +326,54 @@ test(
       assert.deepEqual(await snapshotCommunitySite(pool, siteB), beforeSiteB);
     }
 
-    async function assertFriendshipCreateRace({ description, mutation, restore, verifyMutation }) {
+    async function assertFriendshipWriteRace({
+      description,
+      mutation,
+      restore,
+      verifyMutation,
+      method = 'POST',
+      targetUserId = userB2.id,
+      requestHeaders = headers,
+      writeSql = 'INSERT INTO social_friendships',
+      expectedStatus = 404,
+      expectedCode = 'ERR_VIRGOSCORPIO_HUB_COMMUNITY_USER_NOT_FOUND',
+      expectedRemoved,
+    }) {
       const originalQueryDescriptor = Object.getOwnPropertyDescriptor(pool, 'query');
       const query = pool.query.bind(pool);
       let mutationStarted = false;
       let mutationApplied = false;
-      let siteAAtInsert = null;
-      let siteBAtInsert = null;
+      let siteAAtWrite = null;
+      let siteBAtWrite = null;
 
       pool.query = async (sql, params) => {
         if (
           !mutationApplied &&
           typeof sql === 'string' &&
-          sql.toUpperCase().includes('INSERT INTO SOCIAL_FRIENDSHIPS')
+          sql.toUpperCase().includes(writeSql.toUpperCase())
         ) {
           mutationStarted = true;
           await mutation(query);
           mutationApplied = true;
-          siteAAtInsert = await snapshotCommunitySite(pool, siteA);
-          siteBAtInsert = await snapshotCommunitySite(pool, siteB);
+          siteAAtWrite = await snapshotCommunitySite(pool, siteA);
+          siteBAtWrite = await snapshotCommunitySite(pool, siteB);
         }
 
         return query(sql, params);
       };
 
       try {
-        const response = await fetch(`${base}/api/v1/sites/${siteB}/community/friends/${userB2.id}`, {
-          method: 'POST',
-          headers,
+        const response = await fetch(`${base}/api/v1/sites/${siteB}/community/friends/${targetUserId}`, {
+          method,
+          headers: requestHeaders,
         });
         const payload = await response.json();
         const serialized = JSON.stringify(payload);
 
-        assert.equal(mutationApplied, true, `${description}: state change must run immediately before the INSERT`);
-        assert.equal(response.status, 404, `${description}: ineligible participants must not create or update a friendship`);
-        assert.equal(payload.code, 'ERR_VIRGOSCORPIO_HUB_COMMUNITY_USER_NOT_FOUND');
+        assert.equal(mutationApplied, true, `${description}: state change must run immediately before the write`);
+        assert.equal(response.status, expectedStatus, `${description}: unexpected friendship-write status`);
+        if (expectedCode !== null) assert.equal(payload.code, expectedCode);
+        if (expectedRemoved !== undefined) assert.equal(payload.removed, expectedRemoved);
         assert.equal(serialized.includes(actorB.id), false, 'requester ID must not be disclosed');
         assert.equal(serialized.includes(userB2.id), false, 'recipient ID must not be disclosed');
         assert.equal(serialized.includes(actorB.display_name), false, 'requester display name must not be disclosed');
@@ -368,12 +382,12 @@ test(
         await verifyMutation(query);
         assert.deepEqual(
           await snapshotCommunitySite(pool, siteA),
-          siteAAtInsert,
+          siteAAtWrite,
           `${description}: Site A state must remain unchanged`
         );
         assert.deepEqual(
           await snapshotCommunitySite(pool, siteB),
-          siteBAtInsert,
+          siteBAtWrite,
           `${description}: denied friendship write must not alter Site B community state`
         );
       } finally {
@@ -394,7 +408,9 @@ test(
       targetUserId = userB2.id,
       requestHeaders = headers,
       writeSql = 'INSERT INTO social_friendships',
+      expectedStatus = 404,
       expectedCode = 'ERR_VIRGOSCORPIO_HUB_COMMUNITY_USER_NOT_FOUND',
+      expectedRemoved,
     }) {
       const originalQueryDescriptor = Object.getOwnPropertyDescriptor(pool, 'query');
       const query = pool.query.bind(pool);
@@ -463,8 +479,9 @@ test(
 
         const response = await requestPromise;
         const payload = await response.json();
-        assert.equal(response.status, 404, `${description}: post-lock ineligibility must deny the friendship write`);
-        assert.equal(payload.code, expectedCode);
+        assert.equal(response.status, expectedStatus, `${description}: unexpected friendship-write response`);
+        if (expectedCode !== null) assert.equal(payload.code, expectedCode);
+        if (expectedRemoved !== undefined) assert.equal(payload.removed, expectedRemoved);
         assert.equal(JSON.stringify(payload).includes(actorB.id), false);
         assert.equal(JSON.stringify(payload).includes(userB2.id), false);
 
@@ -1152,7 +1169,7 @@ test(
 
     await t.test('friendship creation revalidates both participants at the write boundary', async t => {
       await t.test('disabled addressee is rejected after the active-membership preflight', async () => {
-        await assertFriendshipCreateRace({
+        await assertFriendshipWriteRace({
           description: 'disabled addressee',
           mutation: query => query("UPDATE users SET status='disabled' WHERE id=$1", [userB2.id]),
           restore: query => query("UPDATE users SET status='active' WHERE id=$1", [userB2.id]),
@@ -1164,7 +1181,7 @@ test(
       });
 
       await t.test('disabled requester is rejected after request authentication', async () => {
-        await assertFriendshipCreateRace({
+        await assertFriendshipWriteRace({
           description: 'disabled requester',
           mutation: query => query("UPDATE users SET status='disabled' WHERE id=$1", [actorB.id]),
           restore: query => query("UPDATE users SET status='active' WHERE id=$1", [actorB.id]),
@@ -1176,7 +1193,7 @@ test(
       });
 
       await t.test('revoked addressee membership is rejected after the active-membership preflight', async () => {
-        await assertFriendshipCreateRace({
+        await assertFriendshipWriteRace({
           description: 'revoked addressee membership',
           mutation: query => query(
             'DELETE FROM site_memberships WHERE site_id=$1 AND user_id=$2',
@@ -1197,7 +1214,7 @@ test(
       });
 
       await t.test('revoked requester membership is rejected after site authorization', async () => {
-        await assertFriendshipCreateRace({
+        await assertFriendshipWriteRace({
           description: 'revoked requester membership',
           mutation: query => query(
             'DELETE FROM site_memberships WHERE site_id=$1 AND user_id=$2',
@@ -1261,6 +1278,191 @@ test(
           },
         });
       });
+    });
+
+    async function resetSiteBFriendship(query = pool.query.bind(pool)) {
+      await query(
+        `INSERT INTO social_friendships(site_id,requester_id,addressee_id,status)
+         VALUES($1,$2,$3,'accepted')
+         ON CONFLICT(site_id,requester_id,addressee_id)
+         DO UPDATE SET status='accepted',updated_at=now()`,
+        [siteB, actorB.id, userB2.id]
+      );
+    }
+
+    await t.test('friendship removal revalidates the actor at the write boundary', async t => {
+      const scenarios = [
+        {
+          description: 'disabled actor account after site authorization',
+          mutation: query => query("UPDATE users SET status='disabled' WHERE id=$1", [actorB.id]),
+          restore: query => query("UPDATE users SET status='active' WHERE id=$1", [actorB.id]),
+          verifyMutation: async query => {
+            const result = await query('SELECT status FROM users WHERE id=$1', [actorB.id]);
+            assert.equal(result.rows[0].status, 'disabled');
+          },
+        },
+        {
+          description: 'revoked actor membership after site authorization',
+          mutation: query => query(
+            'DELETE FROM site_memberships WHERE site_id=$1 AND user_id=$2',
+            [siteB, actorB.id]
+          ),
+          restore: query => query(
+            'INSERT INTO site_memberships(site_id,user_id,role_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING',
+            [siteB, actorB.id, roleId]
+          ),
+          verifyMutation: async query => {
+            const result = await query(
+              'SELECT 1 FROM site_memberships WHERE site_id=$1 AND user_id=$2',
+              [siteB, actorB.id]
+            );
+            assert.equal(result.rowCount, 0);
+          },
+        },
+      ];
+
+      for (const scenario of scenarios) {
+        await t.test(scenario.description, async () => {
+          await resetSiteBFriendship();
+          try {
+            await assertFriendshipWriteRace({
+              ...scenario,
+              method: 'DELETE',
+              targetUserId: userB2.id,
+              requestHeaders: headers,
+              writeSql: 'DELETE FROM social_friendships',
+              expectedStatus: 200,
+              expectedCode: null,
+              expectedRemoved: false,
+            });
+          } finally {
+            await resetSiteBFriendship();
+          }
+        });
+      }
+    });
+
+    await t.test('friendship removal serializes concurrent actor lifecycle changes', async t => {
+      const scenarios = [
+        {
+          description: 'concurrent actor account disablement',
+          lockSql: 'SELECT id FROM users WHERE id=$1 FOR UPDATE',
+          lockParams: [actorB.id],
+          mutate: client => client.query(
+            "UPDATE users SET status='disabled' WHERE id=$1",
+            [actorB.id]
+          ),
+          restore: query => query(
+            "UPDATE users SET status='active' WHERE id=$1",
+            [actorB.id]
+          ),
+          verifyMutation: async query => {
+            const result = await query('SELECT status FROM users WHERE id=$1', [actorB.id]);
+            assert.equal(result.rows[0].status, 'disabled');
+          },
+        },
+        {
+          description: 'concurrent actor membership revocation',
+          lockSql: 'SELECT role_id FROM site_memberships WHERE site_id=$1 AND user_id=$2 ORDER BY user_id,role_id FOR UPDATE',
+          lockParams: [siteB, actorB.id],
+          mutate: client => client.query(
+            'DELETE FROM site_memberships WHERE site_id=$1 AND user_id=$2',
+            [siteB, actorB.id]
+          ),
+          restore: query => query(
+            'INSERT INTO site_memberships(site_id,user_id,role_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING',
+            [siteB, actorB.id, roleId]
+          ),
+          verifyMutation: async query => {
+            const result = await query(
+              'SELECT 1 FROM site_memberships WHERE site_id=$1 AND user_id=$2',
+              [siteB, actorB.id]
+            );
+            assert.equal(result.rowCount, 0);
+          },
+        },
+      ];
+
+      for (const scenario of scenarios) {
+        await t.test(scenario.description, async () => {
+          await resetSiteBFriendship();
+          try {
+            await assertFriendshipWriteSerializesChange({
+              ...scenario,
+              method: 'DELETE',
+              targetUserId: userB2.id,
+              requestHeaders: headers,
+              writeSql: 'DELETE FROM social_friendships',
+              expectedStatus: 200,
+              expectedCode: null,
+              expectedRemoved: false,
+            });
+          } finally {
+            await resetSiteBFriendship();
+          }
+        });
+      }
+    });
+
+    await t.test('friendship removal remains available for an inactive or departed counterpart', async t => {
+      const scenarios = [
+        {
+          description: 'disabled counterpart account',
+          mutate: query => query("UPDATE users SET status='disabled' WHERE id=$1", [userB2.id]),
+          restore: query => query("UPDATE users SET status='active' WHERE id=$1", [userB2.id]),
+          verifyMutation: async query => {
+            const result = await query('SELECT status FROM users WHERE id=$1', [userB2.id]);
+            assert.equal(result.rows[0].status, 'disabled');
+          },
+        },
+        {
+          description: 'revoked counterpart site membership',
+          mutate: query => query(
+            'DELETE FROM site_memberships WHERE site_id=$1 AND user_id=$2',
+            [siteB, userB2.id]
+          ),
+          restore: query => query(
+            'INSERT INTO site_memberships(site_id,user_id,role_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING',
+            [siteB, userB2.id, roleId]
+          ),
+          verifyMutation: async query => {
+            const result = await query(
+              'SELECT 1 FROM site_memberships WHERE site_id=$1 AND user_id=$2',
+              [siteB, userB2.id]
+            );
+            assert.equal(result.rowCount, 0);
+          },
+        },
+      ];
+
+      for (const scenario of scenarios) {
+        await t.test(scenario.description, async () => {
+          await resetSiteBFriendship();
+          const query = pool.query.bind(pool);
+          try {
+            await scenario.mutate(query);
+            await scenario.verifyMutation(query);
+
+            const response = await fetch(`${base}/api/v1/sites/${siteB}/community/friends/${userB2.id}`, {
+              method: 'DELETE',
+              headers,
+            });
+            assert.equal(response.status, 200);
+            assert.equal((await response.json()).removed, true);
+
+            const retry = await fetch(`${base}/api/v1/sites/${siteB}/community/friends/${userB2.id}`, {
+              method: 'DELETE',
+              headers,
+            });
+            assert.equal(retry.status, 200);
+            assert.equal((await retry.json()).removed, false);
+            await assertSiteAUnchanged();
+          } finally {
+            await scenario.restore(query);
+            await resetSiteBFriendship(query);
+          }
+        });
+      }
     });
 
     await t.test('friendship create and accept remain single-row when participants have multiple site roles', async () => {
