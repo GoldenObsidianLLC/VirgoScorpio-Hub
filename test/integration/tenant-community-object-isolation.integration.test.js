@@ -383,13 +383,18 @@ test(
       }
     }
 
-    async function assertFriendshipCreateSerializesChange({
+    async function assertFriendshipWriteSerializesChange({
       description,
       lockSql,
       lockParams,
       mutate,
       restore,
       verifyMutation,
+      method = 'POST',
+      targetUserId = userB2.id,
+      requestHeaders = headers,
+      writeSql = 'INSERT INTO social_friendships',
+      expectedCode = 'ERR_VIRGOSCORPIO_HUB_COMMUNITY_USER_NOT_FOUND',
     }) {
       const originalQueryDescriptor = Object.getOwnPropertyDescriptor(pool, 'query');
       const query = pool.query.bind(pool);
@@ -411,23 +416,23 @@ test(
           if (
             !writeStarted &&
             typeof sql === 'string' &&
-            sql.toUpperCase().includes('INSERT INTO SOCIAL_FRIENDSHIPS')
+            sql.toUpperCase().includes(writeSql.toUpperCase())
           ) {
             writeStarted = true;
           }
           return query(sql, params);
         };
 
-        requestPromise = fetch(`${base}/api/v1/sites/${siteB}/community/friends/${userB2.id}`, {
-          method: 'POST',
-          headers,
+        requestPromise = fetch(`${base}/api/v1/sites/${siteB}/community/friends/${targetUserId}`, {
+          method,
+          headers: requestHeaders,
         });
 
         const startDeadline = Date.now() + 5000;
         while (!writeStarted && Date.now() < startDeadline) {
           await new Promise(resolve => setTimeout(resolve, 20));
         }
-        assert.equal(writeStarted, true, `${description}: friendship INSERT must reach PostgreSQL`);
+        assert.equal(writeStarted, true, `${description}: friendship write must reach PostgreSQL`);
 
         let waitingOnLock = false;
         const lockDeadline = Date.now() + 5000;
@@ -437,9 +442,10 @@ test(
                FROM pg_stat_activity
               WHERE datname = current_database()
                 AND pid <> pg_backend_pid()
-                AND query ILIKE '%INSERT INTO social_friendships%'
+                AND query ILIKE $1
               ORDER BY query_start DESC
-              LIMIT 1`
+              LIMIT 1`,
+            [`%${writeSql.toLowerCase()}%`]
           );
           waitingOnLock = activity.rows[0]?.wait_event_type === 'Lock';
           if (!waitingOnLock) await new Promise(resolve => setTimeout(resolve, 20));
@@ -457,8 +463,8 @@ test(
 
         const response = await requestPromise;
         const payload = await response.json();
-        assert.equal(response.status, 404, `${description}: post-lock ineligibility must deny friendship creation`);
-        assert.equal(payload.code, 'ERR_VIRGOSCORPIO_HUB_COMMUNITY_USER_NOT_FOUND');
+        assert.equal(response.status, 404, `${description}: post-lock ineligibility must deny the friendship write`);
+        assert.equal(payload.code, expectedCode);
         assert.equal(JSON.stringify(payload).includes(actorB.id), false);
         assert.equal(JSON.stringify(payload).includes(userB2.id), false);
 
@@ -969,6 +975,181 @@ test(
       );
     });
 
+    await t.test('friendship acceptance revalidates the authenticated addressee at the write boundary', async t => {
+      const acceptanceSession = await identity.login({
+        email: userB2.email,
+        password: 'Isolation-Password-2026',
+        ip: '127.0.0.1',
+        userAgent: 'tenant-community-friendship-acceptance-race-test',
+      });
+      assert.equal(acceptanceSession.mfaRequired, false);
+      const acceptanceHeaders = {
+        authorization: `Bearer ${acceptanceSession.token}`,
+        'x-virgoscorpio-hub-site-id': siteB,
+      };
+
+      const scenarios = [
+        {
+          description: 'addressee account disabled after site authorization',
+          mutate: query => query("UPDATE users SET status='disabled' WHERE id=$1", [userB2.id]),
+          restore: query => query("UPDATE users SET status='active' WHERE id=$1", [userB2.id]),
+          verify: async query => {
+            const result = await query('SELECT status FROM users WHERE id=$1', [userB2.id]);
+            assert.equal(result.rows[0].status, 'disabled');
+          },
+        },
+        {
+          description: 'addressee site membership revoked after site authorization',
+          mutate: query => query(
+            'DELETE FROM site_memberships WHERE site_id=$1 AND user_id=$2 RETURNING user_id',
+            [siteB, userB2.id]
+          ),
+          restore: query => query(
+            'INSERT INTO site_memberships(site_id,user_id,role_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING',
+            [siteB, userB2.id, roleId]
+          ),
+          verify: async query => {
+            const result = await query(
+              'SELECT 1 FROM site_memberships WHERE site_id=$1 AND user_id=$2',
+              [siteB, userB2.id]
+            );
+            assert.equal(result.rowCount, 0);
+          },
+        },
+      ];
+
+      for (const scenario of scenarios) {
+        await t.test(scenario.description, async () => {
+          await pool.query(
+            "UPDATE social_friendships SET status='pending' WHERE site_id=$1 AND requester_id=$2 AND addressee_id=$3",
+            [siteB, actorB.id, userB2.id]
+          );
+          const siteAStateBefore = await snapshotCommunitySite(pool, siteA);
+          const siteBStateBefore = await snapshotCommunitySite(pool, siteB);
+          const originalQueryDescriptor = Object.getOwnPropertyDescriptor(pool, 'query');
+          const query = pool.query.bind(pool);
+          let mutationApplied = false;
+
+          pool.query = async (sql, params) => {
+            if (
+              !mutationApplied &&
+              typeof sql === 'string' &&
+              sql.toUpperCase().includes('UPDATE SOCIAL_FRIENDSHIPS')
+            ) {
+              await scenario.mutate(query);
+              mutationApplied = true;
+            }
+            return query(sql, params);
+          };
+
+          try {
+            const response = await fetch(`${base}/api/v1/sites/${siteB}/community/friends/${actorB.id}`, {
+              method: 'PUT',
+              headers: acceptanceHeaders,
+            });
+            const payload = await response.json();
+            const serialized = JSON.stringify(payload);
+
+            assert.equal(mutationApplied, true, 'eligibility change must run after preflight and before the final UPDATE');
+            assert.equal(response.status, 404, 'an ineligible addressee must not accept a pending friendship');
+            assert.equal(payload.code, 'ERR_VIRGOSCORPIO_HUB_FRIEND_REQUEST_NOT_FOUND');
+            assert.equal(serialized.includes(actorB.id), false, 'requester ID must not be disclosed');
+            assert.equal(serialized.includes(userB2.id), false, 'addressee ID must not be disclosed');
+            assert.equal(serialized.includes(actorB.display_name), false, 'requester name must not be disclosed');
+            assert.equal(serialized.includes(userB2.display_name), false, 'addressee name must not be disclosed');
+
+            await scenario.verify(query);
+            const friendship = await query(
+              'SELECT status FROM social_friendships WHERE site_id=$1 AND requester_id=$2 AND addressee_id=$3',
+              [siteB, actorB.id, userB2.id]
+            );
+            assert.deepEqual(friendship.rows, [{ status: 'pending' }], 'a denied acceptance must leave the request pending');
+            assert.deepEqual(await snapshotCommunitySite(pool, siteA), siteAStateBefore);
+            assert.deepEqual(await snapshotCommunitySite(pool, siteB), siteBStateBefore);
+          } finally {
+            if (originalQueryDescriptor) Object.defineProperty(pool, 'query', originalQueryDescriptor);
+            else delete pool.query;
+            if (mutationApplied) await scenario.restore(query);
+            await query(
+              "UPDATE social_friendships SET status='accepted' WHERE site_id=$1 AND requester_id=$2 AND addressee_id=$3",
+              [siteB, actorB.id, userB2.id]
+            );
+          }
+        });
+      }
+    });
+
+    await t.test('friendship acceptance serializes concurrent addressee lifecycle changes', async t => {
+      const acceptanceSession = await identity.login({
+        email: userB2.email,
+        password: 'Isolation-Password-2026',
+        ip: '127.0.0.1',
+        userAgent: 'tenant-community-friendship-acceptance-serialization-test',
+      });
+      assert.equal(acceptanceSession.mfaRequired, false);
+      const acceptanceHeaders = {
+        authorization: `Bearer ${acceptanceSession.token}`,
+        'x-virgoscorpio-hub-site-id': siteB,
+      };
+      const scenarios = [
+        {
+          description: 'concurrent addressee account disablement',
+          lockSql: 'SELECT id FROM users WHERE id=$1 FOR UPDATE',
+          lockParams: [userB2.id],
+          mutate: client => client.query("UPDATE users SET status='disabled' WHERE id=$1", [userB2.id]),
+          restore: query => query("UPDATE users SET status='active' WHERE id=$1", [userB2.id]),
+          verifyMutation: async query => {
+            const result = await query('SELECT status FROM users WHERE id=$1', [userB2.id]);
+            assert.equal(result.rows[0].status, 'disabled');
+          },
+        },
+        {
+          description: 'concurrent addressee membership revocation',
+          lockSql: 'SELECT role_id FROM site_memberships WHERE site_id=$1 AND user_id=$2 ORDER BY role_id FOR UPDATE',
+          lockParams: [siteB, userB2.id],
+          mutate: client => client.query(
+            'DELETE FROM site_memberships WHERE site_id=$1 AND user_id=$2',
+            [siteB, userB2.id]
+          ),
+          restore: query => query(
+            'INSERT INTO site_memberships(site_id,user_id,role_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING',
+            [siteB, userB2.id, roleId]
+          ),
+          verifyMutation: async query => {
+            const result = await query(
+              'SELECT 1 FROM site_memberships WHERE site_id=$1 AND user_id=$2',
+              [siteB, userB2.id]
+            );
+            assert.equal(result.rowCount, 0);
+          },
+        },
+      ];
+
+      for (const scenario of scenarios) {
+        await t.test(scenario.description, async () => {
+          await pool.query(
+            "UPDATE social_friendships SET status='pending' WHERE site_id=$1 AND requester_id=$2 AND addressee_id=$3",
+            [siteB, actorB.id, userB2.id]
+          );
+          try {
+            await assertFriendshipWriteSerializesChange({
+              ...scenario,
+              method: 'PUT',
+              targetUserId: actorB.id,
+              requestHeaders: acceptanceHeaders,
+              writeSql: 'UPDATE social_friendships',
+              expectedCode: 'ERR_VIRGOSCORPIO_HUB_FRIEND_REQUEST_NOT_FOUND',
+            });
+          } finally {
+            await pool.query(
+              "UPDATE social_friendships SET status='accepted' WHERE site_id=$1 AND requester_id=$2 AND addressee_id=$3",
+              [siteB, actorB.id, userB2.id]
+            );
+          }
+        });
+      }
+    });
+
     await t.test('friendship creation revalidates both participants at the write boundary', async t => {
       await t.test('disabled addressee is rejected after the active-membership preflight', async () => {
         await assertFriendshipCreateRace({
@@ -1039,7 +1220,7 @@ test(
 
     await t.test('friendship creation serializes concurrent participant changes', async t => {
       await t.test('account disablement waits for the locked participant user row', async () => {
-        await assertFriendshipCreateSerializesChange({
+        await assertFriendshipWriteSerializesChange({
           description: 'concurrent addressee disablement',
           lockSql: 'SELECT id FROM users WHERE id=$1 FOR UPDATE',
           lockParams: [userB2.id],
@@ -1059,7 +1240,7 @@ test(
       });
 
       await t.test('membership revocation waits for the locked participant membership row', async () => {
-        await assertFriendshipCreateSerializesChange({
+        await assertFriendshipWriteSerializesChange({
           description: 'concurrent addressee membership revocation',
           lockSql: 'SELECT user_id FROM site_memberships WHERE site_id=$1 AND user_id=$2 FOR UPDATE',
           lockParams: [siteB, userB2.id],
@@ -1082,7 +1263,7 @@ test(
       });
     });
 
-    await t.test('friendship creation remains single-row when participants have multiple site roles', async () => {
+    await t.test('friendship create and accept remain single-row when participants have multiple site roles', async () => {
       const siteAStateBefore = await snapshotCommunitySite(pool, siteA);
       const additionalRoleResult = await pool.query(
         'INSERT INTO roles(slug,label,capabilities) VALUES($1,$2,$3::jsonb) RETURNING id',
@@ -1111,11 +1292,42 @@ test(
         assert.equal(payload.friendship.addressee_id, userB2.id);
         assert.equal(payload.friendship.status, 'accepted');
 
-        const rows = await pool.query(
+        let rows = await pool.query(
           'SELECT status FROM social_friendships WHERE site_id=$1 AND requester_id=$2 AND addressee_id=$3',
           [siteB, actorB.id, userB2.id]
         );
         assert.deepEqual(rows.rows, [{ status: 'accepted' }], 'multiple membership roles must still produce one friendship row');
+
+        await pool.query(
+          "UPDATE social_friendships SET status='pending' WHERE site_id=$1 AND requester_id=$2 AND addressee_id=$3",
+          [siteB, actorB.id, userB2.id]
+        );
+        const acceptanceSession = await identity.login({
+          email: userB2.email,
+          password: 'Isolation-Password-2026',
+          ip: '127.0.0.1',
+          userAgent: 'tenant-community-friendship-multi-role-acceptance-test',
+        });
+        assert.equal(acceptanceSession.mfaRequired, false);
+        const acceptanceHeaders = {
+          authorization: `Bearer ${acceptanceSession.token}`,
+          'x-virgoscorpio-hub-site-id': siteB,
+        };
+        const acceptance = await fetch(`${base}/api/v1/sites/${siteB}/community/friends/${actorB.id}`, {
+          method: 'PUT',
+          headers: acceptanceHeaders,
+        });
+        assert.equal(acceptance.status, 200);
+        const acceptedPayload = await acceptance.json();
+        assert.equal(acceptedPayload.friendship.requester_id, actorB.id);
+        assert.equal(acceptedPayload.friendship.addressee_id, userB2.id);
+        assert.equal(acceptedPayload.friendship.status, 'accepted');
+
+        rows = await pool.query(
+          'SELECT status FROM social_friendships WHERE site_id=$1 AND requester_id=$2 AND addressee_id=$3',
+          [siteB, actorB.id, userB2.id]
+        );
+        assert.deepEqual(rows.rows, [{ status: 'accepted' }], 'multiple membership roles must still yield one accepted friendship row');
         siteBStateAfterRequest = await snapshotCommunitySite(pool, siteB);
       } finally {
         await pool.query(
