@@ -246,6 +246,8 @@ async function handlePlatformRoute(ctx) {
       const client = await localPool.connect();
       try {
         await client.query('BEGIN');
+        // Membership removal locks the site before memberships; take the compatible FK lock first to avoid a lock cycle.
+        await client.query('SELECT id FROM sites WHERE id=$1 FOR KEY SHARE', [siteId]);
         // Count aggregates exhaust both materialized lock sets and lock every matching row.
         const groupResult = await client.query(
           `WITH participant_users AS MATERIALIZED (

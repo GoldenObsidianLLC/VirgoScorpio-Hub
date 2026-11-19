@@ -619,6 +619,8 @@ test(
         let mutationCommitted = false;
         let writeStarted = false;
         let requestPromise = null;
+        const writeQueryFragment = (scenario.writeQueryFragment || 'INSERT INTO SOCIAL_GROUPS').toUpperCase();
+        const blockedQueryFragment = scenario.blockedQueryFragment || 'WITH participant_users AS MATERIALIZED';
 
         try {
           await blocker.query('BEGIN');
@@ -633,7 +635,7 @@ test(
                 if (
                   !writeStarted &&
                   typeof sql === 'string' &&
-                  sql.toUpperCase().includes('INSERT INTO SOCIAL_GROUPS')
+                  sql.toUpperCase().includes(writeQueryFragment)
                 ) {
                   writeStarted = true;
                 }
@@ -655,7 +657,7 @@ test(
           assert.equal(writeStarted, true, `${scenario.description}: group creation must reach its final PostgreSQL write`);
           const writeWaitsForAuthorizationRow = await waitForDatabaseWriteLock(
             blocker,
-            'WITH participant_users AS MATERIALIZED'
+            blockedQueryFragment
           );
           assert.equal(
             writeWaitsForAuthorizationRow,
@@ -906,6 +908,29 @@ test(
         }
 
         const lockSerializationCases = [
+          {
+            label: 'site-lock-contention',
+            description: 'site-row locking serializes membership removal before group-create locks',
+            lockSql: 'SELECT id FROM sites WHERE id=$1 FOR UPDATE',
+            lockParams: [siteB],
+            writeQueryFragment: 'SELECT ID FROM SITES WHERE ID=$1 FOR KEY SHARE',
+            blockedQueryFragment: 'SELECT id FROM sites WHERE id=$1 FOR KEY SHARE',
+            mutate: client => client.query(
+              'DELETE FROM site_memberships WHERE site_id=$1 AND user_id=$2',
+              [siteB, actorB.id]
+            ),
+            restore: query => query(
+              'INSERT INTO site_memberships(site_id,user_id,role_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING',
+              [siteB, actorB.id, roleId]
+            ),
+            verify: async query => {
+              const result = await query(
+                'SELECT 1 FROM site_memberships WHERE site_id=$1 AND user_id=$2',
+                [siteB, actorB.id]
+              );
+              assert.equal(result.rowCount, 0);
+            },
+          },
           {
             label: 'user-lock-contention',
             description: 'concurrent creator account disablement',
