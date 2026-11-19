@@ -21,7 +21,7 @@ The pre-fix behavior was reproduced against a disposable PostgreSQL 18 database 
 
 **Before the correction:** the request returned HTTP **201** and created the group despite the creator's selected-site membership having been revoked. The regression expected the existing forbidden response and failed on the original route. Synthetic Site A/Site B fixture data was used; the injected authorization state was restored and the test-owned record was cleaned up.
 
-Additional deterministic red/green cases inject account disablement and `content:create` removal at the same final-write boundary. The previously executed 36-case focused suite covered the user, membership and role serialization paths. The final refinement replaces early-exit existence checks with count aggregates so every materialized membership and role row is locked. It also acquires the selected-site row key-share lock before actor authorization locks, matching the site-before-membership order in membership removal. Three explicit contention cases now cover the site-row/membership-removal ordering and later membership/role rows while another role still authorizes the actor. These final cases await a fresh live PostgreSQL run in exact-head hosted CI.
+Additional deterministic red/green cases inject account disablement and `content:create` removal at the same final-write boundary. The earlier 36-case focused suite covered the user, membership and role serialization paths. The final refinement fully consumes every materialized membership and role lock set and acquires the selected-site key-share lock before actor authorization locks, matching membership removal's site-before-membership order. The final exact-head PostgreSQL/Memgraph/Redis integration in PR run [#44629862297](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44629862297) passed 169/169 with zero skips, including the site-row ordering and later membership/role contention cases.
 
 ## Implementation
 
@@ -51,7 +51,7 @@ The existing `test/integration/tenant-community-object-isolation.integration.tes
 - Real PostgreSQL lock contention for concurrent user disablement, membership revocation, and role-capability removal (covered by the earlier 36/36 focused run).
 - A site-row contention case proves group creation takes its site key-share lock before membership locks, serializing against membership removal's site `FOR UPDATE` lock.
 - Positive controls for `content:create`, `site:manage`, wildcard capability, and creators with multiple roles.
-- Additional later-membership and later-role contention cases verify that every materialized authorization row is locked; fresh live PostgreSQL confirmation is pending for all three final lock-order cases.
+- The site-row ordering and later-membership/later-role contention cases passed in the exact-head live PostgreSQL suite (PR run #44629862297), confirming site-before-membership serialization and complete authorization lock-set consumption.
 - A trigger-injected initial owner-membership insert failure proving the group row rolls back with it.
 - Existing Site A/Site B deep snapshots, owner-role/status behavior, and the surrounding community/friendship isolation regressions.
 
@@ -62,15 +62,16 @@ Denied writes leave both site snapshots unchanged. Test-created roles, triggers,
 | Check | Result |
 |---|---|
 | Pre-fix red reproduction | Confirmed: membership revocation after preflight still returned HTTP 201 and persisted the group. |
-| Earlier focused live PostgreSQL 18 community-isolation suite (before final all-row lock-set refinement) | **36/36 passed; 0 failed, 0 skipped, 0 TODO.** This is prior evidence, not a fresh run of the two additional secondary-row contention cases. |
-| Final site-first / later-membership / later-role contention cases | Added to prove site-before-membership lock order and complete authorization lock-set consumption; not rerun locally because `DATABASE_URL` is absent and the Docker daemon is unavailable; exact-head hosted PostgreSQL CI pending. |
+| Earlier focused live PostgreSQL 18 community-isolation suite (before final refinements) | **36/36 passed; 0 failed, 0 skipped, 0 TODO.** Superseded by the final exact-head hosted integration result below. |
+| Final exact-head PostgreSQL/Memgraph/Redis integration (PR #224, run #44629862297) | **169/169 passed; 0 failed, 0 skipped, 0 TODO.** This includes F1.57 creator revalidation, site-first lock serialization against membership removal, later-membership and later-role contention, capability controls, owner-insert rollback and two-site snapshots. Fresh migrations 18/18; idempotent second pass 18/18 skipped as expected. |
+| Final exact-head candidate CI (push #44629850558 and PR #44629862297) | Both runs passed all six functional jobs: Node 22.23.4 and 24.22.1 (each 670/670 Hub + 94/94 EnginEx tests, zero skips), live database integration, browser smoke 9/9, CodeQL, and candidate evidence consolidation. Both npm audit scopes reported 0 vulnerabilities. Main-only SLSA lockfile/SBOM attestation was skipped as designed on non-main events. This is candidate evidence, not mainline readiness. |
 | API runtime syntax | `node --check apps/api/src/platform-routes.js` passed. |
 | Integration test syntax | `node --check test/integration/tenant-community-object-isolation.integration.test.js` passed. |
 | Latest full local project check | `npm run check`: **667 passed, 0 failed, 3 Windows-specific skips** (670 total); final rerun passed after regenerating the tenant inventory. |
 | Artifact verification | Passed: 238 required paths and 268 JavaScript files syntax-checked. |
 | Tenant-isolation inventory | Regenerated successfully: 28 route/flow families, 80 declared route patterns, 21 implementation source files and 57 referenced test files. |
 | Diff hygiene | `git diff --check` passed. |
-| Hosted exact-head CI | Pending branch publication and PR workflow. Candidate CI must not be described as mainline evidence. |
+| Hosted exact-head CI | Push run [#44629850558](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44629850558) and PR run [#44629862297](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44629862297) both passed all six applicable non-attestation jobs: Node 22/24, live DB, browser smoke, CodeQL and candidate evidence consolidation. The main-only attestation skip is expected on branch/PR events. This is candidate evidence, not mainline readiness. |
 | Independent security review | Not performed by this maintainer change; issues #14 and #25 remain OPEN / NOT PERFORMED. |
 
 The full local check ran on Node.js 26.12.1 / npm 11.19.1. Its three skips are Windows-specific platform skips, not passes. The earlier focused live PostgreSQL suite ran separately against the disposable PostgreSQL 18 database with zero skips, before the final all-row lock-set refinement, the site-first lock-order change, and the three added contention cases. The project `npm run check` itself does not validate live database migrations, provider behavior, or production security.
