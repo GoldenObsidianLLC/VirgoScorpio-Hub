@@ -21,7 +21,7 @@ The pre-fix behavior was reproduced against a disposable PostgreSQL 18 database 
 
 **Before the correction:** the request returned HTTP **201** and created the group despite the creator's selected-site membership having been revoked. The regression expected the existing forbidden response and failed on the original route. Synthetic Site A/Site B fixture data was used; the injected authorization state was restored and the test-owned record was cleaned up.
 
-Additional deterministic red/green cases now inject account disablement and `content:create` removal at the same final-write boundary. Concurrent variants hold the relevant PostgreSQL row lock while the route reaches its final write, then commit the authorization change and verify that the request observes the new state.
+Additional deterministic red/green cases inject account disablement and `content:create` removal at the same final-write boundary. The previously executed 36-case focused suite covered the user, membership and role serialization paths. The final refinement replaces early-exit existence checks with count aggregates so every materialized membership and role row is locked, then adds two explicit contention cases against a later membership row and a later role row while another role still authorizes the actor. These last two cases await a fresh live PostgreSQL run in exact-head hosted CI.
 
 ## Implementation
 
@@ -32,7 +32,7 @@ The route still performs `siteIdFor` and `requireCapability(actor, siteId, 'cont
 1. `participant_users` materializes and locks the creator's user row and requires an active account.
 2. `participant_memberships` locks every creator membership row for the requested site, ordered by user ID and role ID; at least one is required.
 3. `participant_roles` locks all roles referenced by those selected-site membership rows, ordered by role ID.
-4. `authorized_actor` permits the requested capability, `site:manage`, or `*`, matching `packages/auth/src/service.js` / `identity.authorizeSite`.
+4. Count aggregates exhaust both materialized CTEs before the final authorization decision, ensuring later membership and role rows are locked rather than relying on an early-exit `EXISTS` check. `authorized_actor` then permits the requested capability, `site:manage`, or `*`, matching `packages/auth/src/service.js` / `identity.authorizeSite`.
 5. The final `INSERT INTO social_groups ... SELECT` writes only when the actor remains eligible and authorized.
 6. The initial `owner/active` group-membership insert uses the same transaction client. Any failure rolls back both records.
 
@@ -47,8 +47,9 @@ The existing `test/integration/tenant-community-object-isolation.integration.tes
 - Selected-site membership revocation immediately before the group insert.
 - Creator account disablement immediately before the group insert.
 - Removal of the effective `content:create` permission immediately before the group insert.
-- Real PostgreSQL lock contention for concurrent user disablement, membership revocation, and role-capability removal.
+- Real PostgreSQL lock contention for concurrent user disablement, membership revocation, and role-capability removal (covered by the earlier 36/36 focused run).
 - Positive controls for `content:create`, `site:manage`, wildcard capability, and creators with multiple roles.
+- Additional later-membership and later-role contention cases verify that every materialized authorization row is locked; fresh live PostgreSQL confirmation is pending.
 - A trigger-injected initial owner-membership insert failure proving the group row rolls back with it.
 - Existing Site A/Site B deep snapshots, owner-role/status behavior, and the surrounding community/friendship isolation regressions.
 
@@ -59,22 +60,23 @@ Denied writes leave both site snapshots unchanged. Test-created roles, triggers,
 | Check | Result |
 |---|---|
 | Pre-fix red reproduction | Confirmed: membership revocation after preflight still returned HTTP 201 and persisted the group. |
-| Focused live PostgreSQL 18 community-isolation suite | **36/36 passed; 0 failed, 0 skipped, 0 TODO.** |
+| Earlier focused live PostgreSQL 18 community-isolation suite (before final all-row lock-set refinement) | **36/36 passed; 0 failed, 0 skipped, 0 TODO.** This is prior evidence, not a fresh run of the two additional secondary-row contention cases. |
+| Final later-membership / later-role contention cases | Added to verify complete lock-set consumption; not rerun locally because `DATABASE_URL` is absent and the Docker daemon is unavailable; exact-head hosted PostgreSQL CI pending. |
 | API runtime syntax | `node --check apps/api/src/platform-routes.js` passed. |
 | Integration test syntax | `node --check test/integration/tenant-community-object-isolation.integration.test.js` passed. |
-| Full local project check | `npm run check`: **667 passed, 0 failed, 3 Windows-specific skips** (670 total). |
+| Latest full local project check | `npm run check`: **667 passed, 0 failed, 3 Windows-specific skips** (670 total); final rerun passed after regenerating the tenant inventory. |
 | Artifact verification | Passed: 238 required paths and 268 JavaScript files syntax-checked. |
 | Tenant-isolation inventory | Regenerated successfully: 28 route/flow families, 80 declared route patterns, 21 implementation source files and 57 referenced test files. |
 | Diff hygiene | `git diff --check` passed. |
 | Hosted exact-head CI | Pending branch publication and PR workflow. Candidate CI must not be described as mainline evidence. |
 | Independent security review | Not performed by this maintainer change; issues #14 and #25 remain OPEN / NOT PERFORMED. |
 
-The full local check ran on Node.js 26.12.1 / npm 11.19.1. Its three skips are Windows-specific platform skips, not passes. The focused live PostgreSQL suite ran separately against the disposable PostgreSQL 18 database with zero skips. The project `npm run check` itself does not validate live database migrations, provider behavior, or production security.
+The full local check ran on Node.js 26.12.1 / npm 11.19.1. Its three skips are Windows-specific platform skips, not passes. The earlier focused live PostgreSQL suite ran separately against the disposable PostgreSQL 18 database with zero skips, before the final all-row lock-set refinement and its two additional secondary-row contention cases. The project `npm run check` itself does not validate live database migrations, provider behavior, or production security.
 
 ## Continuity, inventory and release boundary
 
 - F1.56 remains the latest merged runtime increment on main at `f789444d769e9adf94adb5ef494c1a038a0c7261` (PR #220; issue #219 CLOSED). Exact-main workflow #794 / run 44566086887 and canonical readiness artifact #14552870585 remain the authoritative mainline evidence.
-- F1.57 is a local maintainer candidate on this branch, based on the F1.56 merge SHA. It does not update or replace mainline readiness.
+- F1.57 is a local maintainer candidate on this branch, based on current main HEAD `eae64f13a61613614f54dca7d7dffff4a98bfe00`; F1.56 runtime merge SHA `f789444d769e9adf94adb5ef494c1a038a0c7261` remains the runtime baseline. The intervening PRs #221/#223 are documentation-only. This branch does not update or replace mainline readiness.
 - Source-anchored tenant inventory remains 28 families / 80 declared route patterns / 21 source files / 57 test files after regeneration.
 - Independent tenant-isolation review #14 and platform-wide security assessment #25 remain OPEN / NOT PERFORMED. Dependency/license review #23 remains OPEN / PARTIAL.
 - Package `0.6.2` remains private and unreleased. Production remains `NOT_PRODUCTION_CERTIFIED` / NO-GO.

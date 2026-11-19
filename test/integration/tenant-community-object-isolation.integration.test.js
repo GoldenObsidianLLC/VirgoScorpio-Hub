@@ -670,14 +670,27 @@ test(
 
           const response = await requestPromise;
           const payload = await response.json();
-          assert.equal(response.status, 403, `${scenario.description}: the post-lock authorization change must be observed`);
-          assert.equal(payload.code, 'ERR_VIRGOSCORPIO_HUB_FORBIDDEN');
+          const expectedStatus = scenario.expectedStatus ?? 403;
+          assert.equal(response.status, expectedStatus, scenario.description + ': the post-lock result must match the expected authorization state');
+          if (expectedStatus === 403) {
+            assert.equal(payload.code, 'ERR_VIRGOSCORPIO_HUB_FORBIDDEN');
+          } else {
+            assert.equal(payload.group?.created_by, actorB.id, scenario.description + ': still-authorized creator remains the group owner');
+          }
           await scenario.verify(query);
           const persisted = await query(
             'SELECT id FROM social_groups WHERE site_id=$1 AND slug=$2',
             [siteB, group.slug]
           );
-          assert.equal(persisted.rowCount, 0, `${scenario.description}: no group may persist`);
+          const expectedPersistedCount = expectedStatus === 201 ? 1 : 0;
+          assert.equal(persisted.rowCount, expectedPersistedCount, scenario.description + ': persisted-group count must match the result');
+          if (expectedStatus === 201) {
+            const owner = await query(
+              'SELECT role,status FROM social_group_memberships WHERE group_id=$1 AND user_id=$2',
+              [persisted.rows[0].id, actorB.id]
+            );
+            assert.deepEqual(owner.rows, [{ role: 'owner', status: 'active' }]);
+          }
         } finally {
           if (transactionOpen) await blocker.query('ROLLBACK').catch(() => {});
           if (originalConnectDescriptor) Object.defineProperty(pool, 'connect', originalConnectDescriptor);
@@ -708,6 +721,55 @@ test(
             [siteB, actorB.id, additionalRole.rows[0].id]
           );
           await createGroupAndAssertOwner('multiple-creator-roles');
+          const orderedRoleIds = [String(roleId), String(additionalRole.rows[0].id)].sort();
+          const trailingRoleId = orderedRoleIds[orderedRoleIds.length - 1];
+          const trailingRoleCapabilities = (await pool.query(
+            'SELECT capabilities FROM roles WHERE id=$1',
+            [trailingRoleId]
+          )).rows[0].capabilities;
+
+          await assertGroupCreationSerializesChange({
+            label: 'secondary-membership-lock-contention',
+            description: 'concurrent removal of a later selected-site membership row',
+            expectedStatus: 201,
+            lockSql: 'SELECT role_id FROM site_memberships WHERE site_id=$1 AND user_id=$2 AND role_id=$3 FOR UPDATE',
+            lockParams: [siteB, actorB.id, trailingRoleId],
+            mutate: client => client.query(
+              'DELETE FROM site_memberships WHERE site_id=$1 AND user_id=$2 AND role_id=$3',
+              [siteB, actorB.id, trailingRoleId]
+            ),
+            restore: query => query(
+              'INSERT INTO site_memberships(site_id,user_id,role_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING',
+              [siteB, actorB.id, trailingRoleId]
+            ),
+            verify: async query => {
+              const result = await query(
+                'SELECT 1 FROM site_memberships WHERE site_id=$1 AND user_id=$2 AND role_id=$3',
+                [siteB, actorB.id, trailingRoleId]
+              );
+              assert.equal(result.rowCount, 0);
+            },
+          });
+
+          await assertGroupCreationSerializesChange({
+            label: 'secondary-role-lock-contention',
+            description: 'concurrent capability change on a later selected-site role row',
+            expectedStatus: 201,
+            lockSql: 'SELECT id FROM roles WHERE id=$1 FOR UPDATE',
+            lockParams: [trailingRoleId],
+            mutate: client => client.query(
+              "UPDATE roles SET capabilities=capabilities - 'content:create' WHERE id=$1",
+              [trailingRoleId]
+            ),
+            restore: query => query(
+              'UPDATE roles SET capabilities=$2::jsonb WHERE id=$1',
+              [trailingRoleId, JSON.stringify(trailingRoleCapabilities)]
+            ),
+            verify: async query => {
+              const result = await query('SELECT capabilities FROM roles WHERE id=$1', [trailingRoleId]);
+              assert.equal(result.rows[0]?.capabilities.includes('content:create'), false);
+            },
+          });
         } finally {
           await pool.query(
             'DELETE FROM site_memberships WHERE site_id=$1 AND user_id=$2 AND role_id=$3',

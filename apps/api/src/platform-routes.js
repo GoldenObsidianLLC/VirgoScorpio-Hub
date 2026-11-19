@@ -246,6 +246,7 @@ async function handlePlatformRoute(ctx) {
       const client = await localPool.connect();
       try {
         await client.query('BEGIN');
+        // Count aggregates exhaust both materialized lock sets and lock every matching row.
         const groupResult = await client.query(
           `WITH participant_users AS MATERIALIZED (
              SELECT u.id, u.status
@@ -270,18 +271,18 @@ async function handlePlatformRoute(ctx) {
              SELECT pu.id
              FROM participant_users pu
              WHERE pu.status = 'active'
-               AND EXISTS (
-                 SELECT 1
+               AND (
+                 SELECT count(*)
                  FROM participant_memberships pm
                  WHERE pm.user_id = pu.id
-               )
-               AND EXISTS (
-                 SELECT 1
+               ) > 0
+               AND (
+                 SELECT count(*)
                  FROM participant_roles pr
                  WHERE pr.capabilities ? $7
                     OR pr.capabilities ? 'site:manage'
                     OR pr.capabilities ? '*'
-               )
+               ) > 0
            )
            INSERT INTO social_groups(site_id,slug,name,description,privacy,created_by)
            SELECT $1,$2,$3,$4,$5,authorized_actor.id

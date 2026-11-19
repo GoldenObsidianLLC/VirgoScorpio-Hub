@@ -8,7 +8,7 @@
   "generatedBy": "scripts/generate-tenant-isolation-route-inventory.js",
   "sourceTree": {
     "fileCount": 21,
-    "sha256": "d1a69c5a77b9938cea6aaec54a99d6c0529afa09beabace3687cfaae11eb1e77",
+    "sha256": "2c67b047657e9741a6057e50f5d0be00fa29460c564ec28ebb396c97f9616147",
     "files": [
       "apps/api/src/ai-task-routes.js",
       "apps/api/src/auth-routes.js",
@@ -35,7 +35,7 @@
   },
   "testTree": {
     "fileCount": 57,
-    "sha256": "4bc05cdef45a32c9ddfcb89863af3544a23aaa163555af1487951f8555490d56",
+    "sha256": "d4212e9e4d0d26616c93bbe2adf30b860d45ac64182506b2de2ce0359caa7102",
     "files": [
       "test/ai-queue-worker.test.js",
       "test/ai-task-queue.test.js",
@@ -1437,13 +1437,13 @@
             {
               "anchor": "const feed=",
               "lines": [
-                375
+                376
               ]
             },
             {
               "anchor": "const friendRequest=",
               "lines": [
-                479
+                480
               ]
             }
           ]
@@ -1518,7 +1518,7 @@
             {
               "anchor": "const friendRequest=",
               "lines": [
-                479
+                480
               ]
             }
           ]
@@ -1636,7 +1636,7 @@
             {
               "anchor": "const firewallCollection",
               "lines": [
-                598
+                599
               ]
             }
           ]
@@ -1685,7 +1685,7 @@
             {
               "anchor": "const cloudConnections",
               "lines": [
-                653
+                654
               ]
             }
           ]
@@ -1733,7 +1733,7 @@
             {
               "anchor": "const megaMenus",
               "lines": [
-                894
+                895
               ]
             },
             {
@@ -1741,8 +1741,8 @@
               "lines": [
                 177,
                 194,
-                946,
-                979
+                947,
+                980
               ]
             }
           ]
