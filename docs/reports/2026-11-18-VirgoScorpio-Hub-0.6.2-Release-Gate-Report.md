@@ -1,10 +1,12 @@
-# VirgoScorpio Hub 0.6.2 — Full Release-Gate Repor
+# VirgoScorpio Hub 0.6.2 — Full Release-Gate Report
 
 **Assessment snapshot:** 18 November 2026 UTC / 18 November 2026 America/Chicago
 **Repository:** `GoldenObsidianLLC/VirgoScorpio-Hub`
-**Current mainline source:** `ccd454c0fa8bc49a91526756819af451c1a390d2` (F1.52 runtime PR #208 merged)
+**Current repository main HEAD:** `c07c10763f0660c3d0d60b755de0429211f75b14` (documentation-only PR #209 merged)
+**Latest merged runtime source / readiness baseline:** `ccd454c0fa8bc49a91526756819af451c1a390d2` (F1.52 runtime PR #208 merged)
 **Latest runtime merge:** F1.52 / [PR #208](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/208), implementation commit `99886cc4d8db22109bd036b80091fa4054387d93`, PR head `8230b9946d2edaf91039cdb878c2eb9e8d08d867`, merge SHA `ccd454c0fa8bc49a91526756819af451c1a390d2`; issue #207 CLOSED
-**Latest exact-main CI:** [workflow #44407304492 / run #765](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44407304492) — SUCCESS, 7/7 jobs, bound to current main `ccd454c0fa8bc49a91526756819af451c1a390d2`
+**Latest current-main CI:** [workflow #44421404827 / run #768](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44421404827) — SUCCESS, 7/7 jobs, bound to documentation-only main HEAD `c07c10763f0660c3d0d60b755de0429211f75b14`
+**Latest exact-main runtime/readiness CI:** [workflow #44407304492 / run #765](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44407304492) — SUCCESS, 7/7 jobs, bound to F1.52 runtime source `ccd454c0fa8bc49a91526756819af451c1a390d2`
 **Latest consolidated readiness artifact:** `14476181217`, archive SHA-256 `36aadc37cea1c9684f9572d7ad9574d80e904a6ab782d4d4bf3644786779c3ae`; readiness JSON SHA-256 `733972ee378321ebb34072b0789ca76a49c5951680cf863f9e5ddd90d79ffa22`
 **Decision:** **PRODUCTION NO-GO / NOT_PRODUCTION_CERTIFIED**
 
@@ -28,7 +30,9 @@ No SemVer increment, release tag, GitHub Release, npm publication, production de
 
 ## 2. Current mainline and exact-source engineering evidence
 
-F1.52 is now the latest merged runtime increment. It closes a requester-lifecycle gap in the friendship acceptance route: the existing UPDATE now revalidates that the pending requester still has an active user account and membership in the same site at transition time. The existing generic non-disclosing 404 remains unchanged. Runtime PR #208 merged at `ccd454c0fa8bc49a91526756819af451c1a390d2` (implementation commit `99886cc4d8db22109bd036b80091fa4054387d93`; PR head `8230b9946d2edaf91039cdb878c2eb9e8d08d867`); issue #207 is CLOSED. No endpoint, response contract, schema, migration, dependency, lockfile or package-version change was made.
+Repository `main` is currently `c07c10763f0660c3d0d60b755de0429211f75b14` after documentation-only PR #209. Current-main workflow #768 passed all 7/7 jobs on that exact docs-only HEAD. The source-bound readiness artifact and detailed runtime qualification below remain bound to the latest merged runtime source, F1.52 SHA `ccd454c0fa8bc49a91526756819af451c1a390d2`; the documentation-only run does not replace or rebind that artifact.
+
+F1.52 is the latest merged runtime increment. It closes a requester-lifecycle gap in the friendship acceptance route: the existing UPDATE now revalidates that the pending requester still has an active user account and membership in the same site at transition time. The existing generic non-disclosing 404 remains unchanged. Runtime PR #208 merged at `ccd454c0fa8bc49a91526756819af451c1a390d2` (implementation commit `99886cc4d8db22109bd036b80091fa4054387d93`; PR head `8230b9946d2edaf91039cdb878c2eb9e8d08d867`); issue #207 is CLOSED. No endpoint, response contract, schema, migration, dependency, lockfile or package-version change was made.
 
 Exact-main workflow [#44407304492](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44407304492) / run #765 completed all seven required jobs successfully on the exact current main SHA:
 
@@ -103,7 +107,7 @@ The scope recommendation is recorded in [RELEASE-SCOPE.md](../RELEASE-SCOPE.md),
 - Qualified dependency/license review [#23](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/23): **OPEN / PARTIAL**.
 - Authorized product/release scope [#13](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/13), load/restore [#24](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/24), operations ownership [#26](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/26), and governance/authority [#32](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/32): **OPEN**.
 
-The exact-main CI and maintainer-authored regressions are not independent review, legal approval, provider qualification, risk acceptance, or production authorization. No SemVer increment is warranted by the F1.51 or F1.52 work described here. Package 0.6.2 remains private and unreleased.
+The exact-main CI and maintainer-authored regressions are not independent review, legal approval, provider qualification, risk acceptance, or production authorization. No SemVer increment is warranted by the F1.51/F1.52 merged work or the F1.53 unmerged candidate described here. Package 0.6.2 remains private and unreleased.
 
 ## 6. F1.52 merged maintainer increment — [PR #208 MERGED](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/208); issue #207 CLOSED
 
@@ -121,6 +125,18 @@ PR #208 merged to main at `ccd454c0fa8bc49a91526756819af451c1a390d2`; implementa
 
 PR #208 recorded zero formal review submissions and zero inline review threads. This merged work remains maintainer-led regression hardening, not independent security/legal approval. It does not complete reviews #14/#25 or any other release gate. No schema, migration, endpoint, response-contract, dependency, lockfile, package-version, or SemVer change was made.
 
-## 7. Release decision
+## 7. F1.53 current maintainer candidate — [PR #211 OPEN](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/211); issue #210 OPEN
 
-**NO-GO / NOT_PRODUCTION_CERTIFIED.** Do not publish, tag, deploy, or represent VirgoScorpio Hub 0.6.2 as production-ready. F1.52 / [PR #208](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/208) is merged and exact-main workflow #765 passed 7/7 jobs; this is maintainer/automation evidence only, with zero formal PR reviews or inline threads. Independent assurance, dependency/license review, provider, product, operations, governance, and authorized release-owner obligations remain open.
+F1.53 addresses a write-boundary time-of-check/time-of-use race in `POST /api/v1/sites/{siteId}/community/friends/{userId}`. The former route checked the addressee's active account and same-site membership in a preflight SELECT, then inserted the friendship separately; requester eligibility could also change between request authorization and persistence. The candidate retains the early preflight and changes only the final friendship write to a parameterized `INSERT ... SELECT`.
+
+The write materializes and locks both participant user rows in deterministic UUID order, then materializes and locks all matching requested-site membership rows in deterministic user-ID / role-ID order. It requires both accounts to remain active and both same-site memberships to remain present. Membership `EXISTS` predicates prevent multiple role rows from multiplying the insert source. The existing blocked-state conflict behavior, generic non-disclosing `404 ERR_VIRGOSCORPIO_HUB_COMMUNITY_USER_NOT_FOUND`, route, HTTP status and response shape remain unchanged. No helper/API, schema, migration, dependency, lockfile, package-version or SemVer change is introduced.
+
+The regression fixture covers addressee/requester disablement after preflight/authorization, revocation of either participant's same-site membership, actual row-lock waits for concurrent disablement and membership deletion, multiple-role membership, blocked-state preservation, ID/display-name non-disclosure, and unchanged Site A/Site B snapshots. Local focused PostgreSQL integration passed **20/20** with zero failures/skips/TODOs. Local `npm run check` passed **667/670** with zero failures and three Windows-specific skips (Node.js 26.12.1 with a 4 GiB V8 heap); artifact verification passed **238 required paths / 268 JavaScript files**; the tenant inventory is current at **28 families / 80 route patterns / 21 source files / 57 test files**; the updated Markdown link audit checked **241 relative links across all 9 Markdown files in the PR diff with zero broken links**; and `git diff --check` passed. All 18 migrations were already applied in the disposable local database; no fresh-migration claim is made.
+
+Candidate branch `security/f1-53-community-friendship-create-race-2026-11-18` contains runtime implementation commit `5ddae486ff39635f33b0594475626542643d18fb`; current PR head is `62b14371ca430f9d7723bf816924b74568060af8`. Exact-head push workflow [#44434648866 / run #771](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44434648866) and PR workflow [#44434656869 / run #772](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44434656869) both completed successfully. In each run, all six applicable candidate jobs passed: Node.js 22.23.4, Node.js 24.22.1, PostgreSQL/Memgraph integration, browser editor/accessibility smoke, CodeQL, and candidate evidence consolidation. The mainline-only dependency/SBOM attestation job was skipped by design for candidate events; no candidate attestation or exact-main readiness result is claimed. The current mainline readiness artifact remains the F1.52 source-bound record described above until F1.53 is merged and independently revalidated on main.
+
+GitHub records **zero formal review submissions and zero inline review threads** on PR #211. These CI and regression results are maintainer/automation evidence only. They do not satisfy independent tenant/site review #14 or broader platform security assessment #25; both remain OPEN / NOT PERFORMED. Issue #210 remains OPEN until the PR is merged. F1.53 is not yet merged or included in canonical release readiness. Package 0.6.2 remains private/unreleased and production remains **NO-GO / NOT_PRODUCTION_CERTIFIED**.
+
+## 8. Release decision
+
+**NO-GO / NOT_PRODUCTION_CERTIFIED.** Do not publish, tag, deploy, or represent VirgoScorpio Hub 0.6.2 as production-ready. F1.52 / [PR #208](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/208) remains the latest merged runtime increment; exact-main workflow #765 passed 7/7 jobs on its runtime merge SHA, and current-main docs-only workflow #768 passed 7/7 jobs on `c07c10763f0660c3d0d60b755de0429211f75b14`. F1.53 / [PR #211](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/211) has passing exact-head candidate workflows #771/#772 but remains unmerged, with zero formal review submissions or inline threads. All are maintainer/automation evidence only. Independent assurance, dependency/license review, provider, product, operations, governance, and authorized release-owner obligations remain open; production remains NO-GO.
