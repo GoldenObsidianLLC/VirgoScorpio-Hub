@@ -236,7 +236,88 @@ async function handlePlatformRoute(ctx) {
     )
   ) {if(!localPool||!actor.user.id)throw fail(503,'ERR_VIRGOSCORPIO_HUB_COMMUNITY_DISABLED','Community groups require PostgreSQL and a signed-in user.');const siteId=groups[1],body=method==='POST'?await readJson(req,Math.min(maxBody,32_000)):{};await siteIdFor({ req, url, body, actor, routeSiteId: siteId });
     if(!groups[2]&&method==='GET'){const q=await localPool.query(`SELECT g.id,g.slug,g.name,g.description,g.privacy,g.created_by,g.created_at,(SELECT count(*)::int FROM social_group_memberships gm WHERE gm.group_id=g.id AND gm.status='active') member_count,(SELECT status FROM social_group_memberships gm WHERE gm.group_id=g.id AND gm.user_id=$2) my_status FROM social_groups g WHERE g.site_id=$1 AND (g.privacy='public' OR g.created_by=$2 OR EXISTS(SELECT 1 FROM social_group_memberships gm WHERE gm.group_id=g.id AND gm.user_id=$2 AND gm.status='active')) ORDER BY g.created_at DESC LIMIT 200`,[siteId,actor.user.id]);return sendJson(res,200,{groups:q.rows,requestId});}
-    if(!groups[2]&&method==='POST'){await requireCapability(actor,siteId,'content:create');const v=validateGroup(body);if(!v.valid)throw fail(422,'ERR_VIRGOSCORPIO_HUB_GROUP_INVALID','Group validation failed.',v.errors);const client=await localPool.connect();try{await client.query('BEGIN');const q=await client.query('INSERT INTO social_groups(site_id,slug,name,description,privacy,created_by) VALUES($1,$2,$3,$4,$5,$6) RETURNING *',[siteId,body.slug,body.name.trim(),body.description||'',body.privacy||'public',actor.user.id]);await client.query("INSERT INTO social_group_memberships(group_id,user_id,role,status) VALUES($1,$2,'owner','active')",[q.rows[0].id,actor.user.id]);await client.query('COMMIT');return sendJson(res,201,{group:q.rows[0],requestId});}catch(e){await client.query('ROLLBACK').catch(()=>{});throw e;}finally{client.release();}}
+    if (!groups[2] && method === 'POST') {
+      await requireCapability(actor, siteId, 'content:create');
+      const validation = validateGroup(body);
+      if (!validation.valid) {
+        throw fail(422, 'ERR_VIRGOSCORPIO_HUB_GROUP_INVALID', 'Group validation failed.', validation.errors);
+      }
+
+      const client = await localPool.connect();
+      try {
+        await client.query('BEGIN');
+        // Membership removal locks the site before memberships; take the compatible FK lock first to avoid a lock cycle.
+        await client.query('SELECT id FROM sites WHERE id=$1 FOR KEY SHARE', [siteId]);
+        // Count aggregates exhaust both materialized lock sets and lock every matching row.
+        const groupResult = await client.query(
+          `WITH participant_users AS MATERIALIZED (
+             SELECT u.id, u.status
+             FROM users u
+             WHERE u.id = $6
+             ORDER BY u.id
+             FOR UPDATE OF u
+           ), participant_memberships AS MATERIALIZED (
+             SELECT sm.user_id, sm.role_id
+             FROM site_memberships sm
+             JOIN participant_users pu ON pu.id = sm.user_id
+             WHERE sm.site_id = $1
+             ORDER BY sm.user_id, sm.role_id
+             FOR UPDATE OF sm
+           ), participant_roles AS MATERIALIZED (
+             SELECT r.id, r.capabilities
+             FROM roles r
+             JOIN participant_memberships pm ON pm.role_id = r.id
+             ORDER BY r.id
+             FOR UPDATE OF r
+           ), authorized_actor AS MATERIALIZED (
+             SELECT pu.id
+             FROM participant_users pu
+             WHERE pu.status = 'active'
+               AND (
+                 SELECT count(*)
+                 FROM participant_memberships pm
+                 WHERE pm.user_id = pu.id
+               ) > 0
+               AND (
+                 SELECT count(*)
+                 FROM participant_roles pr
+                 WHERE pr.capabilities ? $7
+                    OR pr.capabilities ? 'site:manage'
+                    OR pr.capabilities ? '*'
+               ) > 0
+           )
+           INSERT INTO social_groups(site_id,slug,name,description,privacy,created_by)
+           SELECT $1,$2,$3,$4,$5,authorized_actor.id
+           FROM authorized_actor
+           RETURNING *`,
+          [
+            siteId,
+            body.slug,
+            body.name.trim(),
+            body.description || '',
+            body.privacy || 'public',
+            actor.user.id,
+            'content:create',
+          ]
+        );
+
+        if (!groupResult.rows[0]) {
+          throw fail(403, 'ERR_VIRGOSCORPIO_HUB_FORBIDDEN', 'The content:create capability is required for this site.');
+        }
+
+        await client.query(
+          "INSERT INTO social_group_memberships(group_id,user_id,role,status) VALUES($1,$2,'owner','active')",
+          [groupResult.rows[0].id, actor.user.id]
+        );
+        await client.query('COMMIT');
+        return sendJson(res, 201, { group: groupResult.rows[0], requestId });
+      } catch (error) {
+        await client.query('ROLLBACK').catch(() => {});
+        throw error;
+      } finally {
+        client.release();
+      }
+    }
     if (groups[3] === 'join') {
       // Resolve and lock eligibility at the same write boundary as the membership mutation.
       // Preserve a stable lock order: user, site memberships, then group.
