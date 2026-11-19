@@ -1,32 +1,32 @@
-### Current exact-main evidence snapshot — 18 November 2026 America/Chicago (0.6.2, F1.53 PR #211 merged; workflow #776)
+### Current exact-main evidence snapshot — 18 November 2026 America/Chicago (0.6.2, F1.54 PR #213 merged; workflow #779)
 
-Current repository main is e8913fa812304e80dc4c8846f7ea637a2fa4e4d1. F1.53 runtime changes merged through [PR #211](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/211); implementation commit 5ddae486ff39635f33b0594475626542643d18fb; code-bearing candidate head 62b14371ca430f9d7723bf816924b74568060af8; final PR head f4193675fc729cc5d1648a7054f2443ff4378f08; issue #210 is CLOSED. Exact-main [workflow #44445082339 / run 776](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44445082339), attempt 1, completed all seven jobs successfully on the exact merge SHA.
+Current repository main is `c247e1cb1daa5683c3a74aa6856e9718d92b4557`. F1.54 runtime changes merged through [PR #213](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/213); implementation commit and validated PR head are `a2198c4b0cf3ead80bd47718db7b68e666642e3d`; base main was `e8913fa812304e80dc4c8846f7ea637a2fa4e4d1`; issue #212 is CLOSED. Candidate push/PR workflows #777/#778 passed their six applicable functional jobs. Exact-main [workflow #44467525998 / run #779](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44467525998), attempt 1, completed all seven jobs successfully on the exact merge SHA.
 
-- Node.js 22.23.4 and 24.22.1 each passed **670/670 Hub tests** and **94/94 EnginEx 7.0.0 tests**, with zero failures/skips. Both full and production-only npm audit scopes reported zero vulnerabilities.
+- Node.js 22.23.4 and 24.22.1 each passed **670/670 Hub tests** and **94/94 EnginEx 7.0.0 tests**, with zero failures or skips. Both full and production-only npm audit scopes reported zero vulnerabilities.
 - PostgreSQL/Memgraph passed **153/153 live integration tests**, with zero failures, skips or TODOs. Fresh migrations applied all 18 migrations; the idempotent second pass verified all 18 as already applied.
-- Browser editor/accessibility smoke passed 9/9. CodeQL passed. Mainline SLSA provenance and CycloneDX SBOM attestations were created and verified; exact-source CI evidence consolidation passed.
-- Consolidated readiness artifact **14493590005** (archive SHA-256 38a8d9b4c479cff4ac6145cbe31afd715e04f9c69c661762addd6bf2a90ed7b9) contains final readiness JSON SHA-256 d9d0ed95c4fe60d50ccb4054d0c7b6d75aa67ea88e13bad1c8043e13633987a0 and is source-bound to e8913fa812304e80dc4c8846f7ea637a2fa4e4d1. It reports CI EVIDENCE: PASS; FINAL RELEASE READINESS: NOT_PRODUCTION_CERTIFIED; PRODUCTION CERTIFICATION: NO; **8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN**; readyForProduction=false.
+- Browser editor/accessibility smoke passed **9/9**. CodeQL passed. Mainline SLSA provenance and CycloneDX 1.5 SBOM attestations were created and verified; the SBOM contains 200 components and 201 dependency records, and the verified subjects include package-lock.json and the generated SBOM.
+- Exact-source evidence consolidation and canonical post-producer readiness finalization passed. Readiness artifact **14502244347** (archive SHA-256 `a86a098067351d02d489ce14d835c85f0c28e320a305afbb0a27337cdb3a2b86`) contains finalized readiness JSON SHA-256 `e5d50ccf175bb70c373b7455750958ceb2fd287ac34fe946719008d51acdda3`, source-bound to `c247e1cb1daa5683c3a74aa6856e9718d92b4557`. It reports CI EVIDENCE: PASS; FINAL RELEASE READINESS: NOT_PRODUCTION_CERTIFIED; PRODUCTION CERTIFICATION: NO; **8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN**; `readyForProduction=false`.
 
-| Workflow #776 evidence | Artifact ID | Archive SHA-256 |
+| Workflow #779 evidence | Artifact ID | Archive SHA-256 |
 |---|---:|---|
-| Consolidated readiness / CI evidence | 14493590005 | 38a8d9b4c479cff4ac6145cbe31afd715e04f9c69c661762addd6bf2a90ed7b9 |
-| Node.js 22.23.4 CI evidence | 14492758685 | e06e4d3cf97fa402e0d67f6d77e8b971bdfa71279562dceccaa784822d49f221 |
-| Node.js 24.22.1 CI evidence | 14492004699 | 0dab246990a47573d1d4c2a9f558bf95b0966e48c456fb319e778296b03e8d77 |
-| PostgreSQL/Memgraph integration CI evidence | 14492579021 | 9786d3d23e092512d29fe49346004c6e6199a0585828ac324aa01c85d49e9c4c |
-| Live PostgreSQL/Memgraph integration producer | 14493420448 | 658319f1ea631f1628535325f047dd129a0d6d334516a39843959a370099411b |
-| Browser editor/accessibility smoke | 14492643732 | 27713cea8484fe6eeaf2250c71ebb5f7d85e96692da7d725c20e3ee1364cfd00 |
-| CodeQL static analysis | 14492368071 | 876cdd04f5c3ce78c82a1c81a53247195abc7cc74d3d6a786796f5be2ed4b058 |
-| Signed supply-chain evidence | 14492644016 | 9eb838845b9543918e724b6e9d016eabf4cec731586ef6a1ff2c37c06e9fd71d |
-| Node.js 22.23.4 dependency evidence | 14492269418 | 364f7ace15e7107d4cca12bf4bddf4a35bc7047daf956a910604887328342497 |
-| Node.js 24.22.1 dependency evidence | 14492079686 | f942a3dba0affceb2e0c46349821730641b0dccd0883c413bce8d5bb5f50c783 |
+| Consolidated readiness / CI evidence | 14502244347 | a86a098067351d02d489ce14d835c85f0c28e320a305afbb0a27337cdb3a2b86 |
+| Node.js 22.23.4 CI evidence | 14502772675 | d8739a6749977b313f761c3cb2045414c131d3a1898c0206e75853f2c4205074 |
+| Node.js 24.22.1 CI evidence | 14502358309 | 9631d55a519e6aebfa3b077d8f39a1bafbb7d33dd0e07a24da081d0433e07239 |
+| PostgreSQL/Memgraph integration CI evidence | 14502393846 | Included in the source-bound readiness artifact #14502244347. |
+| Live PostgreSQL/Memgraph integration producer | 14502214046 | Included in the source-bound readiness artifact #14502244347. |
+| Browser editor/accessibility smoke | 14502199308 | 6720089d63fa54ba4b7a59822ffa926f6cabde120a87f19475a2eecceeda79d7 |
+| CodeQL static analysis | 14502404123 | Included in the source-bound readiness artifact #14502244347. |
+| Signed supply-chain evidence | 14502173269 | f4fe2dd6617caf7c54d8dca02dc325270129f5fbba3257aef6b10c1b3ce239e7 |
+| Node.js 22.23.4 dependency evidence | 14502228840 | Included in the source-bound readiness artifact #14502244347. |
+| Node.js 24.22.1 dependency evidence | 14502453297 | Included in the source-bound readiness artifact #14502244347. |
 
-The source-bound lockfile SHA-256 is 8f3786bcfcd03d0b63761c7107e4d757ae5b45171ba2f6c086ff38c027c8b086. CycloneDX 1.5 SBOM SHA-256 is f19ed6da7d2f19bffb012aba566bb13eb0d75f1537cf3500262f3829cc12aac8 (200 components / 201 dependency records). The signed verification summary confirms package-lock.json and the SBOM are the verified attestation subjects.
+The source-bound lockfile SHA-256 is `8f3786bcfcd03d0b63761c7107e4d757ae5b45171ba2f6c086ff38c027c8b086`. CycloneDX 1.5 SBOM SHA-256 is `bf85ecc52573f2ded781c385801b8f669f38401b451053babf9bdd78b77848eb` (200 components / 201 dependency records). Signed verification summary SHA-256 is `99eb2a9fc98db59ddec45d89a763d3a3846ad3ac9bc69ae7c1fe510ba215cddf`; it records package-lock.json and the SBOM as verified attestation subjects.
 
-The tenant-isolation navigation inventory remains 28 route/flow families, 80 declared route patterns, 21 implementation source files and 57 referenced test files. F1.53 adds no new route family or route pattern. This maintainer-authored navigation and drift-detection evidence does not prove exhaustive route discovery or satisfy independent review #14.
+The tenant-isolation navigation inventory remains 28 route/flow families, 80 declared route patterns, 21 implementation source files and 57 referenced test files. F1.54 adds no new route family or route pattern. This maintainer-authored navigation and drift-detection evidence does not prove exhaustive route discovery or satisfy independent review #14.
 
 ### 2.1 Interpretation of the two PARTIAL classifications
 
-The two PARTIAL rows are (1) incomplete qualified human dependency, lockfile and license review, and (2) the service-less integration diagnostic. Skipped service-less cases are not live integration passes. They remain distinct from workflow #776's separate 153/153 live PostgreSQL/Memgraph result with zero skips. Do not promote either PARTIAL item based on successful CI, live producer, or automated attestations.
+The two PARTIAL rows are (1) incomplete qualified human dependency, lockfile and license review, and (2) the service-less integration diagnostic (47 tests, 1 pass / 46 skipped in each runtime's service-less run). Skipped service-less cases are not live integration passes. They remain distinct from workflow #779's separate 153/153 live PostgreSQL/Memgraph result with zero skips. Do not promote either PARTIAL item based on successful CI, the live producer, or automated attestations.
 
 ### Historical exact-main evidence snapshot — F1.51 after documentation PR #206 (main `584831648b7e96d00ccec77bb4565d4bfb4730a6`; workflow #762; superseded by F1.52 / #765)
 

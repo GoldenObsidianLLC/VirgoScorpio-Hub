@@ -1,10 +1,13 @@
 # F1.54 — Community group join revalidates site membership at the write boundary
 
-**Date:** 18 November 2026 America/Chicago  
-**Status:** Local implementation and PostgreSQL regression validated; candidate not yet committed, pushed or opened as a pull request.  
-**Parent:** [Issue #124](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/124)  
-**Tracking:** [Issue #212](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/212)  
-**Base main:** e8913fa812304e80dc4c8846f7ea637a2fa4e4d1 (F1.53 / PR #211 merged)
+**Date:** 18 November 2026 America/Chicago
+**Status:** Merged maintainer implementation; [PR #213 MERGED](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/213) merged into main at `c247e1cb1daa5683c3a74aa6856e9718d92b4557`, closing issue [#212](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/212). Candidate workflows #777/#778 and exact-main workflow #779 passed; no formal PR review or independent assessment is recorded.
+**Parent:** [Issue #124](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/124)
+**Tracking:** [Issue #212](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/212)
+**Base main before merge:** `e8913fa812304e80dc4c8846f7ea637a2fa4e4d1` (F1.53 / PR #211 merged)
+**Implementation commit / PR head:** `a2198c4b0cf3ead80bd47718db7b68e666642e3d`
+**Merge commit / current main:** `c247e1cb1daa5683c3a74aa6856e9718d92b4557`
+**Exact-main validation:** [workflow #44467525998 / run #779](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44467525998), 7/7 jobs passed.
 
 ## Finding and reproduction
 
@@ -47,6 +50,10 @@ The generated tenant-isolation inventory is current: 28 route/flow families, 80 
 
 ## Evidence and release boundary
 
-The implementation is a maintainer-led regression hardening item. Focused local PostgreSQL and the full local check are green; hosted candidate workflows have not yet run because this working tree has not yet been committed or pushed. This report is not independent security approval.
+Candidate push workflow #777 and PR workflow #778 completed successfully on implementation commit `a2198c4b0cf3ead80bd47718db7b68e666642e3d`; all six applicable functional jobs passed in each. Mainline [workflow #44467525998 / run #779](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44467525998) then passed all seven jobs on merge SHA `c247e1cb1daa5683c3a74aa6856e9718d92b4557`: Node 22/24 matrices; live PostgreSQL/Memgraph 153/153 with zero skips; all 18 fresh and idempotent migrations; browser smoke 9/9; CodeQL; signed provenance/SBOM; and exact-source evidence consolidation.
 
-Independent tenant/site review #14 and platform security assessment #25 remain OPEN / NOT PERFORMED. Qualified dependency/license review #23 remains OPEN / PARTIAL; other production evidence gates remain open. Package 0.6.2 remains private and unreleased. Production remains **NO-GO / NOT_PRODUCTION_CERTIFIED**. No release tag, GitHub Release, npm publication, deployment, production-data testing, assessor engagement, spending or risk acceptance is authorized.
+Canonical readiness artifact #14502244347 is source-bound to the merge SHA. Archive SHA-256: `a86a098067351d02d489ce14d835c85f0c28e320a305afbb0a27337cdb3a2b86`; finalized readiness JSON SHA-256: `e5d50ccf175bb70c373b7455750958ceb2fd287ac34fe946719008d51acdda3`. Readiness remains **8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN**, `readyForProduction=false`, production **NO-GO / NOT_PRODUCTION_CERTIFIED**. The two PARTIAL rows remain qualified human dependency/license review and the service-less diagnostic (46 of 47 tests skipped in each runtime run); those skips are not live integration results.
+
+PR #213 merged on 18 November 2026 America/Chicago at `c247e1cb1daa5683c3a74aa6856e9718d92b4557`, closing issue #212. It has zero formal review submissions and zero inline review threads. All regression, CI, CodeQL, and attestation results are maintainer/automation evidence only; they do not satisfy independent tenant/site review #14 or platform security assessment #25. Both remain OPEN / NOT PERFORMED; qualified dependency/license review #23 remains OPEN / PARTIAL. Provider, product-parity, plugin-isolation, load/restore, observability, operations, and governance gates remain open.
+
+Package 0.6.2 remains private and unreleased. No SemVer increment, release tag, GitHub Release, npm publication, production deployment, production-data testing, assessor engagement, spending, or risk acceptance is authorized. Production remains **NO-GO / NOT_PRODUCTION_CERTIFIED**.
