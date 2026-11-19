@@ -1,11 +1,13 @@
 # F1.55 — Friendship acceptance authorization-race report
 
 **Date:** 19 November 2026
-**Status:** In-progress maintainer candidate; not merged
-**Issue:** [#215 — Revalidate friendship acceptance addressee at the write boundary](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/215)
+**Status:** Merged maintainer hardening; [PR #216 MERGED](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/216)
+**Issue:** [#215 — Revalidate friendship acceptance addressee at the write boundary](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/215) — CLOSED
 **Parent:** [#124 — maintainer hardening tracker](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/124)
 **Branch:** `security/f1-55-community-friendship-acceptance-revocation-2026-11-19`
 **Base:** main `91a93f370205335321c65d68e706f830251936c3`
+**Implementation commit:** `84ce5eb71127411573d4a0b5e81dda94ecef3f81`
+**Merge commit / exact-main source:** `db0b641880a5c842ffdcc2cf1dda6bedde58d033` via [PR #216](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/216), merged 19 November 2026 07:51:37 UTC
 
 ## Summary
 
@@ -58,14 +60,20 @@ The two-site tenant/community integration fixture now covers:
 | JavaScript syntax checks | Passed for `apps/api/src/platform-routes.js` and `test/integration/tenant-community-object-isolation.integration.test.js` |
 | Tenant-isolation inventory regeneration | Passed; 28 families / 80 route patterns / 21 implementation sources / 57 referenced test files |
 | Full `npm run check` | **667/670 passed; 0 failed; 3 Windows-specific skips.** The inventory is current. An initial post-refresh full run encountered an unrelated transient loopback `bad port` in an observability test; that test passed 1/1 when isolated, and the subsequent complete `npm run check` passed. |
-| Candidate hosted CI / exact-head evidence | Pending; mainline workflow #782 is baseline evidence only and does not validate this branch. |
+| Candidate push workflow #783 | Passed six applicable functional jobs; exact implementation head `84ce5eb71127411573d4a0b5e81dda94ecef3f81`; live PostgreSQL/Memgraph 159/159; fresh/idempotent migrations 18/18. |
+| Candidate pull-request workflow #784 | Passed six applicable functional jobs; exact implementation head `84ce5eb71127411573d4a0b5e81dda94ecef3f81`; live PostgreSQL/Memgraph 159/159; fresh/idempotent migrations 18/18. |
+| Exact-main workflow #785 | **7/7 jobs passed** on merge commit `db0b641880a5c842ffdcc2cf1dda6bedde58d033`; Node 22/24 matrix, live database, migrations, browser, CodeQL, signed attestations and evidence consolidation passed. |
 
 The focused integration ran on Node.js 26.12.1 against a disposable PostgreSQL 18 container bound to loopback with a temporary in-memory data directory. It used the existing project test fixture and migrations; no persistent application data or production endpoint was used.
 
 ## Source and assurance boundaries
 
-The branch starts from repository main `91a93f370205335321c65d68e706f830251936c3`. Exact-main workflow [#782](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44472194473) passed 7/7 jobs on that baseline after documentation-only PR #214. The latest merged runtime increment remains F1.54 / PR #213 at runtime merge SHA `c247e1cb1daa5683c3a74aa6856e9718d92b4557`. Workflow #782 is not candidate CI and must not be represented as validating F1.55.
+Implementation commit `84ce5eb71127411573d4a0b5e81dda94ecef3f81` merged through [PR #216](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/216) at exact main SHA `db0b641880a5c842ffdcc2cf1dda6bedde58d033`; issue #215 is CLOSED. Candidate push [workflow #783](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44481965771) and pull-request [workflow #784](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44482025200) each passed all six applicable functional jobs. Exact-main [workflow #785](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44482863945) passed all seven jobs on the merged SHA. This exact-main run, not the earlier baseline workflow #782, validates F1.55 on main.
 
-This is maintainer-led regression hardening, not an independent security assessment or risk acceptance. Independent tenant-isolation review [#14](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/14) and platform security assessment [#25](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/25) remain open and not performed. No formal review of this candidate has occurred while it remains unmerged.
+Workflow #785 reports Node.js 22.23.4 and 24.22.1 each passing 670/670 Hub tests and 94/94 EnginEx tests; the live PostgreSQL/Memgraph suite passed 159/159 with zero failures, skips, or TODOs; 18/18 migrations applied fresh and 18/18 were skipped on idempotent re-entry; browser smoke passed 9/9; CodeQL, signed mainline provenance/SBOM, and exact-source evidence consolidation passed. The service-less diagnostic remains PARTIAL (47 cases: 1 pass / 46 skipped per runtime) and is not a substitute for the live 159-test integration result.
 
-Package `virgoscorpio-hub@0.6.2` remains private and unreleased. No SemVer increment, tag, GitHub Release, npm publication, deployment, waiver, or production certification is authorized. The current mainline readiness baseline remains **8 PASS / 2 PARTIAL / 14 MISSING_EVIDENCE**, `readyForProduction=false`, production **NO-GO / NOT_PRODUCTION_CERTIFIED**.
+The exact-source readiness artifact #14508174935 is bound to `db0b641880a5c842ffdcc2cf1dda6bedde58d033` (archive SHA-256 `b4bedbc44d9067d04f5327cc57337f94238c6d18cd93fe1aff2beb74574bc786`; readiness JSON SHA-256 `47c6a13ea9f4ca49449a618d20dfcf5c6094def7b92d930b7399886513976ea9`). It remains **8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN**, `readyForProduction=false`, `NOT_PRODUCTION_CERTIFIED`, production **NO-GO**.
+
+PR #216 merged with zero formal review submissions and zero inline review threads. This remains maintainer-led regression hardening, not an independent security assessment or risk acceptance. Independent tenant-isolation review [#14](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/14) and platform security assessment [#25](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/25) remain open and not performed.
+
+Package `virgoscorpio-hub@0.6.2` remains private and unreleased. No SemVer increment, tag, GitHub Release, npm publication, deployment, waiver, risk acceptance, or production certification is authorized.

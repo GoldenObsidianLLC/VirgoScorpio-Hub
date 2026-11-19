@@ -1431,54 +1431,54 @@
     "localValidationSummary": "PASS: 202 required paths, 211 JavaScript files syntax-checked; 461 unit tests (458 passed, 0 failed, 3 Windows/platform-specific skips); focused AI route/API/context suites 45/45; package-lock audit 0 vulnerabilities."
   },
   "latestMainEvidence": {
-    "reviewedAt": "2026-11-18",
+    "reviewedAt": "2026-11-19",
     "version": "0.6.2",
-    "commit": "c247e1cb1daa5683c3a74aa6856e9718d92b4557",
+    "commit": "db0b641880a5c842ffdcc2cf1dda6bedde58d033",
     "pullRequest": {
-      "number": 213,
-      "title": "F1.54: Revalidate site membership at community group join",
-      "mergedAt": "2026-11-19T05:47:02Z",
-      "mergeCommit": "c247e1cb1daa5683c3a74aa6856e9718d92b4557",
-      "head": "a2198c4b0cf3ead80bd47718db7b68e666642e3d",
-      "base": "e8913fa812304e80dc4c8846f7ea637a2fa4e4d1",
+      "number": 216,
+      "title": "F1.55: Revalidate friendship acceptance addressee at the write boundary",
+      "mergedAt": "2026-11-19T07:51:37Z",
+      "mergeCommit": "db0b641880a5c842ffdcc2cf1dda6bedde58d033",
+      "head": "84ce5eb71127411573d4a0b5e81dda94ecef3f81",
+      "base": "91a93f370205335321c65d68e706f830251936c3",
       "formalReviews": 0,
       "inlineReviewThreads": 0,
       "reviewDecision": "NONE"
     },
     "runtimeChange": {
-      "feature": "F1.54",
-      "pullRequest": 213,
-      "issue": 212,
+      "feature": "F1.55",
+      "pullRequest": 216,
+      "issue": 215,
       "issueState": "CLOSED",
       "parentIssue": 124,
-      "branch": "security/f1-54-community-group-join-membership-race-2026-11-18",
-      "mergeCommit": "c247e1cb1daa5683c3a74aa6856e9718d92b4557",
-      "implementationCommit": "a2198c4b0cf3ead80bd47718db7b68e666642e3d",
-      "pullRequestHead": "a2198c4b0cf3ead80bd47718db7b68e666642e3d",
-      "mergedAt": "2026-11-19T05:47:02Z",
+      "branch": "security/f1-55-community-friendship-acceptance-revocation-2026-11-19",
+      "mergeCommit": "db0b641880a5c842ffdcc2cf1dda6bedde58d033",
+      "implementationCommit": "84ce5eb71127411573d4a0b5e81dda94ecef3f81",
+      "pullRequestHead": "84ce5eb71127411573d4a0b5e81dda94ecef3f81",
+      "mergedAt": "2026-11-19T07:51:37Z",
       "formalReviews": 0,
       "inlineReviewThreads": 0
     },
     "previousRuntimeChange": {
-      "feature": "F1.53",
-      "pullRequest": 211,
-      "issue": 210,
+      "feature": "F1.54",
+      "pullRequest": 213,
+      "issue": 212,
       "issueState": "CLOSED",
-      "mergeCommit": "e8913fa812304e80dc4c8846f7ea637a2fa4e4d1",
-      "implementationCommit": "5ddae486ff39635f33b0594475626542643d18fb"
+      "mergeCommit": "c247e1cb1daa5683c3a74aa6856e9718d92b4557",
+      "implementationCommit": "a2198c4b0cf3ead80bd47718db7b68e666642e3d"
     },
-    "previousMainCommit": "e8913fa812304e80dc4c8846f7ea637a2fa4e4d1",
+    "previousMainCommit": "c247e1cb1daa5683c3a74aa6856e9718d92b4557",
     "workflow": {
       "name": "VirgoScorpio Hub CI",
-      "runId": 44467525998,
-      "runNumber": 779,
-      "url": "https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44467525998",
+      "runId": 44482863945,
+      "runNumber": 785,
+      "url": "https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44482863945",
       "event": "push",
       "attempt": 1,
-      "completedAt": "2026-11-19T05:50:22Z",
+      "completedAt": "2026-11-19T07:54:59Z",
       "completedJobs": 7,
       "successfulJobs": 7,
-      "sourceRevision": "c247e1cb1daa5683c3a74aa6856e9718d92b4557"
+      "sourceRevision": "db0b641880a5c842ffdcc2cf1dda6bedde58d033"
     },
     "results": {
       "node22HubTests": {
@@ -1497,7 +1497,7 @@
         "skipped": 0
       },
       "livePostgresMemgraph": {
-        "passed": 153,
+        "passed": 159,
         "failed": 0,
         "skipped": 0
       },
@@ -1518,24 +1518,24 @@
     },
     "sbom": {
       "lockfileSha256": "8f3786bcfcd03d0b63761c7107e4d757ae5b45171ba2f6c086ff38c027c8b086",
-      "sbomSha256": "f19ed6da7d2f19bffb012aba566bb13eb0d75f1537cf3500262f3829cc12aac8",
+      "sbomSha256": "5752c75e28ec77802a2539197be00725a136e251c5941bde3d3f05516459f4c8",
       "cyclonedx": "1.5",
       "npm": "11.19.1",
       "componentsPerRuntime": 200,
       "dependencyRecordsPerRuntime": 201,
       "attestations": {
-        "workflow": "https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44445082339",
-        "evidenceArtifact": "https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44445082339/artifacts/14492644016",
+        "workflow": "https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44482863945",
+        "evidenceArtifact": "https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44482863945/artifacts/14509153178",
         "verified": true
       }
     },
     "readiness": {
-      "generatedAt": "2026-11-19T05:50:17.748Z",
-      "artifactId": 14502244347,
-      "archiveSha256": "a86a098067351d02d489ce14d835c85f0c28e320a305afbb0a27337cdb3a2b86",
-      "readinessJsonSha256": "e5d50ccf175bb70c373b7455750958ceb2fd287ac34fe946719008d51acdda3",
-      "readinessMarkdownSha256": "63ee95dabe4cef4f5b9361eb2ceceff26bf2d6e1891a8af869bb5095af3fed33",
-      "sourceRevision": "c247e1cb1daa5683c3a74aa6856e9718d92b4557",
+      "generatedAt": "2026-11-19T07:54:53.727Z",
+      "artifactId": 14508174935,
+      "archiveSha256": "b4bedbc44d9067d04f5327cc57337f94238c6d18cd93fe1aff2beb74574bc786",
+      "readinessJsonSha256": "47c6a13ea9f4ca49449a618d20dfcf5c6094def7b92d930b7399886513976ea9",
+      "readinessMarkdownSha256": "457053408b0531e2b90057b3ea2af324fa37edd2d8c9dae9cba87f4933f6e8a8",
+      "sourceRevision": "db0b641880a5c842ffdcc2cf1dda6bedde58d033",
       "pass": 8,
       "partial": 2,
       "blocked": 0,
@@ -1546,34 +1546,34 @@
       "decision": "NO_GO"
     },
     "artifactIds": {
-      "readiness": 14493590005,
-      "node22Ci": 14492758685,
-      "node24Ci": 14492004699,
-      "dependency22": 14492269418,
-      "dependency24": 14492079686,
-      "postgresMemgraph": 14492579021,
-      "liveIntegrationNode22": 14493420448,
-      "browser": 14492643732,
-      "codeql": 14492368071,
-      "supplyChainAttestation": 14492644016
+      "readiness": 14508174935,
+      "node22Ci": 14509895007,
+      "node24Ci": 14509227738,
+      "dependency22": 14508749409,
+      "dependency24": 14508469958,
+      "postgresMemgraph": 14508334573,
+      "liveIntegrationNode22": 14508154756,
+      "browser": 14508484755,
+      "codeql": 14508364226,
+      "supplyChainAttestation": 14509153178
     },
     "artifactDigests": {
-      "readiness": "sha256:38a8d9b4c479cff4ac6145cbe31afd715e04f9c69c661762addd6bf2a90ed7b9",
-      "node22Ci": "sha256:e06e4d3cf97fa402e0d67f6d77e8b971bdfa71279562dceccaa784822d49f221",
-      "node24Ci": "sha256:0dab246990a47573d1d4c2a9f558bf95b0966e48c456fb319e778296b03e8d77",
-      "dependency22": "sha256:364f7ace15e7107d4cca12bf4bddf4a35bc7047daf956a910604887328342497",
-      "dependency24": "sha256:f942a3dba0affceb2e0c46349821730641b0dccd0883c413bce8d5bb5f50c783",
-      "postgresMemgraph": "sha256:9786d3d23e092512d29fe49346004c6e6199a0585828ac324aa01c85d49e9c4c",
-      "liveIntegrationNode22": "sha256:658319f1ea631f1628535325f047dd129a0d6d334516a39843959a370099411b",
-      "browser": "sha256:27713cea8484fe6eeaf2250c71ebb5f7d85e96692da7d725c20e3ee1364cfd00",
-      "codeql": "sha256:876cdd04f5c3ce78c82a1c81a53247195abc7cc74d3d6a786796f5be2ed4b058",
-      "supplyChainAttestation": "sha256:9eb838845b9543918e724b6e9d016eabf4cec731586ef6a1ff2c37c06e9fd71d"
+      "readiness": "sha256:b4bedbc44d9067d04f5327cc57337f94238c6d18cd93fe1aff2beb74574bc786",
+      "node22Ci": "sha256:e20d4576e754e3cf5043bf1424f7301557bfe03eca07225aa1b2759739475532",
+      "node24Ci": "sha256:85d893179eb306926f36dacdba38fa6ed990573218b44dbfa752580b1514b534",
+      "dependency22": "sha256:58b34baf86bd125d3a60a2d09d516d4ddba863f1c38c112401a60e7c6b781b7d",
+      "dependency24": "sha256:4f302f40baa9d7287b97bcac8f8119e9c776e417f989229bdbb2216262eaf148",
+      "postgresMemgraph": "sha256:5c9ef4f5c8e1c5efcc539ec7870961f72701e40cfcefed3e1dd2976ba479c90b",
+      "liveIntegrationNode22": "sha256:26a9e0a3d16d081074218e4de981ca20acdfd49ef671129248d230099c4a1a29",
+      "browser": "sha256:909aea32c91139c836b1733f0ef83f210776187062740d9346f1f3262bbf1bcd",
+      "codeql": "sha256:34adfe9f34ca373dd513408fa9cd2c2ed8a7ab17ca45d1bbf02f86b5d625ee34",
+      "supplyChainAttestation": "sha256:cbed115fd6ebc153e0aa2b60c3ca50229e73472e46a6979653a5ec16d9ea2686"
     },
     "review": {
       "formalPullRequestReviews": 0,
       "inlineReviewThreads": 0,
       "reviewDecision": "NONE",
-      "note": "PR #213 merged with no formal reviews or inline threads; CI and attestations are maintainer/automation evidence only."
+      "note": "PR #216 merged with zero formal review submissions or inline threads; CI, CodeQL and signed attestations are maintainer/automation evidence only."
     },
     "release": {
       "gitHubReleasePublished": false,
@@ -1583,21 +1583,21 @@
     },
     "candidateWorkflows": [
       {
-        "runId": 44467013901,
-        "runNumber": 777,
+        "runId": 44481965771,
+        "runNumber": 783,
         "event": "push",
         "conclusion": "success",
-        "headSha": "a2198c4b0cf3ead80bd47718db7b68e666642e3d"
+        "headSha": "84ce5eb71127411573d4a0b5e81dda94ecef3f81"
       },
       {
-        "runId": 44467066566,
-        "runNumber": 778,
+        "runId": 44482025200,
+        "runNumber": 784,
         "event": "pull_request",
         "conclusion": "success",
-        "headSha": "a2198c4b0cf3ead80bd47718db7b68e666642e3d"
+        "headSha": "84ce5eb71127411573d4a0b5e81dda94ecef3f81"
       }
     ],
-    "evidenceScope": "F1.54 is latest merged runtime. PR #213 closed issue #212. Exact-main workflow #779 passed 7/7 on c247e1c. Readiness artifact #14502244347: 8 PASS / 2 PARTIAL / 14 MISSING_EVIDENCE; readyForProduction=false; production NO-GO. Zero formal PR reviews or inline threads; maintainer/automation evidence only."
+    "evidenceScope": "F1.55 is the latest merged runtime increment. PR #216 closed issue #215. Exact-main workflow #785 passed 7/7 on db0b641. Readiness artifact #14508174935: 8 PASS / 2 PARTIAL / 14 MISSING_EVIDENCE; readyForProduction=false; production NO-GO. Zero formal PR reviews or inline threads; maintainer/automation evidence only."
   },
   "libraryRouteRefactor": {
     "reviewedAt": "2026-11-04",
@@ -2372,39 +2372,39 @@
     ]
   },
   "latestMainSourceEvidence": {
-    "reviewedAt": "2026-11-18",
+    "reviewedAt": "2026-11-19",
     "version": "0.6.2",
-    "sourceRevision": "c247e1cb1daa5683c3a74aa6856e9718d92b4557",
-    "runtimeMergeRevision": "c247e1cb1daa5683c3a74aa6856e9718d92b4557",
-    "previousRuntimeMergeRevision": "e8913fa812304e80dc4c8846f7ea637a2fa4e4d1",
+    "sourceRevision": "db0b641880a5c842ffdcc2cf1dda6bedde58d033",
+    "runtimeMergeRevision": "db0b641880a5c842ffdcc2cf1dda6bedde58d033",
+    "previousRuntimeMergeRevision": "c247e1cb1daa5683c3a74aa6856e9718d92b4557",
     "latestRuntimeChange": {
-      "feature": "F1.54",
-      "issue": 212,
-      "pullRequest": 213,
-      "implementationHead": "a2198c4b0cf3ead80bd47718db7b68e666642e3d",
-      "implementationCommit": "a2198c4b0cf3ead80bd47718db7b68e666642e3d",
-      "mergeCommit": "c247e1cb1daa5683c3a74aa6856e9718d92b4557",
-      "mergedAt": "2026-11-19T05:47:02Z"
+      "feature": "F1.55",
+      "issue": 215,
+      "pullRequest": 216,
+      "implementationHead": "84ce5eb71127411573d4a0b5e81dda94ecef3f81",
+      "implementationCommit": "84ce5eb71127411573d4a0b5e81dda94ecef3f81",
+      "mergeCommit": "db0b641880a5c842ffdcc2cf1dda6bedde58d033",
+      "mergedAt": "2026-11-19T07:51:37Z"
     },
     "documentationReconciliation": {
-      "pullRequest": 211,
-      "head": "f4193675fc729cc5d1648a7054f2443ff4378f08",
-      "mergeCommit": "e8913fa812304e80dc4c8846f7ea637a2fa4e4d1",
-      "mergedAt": "2026-11-19T02:32:33Z",
+      "pullRequest": 214,
+      "head": "950a082b7f28f731f396f84b5ad04b9f4f8ccebb",
+      "mergeCommit": "91a93f370205335321c65d68e706f830251936c3",
+      "mergedAt": "2026-11-19T06:26:35Z",
       "documentationOnly": true,
-      "note": "The final PR head includes a documentation-only follow-up commit after the runtime implementation commit; the merged PR includes F1.53 runtime changes."
+      "note": "Prior documentation-only reconciliation after F1.54; current runtime PR #216 and exact-main workflow #785 are recorded above."
     },
     "workflow": {
       "name": "VirgoScorpio Hub CI",
-      "runId": 44467525998,
-      "runNumber": 779,
-      "url": "https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44467525998",
+      "runId": 44482863945,
+      "runNumber": 785,
+      "url": "https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44482863945",
       "event": "push",
       "attempt": 1,
-      "completedAt": "2026-11-19T05:50:22Z",
+      "completedAt": "2026-11-19T07:54:59Z",
       "completedJobs": 7,
       "successfulJobs": 7,
-      "sourceRevision": "c247e1cb1daa5683c3a74aa6856e9718d92b4557"
+      "sourceRevision": "db0b641880a5c842ffdcc2cf1dda6bedde58d033"
     },
     "results": {
       "node22HubTests": {
@@ -2423,7 +2423,7 @@
         "skipped": 0
       },
       "livePostgresMemgraph": {
-        "passed": 153,
+        "passed": 159,
         "failed": 0,
         "skipped": 0
       },
@@ -2444,24 +2444,24 @@
     },
     "supplyChain": {
       "lockfileSha256": "8f3786bcfcd03d0b63761c7107e4d757ae5b45171ba2f6c086ff38c027c8b086",
-      "sbomSha256": "bf85ecc52573f2ded781c385801b8f669f38401b451053babf9bdd78b77848eb",
+      "sbomSha256": "5752c75e28ec77802a2539197be00725a136e251c5941bde3d3f05516459f4c8",
       "cyclonedx": "1.5",
       "components": 200,
       "dependencyRecords": 201,
-      "verificationSummarySha256": "99eb2a9fc98db59ddec45d89a763d3a3846ad3ac9bc69ae7c1fe510ba215cddf",
+      "verificationSummarySha256": "cbed115fd6ebc153e0aa2b60c3ca50229e73472e46a6979653a5ec16d9ea2686",
       "attestations": {
-        "workflowRun": 44467525998,
-        "artifactId": 14502173269,
+        "workflowRun": 44482863945,
+        "artifactId": 14509153178,
         "verified": true
       }
     },
     "readiness": {
-      "generatedAt": "2026-11-19T05:50:17.748Z",
-      "artifactId": 14502244347,
-      "archiveSha256": "a86a098067351d02d489ce14d835c85f0c28e320a305afbb0a27337cdb3a2b86",
-      "readinessJsonSha256": "e5d50ccf175bb70c373b7455750958ceb2fd287ac34fe946719008d51acdda3",
-      "readinessMarkdownSha256": "63ee95dabe4cef4f5b9361eb2ceceff26bf2d6e1891a8af869bb5095af3fed33",
-      "sourceRevision": "c247e1cb1daa5683c3a74aa6856e9718d92b4557",
+      "generatedAt": "2026-11-19T07:54:53.727Z",
+      "artifactId": 14508174935,
+      "archiveSha256": "b4bedbc44d9067d04f5327cc57337f94238c6d18cd93fe1aff2beb74574bc786",
+      "readinessJsonSha256": "47c6a13ea9f4ca49449a618d20dfcf5c6094def7b92d930b7399886513976ea9",
+      "readinessMarkdownSha256": "457053408b0531e2b90057b3ea2af324fa37edd2d8c9dae9cba87f4933f6e8a8",
+      "sourceRevision": "db0b641880a5c842ffdcc2cf1dda6bedde58d033",
       "pass": 8,
       "partial": 2,
       "blocked": 0,
@@ -2472,29 +2472,29 @@
       "decision": "NO_GO"
     },
     "review": {
-      "runtimePullRequest": 213,
+      "runtimePullRequest": 216,
       "runtimeFormalReviews": 0,
       "runtimeInlineReviewThreads": 0,
       "reviewDecision": "NONE",
-      "qualification": "PR #213 merged with zero formal review submissions or inline review threads; mainline CI and signed attestations are maintainer/automation evidence only."
+      "qualification": "PR #216 merged with zero formal reviews or inline threads; mainline CI and signed attestations are maintainer/automation evidence only."
     },
-    "qualification": "F1.54 revalidates community group-join account and requested-site membership eligibility at the final locked write boundary. Exact-main CI, live PostgreSQL/Memgraph, migrations, CodeQL and signed attestations validate this exact merge source. This remains maintainer/automation evidence, not independent tenant/security or qualified legal review. Production remains NO-GO / NOT_PRODUCTION_CERTIFIED.",
+    "qualification": "F1.55 revalidates the authenticated friendship addressee account and selected-site membership at the final locked acceptance write. Exact-main CI, live PostgreSQL/Memgraph, migrations, CodeQL and signed attestations validate this exact merge source. This remains maintainer/automation evidence, not independent tenant/security or qualified legal review. Production remains NO-GO / NOT_PRODUCTION_CERTIFIED.",
     "releaseGateReport": "docs/reports/2026-11-18-VirgoScorpio-Hub-0.6.2-Release-Gate-Report.md",
     "f151MergeReport": "docs/reports/2026-11-18-F1-51-COMMUNITY-GROUP-JOIN-IDEMPOTENCY-REPORT.md",
     "candidateWorkflows": [
       {
-        "runId": 44467013901,
-        "runNumber": 777,
+        "runId": 44481965771,
+        "runNumber": 783,
         "event": "push",
         "conclusion": "success",
-        "headSha": "a2198c4b0cf3ead80bd47718db7b68e666642e3d"
+        "headSha": "84ce5eb71127411573d4a0b5e81dda94ecef3f81"
       },
       {
-        "runId": 44467066566,
-        "runNumber": 778,
+        "runId": 44482025200,
+        "runNumber": 784,
         "event": "pull_request",
         "conclusion": "success",
-        "headSha": "a2198c4b0cf3ead80bd47718db7b68e666642e3d"
+        "headSha": "84ce5eb71127411573d4a0b5e81dda94ecef3f81"
       }
     ],
     "f152MergeReport": "docs/reports/2026-11-18-F1-52-FRIENDSHIP-ACTIVE-REQUESTER-ACCEPTANCE-REPORT.md"
@@ -2617,31 +2617,31 @@
     "status": "MERGED_TO_MAIN_EXACT_MAIN_CI_PASS"
   },
   "latestMergedIncrementEvidence": {
-    "reviewedAt": "2026-11-18",
+    "reviewedAt": "2026-11-19",
     "version": "0.6.2",
-    "feature": "F1.54",
+    "feature": "F1.55",
     "issue": {
-      "number": 212,
+      "number": 215,
       "state": "CLOSED",
       "parentIssue": 124,
       "closeReason": "completed"
     },
-    "branch": "security/f1-54-community-group-join-membership-race-2026-11-18",
-    "implementationCommit": "a2198c4b0cf3ead80bd47718db7b68e666642e3d",
-    "mergeCommit": "c247e1cb1daa5683c3a74aa6856e9718d92b4557",
-    "pullRequest": 213,
-    "pullRequestHead": "a2198c4b0cf3ead80bd47718db7b68e666642e3d",
-    "mergedAt": "2026-11-19T05:47:02Z",
-    "mainlineWorkflow": 44467525998,
-    "exactHeadPushWorkflow": 44467013901,
-    "exactHeadPullRequestWorkflow": 44467066566,
+    "branch": "security/f1-55-community-friendship-acceptance-revocation-2026-11-19",
+    "implementationCommit": "84ce5eb71127411573d4a0b5e81dda94ecef3f81",
+    "mergeCommit": "db0b641880a5c842ffdcc2cf1dda6bedde58d033",
+    "pullRequest": 216,
+    "pullRequestHead": "84ce5eb71127411573d4a0b5e81dda94ecef3f81",
+    "mergedAt": "2026-11-19T07:51:37Z",
+    "mainlineWorkflow": 44482863945,
+    "exactHeadPushWorkflow": 44481965771,
+    "exactHeadPullRequestWorkflow": 44482025200,
     "hostedLiveIntegration": {
-      "passed": 153,
+      "passed": 159,
       "failed": 0,
       "skipped": 0
     },
     "focusedLocalIntegration": {
-      "passed": 20,
+      "passed": 26,
       "failed": 0,
       "skipped": 0
     },
@@ -2668,12 +2668,12 @@
     },
     "formalReviews": 0,
     "inlineReviewThreads": 0,
-    "reviewQualification": "PR #213 merged with zero formal review submissions or inline review threads. Mainline CI, CodeQL and signed attestations are maintainer/automation evidence only, not independent security/legal approval.",
+    "reviewQualification": "PR #216 merged with zero formal reviews or inline review threads. CI and signed attestations are maintainer/automation evidence only, not independent security/legal approval.",
     "productionCertified": false,
     "readyForProduction": false,
     "productionDecision": "NO_GO",
-    "readinessArtifact": 14502244347,
-    "report": "docs/reports/2026-11-18-F1-54-COMMUNITY-GROUP-JOIN-MEMBERSHIP-RACE-REPORT.md"
+    "readinessArtifact": 14508174935,
+    "report": "docs/reports/2026-11-19-F1-55-FRIENDSHIP-ACCEPTANCE-AUTHORIZATION-RACE-REPORT.md"
   },
   "historicalMainSourceEvidenceF140": {
     "reviewedAt": "2026-11-16",
