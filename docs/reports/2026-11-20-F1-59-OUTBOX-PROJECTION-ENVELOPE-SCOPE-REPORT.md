@@ -88,7 +88,7 @@ Additional focused checks:
 
 The full `npm run check` completed successfully after the final regression and inventory regeneration: **677 tests, 674 passed, 0 failed and 3 conditional skips**. The script completed both `node scripts/verify.js` and `npm test`. The focused live Memgraph integration cases are among the skipped checks because the local environment did not have the required service configuration; the hosted live PostgreSQL/Memgraph CI path must exercise them.
 
-`node scripts/generate-tenant-isolation-route-inventory.js --check` and `git diff --check` pass. A relative-link scan covered the four changed Markdown files and found no relative inline destinations requiring resolution. Hosted PR CI remains pending.
+`node scripts/generate-tenant-isolation-route-inventory.js --check` and `git diff --check` pass. A relative-link scan covered all 10 changed Markdown files and checked 159 relative inline destinations; no broken targets were found. Hosted PR CI remains pending.
 
 ## Scope and release boundary
 
