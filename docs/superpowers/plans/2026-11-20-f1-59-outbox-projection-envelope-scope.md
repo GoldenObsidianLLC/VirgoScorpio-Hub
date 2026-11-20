@@ -1,6 +1,6 @@
 # F1.59 Graph Projection Envelope Scope Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Bind every graph projection write to a validated outbox envelope and reject contradictory payload identity before Memgraph mutation.
 
@@ -62,7 +62,7 @@
 - [x] **Step 10: Update generated tenant-isolation inventory.** Revise graph projection coverage note and exact source/test references; run `npm run security:tenant-inventory` and `node scripts/generate-tenant-isolation-route-inventory.js --check`.
 - [x] **Step 11: Write the F1.59 report.** Record baseline SHA, reproduction, source-of-truth rule, focused regression evidence, inventory digest, limitations and unchanged release boundary. Do not claim independent review or production readiness.
 - [x] **Step 12: Validate.** Run `git diff --check`, `npm run check`, focused graph/outbox tests, inventory freshness and Markdown link audit for changed docs. Confirm no schema, migration, dependency, lockfile, API or SemVer files changed. Record the two live Memgraph integration skips caused by absent local service configuration; hosted CI must exercise the live integration path.
-- [ ] **Step 13: Commit and publish.** Review the final diff, stage only F1.59 source/tests/inventory/report/spec/plan files, create `fix(graph): bind projections to validated outbox identity`, push the feature branch, open a PR that closes #231, then verify hosted CI. Do not merge without a distinct independent human approval.
+- [x] **Step 13: Commit and publish.** Review the final diff, stage only F1.59 source/tests/inventory/report/spec/plan files, create `fix(graph): bind projections to validated outbox identity`, push the feature branch, open a PR that closes #231, then verify hosted CI. Do not merge without a distinct independent human approval.
 
 ## Completion contract
 
