@@ -449,3 +449,392 @@ test('content:read:own uses the database owner-scoped detail lookup', async () =
   assert.equal(ctx.res.result.payload.error, 'Record not found.');
   assert.deepEqual(ownerLookups, [{ siteId: SITE_ID, id: RECORD_ID, actorId: ACTOR_ID }]);
 });
+
+// ============================================================================
+// Per-content-type authorization policy enforcement tests
+// These tests verify the security fix for the pentest finding:
+// "Per-content-type authorization policies are not enforced"
+// ============================================================================
+
+test('record listing enforces per-type read capability from definition', async () => {
+  const restrictedType = {
+    ...ARTICLE,
+    name: 'restricted',
+    capabilities: ['create', 'edit'], // read is omitted
+  };
+  const { handler } = createHandler([restrictedType]);
+  const store = { async listContent() { throw new Error('must not list after denied type capability'); } };
+  const ctx = createContext({
+    path: '/api/v1/content-types/restricted/records',
+    store,
+    capabilities: ['content:read'], // has site capability but not type capability
+  });
+
+  await assert.rejects(
+    handler(ctx),
+    error => error.statusCode === 403 && error.code === 'ERR_VIRGOSCORPIO_HUB_FORBIDDEN' &&
+             error.message === 'The content type does not permit this operation.'
+  );
+});
+
+test('record listing allows read when type definition includes read capability', async () => {
+  const { handler } = createHandler([ARTICLE]); // ARTICLE has 'read' capability
+  const store = { async listContent() { return []; } };
+  const ctx = createContext({
+    path: '/api/v1/content-types/article/records',
+    store,
+    capabilities: ['content:read'],
+  });
+
+  assert.equal(await handler(ctx), true);
+  assert.equal(ctx.res.result.statusCode, 200);
+});
+
+test('record creation enforces per-type create capability from definition', async () => {
+  const readOnlyType = {
+    ...ARTICLE,
+    name: 'readonly',
+    capabilities: ['read'], // create is omitted
+  };
+  const { handler } = createHandler([readOnlyType]);
+  const store = { async saveDraft() { throw new Error('must not save after denied type capability'); } };
+  const ctx = createContext({
+    path: '/api/v1/content-types/readonly/records',
+    method: 'POST',
+    store,
+    capabilities: ['content:create'], // has site capability but not type capability
+    body: { title: 'Test', values: { title: 'Test' } },
+  });
+
+  await assert.rejects(
+    handler(ctx),
+    error => error.statusCode === 403 && error.code === 'ERR_VIRGOSCORPIO_HUB_FORBIDDEN' &&
+             error.message === 'The content type does not permit this operation.'
+  );
+});
+
+test('record creation allows create when type definition includes create capability', async () => {
+  const { handler } = createHandler([ARTICLE]); // ARTICLE has 'create' capability
+  const store = { async saveDraft() { return { id: RECORD_ID, version: 1, status: 'draft' }; } };
+  const ctx = createContext({
+    path: '/api/v1/content-types/article/records',
+    method: 'POST',
+    store,
+    capabilities: ['content:create'],
+    body: { title: 'Test', values: { title: 'Test' } },
+  });
+
+  assert.equal(await handler(ctx), true);
+  assert.equal(ctx.res.result.statusCode, 201);
+});
+
+test('record detail lookup enforces per-type read capability from definition', async () => {
+  const restrictedType = {
+    ...ARTICLE,
+    name: 'restricted',
+    capabilities: ['create', 'edit'], // read is omitted
+  };
+  const { handler } = createHandler([restrictedType]);
+  const store = { async getById() { throw new Error('must not read after denied type capability'); } };
+  const ctx = createContext({
+    path: '/api/v1/content-types/restricted/records/' + RECORD_ID,
+    store,
+    capabilities: ['content:read'], // has site capability but not type capability
+  });
+
+  await assert.rejects(
+    handler(ctx),
+    error => error.statusCode === 403 && error.code === 'ERR_VIRGOSCORPIO_HUB_FORBIDDEN' &&
+             error.message === 'The content type does not permit this operation.'
+  );
+});
+
+test('developers bypass per-type capability restrictions', async () => {
+  const restrictedType = {
+    ...ARTICLE,
+    name: 'restricted',
+    capabilities: [], // no capabilities
+  };
+  const { handler } = createHandler([restrictedType]);
+  const store = { async listContent() { return []; } };
+  const ctx = createContext({
+    path: '/api/v1/content-types/restricted/records',
+    store,
+    capabilities: [],
+  });
+  ctx.actor.isDeveloper = true;
+
+  assert.equal(await handler(ctx), true);
+  assert.equal(ctx.res.result.statusCode, 200);
+});
+
+test('authorizeWorkflowAction rejects archive when type omits archive capability', async () => {
+  const noArchiveType = {
+    ...ARTICLE,
+    capabilities: ['read', 'create', 'edit', 'submitForReview', 'publish'], // archive omitted
+  };
+  const { handler } = createHandler([noArchiveType]);
+  const record = { id: RECORD_ID, content_type: 'article', created_by: ACTOR_ID };
+  const { pool } = createPool({ rows: [{ slug: 'article', definition: noArchiveType, source: 'git' }] });
+
+  await assert.rejects(
+    handler.authorizeWorkflowAction({
+      actor: { user: { id: ACTOR_ID }, isDeveloper: false },
+      siteId: SITE_ID,
+      action: 'archive',
+      record,
+      localPool: pool,
+      hasSiteCapability: async () => true,
+      fail: (statusCode, code, message) => Object.assign(new Error(message), { statusCode, code }),
+    }),
+    error => error.statusCode === 403 && error.code === 'ERR_VIRGOSCORPIO_HUB_FORBIDDEN' &&
+             error.message === 'The content type does not permit this operation.'
+  );
+});
+
+test('authorizeWorkflowAction allows archive when type includes archive capability', async () => {
+  const withArchiveType = {
+    ...ARTICLE,
+    capabilities: ['read', 'create', 'edit', 'archive'],
+  };
+  const { handler } = createHandler([withArchiveType]);
+  const record = { id: RECORD_ID, content_type: 'article', created_by: ACTOR_ID };
+  const { pool } = createPool({ rows: [{ slug: 'article', definition: withArchiveType, source: 'git' }] });
+
+  // Should not throw
+  await handler.authorizeWorkflowAction({
+    actor: { user: { id: ACTOR_ID }, isDeveloper: false },
+    siteId: SITE_ID,
+    action: 'archive',
+    record,
+    localPool: pool,
+    hasSiteCapability: async () => true,
+    fail: (statusCode, code, message) => Object.assign(new Error(message), { statusCode, code }),
+  });
+});
+
+test('authorizeWorkflowAction rejects publish when type omits publish capability', async () => {
+  const noPublishType = {
+    ...ARTICLE,
+    capabilities: ['read', 'create', 'edit'], // publish omitted
+  };
+  const { handler } = createHandler([noPublishType]);
+  const record = { id: RECORD_ID, content_type: 'article', created_by: ACTOR_ID };
+  const { pool } = createPool({ rows: [{ slug: 'article', definition: noPublishType, source: 'git' }] });
+
+  await assert.rejects(
+    handler.authorizeWorkflowAction({
+      actor: { user: { id: ACTOR_ID }, isDeveloper: false },
+      siteId: SITE_ID,
+      action: 'publish',
+      record,
+      localPool: pool,
+      hasSiteCapability: async () => true,
+      fail: (statusCode, code, message) => Object.assign(new Error(message), { statusCode, code }),
+    }),
+    error => error.statusCode === 403 && error.code === 'ERR_VIRGOSCORPIO_HUB_FORBIDDEN' &&
+             error.message === 'The content type does not permit this operation.'
+  );
+});
+
+test('authorizeWorkflowAction enforces owner-only policy for publish actions', async () => {
+  const ownerOnlyType = {
+    ...JOB,
+    capabilities: ['read', 'create', 'edit', 'publish'], // add publish capability
+    publicationPolicy: 'owner-only',
+  };
+  const { handler } = createHandler([ownerOnlyType]);
+  const record = { id: RECORD_ID, content_type: 'job', created_by: ACTOR_ID };
+  const { pool } = createPool({ rows: [{ slug: 'job', definition: ownerOnlyType, source: 'admin' }] });
+
+  await assert.rejects(
+    handler.authorizeWorkflowAction({
+      actor: { user: { id: ACTOR_ID }, isDeveloper: false },
+      siteId: SITE_ID,
+      action: 'publish',
+      record,
+      localPool: pool,
+      hasSiteCapability: async capability => capability !== 'site:manage', // not a site owner
+      fail: (statusCode, code, message) => Object.assign(new Error(message), { statusCode, code }),
+    }),
+    error => error.statusCode === 403 && error.code === 'ERR_VIRGOSCORPIO_HUB_FORBIDDEN' &&
+             error.message === 'Only a site owner may change the publication state of this content type.'
+  );
+});
+
+test('authorizeWorkflowAction allows owner-only publish for site managers', async () => {
+  const ownerOnlyType = {
+    ...JOB,
+    capabilities: ['read', 'create', 'edit', 'publish'], // add publish capability
+    publicationPolicy: 'owner-only',
+  };
+  const { handler } = createHandler([ownerOnlyType]);
+  const record = { id: RECORD_ID, content_type: 'job', created_by: ACTOR_ID };
+  const { pool } = createPool({ rows: [{ slug: 'job', definition: ownerOnlyType, source: 'admin' }] });
+
+  // Should not throw
+  await handler.authorizeWorkflowAction({
+    actor: { user: { id: ACTOR_ID }, isDeveloper: false },
+    siteId: SITE_ID,
+    action: 'publish',
+    record,
+    localPool: pool,
+    hasSiteCapability: async capability => capability === 'site:manage', // is a site owner
+    fail: (statusCode, code, message) => Object.assign(new Error(message), { statusCode, code }),
+  });
+});
+
+test('authorizeWorkflowAction enforces review-required policy for approve/reject', async () => {
+  const { handler } = createHandler([ARTICLE]); // ARTICLE has review-required policy
+  const record = { id: RECORD_ID, content_type: 'article', created_by: ACTOR_ID };
+  const { pool } = createPool({ rows: [{ slug: 'article', definition: ARTICLE, source: 'git' }] });
+
+  // Author cannot approve their own content
+  await assert.rejects(
+    handler.authorizeWorkflowAction({
+      actor: { user: { id: ACTOR_ID }, isDeveloper: false },
+      siteId: SITE_ID,
+      action: 'approve',
+      record,
+      localPool: pool,
+      hasSiteCapability: async capability => capability !== 'site:manage', // not a site owner
+      fail: (statusCode, code, message) => Object.assign(new Error(message), { statusCode, code }),
+    }),
+    error => error.statusCode === 403 && error.code === 'ERR_VIRGOSCORPIO_HUB_FORBIDDEN' &&
+             error.message === 'This content type requires review by someone other than the author.'
+  );
+});
+
+test('authorizeWorkflowAction allows review-required approve for non-authors', async () => {
+  const OTHER_ACTOR_ID = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+  const { handler } = createHandler([ARTICLE]); // ARTICLE has review-required policy
+  const record = { id: RECORD_ID, content_type: 'article', created_by: ACTOR_ID };
+  const { pool } = createPool({ rows: [{ slug: 'article', definition: ARTICLE, source: 'git' }] });
+
+  // Different user can approve
+  await handler.authorizeWorkflowAction({
+    actor: { user: { id: OTHER_ACTOR_ID }, isDeveloper: false },
+    siteId: SITE_ID,
+    action: 'approve',
+    record,
+    localPool: pool,
+    hasSiteCapability: async () => true,
+    fail: (statusCode, code, message) => Object.assign(new Error(message), { statusCode, code }),
+  });
+});
+
+test('authorizeWorkflowAction allows review-required approve for site managers even if author', async () => {
+  const { handler } = createHandler([ARTICLE]); // ARTICLE has review-required policy
+  const record = { id: RECORD_ID, content_type: 'article', created_by: ACTOR_ID };
+  const { pool } = createPool({ rows: [{ slug: 'article', definition: ARTICLE, source: 'git' }] });
+
+  // Site manager can approve their own content
+  await handler.authorizeWorkflowAction({
+    actor: { user: { id: ACTOR_ID }, isDeveloper: false },
+    siteId: SITE_ID,
+    action: 'approve',
+    record,
+    localPool: pool,
+    hasSiteCapability: async capability => capability === 'site:manage', // is a site owner
+    fail: (statusCode, code, message) => Object.assign(new Error(message), { statusCode, code }),
+  });
+});
+
+test('authorizeWorkflowAction bypasses checks for developers', async () => {
+  const noCapabilitiesType = {
+    ...ARTICLE,
+    capabilities: [], // no capabilities at all
+    publicationPolicy: 'owner-only',
+  };
+  const { handler } = createHandler([noCapabilitiesType]);
+  const record = { id: RECORD_ID, content_type: 'article', created_by: ACTOR_ID };
+  const { pool } = createPool({ rows: [{ slug: 'article', definition: noCapabilitiesType, source: 'git' }] });
+
+  // Developer should bypass all checks
+  await handler.authorizeWorkflowAction({
+    actor: { user: { id: ACTOR_ID }, isDeveloper: true },
+    siteId: SITE_ID,
+    action: 'publish',
+    record,
+    localPool: pool,
+    hasSiteCapability: async () => false,
+    fail: (statusCode, code, message) => Object.assign(new Error(message), { statusCode, code }),
+  });
+});
+
+test('authorizeWorkflowAction skips checks for records without content_type', async () => {
+  const { handler } = createHandler([ARTICLE]);
+  const record = { id: RECORD_ID }; // no content_type field (e.g., built-in page)
+
+  // Should not throw
+  await handler.authorizeWorkflowAction({
+    actor: { user: { id: ACTOR_ID }, isDeveloper: false },
+    siteId: SITE_ID,
+    action: 'publish',
+    record,
+    localPool: null,
+    hasSiteCapability: async () => true,
+    fail: (statusCode, code, message) => Object.assign(new Error(message), { statusCode, code }),
+  });
+});
+
+test('authorizeWorkflowAction skips checks when definition not found', async () => {
+  const { handler } = createHandler([]);
+  const record = { id: RECORD_ID, content_type: 'unknown' };
+  const { pool } = createPool({ rows: [] }); // no definition found
+
+  // Should not throw
+  await handler.authorizeWorkflowAction({
+    actor: { user: { id: ACTOR_ID }, isDeveloper: false },
+    siteId: SITE_ID,
+    action: 'publish',
+    record,
+    localPool: pool,
+    hasSiteCapability: async () => true,
+    fail: (statusCode, code, message) => Object.assign(new Error(message), { statusCode, code }),
+  });
+});
+
+test('authorizeWorkflowAction maps all workflow actions to correct definition capabilities', async () => {
+  const fullCapabilitiesType = {
+    ...ARTICLE,
+    capabilities: ['read', 'create', 'edit', 'submitForReview', 'publish', 'archive'], // all capabilities
+    publicationPolicy: 'author-can-publish',
+  };
+  const { handler } = createHandler([fullCapabilitiesType]);
+  const { pool } = createPool({ rows: [{ slug: 'article', definition: fullCapabilitiesType, source: 'git' }] });
+  const record = { id: RECORD_ID, content_type: 'article', created_by: ACTOR_ID };
+
+  // Test submit-review requires submitForReview capability
+  await handler.authorizeWorkflowAction({
+    actor: { user: { id: ACTOR_ID }, isDeveloper: false },
+    siteId: SITE_ID,
+    action: 'submit-review',
+    record,
+    localPool: pool,
+    hasSiteCapability: async () => true,
+    fail: (statusCode, code, message) => Object.assign(new Error(message), { statusCode, code }),
+  });
+
+  // Test schedule requires publish capability
+  await handler.authorizeWorkflowAction({
+    actor: { user: { id: ACTOR_ID }, isDeveloper: false },
+    siteId: SITE_ID,
+    action: 'schedule',
+    record,
+    localPool: pool,
+    hasSiteCapability: async () => true,
+    fail: (statusCode, code, message) => Object.assign(new Error(message), { statusCode, code }),
+  });
+
+  // Test unpublish requires publish capability
+  await handler.authorizeWorkflowAction({
+    actor: { user: { id: ACTOR_ID }, isDeveloper: false },
+    siteId: SITE_ID,
+    action: 'unpublish',
+    record,
+    localPool: pool,
+    hasSiteCapability: async () => true,
+    fail: (statusCode, code, message) => Object.assign(new Error(message), { statusCode, code }),
+  });
+});
