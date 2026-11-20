@@ -8,7 +8,7 @@
   "generatedBy": "scripts/generate-tenant-isolation-route-inventory.js",
   "sourceTree": {
     "fileCount": 21,
-    "sha256": "40434d03328143cf748b8a1b4fffc83aa987451045dbc6ee0fca2527a76eb3b1",
+    "sha256": "f15ca4cd69e78692e2b658e30998b00213439cca25c80f723e6a048d88a02bd2",
     "files": [
       "apps/api/src/ai-task-routes.js",
       "apps/api/src/auth-routes.js",
@@ -35,7 +35,7 @@
   },
   "testTree": {
     "fileCount": 57,
-    "sha256": "3c29ccaf6242a283307fa21dc83e74c9e039acb78e472d4c9998f05f92cc8909",
+    "sha256": "b969fd34b044576d54f15c53efe2f14677b329113a45b37605f8c0df05a75160",
     "files": [
       "test/ai-queue-worker.test.js",
       "test/ai-task-queue.test.js",
@@ -1443,7 +1443,7 @@
             {
               "anchor": "const friendRequest=",
               "lines": [
-                482
+                623
               ]
             }
           ]
@@ -1518,7 +1518,7 @@
             {
               "anchor": "const friendRequest=",
               "lines": [
-                482
+                623
               ]
             }
           ]
@@ -1636,7 +1636,7 @@
             {
               "anchor": "const firewallCollection",
               "lines": [
-                601
+                742
               ]
             }
           ]
@@ -1685,7 +1685,7 @@
             {
               "anchor": "const cloudConnections",
               "lines": [
-                656
+                797
               ]
             }
           ]
@@ -1733,7 +1733,7 @@
             {
               "anchor": "const megaMenus",
               "lines": [
-                897
+                1038
               ]
             },
             {
@@ -1741,8 +1741,8 @@
               "lines": [
                 177,
                 194,
-                949,
-                982
+                1090,
+                1123
               ]
             }
           ]
