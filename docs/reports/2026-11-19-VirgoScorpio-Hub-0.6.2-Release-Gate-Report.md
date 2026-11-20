@@ -1,16 +1,16 @@
 # VirgoScorpio Hub 0.6.2 — Full Release-Gate Report
 
-**Assessment snapshot:** 19 November 2026 America/Chicago
+**Assessment snapshot:** 19 November 2026 America/Chicago (candidate update; exact mainline evidence remains source-bound as stated below)
 **Repository:** `GoldenObsidianLLC/VirgoScorpio-Hub`
-**Repository main revision at latest exact-main validation:** 75aeb93ed3db1801f0a0860a33cade90045f4ee6 (documentation-only PR #225 after F1.57 runtime; runtime unchanged)
-**Previous merged runtime SHA (F1.56):** `f789444d769e9adf94adb5ef494c1a038a0c7261` (PR #220; predecessor to F1.57)
+**Current main SHA:** `a1e0fb0cf605c6f34f9e85c252593ae1b508e0b2` (documentation-only PR #226 after the F1.57 runtime; no new runtime increment)
 **Latest merged runtime source:** F1.57 / PR #224, merge `f60d454e80273262c9020940575aae4328fb9149`; issue #222 CLOSED
-**Latest exact-main CI snapshot:** [workflow #44643356523](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44643356523) - SUCCESS, 7/7 jobs on 75aeb93ed3db1801f0a0860a33cade90045f4ee6; F1.57 runtime source f60d454e80273262c9020940575aae4328fb9149
-**Latest consolidated mainline readiness artifact:** #14587571933; SHA-256 d8efc488ea18bfd8cce4f07e49f77796a04825ebc722b1f38e6fa0335905b549; readiness JSON SHA-256 32c23e00aa19da87d8148407cd60d5be70242986ac6f8056f7d53ea8f41f0e29; source revision 75aeb93ed3db1801f0a0860a33cade90045f4ee6
+**Latest previously finalized exact-main CI snapshot:** [workflow #44643356523](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44643356523) — SUCCESS, 7/7 jobs on prior docs-only main SHA `75aeb93ed3db1801f0a0860a33cade90045f4ee6`; F1.57 runtime source unchanged
+**Latest previously consolidated mainline readiness artifact:** #14587571933; archive SHA-256 `d8efc488ea18bfd8cce4f07e49f77796a04825ebc722b1f38e6fa0335905b549`; readiness JSON SHA-256 `32c23e00aa19da87d8148407cd60d5be70242986ac6f8056f7d53ea8f41f0e29`; source revision `75aeb93ed3db1801f0a0860a33cade90045f4ee6`
+**Current unmerged maintainer candidate:** F1.58 / issue #227; candidate branch `security/f1-58-community-feed-write-authorization-2026-11-19`, based on current main `a1e0fb0cf605c6f34f9e85c252593ae1b508e0b2`. Focused PostgreSQL 18 integration: community-feed privacy 22/22 and adjacent tenant community-object isolation 36/36 (58/58 combined, zero skips); four preflight TOCTOU denials, one privacy-narrowing success control, and four actual PostgreSQL lock waits for lifecycle changes. Local `npm run check` 667 passed / 0 failed / 3 conditional skips; artifact check 238 paths / 269 JavaScript files; `npm audit` 0 vulnerabilities; inventory 28/80/21/57. Exact-head hosted CI and consolidated evidence are pending. Candidate report: [F1.58 implementation report](2026-11-19-F1-58-COMMUNITY-FEED-WRITE-AUTHORIZATION-RACE-REPORT.md).
 **Decision:** **PRODUCTION NO-GO / NOT_PRODUCTION_CERTIFIED**
 **Package:** `virgoscorpio-hub@0.6.2`, private and unreleased
 
-> This report records F1.57 as the latest merged maintainer runtime increment and uses the subsequent documentation-only PR #225 main revision for the latest exact-main CI/readiness snapshot. It separates automated evidence from independent, provider, product, legal, governance and operational acceptance.
+> F1.57 remains the latest merged maintainer runtime increment. Current main has advanced through docs-only PR #226 to `a1e0fb0...`; the most recent exact-main workflow and canonical readiness artifact cited here are still bound to `75aeb93...`, so they are historical source-bound evidence, not a fresh exact-main result on current main. F1.58 is an unmerged local/PR candidate and must not be described as mainline release evidence. This report separates automated evidence from independent, provider, product, legal, governance and operational acceptance.
 
 ## 1. Executive decision
 

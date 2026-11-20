@@ -416,6 +416,7 @@ async function handlePlatformRoute(ctx) {
     let groupId = null;
     let parentId = null;
     let visibility = requestedVisibility;
+    let requiresGroupMembership = activityType === 'group_post';
 
     if (activityType === 'comment') {
       if (!validUuid(body.parentId)) {
@@ -442,6 +443,9 @@ async function handlePlatformRoute(ctx) {
       parentId = parent.id;
       groupId = parent.group_id;
       visibility = parent.visibility;
+      requiresGroupMembership = Boolean(groupId) && (
+        visibility === 'group' || ['private', 'hidden'].includes(parent.privacy)
+      );
     } else {
       if (body.parentId != null) {
         throw fail(400, 'ERR_VIRGOSCORPIO_HUB_ACTIVITY_PARENT_INVALID', 'Only comments may reference a parent activity.');
@@ -469,14 +473,151 @@ async function handlePlatformRoute(ctx) {
       }
     }
 
-    const q = await localPool.query(
-      "INSERT INTO social_activities " +
-      "(site_id,actor_id,group_id,activity_type,body,visibility,parent_id,metadata) " +
-      "VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb) " +
-      "RETURNING id,site_id,actor_id,group_id,activity_type,body,visibility,parent_id,metadata,created_at",
-      [siteId, actor.user.id, groupId, activityType, text, visibility, parentId, JSON.stringify({})]
-    );
-    return sendJson(res, 201, { activity: q.rows[0], requestId });
+    const q = await withTransaction(localPool, async client => {
+      // Match community lifecycle lock ordering: site, user, site membership,
+      // group, then group membership. Recheck eligibility in the same transaction
+      // that inserts the activity so request-time authorization cannot go stale.
+      await client.query(
+        'SELECT id FROM sites WHERE id=$1 FOR KEY SHARE',
+        [siteId]
+      );
+
+      const inserted = await client.query(
+        `WITH participant_users AS MATERIALIZED (
+          SELECT u.id, u.status
+          FROM users u
+          WHERE u.id = $2
+          ORDER BY u.id
+          FOR UPDATE OF u
+        ), participant_memberships AS MATERIALIZED (
+          SELECT sm.user_id, sm.role_id
+          FROM site_memberships sm
+          JOIN participant_users pu ON pu.id = sm.user_id
+          WHERE sm.site_id = $1
+          ORDER BY sm.user_id, sm.role_id
+          FOR UPDATE OF sm
+        ), target_group AS MATERIALIZED (
+          SELECT g.id, g.privacy
+          FROM social_groups g
+          WHERE g.site_id = $1
+            AND g.id = $3
+            AND EXISTS (
+              SELECT 1
+              FROM participant_memberships pm
+              WHERE pm.user_id = $2
+            )
+          FOR UPDATE OF g
+        ), participant_group_memberships AS MATERIALIZED (
+          SELECT gm.group_id, gm.user_id, gm.status
+          FROM social_group_memberships gm
+          JOIN participant_users pu ON pu.id = gm.user_id
+          JOIN target_group tg ON tg.id = gm.group_id
+          ORDER BY gm.group_id, gm.user_id
+          FOR UPDATE OF gm
+        ), eligible_actor AS MATERIALIZED (
+          SELECT pu.id
+          FROM participant_users pu
+          WHERE pu.status = 'active'
+            AND EXISTS (
+              SELECT 1
+              FROM participant_memberships pm
+              WHERE pm.user_id = pu.id
+            )
+        )
+        INSERT INTO social_activities
+          (site_id,actor_id,group_id,activity_type,body,visibility,parent_id,metadata)
+        SELECT
+          $1,
+          ea.id,
+          $3,
+          $4,
+          $5,
+          CASE
+            WHEN tg.privacy IN ('private','hidden')
+              AND $6 <> 'private' THEN 'group'
+            ELSE $6
+          END,
+          $7,
+          $9::jsonb
+        FROM eligible_actor ea
+        LEFT JOIN target_group tg ON TRUE
+        WHERE ($3::uuid IS NULL OR tg.id IS NOT NULL)
+          AND (
+            NOT (
+              $8::boolean
+              OR (
+                $3::uuid IS NOT NULL
+                AND $4 = 'comment'
+                AND tg.privacy IN ('private','hidden')
+              )
+            )
+            OR EXISTS (
+              SELECT 1
+              FROM participant_group_memberships gm
+              WHERE gm.user_id = ea.id
+                AND gm.status = 'active'
+            )
+          )
+        RETURNING id,site_id,actor_id,group_id,activity_type,body,visibility,parent_id,metadata,created_at`,
+        [
+          siteId,
+          actor.user.id,
+          groupId,
+          activityType,
+          text,
+          visibility,
+          parentId,
+          requiresGroupMembership,
+          JSON.stringify({}),
+        ]
+      );
+
+      if (inserted.rows[0]) {
+        return { activity: inserted.rows[0], denialCode: null };
+      }
+
+      // Keep the denial contract aligned with the same locked transaction state.
+      const eligibility = await client.query(
+        `SELECT
+          u.status,
+          EXISTS (
+            SELECT 1 FROM site_memberships sm
+            WHERE sm.site_id = $1 AND sm.user_id = u.id
+          ) AS has_site_membership,
+          g.privacy AS group_privacy,
+          EXISTS (
+            SELECT 1 FROM social_group_memberships gm
+            WHERE gm.group_id = g.id
+              AND gm.user_id = u.id
+              AND gm.status = 'active'
+          ) AS has_active_group_membership
+        FROM users u
+        LEFT JOIN social_groups g ON g.id = $3 AND g.site_id = $1
+        WHERE u.id = $2`,
+        [siteId, actor.user.id, groupId]
+      );
+      const current = eligibility.rows[0];
+      if (
+        current &&
+        current.status === 'active' &&
+        current.has_site_membership &&
+        groupId &&
+        (requiresGroupMembership || ['private', 'hidden'].includes(current.group_privacy)) &&
+        !current.has_active_group_membership
+      ) {
+        return { activity: null, denialCode: 'GROUP' };
+      }
+      return { activity: null, denialCode: 'TENANT' };
+    });
+
+    if (!q.activity) {
+      if (q.denialCode === 'GROUP') {
+        throw fail(403, 'ERR_VIRGOSCORPIO_HUB_GROUP_MEMBERSHIP', 'Active group membership is required to create this activity.');
+      }
+      throw fail(403, 'ERR_VIRGOSCORPIO_HUB_TENANT_FORBIDDEN', 'You are not an active member of this site.');
+    }
+
+    return sendJson(res, 201, { activity: q.activity, requestId });
   }
 
   const friendRequest=pathName.match(/^\/api\/v1\/sites\/([0-9a-f-]{36})\/community\/friends(?:\/([0-9a-f-]{36}))?$/i);

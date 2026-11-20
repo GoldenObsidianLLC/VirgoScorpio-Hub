@@ -6,6 +6,7 @@ const { randomUUID } = require('node:crypto');
 const { createPostgresPool } = require('../../packages/db/src/postgres-store');
 const { createIdentityService, hashPassword } = require('../../packages/auth/src/service');
 const { createApiServer } = require('../../apps/api/src/server');
+const { waitForDatabaseWriteLock } = require('../helpers/postgres-locks');
 
 const enabled = Boolean(
   process.env.DATABASE_URL &&
@@ -370,6 +371,328 @@ test(
 
     const initialA = await snapshotFeedSite(siteA);
     const initialB = await snapshotFeedSite(siteB);
+
+    await t.test('community feed writes revalidate author and group eligibility at the final insert', async t => {
+      const scenarios = [
+        {
+          name: 'actor disabled after route authorization',
+          body: { activityType: 'status', visibility: 'members' },
+          expectedCode: 'ERR_VIRGOSCORPIO_HUB_TENANT_FORBIDDEN',
+          mutate: async query => {
+            const result = await query("UPDATE users SET status='disabled' WHERE id=$1 RETURNING id", [groupOwnerA.id]);
+            assert.equal(result.rowCount, 1);
+          },
+          restore: query => query("UPDATE users SET status='active' WHERE id=$1", [groupOwnerA.id]),
+        },
+        {
+          name: 'selected-site membership revoked after route authorization',
+          body: { activityType: 'status', visibility: 'members' },
+          expectedCode: 'ERR_VIRGOSCORPIO_HUB_TENANT_FORBIDDEN',
+          mutate: async query => {
+            const result = await query(
+              'DELETE FROM site_memberships WHERE site_id=$1 AND user_id=$2 RETURNING role_id',
+              [siteA, groupOwnerA.id]
+            );
+            assert.equal(result.rowCount, 1);
+          },
+          restore: query => query(
+            'INSERT INTO site_memberships(site_id,user_id,role_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING',
+            [siteA, groupOwnerA.id, roleId]
+          ),
+        },
+        {
+          name: 'private-group membership revoked after route authorization',
+          body: { activityType: 'group_post', groupId: privateGroupId, visibility: 'group' },
+          expectedCode: 'ERR_VIRGOSCORPIO_HUB_GROUP_MEMBERSHIP',
+          mutate: async query => {
+            const result = await query(
+              "UPDATE social_group_memberships SET status='banned' WHERE group_id=$1 AND user_id=$2 AND status='active' RETURNING status",
+              [privateGroupId, groupOwnerA.id]
+            );
+            assert.equal(result.rowCount, 1);
+          },
+          restore: query => query(
+            "UPDATE social_group_memberships SET status='active' WHERE group_id=$1 AND user_id=$2",
+            [privateGroupId, groupOwnerA.id]
+          ),
+        },
+        {
+          name: 'parent group becomes private after comment authorization',
+          token: sessionSiteMemberA.token,
+          body: { activityType: 'comment', parentId: publicGroupMembersPostId },
+          expectedCode: 'ERR_VIRGOSCORPIO_HUB_GROUP_MEMBERSHIP',
+          mutate: async query => {
+            const result = await query(
+              "UPDATE social_groups SET privacy='private' WHERE id=$1 AND privacy='public' RETURNING id",
+              [publicGroupId]
+            );
+            assert.equal(result.rowCount, 1);
+          },
+          restore: query => query(
+            "UPDATE social_groups SET privacy='public' WHERE id=$1",
+            [publicGroupId]
+          ),
+        },
+        {
+          name: 'eligible group member comment narrows to group visibility when privacy changes after preflight',
+          token: sessionOwnerA.token,
+          body: { activityType: 'comment', parentId: publicGroupMembersPostId },
+          expectedStatus: 201,
+          expectedVisibility: 'group',
+          mutate: async query => {
+            const result = await query(
+              "UPDATE social_groups SET privacy='private' WHERE id=$1 AND privacy='public' RETURNING id",
+              [publicGroupId]
+            );
+            assert.equal(result.rowCount, 1);
+          },
+          restore: query => query(
+            "UPDATE social_groups SET privacy='public' WHERE id=$1",
+            [publicGroupId]
+          ),
+        },
+      ];
+
+      for (const scenario of scenarios) {
+        await t.test(scenario.name, async () => {
+          const beforeA = await snapshotFeedSite(siteA);
+          const beforeB = await snapshotFeedSite(siteB);
+          const marker = 'F1.58_' + randomUUID();
+          const body = { ...scenario.body, body: marker };
+          const originalQueryDescriptor = Object.getOwnPropertyDescriptor(pool, 'query');
+          const originalConnectDescriptor = Object.getOwnPropertyDescriptor(pool, 'connect');
+          const query = pool.query.bind(pool);
+          const connect = pool.connect.bind(pool);
+          let mutationStarted = false;
+          let mutationApplied = false;
+
+          const beforeWriteTransaction = async sql => {
+            if (
+              !mutationStarted &&
+              typeof sql === 'string' &&
+              sql.trim().toUpperCase() === 'BEGIN'
+            ) {
+              mutationStarted = true;
+              await scenario.mutate(query);
+              mutationApplied = true;
+            }
+          };
+
+          pool.query = async (sql, params) => {
+            await beforeWriteTransaction(sql);
+            return query(sql, params);
+          };
+          pool.connect = function (callback) {
+            if (typeof callback === 'function') return connect(callback);
+            return connect().then(client => ({
+              query: async (sql, params) => {
+                await beforeWriteTransaction(sql);
+                return client.query(sql, params);
+              },
+              release: (...args) => client.release(...args),
+            }));
+          };
+
+          try {
+            const denied = await requestFeed(siteA, scenario.token || sessionOwnerA.token, { method: 'POST', body });
+            assert.equal(mutationStarted, true, scenario.name + ': eligibility mutation must happen after route preflight and before the write transaction begins');
+            assert.equal(mutationApplied, true, scenario.name + ': injected eligibility change must commit before the write transaction begins');
+            assert.equal(denied.response.status, scenario.expectedStatus || 403, scenario.name + ': final write must preserve the locked authorization and privacy decision');
+            if (scenario.expectedCode) assert.equal(denied.payload.code, scenario.expectedCode);
+            if (scenario.expectedVisibility) {
+              assert.equal(denied.payload.activity.visibility, scenario.expectedVisibility);
+              assert.equal(denied.payload.activity.group_id, publicGroupId);
+              assert.equal(denied.payload.activity.parent_id, publicGroupMembersPostId);
+            }
+            const persisted = await query(
+              'SELECT id FROM social_activities WHERE site_id=$1 AND actor_id=$2 AND body=$3',
+              [siteA, groupOwnerA.id, marker]
+            );
+            assert.equal(persisted.rowCount, scenario.expectedStatus === 201 ? 1 : 0, scenario.name + ': persisted activity count must match the expected outcome');
+          } finally {
+            if (originalQueryDescriptor) Object.defineProperty(pool, 'query', originalQueryDescriptor);
+            else delete pool.query;
+            if (originalConnectDescriptor) Object.defineProperty(pool, 'connect', originalConnectDescriptor);
+            else delete pool.connect;
+            try {
+              if (mutationApplied) await scenario.restore(query);
+            } finally {
+              await query(
+                'DELETE FROM social_activities WHERE site_id=$1 AND actor_id=$2 AND body=$3',
+                [siteA, groupOwnerA.id, marker]
+              );
+            }
+          }
+
+          assert.deepEqual(await snapshotFeedSite(siteA), beforeA, scenario.name + ': Site A feed/audit/outbox state must be unchanged');
+          assert.deepEqual(await snapshotFeedSite(siteB), beforeB, scenario.name + ': Site B feed/audit/outbox state must be unchanged');
+        });
+      }
+    });
+
+    await t.test('community feed writes serialize with concurrent lifecycle changes', async t => {
+      const scenarios = [
+        {
+          name: 'account disablement waits for the actor user lock',
+          lockSql: 'SELECT id FROM users WHERE id=$1 FOR UPDATE',
+          lockParams: [groupOwnerA.id],
+          body: { activityType: 'status', visibility: 'members' },
+          expectedStatus: 403,
+          expectedCode: 'ERR_VIRGOSCORPIO_HUB_TENANT_FORBIDDEN',
+          mutate: blocker => blocker.query("UPDATE users SET status='disabled' WHERE id=$1", [groupOwnerA.id]),
+          restore: query => query("UPDATE users SET status='active' WHERE id=$1", [groupOwnerA.id]),
+        },
+        {
+          name: 'site-membership revocation waits for the selected-site membership lock',
+          lockSql: 'SELECT user_id FROM site_memberships WHERE site_id=$1 AND user_id=$2 ORDER BY role_id FOR UPDATE',
+          lockParams: [siteA, groupOwnerA.id],
+          body: { activityType: 'status', visibility: 'members' },
+          expectedStatus: 403,
+          expectedCode: 'ERR_VIRGOSCORPIO_HUB_TENANT_FORBIDDEN',
+          mutate: blocker => blocker.query(
+            'DELETE FROM site_memberships WHERE site_id=$1 AND user_id=$2',
+            [siteA, groupOwnerA.id]
+          ),
+          restore: query => query(
+            'INSERT INTO site_memberships(site_id,user_id,role_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING',
+            [siteA, groupOwnerA.id, roleId]
+          ),
+        },
+        {
+          name: 'private-group membership ban waits for the group-membership lock',
+          lockSql: 'SELECT group_id,user_id FROM social_group_memberships WHERE group_id=$1 AND user_id=$2 FOR UPDATE',
+          lockParams: [privateGroupId, groupOwnerA.id],
+          body: { activityType: 'group_post', groupId: privateGroupId, visibility: 'group' },
+          expectedStatus: 403,
+          expectedCode: 'ERR_VIRGOSCORPIO_HUB_GROUP_MEMBERSHIP',
+          mutate: blocker => blocker.query(
+            "UPDATE social_group_memberships SET status='banned' WHERE group_id=$1 AND user_id=$2",
+            [privateGroupId, groupOwnerA.id]
+          ),
+          restore: query => query(
+            "UPDATE social_group_memberships SET status='active' WHERE group_id=$1 AND user_id=$2",
+            [privateGroupId, groupOwnerA.id]
+          ),
+        },
+        {
+          name: 'parent-group privacy changes wait for the group lock and narrow comment visibility',
+          lockSql: 'SELECT id FROM social_groups WHERE site_id=$1 AND id=$2 FOR UPDATE',
+          lockParams: [siteA, publicGroupId],
+          body: { activityType: 'comment', parentId: publicGroupMembersPostId },
+          expectedStatus: 201,
+          expectedVisibility: 'group',
+          mutate: blocker => blocker.query(
+            "UPDATE social_groups SET privacy='private' WHERE site_id=$1 AND id=$2",
+            [siteA, publicGroupId]
+          ),
+          restore: query => query(
+            "UPDATE social_groups SET privacy='public' WHERE site_id=$1 AND id=$2",
+            [siteA, publicGroupId]
+          ),
+        },
+      ];
+
+      for (const scenario of scenarios) {
+        await t.test(scenario.name, async () => {
+          const beforeA = await snapshotFeedSite(siteA);
+          const beforeB = await snapshotFeedSite(siteB);
+          const marker = 'F1.58_LOCK_' + randomUUID();
+          const body = { ...scenario.body, body: marker };
+          const blocker = await pool.connect();
+          const originalConnectDescriptor = Object.getOwnPropertyDescriptor(pool, 'connect');
+          const connect = pool.connect.bind(pool);
+          const query = pool.query.bind(pool);
+          let transactionOpen = false;
+          let mutationCommitted = false;
+          let writeStarted = false;
+          let requestPromise = null;
+
+          try {
+            await blocker.query('BEGIN');
+            transactionOpen = true;
+            const locked = await blocker.query(scenario.lockSql, scenario.lockParams);
+            assert.ok(locked.rowCount > 0, scenario.name + ': the blocker row must exist');
+
+            pool.connect = function (callback) {
+              if (typeof callback === 'function') return connect(callback);
+              return connect().then(client => ({
+                query: (sql, params) => {
+                  if (
+                    !writeStarted &&
+                    typeof sql === 'string' &&
+                    sql.toUpperCase().includes('WITH PARTICIPANT_USERS AS MATERIALIZED')
+                  ) {
+                    writeStarted = true;
+                  }
+                  return client.query(sql, params);
+                },
+                release: (...args) => client.release(...args),
+              }));
+            };
+
+            requestPromise = requestFeed(siteA, sessionOwnerA.token, { method: 'POST', body });
+            const writeDeadline = Date.now() + 5000;
+            while (!writeStarted && Date.now() < writeDeadline) {
+              await new Promise(resolve => setTimeout(resolve, 20));
+            }
+            assert.equal(writeStarted, true, scenario.name + ': final feed transaction must reach PostgreSQL');
+
+            const waitingOnLock = await waitForDatabaseWriteLock(
+              blocker,
+              'WITH PARTICIPANT_USERS AS MATERIALIZED'
+            );
+            assert.equal(
+              waitingOnLock,
+              true,
+              scenario.name + ': the final feed write must wait for the lifecycle row lock'
+            );
+
+            await scenario.mutate(blocker);
+            await blocker.query('COMMIT');
+            transactionOpen = false;
+            mutationCommitted = true;
+
+            const result = await requestPromise;
+            requestPromise = null;
+            assert.equal(result.response.status, scenario.expectedStatus, scenario.name + ': response must reflect the committed lifecycle change');
+            if (scenario.expectedCode) assert.equal(result.payload.code, scenario.expectedCode);
+            if (scenario.expectedVisibility) {
+              assert.equal(result.payload.activity.visibility, scenario.expectedVisibility);
+              assert.equal(result.payload.activity.group_id, publicGroupId);
+              assert.equal(result.payload.activity.parent_id, publicGroupMembersPostId);
+            }
+
+            const persisted = await query(
+              'SELECT id FROM social_activities WHERE site_id=$1 AND actor_id=$2 AND body=$3',
+              [siteA, groupOwnerA.id, marker]
+            );
+            assert.equal(
+              persisted.rowCount,
+              scenario.expectedStatus === 201 ? 1 : 0,
+              scenario.name + ': persisted activity count must match the expected response'
+            );
+          } finally {
+            if (transactionOpen) await blocker.query('ROLLBACK').catch(() => {});
+            if (originalConnectDescriptor) Object.defineProperty(pool, 'connect', originalConnectDescriptor);
+            else delete pool.connect;
+            if (requestPromise) await requestPromise.catch(() => {});
+            blocker.release();
+
+            try {
+              if (mutationCommitted) await scenario.restore(query);
+            } finally {
+              await query(
+                'DELETE FROM social_activities WHERE site_id=$1 AND actor_id=$2 AND body=$3',
+                [siteA, groupOwnerA.id, marker]
+              );
+            }
+          }
+
+          assert.deepEqual(await snapshotFeedSite(siteA), beforeA, scenario.name + ': Site A feed/audit/outbox state must be unchanged');
+          assert.deepEqual(await snapshotFeedSite(siteB), beforeB, scenario.name + ': Site B feed/audit/outbox state must be unchanged');
+        });
+      }
+    });
 
     await t.test('legacy comments cannot widen or move a private-group parent scope', async () => {
       const commentAuthorFeed = await requestFeed(siteA, sessionSiteMemberA.token);

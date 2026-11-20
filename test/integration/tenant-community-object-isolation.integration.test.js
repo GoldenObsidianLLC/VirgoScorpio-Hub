@@ -6,6 +6,7 @@ const { randomUUID } = require('node:crypto');
 const { createPostgresPool } = require('../../packages/db/src/postgres-store');
 const { createIdentityService, hashPassword } = require('../../packages/auth/src/service');
 const { createApiServer } = require('../../apps/api/src/server');
+const { waitForDatabaseWriteLock } = require('../helpers/postgres-locks');
 
 const enabled = Boolean(
   process.env.DATABASE_URL &&
@@ -71,25 +72,6 @@ async function snapshotCommunitySite(pool, siteId) {
     result[name] = rows.rows;
   }
   return result;
-}
-
-async function waitForDatabaseWriteLock(client, sqlFragment) {
-  const deadline = Date.now() + 5000;
-  while (Date.now() < deadline) {
-    const activity = await client.query(
-      `SELECT wait_event_type
-         FROM pg_stat_activity
-        WHERE datname = current_database()
-          AND pid <> pg_backend_pid()
-          AND query ILIKE $1
-        ORDER BY query_start DESC
-        LIMIT 1`,
-      [`%${sqlFragment.toLowerCase()}%`]
-    );
-    if (activity.rows[0]?.wait_event_type === 'Lock') return true;
-    await new Promise(resolve => setTimeout(resolve, 20));
-  }
-  return false;
 }
 
 test(
