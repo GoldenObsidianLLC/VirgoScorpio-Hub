@@ -1890,6 +1890,13 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
         const [, id, action] = workflowMatch; const expectedVersion = body.expectedVersion === undefined ? undefined : Number(body.expectedVersion); const note = body.note;
         const caps = { 'submit-review': 'content:submit-review', approve: 'content:approve', reject: 'content:approve', publish: 'content:publish', schedule: 'content:publish', archive: 'content:archive', unpublish: 'content:publish' };
         await requireCapability(actor, siteId, caps[action]);
+        // Enforce the content type's own capability list and publication policy
+        // before any workflow side effect; the site capability above is only the broad gate.
+        const targetRecord = await store.getById({ siteId, id });
+        await contentTypeRouteHandler.authorizeWorkflowAction({
+          actor, siteId, action, record: targetRecord, localPool, fail,
+          hasSiteCapability: async capability => Boolean(await identity?.authorizeSite(actor.user.id, siteId, capability)),
+        });
         if (action === 'submit-review') {
           const current = await store.getById({ siteId, id });
           await canEditContent(actor, siteId, current);
