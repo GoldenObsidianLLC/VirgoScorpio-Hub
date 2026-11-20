@@ -816,9 +816,27 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
         const visit = nodes => { for (const node of Array.isArray(nodes) ? nodes : []) { if (node?.type === 'widget.query-loop') queryNodes.push(node); visit(node?.children); } };
         visit(page.body?.children);
         // Queries are always tenant-scoped and read only published snapshots. Each loop has a hard limit of 12.
+        // Page-level work budget: loops sharing a content type are served by a single query (rows are ordered
+        // identically, so a node's rows are a prefix of the widest result), and at most MAX_PUBLIC_QUERY_LOOP_QUERIES
+        // distinct queries run per request. This also bounds pages published before validation capped query loops.
+        const MAX_PUBLIC_QUERY_LOOP_QUERIES = 5;
+        const queryGroups = new Map();
         for (const node of queryNodes) {
-          const rows = await store.listPublished({ siteId: site.id, contentType: node.props.contentType, locale, limit: node.props.limit, excludeId: page.id });
-          dynamicData[node.id] = rows.map(item => ({
+          const contentType = node.props?.contentType;
+          if (typeof contentType !== 'string') continue;
+          const limit = Math.min(12, Math.max(1, Number.isInteger(node.props.limit) ? node.props.limit : 3));
+          if (!queryGroups.has(contentType) && queryGroups.size >= MAX_PUBLIC_QUERY_LOOP_QUERIES) continue;
+          queryGroups.set(contentType, Math.max(queryGroups.get(contentType) || 0, limit));
+        }
+        const groupRows = new Map();
+        for (const [contentType, limit] of queryGroups) {
+          groupRows.set(contentType, await store.listPublished({ siteId: site.id, contentType, locale, limit, excludeId: page.id }));
+        }
+        for (const node of queryNodes) {
+          const allRows = groupRows.get(node.props?.contentType);
+          if (!allRows) continue;
+          const nodeLimit = Math.min(12, Math.max(1, Number.isInteger(node.props.limit) ? node.props.limit : 3));
+          dynamicData[node.id] = allRows.slice(0, nodeLimit).map(item => ({
             title: item.title,
             excerpt: item.excerpt,
             url: `/public/${site.slug}/pages/${encodeURIComponent(item.slug)}`
