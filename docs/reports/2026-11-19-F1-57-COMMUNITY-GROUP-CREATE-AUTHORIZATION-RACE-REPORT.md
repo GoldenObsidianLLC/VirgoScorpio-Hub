@@ -1,13 +1,13 @@
 # F1.57 — Community group creation revalidates creator authorization at the write boundary
 
 **Date:** 19 November 2026 America/Chicago<br>
-**Status:** Local maintainer implementation candidate; not merged<br>
-**Issue:** [#222 — Revalidate creator authorization at the community group-create write boundary](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/222) — OPEN<br>
+**Status:** Merged to main through [PR #224](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/224); issue #222 CLOSED
+**Issue:** [#222 - Revalidate creator authorization at the community group-create write boundary](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/222) - CLOSED by PR #224
 **Parent:** [#124 — Continue maintainer-led tenant isolation hardening](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/124)<br>
 **Branch:** `security/f1-57-community-group-create-auth-2026-11-19`<br>
-**Current main HEAD:** `eae64f13a61613614f54dca7d7dffff4a98bfe00` (documentation-only PRs #221/#223)<br>
-**Runtime baseline:** `f789444d769e9adf94adb5ef494c1a038a0c7261` (F1.56 / PR #220)<br>
-**Package:** `virgoscorpio-hub@0.6.2`, private and unreleased
+**F1.57 runtime merge SHA / mainline readiness source:** `f60d454e80273262c9020940575aae4328fb9149` (PR #224 squash merge)
+**Previous runtime baseline:** `f789444d769e9adf94adb5ef494c1a038a0c7261` (F1.56 / PR #220)
+**Post-merge exact-main validation:** [workflow #44638362224](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44638362224), 7/7 jobs; canonical artifact #14585192352
 
 ## Summary
 
@@ -71,15 +71,16 @@ Denied writes leave both site snapshots unchanged. Test-created roles, triggers,
 | Artifact verification | Passed: 238 required paths and 268 JavaScript files syntax-checked. |
 | Tenant-isolation inventory | Regenerated successfully: 28 route/flow families, 80 declared route patterns, 21 implementation source files and 57 referenced test files. |
 | Diff hygiene | `git diff --check` passed. |
-| Hosted exact-head CI | Push run [#44629850558](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44629850558) and PR run [#44629862297](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44629862297) both passed all six applicable non-attestation jobs: Node 22/24, live DB, browser smoke, CodeQL and candidate evidence consolidation. The main-only attestation skip is expected on branch/PR events. This is candidate evidence, not mainline readiness. |
+| Canonical mainline readiness | Artifact #14585192352; archive SHA-256 `1fa3223aed7fab8c4f2b662105866da751d466f0fd43cbded0ab771769d56da5`; JSON SHA-256 `a4aa0cdd8f57d921b1e088909927b81e44df75f798a402431f849155f43ff95f`. |
+| Post-merge exact-main CI | [workflow #44638362224](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44638362224) | **7/7 jobs passed** on F1.57 runtime SHA `f60d454e80273262c9020940575aae4328fb9149`: Node 22/24 each 670/670 Hub + 94/94 EnginEx; live PostgreSQL/Memgraph/Redis 169/169; 18/18 fresh and 18/18 idempotent migrations; browser smoke 9/9; CodeQL; mainline SLSA lockfile/SBOM attestation; exact-source consolidation. |
 | Independent security review | Not performed by this maintainer change; issues #14 and #25 remain OPEN / NOT PERFORMED. |
 
 The full local check ran on Node.js 26.12.1 / npm 11.19.1. Its three skips are Windows-specific platform skips, not passes. The earlier focused live PostgreSQL suite ran separately against the disposable PostgreSQL 18 database with zero skips, before the final all-row lock-set refinement, the site-first lock-order change, and the three added contention cases. The project `npm run check` itself does not validate live database migrations, provider behavior, or production security.
 
 ## Continuity, inventory and release boundary
 
-- F1.56 remains the latest merged runtime increment on main at `f789444d769e9adf94adb5ef494c1a038a0c7261` (PR #220; issue #219 CLOSED). Exact-main workflow #794 / run 44566086887 and canonical readiness artifact #14552870585 remain the authoritative mainline evidence.
-- F1.57 is a local maintainer candidate on this branch, based on current main HEAD `eae64f13a61613614f54dca7d7dffff4a98bfe00`; F1.56 runtime merge SHA `f789444d769e9adf94adb5ef494c1a038a0c7261` remains the runtime baseline. The intervening PRs #221/#223 are documentation-only. This branch does not update or replace mainline readiness.
+- F1.56 is the previous merged runtime increment at `f789444d769e9adf94adb5ef494c1a038a0c7261` (PR #220; issue #219 CLOSED). It remains the predecessor runtime baseline for F1.57. The authoritative current-main readiness evidence is now F1.57 / workflow #44638362224 / artifact #14585192352.
+- F1.57 merged to main at `f60d454e80273262c9020940575aae4328fb9149` through PR #224; issue #222 is CLOSED. Exact-main workflow #44638362224 and readiness artifact #14585192352 are the source-bound current runtime evidence.
 - Source-anchored tenant inventory remains 28 families / 80 declared route patterns / 21 source files / 57 test files after regeneration.
 - Independent tenant-isolation review #14 and platform-wide security assessment #25 remain OPEN / NOT PERFORMED. Dependency/license review #23 remains OPEN / PARTIAL.
 - Package `0.6.2` remains private and unreleased. Production remains `NOT_PRODUCTION_CERTIFIED` / NO-GO.
