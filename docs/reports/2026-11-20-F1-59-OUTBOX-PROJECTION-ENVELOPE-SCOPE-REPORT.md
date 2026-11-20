@@ -2,25 +2,25 @@
 
 **Date:** 20 November 2026
 
-**Tracking:** [Issue #231](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/231) · parent #124
+**Date:** 20 November 2026
 
-**Branch:** `security/f1-59-outbox-projection-envelope-scope-2026-11-20`
+**Tracking:** [Issue #231](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/231) CLOSED; parent #124
 
-**Pull request:** [#232](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/232) (OPEN; formal independent review still outstanding)
+**Implementation branch:** `security/f1-59-outbox-projection-envelope-scope-2026-11-20`
 
-**Baseline main SHA:** `619819230dac2e8d169ce71af7c6a41f0630cf27`
+**Pull request:** [#232 MERGED](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/232) at `70e800ad33a6d376388576ce76a608f35c595b64` on 20 November 2026 20:16:37Z.
 
-**Status:** Local implementation, focused tests and full repository check pass. Hosted push workflow [#44798684028](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44798684028) and PR workflow [#44798692834](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44798692834) both completed successfully on runtime implementation code head `623a5597553ffb783d5a42f9280acd40a06227d3`. Both passed Node 22.23.4 and 24.22.1, live PostgreSQL/Memgraph integration, browser editor/accessibility smoke, CodeQL and candidate evidence consolidation. The mainline-only lockfile/SBOM attestation was skipped by design on push/PR feature-branch events and remains a post-merge gate, not a required PR check.
+**Current mainline baseline:** `70e800ad33a6d376388576ce76a608f35c595b64` (F1.59).
 
-**Source-bound candidate readiness:** exact-head push artifact #14660651318 (archive SHA-256 `c932ee8bca3cdd8c427d40fd303203f6bfe3a2a7f008fbbf644c8931160779f6`; readiness JSON SHA-256 `d7238ea074f311be21b920592243fa1386de7f6b1e9df6fbc4f562cd90b5f7b8`) is bound to F1.59 runtime implementation code head `623a5597553ffb783d5a42f9280acd40a06227d3` and records 8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE. PR-event artifact #14660646349 is bound to synthetic merge SHA `1b4a2691378222b7127a0dacd2443cd2421c048c`; it is not the exact branch-head or mainline artifact.
+**Exact-main validation:** [Workflow #833 / run #44809875826](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44809875826) passed 7/7 jobs on the merge SHA. Node 22.23.4 and 24.22.1 each passed 677/677 Hub and 94/94 EnginEx tests; live PostgreSQL/Memgraph integration passed 180/180; fresh and idempotent migration checks passed 18/18 each; browser/editor smoke passed 9/9; CodeQL, mainline lockfile/SBOM attestation, and exact-source evidence consolidation passed.
 
-### Latest F1.59 source-bound documentation refresh — branch head `c46bf837db19d0feeff1d27cfe90aff33e47588c`
+**Current source-bound readiness:** artifact #14666785760 is bound to the merge SHA; archive SHA-256 `dcee92566f66e6bea50e28c301c910f31eac9f51546f63305150a8a9b6a32782`. Readiness is 8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN, `readyForProduction=false`, `NOT_PRODUCTION_CERTIFIED`, production decision NO-GO.
 
-The documentation-only commit `c46bf837db19d0feeff1d27cfe90aff33e47588c` is the current consolidated PR branch head; F1.59 runtime code remains unchanged from implementation head `623a5597553ffb783d5a42f9280acd40a06227d3`. Branch push [#44804183335 / run #829](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44804183335) and PR [#44804193472 / run #830](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44804193472) each completed **7/7 jobs**: six successful functional/evidence jobs and the mainline-only lockfile/SBOM attestation skipped by design. Node.js 22.23.4 and 24.22.1 each passed 677/677 Hub and 94/94 EnginEx tests. Live PostgreSQL/Memgraph integration passed 180/180; 18/18 migrations applied fresh and 18/18 passed idempotent re-entry; graph outage/recovery and canonical rebuild passed; browser/accessibility smoke, CodeQL and source-bound evidence consolidation passed.
+**Pre-merge candidate evidence:** implementation code head `623a5597553ffb783d5a42f9280acd40a06227d3` was validated by push #827 and PR #828. The later docs-only branch head was `c46bf837db19d0feeff1d27cfe90aff33e47588c`, validated by push #829 and PR #830. These were pre-merge candidate snapshots and are retained as historical provenance; workflow #833 is the current exact-main validation.
 
-The exact-head push readiness artifact is [#14660589715](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44804183335), archive SHA-256 `9a75bc9d84551932c9cd21292db94706969b18b48a3a38fe5334a1172b945bbf`; its extracted `release-readiness.json` SHA-256 is `b76896ef1af92744ff1558840a4e13705e83d5ae20f2f3b7ded57b8c17a36608`, generated `2026-11-20T19:43:01.985Z`, bound to branch head `c46bf837db19d0feeff1d27cfe90aff33e47588c`. It reports **8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE**, with production readiness false. The PR-event artifact is [#14662103518](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44804193472), archive SHA-256 `2a3bde97b68ea0ff30e44f2d4a3b118d9b42971565e0864f31fb9155fff31dfa`; its extracted `release-readiness.json` SHA-256 is `3888945c1bead6c2870b0b22e5f4d1b2760ee794f351280fc911440aceb0b8cd`, generated `2026-11-20T19:42:50.615Z`. It records PR head `c46bf837db19d0feeff1d27cfe90aff33e47588c` separately and binds its `sourceRevision` to GitHub synthetic merge SHA `624e16304ba751344f9c3c03f0bcc4932217f3c6`; its readiness classification is also 8 / 2 / 0 / 14. Neither candidate artifact supersedes the F1.58 exact-main readiness artifact or production gates.
+**Review boundary:** PR #232 merged with four formal owner-account COMMENTED submissions and zero APPROVED submissions. No independent non-author approval was recorded; this remains a governance gap tracked by [issue #230](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/230).
 
-
+**Release boundary:** package `virgoscorpio-hub@0.6.2` remains private and unreleased. No schema, migration, API, event-schema, dependency, lockfile or SemVer change was made by F1.59. Production remains NO-GO / NOT_PRODUCTION_CERTIFIED.
 
 ## Summary
 
