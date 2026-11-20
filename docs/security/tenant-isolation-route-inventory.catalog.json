@@ -1434,7 +1434,7 @@
       "title": "Memgraph projection and graph rebuild",
       "routePatterns": [],
       "authentication": "System worker/rebuild operator.",
-      "siteContext": "Projected graph nodes and relationships must carry site identity; query and rebuild paths must bind tenant plus aggregate/resource IDs and preserve version/tombstone ordering.",
+      "siteContext": "The PostgreSQL outbox envelope is the canonical tenant and aggregate identity. Graph projection validates event/resource family and rejects payload site/resource identity mismatches before Memgraph writes. Rebuilds create the same validated v1 envelope from canonical snapshot rows; content business version remains distinct from aggregate projection version.",
       "capabilities": [
         "Worker/maintenance authorization and deployment controls"
       ],
@@ -1451,24 +1451,35 @@
         {
           "file": "packages/graph/src/memgraph-store.js",
           "anchors": [
-            "siteId"
+            "function projectionInput(",
+            "validateEventEnvelope(envelope)"
           ]
         },
         {
           "file": "packages/graph/src/rebuild-projection.js",
           "anchors": [
-            "projector.apply({"
+            "createRebuildEventEnvelope(",
+            "eventEnvelopeFromOutboxRow"
+          ]
+        },
+        {
+          "file": "packages/realtime/src/event-contract.js",
+          "anchors": [
+            "function validateEventEnvelope(",
+            "function eventEnvelopeFromOutboxRow("
           ]
         }
       ],
       "tests": [
         "test/memgraph-projector.test.js",
+        "test/graph.test.js",
+        "test/graph-rebuild.test.js",
         "test/graph-projection-worker.test.js",
         "test/integration/memgraph.integration.test.js"
       ],
       "coverage": {
         "level": "targeted-integration",
-        "limits": "Selected cross-site lookup and replay/rebuild behavior are tested. Forged envelopes, partition collisions, stale projection versions and site deletion cleanup require assessor review."
+        "limits": "Unit tests reject event-type, resource-type, site-scope and aggregate-ID mismatches before Cypher writes; equivalent UUID casing normalizes to the validated envelope. Content, taxonomy and relationship families are exercised, and rebuild tests prove canonical PostgreSQL rows are converted to validated v1 envelopes while preserving content business-version versus projection-version semantics. Local live Memgraph integration was not run when service configuration is absent. Broader assessor work remains for forged/invalid producer envelopes, partition collisions, stale aggregate/replay behavior beyond selected cases, site deletion cleanup and independent tenant-boundary assurance."
       },
       "methods": [
         "WORKER",

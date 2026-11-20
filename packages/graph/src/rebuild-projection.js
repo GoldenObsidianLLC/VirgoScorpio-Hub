@@ -1,6 +1,23 @@
 'use strict';
 
+const { randomUUID } = require('node:crypto');
 const { withTransaction } = require('../../db/src/transaction');
+const { eventEnvelopeFromOutboxRow } = require('../../realtime/src/event-contract');
+
+function createRebuildEventEnvelope({ type, aggregateType, aggregateId, aggregateVersion, siteId, payload }) {
+  return eventEnvelopeFromOutboxRow({
+    id: randomUUID(),
+    event_type: type,
+    schema_version: 1,
+    created_at: new Date().toISOString(),
+    aggregate_type: aggregateType,
+    aggregate_id: aggregateId,
+    aggregate_version: aggregateVersion,
+    payload,
+    site_id: siteId,
+    classification: 'site-private'
+  });
+}
 
 /**
  * Rebuild the Memgraph projection from canonical PostgreSQL records.
@@ -161,20 +178,27 @@ async function rebuildGraphProjection({
     const deleted =
       row.deleted_at != null || row.status === 'deleted';
 
-    await projector.apply({
-      type: deleted ? 'content.delete' : 'content.upsert',
-      payload: {
-        id: row.id,
-        siteId: row.site_id,
-        contentType: row.content_type,
-        slug: row.slug,
-        locale: row.locale,
-        title: row.title,
-        status: row.status,
-        version: row.version,
-        projectionVersion: row.lock_version,
-      },
+    const type = deleted ? 'content.delete' : 'content.upsert';
+    const payload = {
+      id: row.id,
+      siteId: row.site_id,
+      contentType: row.content_type,
+      slug: row.slug,
+      locale: row.locale,
+      title: row.title,
+      status: row.status,
+      version: row.version,
+      projectionVersion: row.lock_version,
+    };
+    const envelope = createRebuildEventEnvelope({
+      type,
+      aggregateType: 'content',
+      aggregateId: row.id,
+      aggregateVersion: row.lock_version,
+      siteId: row.site_id,
+      payload
     });
+    await projector.apply({ type, payload, envelope });
 
     summary.content += 1;
 
@@ -187,18 +211,25 @@ async function rebuildGraphProjection({
   }
 
   for (const row of snapshot.taxonomy) {
-    await projector.apply({
-      type: 'taxonomy.upsert',
-      payload: {
-        id: row.id,
-        siteId: row.site_id,
-        taxonomy: row.taxonomy,
-        slug: row.slug,
-        label: row.label,
-        metadata: row.metadata || {},
-        version: row.version,
-      },
+    const type = 'taxonomy.upsert';
+    const payload = {
+      id: row.id,
+      siteId: row.site_id,
+      taxonomy: row.taxonomy,
+      slug: row.slug,
+      label: row.label,
+      metadata: row.metadata || {},
+      version: row.version,
+    };
+    const envelope = createRebuildEventEnvelope({
+      type,
+      aggregateType: 'taxonomy-term',
+      aggregateId: row.id,
+      aggregateVersion: row.version,
+      siteId: row.site_id,
+      payload
     });
+    await projector.apply({ type, payload, envelope });
 
     summary.taxonomy += 1;
     completed += 1;
@@ -209,22 +240,27 @@ async function rebuildGraphProjection({
     const deleted = row.deleted_at != null;
     const isTermRelation = row.kind === 'HAS_TERM';
 
-    await projector.apply({
-      type: deleted
-        ? 'relationship.delete'
-        : 'relationship.upsert',
-      payload: {
-        relationshipId: row.id,
-        siteId: row.site_id,
-        sourceId: row.source_id,
-        targetId: row.target_id,
-        kind: row.kind,
-        version: row.version,
-        metadata: row.metadata || {},
-        sourceType: 'content',
-        targetType: isTermRelation ? 'term' : 'content',
-      },
+    const type = deleted ? 'relationship.delete' : 'relationship.upsert';
+    const payload = {
+      relationshipId: row.id,
+      siteId: row.site_id,
+      sourceId: row.source_id,
+      targetId: row.target_id,
+      kind: row.kind,
+      version: row.version,
+      metadata: row.metadata || {},
+      sourceType: 'content',
+      targetType: isTermRelation ? 'term' : 'content',
+    };
+    const envelope = createRebuildEventEnvelope({
+      type,
+      aggregateType: 'relationship',
+      aggregateId: row.id,
+      aggregateVersion: row.version,
+      siteId: row.site_id,
+      payload
     });
+    await projector.apply({ type, payload, envelope });
 
     summary.relationships += 1;
 
