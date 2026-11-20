@@ -23,8 +23,14 @@ async function handleLibraryRoute(ctx) {
   const libraryItem=pathName.match(/^\/api\/v1\/sites\/([0-9a-f-]{36})\/library\/items\/([0-9a-f-]{36})(?:\/(versions|optimize|download))?$/i);
   if ((libraryCollection&&['GET','POST'].includes(method))||(libraryItem&&['GET','PATCH','DELETE','POST','PUT'].includes(method))) {
     if(!libraryStore||!localPool) throw fail(503,'ERR_VIRGOSCORPIO_HUB_LIBRARY_DISABLED','File and document libraries require PostgreSQL and configured storage.');
-    const siteId=libraryCollection?.[1]||libraryItem[1]; const body=['POST','PATCH','PUT','DELETE'].includes(method)&&libraryItem?.[3]!=='download'?await readJson(req,maxLibraryBody||maxBody):{};
-    await siteIdFor({ req, url, body, actor, routeSiteId: siteId }); await requireCapability(actor,siteId,method==='GET'?'library:manage':'library:manage');
+    const siteId=libraryCollection?.[1]||libraryItem[1];
+    // Authorize site membership and capability before consuming the request body so
+    // that unauthorized callers cannot force large buffering or JSON parsing.
+    await siteIdFor({ req, url, body: {}, actor, routeSiteId: siteId }); await requireCapability(actor,siteId,'library:manage');
+    const readsBody=['POST','PATCH','PUT','DELETE'].includes(method)&&libraryItem?.[3]!=='download';
+    const body=readsBody?await readJson(req,maxLibraryBody||maxBody):{};
+    // Re-validate only when the body carries its own site selector, preserving the mismatch check.
+    if(readsBody&&body&&body.siteId!==undefined) await siteIdFor({ req, url, body, actor, routeSiteId: siteId });
     if(libraryCollection){
       if(method==='GET') return sendJson(res,200,{items:await libraryStore.list({siteId,category:url.searchParams.get('category')||'all',query:url.searchParams.get('q')||'',limit:url.searchParams.get('limit')||50,offset:url.searchParams.get('offset')||0}),libraryKinds:['image','video','audio','document','file','font'],requestId});
       const category=body.category;
