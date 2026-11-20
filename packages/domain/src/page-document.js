@@ -5,6 +5,7 @@ const { randomUUID } = require('node:crypto');
 const DOCUMENT_SCHEMA_VERSION = 1;
 const MAX_NODES = 250;
 const MAX_DEPTH = 12;
+const MAX_QUERY_LOOPS = 5;
 const MAX_TEXT_LENGTH = 20_000;
 const ALLOWED_NODE_TYPES = new Set([
   'section', 'column', 'container',
@@ -80,6 +81,7 @@ function validatePageDocument(document) {
   if (!Array.isArray(document.children)) errors.push('children must be an array');
 
   let nodeCount = 0;
+  let queryLoopCount = 0;
   const ids = new Set();
   function visit(node, depth, path) {
     nodeCount += 1;
@@ -139,6 +141,8 @@ function validatePageDocument(document) {
       } else if (node.type === 'widget.spacer') {
         if (typeof props.height !== 'string' || !/^(?:[0-9]+(?:\.[0-9]+)?(?:px|rem|em|vh))$/.test(props.height)) errors.push(`${path}.props.height must be a CSS length in px, rem, em, or vh`);
       } else if (node.type === 'widget.query-loop') {
+        queryLoopCount += 1;
+        if (queryLoopCount === MAX_QUERY_LOOPS + 1) errors.push(`query-loop count exceeds ${MAX_QUERY_LOOPS}`);
         if (props.source !== 'latest-published') errors.push(`${path}.props.source must be latest-published`);
         if (typeof props.contentType !== 'string' || !/^[a-z][a-z0-9_-]{0,49}$/.test(props.contentType)) errors.push(`${path}.props.contentType must be a content type slug`);
         if (!Number.isInteger(props.limit) || props.limit < 1 || props.limit > 12) errors.push(`${path}.props.limit must be an integer from 1 to 12`);
