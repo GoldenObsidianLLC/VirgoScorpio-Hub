@@ -4,10 +4,10 @@
 **Status:** Merged to main through [PR #224](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/224); issue #222 CLOSED
 **Issue:** [#222 - Revalidate creator authorization at the community group-create write boundary](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/222) - CLOSED by PR #224
 **Parent:** [#124 — Continue maintainer-led tenant isolation hardening](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/124)<br>
-**Branch:** `security/f1-57-community-group-create-auth-2026-11-19`<br>
-**F1.57 runtime merge SHA / mainline readiness source:** `f60d454e80273262c9020940575aae4328fb9149` (PR #224 squash merge)
-**Previous runtime baseline:** `f789444d769e9adf94adb5ef494c1a038a0c7261` (F1.56 / PR #220)
-**Post-merge exact-main validation:** [workflow #44638362224](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44638362224), 7/7 jobs; canonical artifact #14585192352
+**Implementation branch (merged; remote branch deleted):** security/f1-57-community-group-create-auth-2026-11-19 / PR #224
+**F1.57 runtime merge SHA:** f60d454e80273262c9020940575aae4328fb9149 (PR #224 squash merge)
+**Previous runtime baseline:** f789444d769e9adf94adb5ef494c1a038a0c7261 (F1.56 / PR #220)
+**Latest exact-main validation snapshot:** repository main at docs-only PR #225 SHA 75aeb93ed3db1801f0a0860a33cade90045f4ee6; [workflow #44643356523](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44643356523), 7/7 jobs; artifact #14587571933
 
 ## Summary
 
@@ -64,23 +64,23 @@ Denied writes leave both site snapshots unchanged. Test-created roles, triggers,
 | Pre-fix red reproduction | Confirmed: membership revocation after preflight still returned HTTP 201 and persisted the group. |
 | Earlier focused live PostgreSQL 18 community-isolation suite (before final refinements) | **36/36 passed; 0 failed, 0 skipped, 0 TODO.** Superseded by the final exact-head hosted integration result below. |
 | Final exact-head PostgreSQL/Memgraph/Redis integration (PR #224, run #44629862297) | **169/169 passed; 0 failed, 0 skipped, 0 TODO.** This includes F1.57 creator revalidation, site-first lock serialization against membership removal, later-membership and later-role contention, capability controls, owner-insert rollback and two-site snapshots. Fresh migrations 18/18; idempotent second pass 18/18 skipped as expected. |
-| Final exact-head candidate CI (push #44629850558 and PR #44629862297) | Both runs passed all six functional jobs: Node 22.23.4 and 24.22.1 (each 670/670 Hub + 94/94 EnginEx tests, zero skips), live database integration, browser smoke 9/9, CodeQL, and candidate evidence consolidation. Both npm audit scopes reported 0 vulnerabilities. Main-only SLSA lockfile/SBOM attestation was skipped as designed on non-main events. This is candidate evidence, not mainline readiness. |
+| Final exact-head candidate CI (push #44629850558 and PR #44629862297) | Both runs passed all six applicable functional jobs; main-only SLSA attestation was skipped as designed on branch/PR events. This candidate evidence is superseded for current-main qualification by workflows #44638362224 and #44643356523. |
 | API runtime syntax | `node --check apps/api/src/platform-routes.js` passed. |
 | Integration test syntax | `node --check test/integration/tenant-community-object-isolation.integration.test.js` passed. |
 | Latest full local project check | `npm run check`: **667 passed, 0 failed, 3 Windows-specific skips** (670 total); final rerun passed after regenerating the tenant inventory. |
 | Artifact verification | Passed: 238 required paths and 268 JavaScript files syntax-checked. |
 | Tenant-isolation inventory | Regenerated successfully: 28 route/flow families, 80 declared route patterns, 21 implementation source files and 57 referenced test files. |
 | Diff hygiene | `git diff --check` passed. |
-| Canonical mainline readiness | Artifact #14585192352; archive SHA-256 `1fa3223aed7fab8c4f2b662105866da751d466f0fd43cbded0ab771769d56da5`; JSON SHA-256 `a4aa0cdd8f57d921b1e088909927b81e44df75f798a402431f849155f43ff95f`. |
-| Post-merge exact-main CI | [workflow #44638362224](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44638362224) | **7/7 jobs passed** on F1.57 runtime SHA `f60d454e80273262c9020940575aae4328fb9149`: Node 22/24 each 670/670 Hub + 94/94 EnginEx; live PostgreSQL/Memgraph/Redis 169/169; 18/18 fresh and 18/18 idempotent migrations; browser smoke 9/9; CodeQL; mainline SLSA lockfile/SBOM attestation; exact-source consolidation. |
+| Canonical mainline readiness | Artifact #14587571933, source revision 75aeb93ed3db1801f0a0860a33cade90045f4ee6; archive SHA-256 d8efc488ea18bfd8cce4f07e49f77796a04825ebc722b1f38e6fa0335905b549; JSON SHA-256 32c23e00aa19da87d8148407cd60d5be70242986ac6f8056f7d53ea8f41f0e29; readiness 8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN. |
+| Latest exact-main workflow #44643356523 | **7/7 jobs passed** on docs-only PR #225 source revision 75aeb93ed3db1801f0a0860a33cade90045f4ee6 (runtime F1.57 SHA f60d454e80273262c9020940575aae4328fb9149 unchanged). Node 22/24 each 670/670 Hub + 94/94 EnginEx, zero skips; live PostgreSQL/Memgraph/Redis 169/169, zero skips; 18/18 fresh and 18/18 idempotent migrations; browser smoke 9/9; CodeQL; mainline SLSA lockfile/SBOM attestation; exact-source evidence consolidation. |
 | Independent security review | Not performed by this maintainer change; issues #14 and #25 remain OPEN / NOT PERFORMED. |
 
 The full local check ran on Node.js 26.12.1 / npm 11.19.1. Its three skips are Windows-specific platform skips, not passes. The earlier focused live PostgreSQL suite ran separately against the disposable PostgreSQL 18 database with zero skips, before the final all-row lock-set refinement, the site-first lock-order change, and the three added contention cases. The project `npm run check` itself does not validate live database migrations, provider behavior, or production security.
 
 ## Continuity, inventory and release boundary
 
-- F1.56 is the previous merged runtime increment at `f789444d769e9adf94adb5ef494c1a038a0c7261` (PR #220; issue #219 CLOSED). It remains the predecessor runtime baseline for F1.57. The authoritative current-main readiness evidence is now F1.57 / workflow #44638362224 / artifact #14585192352.
-- F1.57 merged to main at `f60d454e80273262c9020940575aae4328fb9149` through PR #224; issue #222 is CLOSED. Exact-main workflow #44638362224 and readiness artifact #14585192352 are the source-bound current runtime evidence.
+- F1.56 is the previous merged runtime increment at f789444d769e9adf94adb5ef494c1a038a0c7261 (PR #220; issue #219 CLOSED). It remains the predecessor runtime baseline for F1.57.
+- F1.57 merged at runtime SHA f60d454e80273262c9020940575aae4328fb9149 through PR #224; issue #222 is CLOSED. Documentation-only PR #225 advanced main to 75aeb93ed3db1801f0a0860a33cade90045f4ee6 without changing runtime. Exact-main workflow #44643356523 and readiness artifact #14587571933 are the latest mainline evidence snapshot.
 - Source-anchored tenant inventory remains 28 families / 80 declared route patterns / 21 source files / 57 test files after regeneration.
 - Independent tenant-isolation review #14 and platform-wide security assessment #25 remain OPEN / NOT PERFORMED. Dependency/license review #23 remains OPEN / PARTIAL.
 - Package `0.6.2` remains private and unreleased. Production remains `NOT_PRODUCTION_CERTIFIED` / NO-GO.
