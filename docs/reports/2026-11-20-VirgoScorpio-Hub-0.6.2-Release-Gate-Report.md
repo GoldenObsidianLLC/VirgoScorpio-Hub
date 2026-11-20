@@ -3,7 +3,7 @@
 **Report date:** 20 November 2026 (America/Chicago)
 **Source repository:** [GoldenObsidianLLC/VirgoScorpio-Hub](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub)
 **Authoritative merged baseline:** F1.58, main `619819230dac2e8d169ce71af7c6a41f0630cf27`
-**Current maintainer candidate:** F1.59, PR [#232](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/232), head `623a5597553ffb783d5a42f9280acd40a06227d3`
+**Current maintainer candidate:** F1.59, PR [#232](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/232), current documentation-only branch head `c46bf837db19d0feeff1d27cfe90aff33e47588c` (runtime implementation code head `623a5597553ffb783d5a42f9280acd40a06227d3`)
 **Release decision:** **PRODUCTION NO-GO — NOT_PRODUCTION_CERTIFIED**
 
 > This report distinguishes exact-main release evidence from candidate branch evidence and independent production acceptance. Green CI, maintainer tests, signed attestations and a successful pull-request workflow do not constitute production certification or independent security approval.
@@ -72,7 +72,7 @@ The mainline workflow verified signed provenance and SBOM subjects for the exact
 
 ### 3.1 Scope and implementation
 
-F1.59 is tracked by [issue #231](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/231), under umbrella [issue #124](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/124). The candidate branch is `security/f1-59-outbox-projection-envelope-scope-2026-11-20`; implementation commit `bf36d356913053df069abd825e157dad400a67d2`; consolidated PR [#232](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/232).
+F1.59 is tracked by [issue #231](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/231), under umbrella [issue #124](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/124). The candidate branch is `security/f1-59-outbox-projection-envelope-scope-2026-11-20`; implementation commit `bf36d356913053df069abd825e157dad400a67d2`; runtime implementation code head `623a5597553ffb783d5a42f9280acd40a06227d3`; current documentation-only consolidated PR head `c46bf837db19d0feeff1d27cfe90aff33e47588c`; consolidated PR [#232](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/232).
 
 On exact F1.58 main, a validated PostgreSQL outbox envelope carried Site A while the duplicate `payload.siteId` value carried Site B. Before the fix, the graph projector used the payload identity in its Cypher parameters instead of treating the validated envelope as authoritative. This could redirect graph projection state across tenant/site boundaries.
 
@@ -95,30 +95,44 @@ No schema, migration, HTTP/API, event-schema, dependency, lockfile, package-vers
 | Tenant-isolation inventory | Fresh: 28 families, 80 route patterns, 22 source files, 59 test references |
 | Inventory source digest | `82f38c78ee897998e0774de688c36eef9f56e7217d26d6e807b7d35695fe1bd4` |
 | Artifact verification and `git diff --check` | PASS |
-| Markdown relative-link audit | 159 relative destinations checked across 10 changed Markdown files; 0 broken |
+| Markdown relative-link audit | Final branch-wide audit: 14 Markdown files, 293 relative destinations, 0 broken |
 
 The three full-suite skips are conditional Windows/local environment skips. The two focused graph/outbox skips are the local service-dependent integration cases; neither is described as a passing live Memgraph test. Hosted integration supplies the service-backed validation.
 
-### 3.3 Exact-head hosted candidate validation
+### 3.3 Runtime implementation candidate validation — code head `623a5597553ffb783d5a42f9280acd40a06227d3`
 
-The final candidate head is `623a5597553ffb783d5a42f9280acd40a06227d3`.
+The F1.59 implementation commit is `bf36d356913053df069abd825e157dad400a67d2`. The code-only candidate head `623a5597553ffb783d5a42f9280acd40a06227d3` was validated by:
 
 | Event | Workflow | Result |
 |---|---|---|
 | Branch push | [#44798684028 (run #827)](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44798684028) | Success |
 | Pull request | [#44798692834 (run #828)](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44798692834) | Success |
 
-Both events completed the six applicable functional jobs: Node 22 and 24 matrices, PostgreSQL/Memgraph integration, browser/accessibility smoke, CodeQL, and candidate evidence consolidation. Hosted Node matrices passed 677/677 Hub tests and 94/94 EnginEx tests per runtime; the live database integration passed 180/180; migrations passed 18/18 fresh and 18/18 idempotent; browser smoke passed 9/9. Both runs skipped `Attest dependency lockfile and SBOM` by design for feature-branch/PR events. That job is a post-merge mainline control and must not be configured as a PR-required context.
+Both runs passed the Node 22.23.4 and 24.22.1 matrices (677/677 Hub and 94/94 EnginEx per runtime), live PostgreSQL/Memgraph integration (180/180), fresh and idempotent migrations (18/18 each), browser/accessibility smoke (9/9), CodeQL and candidate evidence consolidation. The mainline-only `Attest dependency lockfile and SBOM` job was skipped by design on feature-branch/PR events.
 
-The exact-head push readiness artifact #14660651318 has archive SHA-256 `c932ee8bca3cdd8c427d40fd303203f6bfe3a2a7f008fbbf644c8931160779f6`. Its finalized readiness JSON SHA-256 is `d7238ea074f311be21b920592243fa1386de7f6b1e9df6fbc4f562cd90b5f7b8`; it is bound to branch head `623a5597553ffb783d5a42f9280acd40a06227d3` and records **8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE**, with production readiness false.
+The exact-code-head push readiness artifact #14660651318 (archive SHA-256 `c932ee8bca3cdd8c427d40fd303203f6bfe3a2a7f008fbbf644c8931160779f6`; readiness JSON SHA-256 `d7238ea074f311be21b920592243fa1386de7f6b1e9df6fbc4f562cd90b5f7b8`) is bound to `623a5597553ffb783d5a42f9280acd40a06227d3` and reports **8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE**. The earlier PR-event artifact #14660646349 uses synthetic merge SHA `1b4a2691378222b7127a0dacd2443cd2421c048c`; it is supporting PR evidence, not an exact branch-head or mainline artifact.
 
-The PR-event readiness artifact #14660646349 is bound to GitHub's synthetic merge revision `1b4a2691378222b7127a0dacd2443cd2421c048c`, while recording the candidate branch head separately. It is supporting PR-event evidence, not an exact-main artifact.
+### 3.4 Current consolidated PR head — documentation-only refresh `c46bf837db19d0feeff1d27cfe90aff33e47588c`
 
-### 3.4 Review and merge boundary
+Commit `c46bf837db19d0feeff1d27cfe90aff33e47588c` updates Markdown/release evidence and the manifest's mainline evidence pointer; it does not change the F1.59 runtime implementation. This is the current consolidated PR branch head.
 
-PR #232 is open, non-draft and reported mergeable. Its review decision is unset, no reviewer request is present, and GitHub records only a maintainer-authored `COMMENTED` review (not an approval); there are no inline review threads. **No independent non-author approval has been recorded.** Keep PR #232 open and unmerged until an authorized independent reviewer has inspected the final head and submitted an approving review.
+| Event | Workflow | Result |
+|---|---|---|
+| Branch push | [#44804183335 (run #829)](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44804183335) | Success — 7/7 workflow jobs |
+| Pull request | [#44804193472 (run #830)](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44804193472) | Success — 7/7 workflow jobs |
+
+Each workflow completed six functional/evidence jobs successfully: Node 22.23.4 and 24.22.1 (677/677 Hub and 94/94 EnginEx tests per runtime), PostgreSQL/Memgraph integration (180/180), fresh/idempotent migrations (18/18 each), graph outage/recovery and canonical rebuild, browser/accessibility smoke, CodeQL and source-bound candidate evidence consolidation. The seventh job, `Attest dependency lockfile and SBOM`, was skipped by its mainline-only condition. It remains a post-merge control and must not become a required PR context.
+
+The exact-head push readiness artifact [#14660589715](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44804183335) has archive SHA-256 `9a75bc9d84551932c9cd21292db94706969b18b48a3a38fe5334a1172b945bbf`. Its extracted `release-readiness.json` SHA-256 is `b76896ef1af92744ff1558840a4e13705e83d5ae20f2f3b7ded57b8c17a36608`, generated `2026-11-20T19:43:01.985Z`, and source-bound to branch head `c46bf837db19d0feeff1d27cfe90aff33e47588c`. The readiness classification remains **8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN**, with `readyForProduction=false` and `NOT_PRODUCTION_CERTIFIED`.
+
+The PR-event readiness artifact [#14662103518](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44804193472) has archive SHA-256 `2a3bde97b68ea0ff30e44f2d4a3b118d9b42971565e0864f31fb9155fff31dfa`. Its extracted `release-readiness.json` SHA-256 is `3888945c1bead6c2870b0b22e5f4d1b2760ee794f351280fc911440aceb0b8cd`, generated `2026-11-20T19:42:50.615Z`. It records PR head `c46bf837db19d0feeff1d27cfe90aff33e47588c` and uses GitHub's synthetic merge revision `624e16304ba751344f9c3c03f0bcc4932217f3c6` as `sourceRevision`. Its readiness classification is also **8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE**. Do not conflate this synthetic-merge artifact with the exact-head push artifact or the F1.58 exact-main readiness artifact.
+
+### 3.5 Review and merge boundary
+
+PR #232 remains open, non-draft and mergeable. GitHub reports no review decision and no requested reviewer. The only formal submissions are four owner-account `COMMENTED` entries (`done`, `done`, `reviewed`, `Reviewed`) by `GoldenObsidianLLC`; none is an approval. There are no inline review threads. **No independent non-author approval has been recorded.** Keep PR #232 open and unmerged until a trusted, authorized independent reviewer has inspected the latest branch head `c46bf837db19d0feeff1d27cfe90aff33e47588c` and submitted an approving review.
 
 The candidate does not advance the latest merged runtime. F1.58 remains the current merged runtime baseline until a reviewed F1.59 merge and subsequent exact-main validation occur.
+
 
 ## 4. Canonical production-evidence gate matrix
 
@@ -212,7 +226,7 @@ No release tag, GitHub Release, npm publication, production deployment, producti
 ## 9. Evidence provenance and interpretation
 
 - **Merged mainline:** exact main SHA `619819230dac2e8d169ce71af7c6a41f0630cf27`; workflow run [#44675989750](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44675989750); readiness artifact #14601349640; signed supply-chain artifact #14602322573.
-- **Candidate branch:** exact head `623a5597553ffb783d5a42f9280acd40a06227d3`; push run [#44798684028](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44798684028); PR run [#44798692834](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44798692834); exact-head readiness artifact #14660651318; PR-event artifact #14660646349.
+- **Candidate source and latest PR head:** runtime code-validation head `623a5597553ffb783d5a42f9280acd40a06227d3`; initial candidate push/PR runs #44798684028/#44798692834; code-head readiness artifacts #14660651318/#14660646349. The current documentation-only PR branch head is `c46bf837db19d0feeff1d27cfe90aff33e47588c`; latest push/PR runs [#44804183335](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44804183335)/[#44804193472](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44804193472), exact-head push artifact #14660589715 and synthetic-merge PR artifact #14662103518.
 - **Candidate implementation:** [F1.59 implementation report](2026-11-20-F1-59-OUTBOX-PROJECTION-ENVELOPE-SCOPE-REPORT.md), [issue #231](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/231) and [PR #232](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/232).
 - **Authoritative machine readiness:** [RELEASE_READINESS.md](../RELEASE_READINESS.md) and [RELEASE-EVIDENCE.md](../RELEASE-EVIDENCE.md).
 
