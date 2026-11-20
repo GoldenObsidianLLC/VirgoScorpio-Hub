@@ -1,6 +1,6 @@
 # F1.58 — Community Feed Write Authorization Race Report
 
-**Status:** Implemented locally; issue #227 OPEN; candidate branch unmerged
+**Status:** Committed and pushed; PR #228 OPEN; candidate CI green on push and PR workflows; maintainer review pending
 **Date:** 19 November 2026 (America/Chicago)
 **Repository:** `GoldenObsidianLLC/VirgoScorpio-Hub`
 **Base main SHA:** `a1e0fb0cf605c6f34f9e85c252593ae1b508e0b2` (documentation-only PR #226 after F1.57)
@@ -17,7 +17,7 @@ The candidate reuses the existing PostgreSQL `withTransaction` helper and the es
 
 The change preserves current routes, request/response shape, privacy semantics and error contracts. It introduces no runtime helper abstraction, schema migration, endpoint, runtime dependency, lockfile or package-version change. A small test-only PostgreSQL lock-wait helper was extracted from an existing integration suite and reused by the new feed serialization tests.
 
-**Candidate outcome:** the focused PostgreSQL 18 integration set passed **58/58** with zero failures/skips across community-feed privacy (22/22) and adjacent tenant community-object isolation (36/36). Local `npm run check` passed **667/670** (zero failures, three conditional skips); artifact verification covered 238 required paths / 269 JavaScript files; `npm audit --audit-level=low` found **0 vulnerabilities**. The candidate is not yet hosted-CI validated or merged.
+**Candidate outcome:** the focused PostgreSQL 18 integration set passed **58/58** with zero failures/skips across community-feed privacy (22/22) and adjacent tenant community-object isolation (36/36). Local `npm run check` passed **667/670** (zero failures, three conditional skips); artifact verification covered 238 required paths / 269 JavaScript files; `npm audit --audit-level=low` found **0 vulnerabilities**. Exact candidate push run **#44670394214** and PR run **#44670455912** both succeeded on head SHA `42a41b2d8a615a00ebec8b2fd188ae4889f58b41`; the PR run tested merge SHA `8a1b7c85e597ce5a44bdb1769cb225ed6e0cbad8`. PR #228 is open; independent maintainer review and merge remain pending.
 
 ## 2. Reproduced defect and regression design
 
@@ -90,12 +90,17 @@ If the final guarded insert produces no row, the route returns the existing appl
 | Local `npm run check` | **667 passed / 0 failed / 3 skipped** | Full run exit code 0; skips are environment/platform-conditional and are not counted as passes. |
 | Dependency audit | **PASS** | `npm audit --audit-level=low`: 0 vulnerabilities. |
 | Current-tree secret scan | **PASS** | Gitleaks 8.30.1 scanned approximately 7.13 MB; no findings. |
-| Git-history secret scan | **PASS** | Gitleaks scanned 438 commits / approximately 14.55 MB; no findings. |
-| Artifact verification | **PASS** | 238 required paths and 268 JavaScript files syntax-checked. |
+| Git-history secret scan | **PASS** | Gitleaks scanned 439 commits / approximately 14.60 MB; no findings. |
+| Artifact verification | **PASS** | 238 required paths and 269 JavaScript files syntax-checked. |
 | Tenant-isolation inventory | **PASS / regenerated** | 28 route/flow families, 80 declared route patterns, 21 implementation sources, 57 referenced test files. |
-| Supported hosted Node 22/24 matrix | **PENDING** | Candidate has not yet produced exact-head GitHub evidence. |
-| Hosted live PostgreSQL/Memgraph/Redis and migrations | **PENDING** | Local focused PostgreSQL result is not a substitute for the required hosted live-service producer. |
-| CodeQL, candidate evidence aggregation and branch checks | **PENDING** | No claim is made until exact-head workflows complete. |
+| Hosted Node.js 22.23.4 matrix | **PASS** | 670/670 Hub tests and 94/94 EnginEx tests; zero failures/skips/TODOs. |
+| Hosted Node.js 24.22.1 matrix | **PASS** | 670/670 Hub tests and 94/94 EnginEx tests; zero failures/skips/TODOs. |
+| Hosted PostgreSQL 18 / Memgraph / Redis integration | **180/180 PASS** | Zero failures/skips/TODOs; live producer evidence includes PostgreSQL/Memgraph integration, Redis outage/recovery qualification, multi-node collaboration and graph rebuild. |
+| Fresh/idempotent database migrations | **PASS** | All 18 migrations applied on first pass and all 18 skipped on idempotent second pass; disposable database dropped. |
+| Browser editor/accessibility smoke | **9/9 PASS** | Browser job passed all nine smoke tests; this is not manual WCAG or screen-reader acceptance. |
+| CodeQL security analysis | **PASS** | PR and push CodeQL analyses completed successfully. |
+| Candidate CI evidence consolidation | **PASS** | Revision-bound manifests/checksums verified; readiness snapshot 8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE, `readyForProduction=false`. |
+| Signed lockfile/SBOM attestation | **EXPECTED PR SKIP** | Workflow explicitly runs this job only for non-PR `refs/heads/main`; a successful mainline attestation remains required after merge. |
 | Independent assurance | **OPEN / NOT PERFORMED** | Maintainer regression evidence does not satisfy independent review #14 or assessment #25. |
 
 The full local test command initially identified that the generated tenant-isolation inventory had become stale due to the route source change. The existing inventory generator was run; it regenerated the JSON and Markdown map at the unchanged 28/80/21/57 cardinality. The full `npm run check` was rerun after regeneration and passed.
@@ -131,7 +136,7 @@ F1.58 is candidate maintainer-led hardening only. It does not change the prior c
 
 `readyForProduction=false`; final classification remains `NOT_PRODUCTION_CERTIFIED`. **Production remains NO-GO.**
 
-The latest previously finalized readiness artifact remains #14587571933 and is bound to main SHA `75aeb93ed3db1801f0a0860a33cade90045f4ee6`, not the newer documentation-only main SHA `a1e0fb0cf605c6f34f9e85c252593ae1b508e0b2` and not this unmerged F1.58 candidate. The last reported exact-main workflow #44643356523 passed 7/7 on that earlier SHA. A fresh exact-head CI/evidence result is required before claiming the candidate has passed hosted release-gate automation.
+The latest previously finalized mainline readiness artifact remains #14587571933 and is bound to main SHA `75aeb93ed3db1801f0a0860a33cade90045f4ee6`, not the newer documentation-only main SHA `a1e0fb0cf605c6f34f9e85c252593ae1b508e0b2`. F1.58 now has separate, successful candidate push/PR workflows #44670394214 and #44670455912, with revision-bound CI evidence bound to head SHA `42a41b2d8a615a00ebec8b2fd188ae4889f58b41` and PR merge SHA `8a1b7c85e597ce5a44bdb1769cb225ed6e0cbad8`. The PR evidence artifact reports 8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE and `readyForProduction=false`. It is candidate CI, not mainline evidence; signed lockfile/SBOM attestation is intentionally skipped on pull_request events and must pass in the post-merge mainline workflow.
 
 The 14 missing production evidence categories remain unchanged: independent tenant isolation (#14); identity provider and recovery (#15); malware scanning corpus/legacy clearance (#16); live cloud storage (#17); Stripe lifecycle (#18); manual accessibility/browser acceptance (#19); commerce parity (#20); community parity (#21); plugin isolation (#22); qualified human dependency/license/SBOM review (#23); load/fault/backup/restore (#24); independent platform security assessment (#25); operations and release approval (#26); and production observability. Product/provider scope #13 and zero-reserve governance #32 also remain separate open decisions.
 
@@ -139,10 +144,10 @@ No assessor engagement, spending, risk waiver, production-data test, deployment,
 
 ## 7. Next steps
 
-1. Push the candidate branch and open a PR linked to #227 and parent #124.
-2. Require exact-head hosted checks: supported Node 22/24 tests and audits, live PostgreSQL/Memgraph/Redis integration with zero skips, fresh/idempotent migrations, browser tests where required, CodeQL, and evidence aggregation.
-3. Review the SQL lock order and final INSERT predicates against the current membership-removal, group-join and group-create lifecycle paths; retain the public/member comment positive controls.
-4. Merge only after branch protection and applicable checks pass. Do not conflate candidate workflow evidence with mainline attestation or independent assessment.
+1. Candidate commit `42a41b2d8a615a00ebec8b2fd188ae4889f58b41` is pushed; PR #228 is open and its push/PR workflows #44670394214 and #44670455912 both passed.
+2. Hosted evidence is recorded above: Node 22/24 matrices, live PostgreSQL/Memgraph/Redis (180/180, zero skips), 18/18 fresh plus 18/18 idempotent migrations, browser smoke 9/9, CodeQL and CI evidence consolidation all passed. The supply-chain attestation job correctly skipped because this is a pull request; its mainline run remains mandatory after merge.
+3. Obtain an independent maintainer review of the SQL lock order and final INSERT predicates against membership removal, group join and group create lifecycle paths. Keep the public/member comment and privacy-narrowing positive controls.
+4. PR #228 is not merged. The repository main branch is not protected and the PR has no submitted review yet; do not treat green CI alone as review approval. Merge only after a maintainer review is recorded and the post-merge mainline attestation/evidence workflow passes.
 5. After merge, capture fresh exact-main evidence and reconcile the release-gate report, changelog, README and roadmap against that exact source. Keep historical run-bound evidence intact.
 
 Continue source-anchored review of adjacent site-scoped community lifecycle mutations only when a concrete invariant gap is reproduced. Do not pre-create F1.59 or add a generalized helper without evidence.
