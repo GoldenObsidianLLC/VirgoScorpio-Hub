@@ -132,13 +132,18 @@ function createIdentityService({ pool, env = process.env, clock = () => Date.now
       if (!email) { const error = new Error('A valid email address is required.'); error.statusCode = 400; error.code = 'ERR_VIRGOSCORPIO_HUB_INVALID_EMAIL'; throw error; }
       validatePassword(password);
       if (!/^[a-z0-9][a-z0-9-]{0,62}$/.test(siteSlug)) { const error = new Error('Site slug is invalid.'); error.statusCode = 400; error.code = 'ERR_VIRGOSCORPIO_HUB_INVALID_SITE_SLUG'; throw error; }
+      // Cheap early rejection before the expensive password hash; re-checked under lock below.
+      const existing = await pool.query('SELECT count(*)::integer AS count FROM users');
+      if (existing.rows[0].count > 0) { const error = new Error('Bootstrap is only allowed before any user account exists.'); error.statusCode = 409; error.code = 'ERR_VIRGOSCORPIO_HUB_BOOTSTRAP_CLOSED'; throw error; }
       const passwordHash = await hashPassword(password);
       const client = await pool.connect();
       try {
         await client.query('BEGIN');
         await client.query("SELECT pg_advisory_xact_lock(hashtext('virgoscorpio_hub-bootstrap-owner'))");
-        const users = await client.query('SELECT count(*)::integer AS count FROM users WHERE status <> \'disabled\'');
-        if (users.rows[0].count > 0) { const error = new Error('Bootstrap is only allowed before the first active user exists.'); error.statusCode = 409; error.code = 'ERR_VIRGOSCORPIO_HUB_BOOTSTRAP_CLOSED'; throw error; }
+        // Bootstrap closes permanently once any account row exists, regardless of its status;
+        // disabling every account must not re-open the one-time bootstrap path.
+        const users = await client.query('SELECT count(*)::integer AS count FROM users');
+        if (users.rows[0].count > 0) { const error = new Error('Bootstrap is only allowed before any user account exists.'); error.statusCode = 409; error.code = 'ERR_VIRGOSCORPIO_HUB_BOOTSTRAP_CLOSED'; throw error; }
         const site = await client.query('INSERT INTO sites(slug,name) VALUES($1,$2) ON CONFLICT(slug) DO UPDATE SET name=EXCLUDED.name RETURNING id,slug,name,default_locale', [siteSlug, siteName]);
         const user = await client.query('INSERT INTO users(email,display_name,password_hash,status) VALUES($1,$2,$3,\'active\') RETURNING id,email,display_name,status', [email, String(displayName || email).slice(0, 180), passwordHash]);
         const role = await client.query("SELECT id FROM roles WHERE slug='site-owner'");
