@@ -7,9 +7,26 @@ const { createMemgraphDriver, createMemgraphProjector } = require('../../package
 const { createPostgresPool } = require('../../packages/db/src/postgres-store');
 const { createGraphProjectionWorker, GRAPH_PROJECTION_EVENT_TYPES } = require('../../apps/worker/src/outbox-worker');
 const { replayOutboxDeliveries } = require('../../packages/db/src/outbox-delivery');
+const { eventEnvelopeFromOutboxRow } = require('../../packages/realtime/src/event-contract');
 
 const enabled = Boolean(process.env.MEMGRAPH_URL && process.env.VIRGOSCORPIO_HUB_RUN_MEMGRAPH_INTEGRATION === 'true');
 const postgresEnabled = Boolean(process.env.DATABASE_URL && process.env.VIRGOSCORPIO_HUB_RUN_POSTGRES_INTEGRATION === 'true');
+
+function applyProjection(projector, { type, aggregateType, aggregateId, aggregateVersion, siteId, payload }) {
+  const envelope = eventEnvelopeFromOutboxRow({
+    id: randomUUID(),
+    event_type: type,
+    schema_version: 1,
+    created_at: new Date().toISOString(),
+    aggregate_type: aggregateType,
+    aggregate_id: aggregateId,
+    aggregate_version: aggregateVersion,
+    payload,
+    site_id: siteId,
+    classification: 'site-private'
+  });
+  return projector.apply({ type, payload, envelope });
+}
 
 test('Memgraph integration: monotonic graph projections, relationship tombstones, and tenant-scoped reads', { skip: !enabled }, async t => {
   const driver = createMemgraphDriver({ url: process.env.MEMGRAPH_URL, username: process.env.MEMGRAPH_USERNAME || '', password: process.env.MEMGRAPH_PASSWORD || '' });
@@ -21,21 +38,21 @@ test('Memgraph integration: monotonic graph projections, relationship tombstones
   const session = driver.session();
   try {
     await session.run('RETURN 1 AS ready');
-    await projector.apply({ type: 'content.upsert', payload: { id: sourceId, siteId, contentType: 'page', slug: 'source', locale: 'en', status: 'published', title: 'v1', version: 1 } });
-    await projector.apply({ type: 'content.upsert', payload: { id: sourceId, siteId, contentType: 'page', slug: 'source', locale: 'en', status: 'published', title: 'v2', version: 2 } });
-    await projector.apply({ type: 'content.upsert', payload: { id: sourceId, siteId, contentType: 'page', slug: 'stale', locale: 'en', status: 'draft', title: 'stale', version: 1 } });
-    await projector.apply({ type: 'content.upsert', payload: { id: targetId, siteId, contentType: 'page', slug: 'target', locale: 'en', status: 'published', title: 'target', version: 1 } });
+    await applyProjection(projector, { type: 'content.upsert', aggregateType: 'content', aggregateId: sourceId, aggregateVersion: 1, siteId, payload: { id: sourceId, siteId, contentType: 'page', slug: 'source', locale: 'en', status: 'published', title: 'v1', version: 1 } });
+    await applyProjection(projector, { type: 'content.upsert', aggregateType: 'content', aggregateId: sourceId, aggregateVersion: 2, siteId, payload: { id: sourceId, siteId, contentType: 'page', slug: 'source', locale: 'en', status: 'published', title: 'v2', version: 2 } });
+    await applyProjection(projector, { type: 'content.upsert', aggregateType: 'content', aggregateId: sourceId, aggregateVersion: 1, siteId, payload: { id: sourceId, siteId, contentType: 'page', slug: 'stale', locale: 'en', status: 'draft', title: 'stale', version: 1 } });
+    await applyProjection(projector, { type: 'content.upsert', aggregateType: 'content', aggregateId: targetId, aggregateVersion: 1, siteId, payload: { id: targetId, siteId, contentType: 'page', slug: 'target', locale: 'en', status: 'published', title: 'target', version: 1 } });
 
     const content = await session.run('MATCH (n:Content {id:$id, siteId:$siteId}) RETURN n.version AS version,n.slug AS slug,n.status AS status', { id: sourceId, siteId });
     assert.equal(content.records[0].get('version'), 2);
     assert.equal(content.records[0].get('slug'), 'source');
     assert.equal(content.records[0].get('status'), 'published');
 
-    await projector.apply({ type: 'relationship.upsert', payload: { relationshipId, siteId, sourceId, targetId, sourceType: 'content', targetType: 'content', kind: 'RELATED_TO', version: 1 } });
+    await applyProjection(projector, { type: 'relationship.upsert', aggregateType: 'relationship', aggregateId: relationshipId, aggregateVersion: 1, siteId, payload: { relationshipId, siteId, sourceId, targetId, sourceType: 'content', targetType: 'content', kind: 'RELATED_TO', version: 1 } });
     assert.equal((await projector.findRelated({ id: sourceId, siteId, kind: 'RELATED_TO' })).length, 1);
     assert.equal((await projector.findRelated({ id: sourceId, siteId: randomUUID(), kind: 'RELATED_TO' })).length, 0);
-    await projector.apply({ type: 'relationship.delete', payload: { relationshipId, siteId, sourceId, targetId, sourceType: 'content', targetType: 'content', kind: 'RELATED_TO', version: 3 } });
-    await projector.apply({ type: 'relationship.upsert', payload: { relationshipId, siteId, sourceId, targetId, sourceType: 'content', targetType: 'content', kind: 'RELATED_TO', version: 2 } });
+    await applyProjection(projector, { type: 'relationship.delete', aggregateType: 'relationship', aggregateId: relationshipId, aggregateVersion: 3, siteId, payload: { relationshipId, siteId, sourceId, targetId, sourceType: 'content', targetType: 'content', kind: 'RELATED_TO', version: 3 } });
+    await applyProjection(projector, { type: 'relationship.upsert', aggregateType: 'relationship', aggregateId: relationshipId, aggregateVersion: 2, siteId, payload: { relationshipId, siteId, sourceId, targetId, sourceType: 'content', targetType: 'content', kind: 'RELATED_TO', version: 2 } });
     assert.equal((await projector.findRelated({ id: sourceId, siteId, kind: 'RELATED_TO' })).length, 0);
     const tombstone = await session.run('MATCH (r:RelationshipProjection {id:$id, siteId:$siteId}) RETURN r.version AS version,r.status AS status', { id: relationshipId, siteId });
     assert.equal(tombstone.records[0].get('version'), 3);
