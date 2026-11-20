@@ -6,9 +6,11 @@
 
 **Branch:** `security/f1-59-outbox-projection-envelope-scope-2026-11-20`
 
+**Pull request:** [#232](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/232) (OPEN; formal independent review still outstanding)
+
 **Baseline main SHA:** `619819230dac2e8d169ce71af7c6a41f0630cf27`
 
-**Status:** Local implementation, focused tests and full repository check pass. Hosted PR CI remains pending.
+**Status:** Local implementation, focused tests and full repository check pass. Hosted push workflow [#44797331491](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44797331491) and PR workflow [#44797457759](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44797457759) both completed successfully on final head `062750260744015cb287dab701ed83d0591942c6`. Both passed Node 22.23.4 and 24.22.1, live PostgreSQL/Memgraph integration, browser editor/accessibility smoke, CodeQL and candidate evidence consolidation. The mainline-only lockfile/SBOM attestation was skipped by design on push/PR feature-branch events and remains a post-merge gate, not a required PR check.
 
 ## Summary
 
@@ -86,9 +88,9 @@ Additional focused checks:
 - `npm run security:tenant-inventory`: regenerated the catalog-derived JSON and Markdown inventory, reporting 28 families, 80 declared route patterns, 22 source files and 59 referenced test files.
 - `node scripts/generate-tenant-isolation-route-inventory.js --check`: passed. Implementation-source digest: `82f38c78ee897998e0774de688c36eef9f56e7217d26d6e807b7d35695fe1bd4`.
 
-The full `npm run check` completed successfully after the final regression and inventory regeneration: **677 tests, 674 passed, 0 failed and 3 conditional skips**. The script completed both `node scripts/verify.js` and `npm test`. The focused live Memgraph integration cases are among the skipped checks because the local environment did not have the required service configuration; the hosted live PostgreSQL/Memgraph CI path must exercise them.
+The full `npm run check` completed successfully after the final regression and inventory regeneration: **677 tests, 674 passed, 0 failed and 3 conditional skips**. The script completed both `node scripts/verify.js` and `npm test`. The focused live Memgraph integration cases are among the skipped checks because the local environment did not have the required service configuration; both hosted workflows [#44797331491](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44797331491) and [#44797457759](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44797457759) passed the live PostgreSQL/Memgraph integration job on the final PR head.
 
-`node scripts/generate-tenant-isolation-route-inventory.js --check` and `git diff --check` pass. A relative-link scan covered all 10 changed Markdown files and checked 159 relative inline destinations; no broken targets were found. Hosted PR CI remains pending.
+`node scripts/generate-tenant-isolation-route-inventory.js --check` and `git diff --check` pass. A relative-link scan covered all 10 changed Markdown files and checked 159 relative inline destinations; no broken targets were found. Hosted push workflow [#44797331491](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44797331491) and PR workflow [#44797457759](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44797457759) both completed successfully on final head `062750260744015cb287dab701ed83d0591942c6`. Both passed Node 22.23.4 and 24.22.1, live PostgreSQL/Memgraph integration, browser editor/accessibility smoke, CodeQL and candidate evidence consolidation. The mainline-only lockfile/SBOM attestation was skipped by design on push/PR feature-branch events and remains a post-merge gate, not a required PR check.
 
 ## Scope and release boundary
 
