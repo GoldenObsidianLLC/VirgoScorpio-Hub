@@ -5,6 +5,8 @@ const path = require('node:path');
 const { randomUUID, createHash } = require('node:crypto');
 
 const MAX_LIBRARY_FILE_BYTES = 50 * 1024 * 1024;
+const DEFAULT_MAX_SITE_BYTES = 5 * 1024 * 1024 * 1024;
+const DEFAULT_MAX_SITE_OBJECTS = 10000;
 const CATEGORY_TO_KIND = Object.freeze({ image: 'image', video: 'video', audio: 'audio', document: 'document', file: 'file', font: 'font' });
 const KIND_MIMES = Object.freeze({
   image: new Set(['image/png','image/jpeg','image/webp','image/gif']),
@@ -59,8 +61,9 @@ function decodeDataBase64(value, maxBytes) {
   return data;
 }
 
-function createLibraryStore({ pool, root = path.resolve(process.env.LIBRARY_ROOT || path.join(process.cwd(), 'var', 'library')), maxFileBytes = MAX_LIBRARY_FILE_BYTES, storageAdapter = null, malwareScanner = null, requireMalwareScan = process.env.NODE_ENV === 'production' } = {}) {
+function createLibraryStore({ pool, root = path.resolve(process.env.LIBRARY_ROOT || path.join(process.cwd(), 'var', 'library')), maxFileBytes = MAX_LIBRARY_FILE_BYTES, storageAdapter = null, malwareScanner = null, requireMalwareScan = process.env.NODE_ENV === 'production', maxSiteBytes = DEFAULT_MAX_SITE_BYTES, maxSiteObjects = DEFAULT_MAX_SITE_OBJECTS } = {}) {
   if (!pool) throw new TypeError('Library store requires PostgreSQL.');
+  if (!Number.isFinite(maxSiteBytes) || maxSiteBytes < 1 || !Number.isFinite(maxSiteObjects) || maxSiteObjects < 1) throw new TypeError('Library site quotas must be positive finite numbers.');
   const libraryRoot = path.resolve(root);
   async function scanForMalware(buffer, fileName) {
     if (!malwareScanner || typeof malwareScanner.scan !== 'function') {
@@ -74,6 +77,26 @@ function createLibraryStore({ pool, root = path.resolve(process.env.LIBRARY_ROOT
       throw libraryError('The uploaded file did not pass malware scanning.', 'ERR_VIRGOSCORPIO_HUB_MALWARE_DETECTED', 422);
     }
     return { clean: true, status: 'clean', engine: String(result.engine || malwareScanner.engine || 'configured-scanner').slice(0, 100) };
+  }
+  // Serializes quota decisions per site so concurrent uploads cannot jointly exceed the budget.
+  async function lockSiteQuota(queryable, siteId) {
+    await queryable.query('SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))', [`library-quota:${siteId}`]);
+  }
+  // Retained usage counts every distinct object referenced by the site's assets (including soft-deleted
+  // rows, whose objects are not reclaimed) and by its version history.
+  async function assertSiteQuota(queryable, siteId, additionalBytes) {
+    const usage = await queryable.query(`SELECT COALESCE(SUM(size),0)::text AS bytes, COUNT(*)::text AS objects FROM (
+      SELECT storage_key, MAX(size) AS size FROM (
+        SELECT a.storage_key, a.byte_size AS size FROM library_assets a WHERE a.site_id=$1
+        UNION ALL
+        SELECT v.storage_key, CASE WHEN v.snapshot->>'byteSize' ~ '^[0-9]{1,15}$' THEN (v.snapshot->>'byteSize')::bigint ELSE 0 END
+        FROM library_asset_versions v JOIN library_assets a ON a.id=v.asset_id WHERE a.site_id=$1
+      ) u GROUP BY storage_key
+    ) t`, [siteId]);
+    const row = usage?.rows?.[0] || {};
+    const usedBytes = Number(row.bytes) || 0; const usedObjects = Number(row.objects) || 0;
+    if (usedBytes + additionalBytes > maxSiteBytes) throw libraryError(`The site library storage quota of ${maxSiteBytes} bytes would be exceeded.`, 'ERR_VIRGOSCORPIO_HUB_LIBRARY_QUOTA_EXCEEDED', 413);
+    if (usedObjects + 1 > maxSiteObjects) throw libraryError(`The site library object quota of ${maxSiteObjects} objects would be exceeded.`, 'ERR_VIRGOSCORPIO_HUB_LIBRARY_QUOTA_EXCEEDED', 413);
   }
   async function put(key, buffer, mimeType) {
     if (storageAdapter) return storageAdapter.putObject({ key, body: buffer, contentType: mimeType });
@@ -111,16 +134,21 @@ function createLibraryStore({ pool, root = path.resolve(process.env.LIBRARY_ROOT
       const safeMetadata = { ...metadata, securityScan: { status: scan.status, engine: scan.engine, scannedAt: scan.clean ? new Date().toISOString() : null } };
       let client = null;
       let committed = false;
+      let stored = false;
       try {
-        await put(storageKey, data, detected);
         client = await pool.connect();
         await client.query('BEGIN');
+        // Admission control: serialize per site and enforce the cumulative quota before any object is written.
+        await lockSiteQuota(client, siteId);
+        await assertSiteQuota(client, siteId, data.length);
+        await put(storageKey, data, detected);
+        stored = true;
         const q = await client.query(`INSERT INTO library_assets(id,site_id,asset_kind,display_name,original_name,storage_provider,storage_key,mime_type,byte_size,sha256,alt_text,caption,description,is_public,metadata,created_by,updated_by,optimization_status,status,malware_scan_status,malware_scan_engine,malware_scanned_at)
           VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15::jsonb,$16,$16,'pending',$17,$18,$19,CASE WHEN $18='clean' THEN now() ELSE NULL END)
           RETURNING id,site_id,asset_kind,display_name,original_name,storage_provider,mime_type,byte_size,sha256,alt_text,caption,description,is_public,version,status,optimization_status,malware_scan_status,malware_scan_engine,metadata,created_by,created_at,updated_at`,
           [id, siteId, kind, name, originalName, storageAdapter?.provider || 'local', storageKey, detected, data.length, digest, altText, caption, description, publicAfterScan, JSON.stringify(safeMetadata), actorId || null, assetStatus, scan.status, scan.engine]);
         const asset = q.rows[0];
-        await client.query(`INSERT INTO library_asset_versions(asset_id,version,snapshot,storage_key,sha256,created_by) VALUES($1,1,$2::jsonb,$3,$4,$5)`, [id, JSON.stringify({displayName:name,originalName,altText,caption,description,metadata}), storageKey, digest, actorId || null]);
+        await client.query(`INSERT INTO library_asset_versions(asset_id,version,snapshot,storage_key,sha256,created_by) VALUES($1,1,$2::jsonb,$3,$4,$5)`, [id, JSON.stringify({displayName:name,originalName,altText,caption,description,metadata,byteSize:data.length}), storageKey, digest, actorId || null]);
         if (typeof onAssetUploaded === 'function') {
           await onAssetUploaded({ queryable: client, result: asset });
         }
@@ -129,7 +157,7 @@ function createLibraryStore({ pool, root = path.resolve(process.env.LIBRARY_ROOT
         return asset;
       } catch (error) {
         if (client) await client.query('ROLLBACK').catch(() => {});
-        if (!committed) await remove(storageKey).catch(() => {});
+        if (stored && !committed) await remove(storageKey).catch(() => {});
         throw error;
       } finally {
         client?.release();
@@ -166,11 +194,11 @@ function createLibraryStore({ pool, root = path.resolve(process.env.LIBRARY_ROOT
         next.displayName = sanitizeDisplayName(next.displayName);
         for (const [key, limit] of [['altText',1000],['caption',4000],['description',12000]]) if (typeof next[key] !== 'string' || next[key].length > limit) throw libraryError(`${key} is invalid.`);
         if (typeof next.isPublic !== 'boolean' || !next.metadata || typeof next.metadata !== 'object' || Array.isArray(next.metadata) || Buffer.byteLength(JSON.stringify(next.metadata)) > 16_384) throw libraryError('isPublic must be boolean and metadata must be a bounded JSON object.');
-        await client.query(`INSERT INTO library_asset_versions(asset_id,version,snapshot,storage_key,sha256,created_by) VALUES($1,$2,$3::jsonb,$4,$5,$6) ON CONFLICT(asset_id,version) DO NOTHING`, [id,row.version,JSON.stringify({displayName:row.display_name,originalName:row.original_name,altText:row.alt_text,caption:row.caption,description:row.description,isPublic:row.is_public,metadata:row.metadata}),row.storage_key,row.sha256,row.updated_by]);
+        await client.query(`INSERT INTO library_asset_versions(asset_id,version,snapshot,storage_key,sha256,created_by) VALUES($1,$2,$3::jsonb,$4,$5,$6) ON CONFLICT(asset_id,version) DO NOTHING`, [id,row.version,JSON.stringify({displayName:row.display_name,originalName:row.original_name,altText:row.alt_text,caption:row.caption,description:row.description,isPublic:row.is_public,metadata:row.metadata,byteSize:Number(row.byte_size)}),row.storage_key,row.sha256,row.updated_by]);
         const updated = await client.query(`UPDATE library_assets SET display_name=$3,alt_text=$4,caption=$5,description=$6,is_public=$7,metadata=$8::jsonb,version=version+1,updated_by=$9,updated_at=now() WHERE site_id=$1 AND id=$2 AND version=$10 RETURNING id,site_id,asset_kind,display_name,original_name,mime_type,byte_size,sha256,alt_text,caption,description,is_public,version,status,optimization_status,metadata,created_by,updated_by,created_at,updated_at`, [siteId,id,next.displayName,next.altText,next.caption,next.description,next.isPublic,JSON.stringify(next.metadata),actorId || null,row.version]);
         if (!updated.rows[0]) throw libraryError('Asset version is stale.', 'ERR_VIRGOSCORPIO_HUB_VERSION_CONFLICT', 409);
         const updatedRow = updated.rows[0];
-        await client.query('INSERT INTO library_asset_versions(asset_id,version,snapshot,storage_key,sha256,created_by) VALUES($1,$2,$3::jsonb,$4,$5,$6) ON CONFLICT(asset_id,version) DO NOTHING', [id, updatedRow.version, JSON.stringify({ displayName: updatedRow.display_name, originalName: updatedRow.original_name, altText: updatedRow.alt_text, caption: updatedRow.caption, description: updatedRow.description, isPublic: updatedRow.is_public, metadata: updatedRow.metadata }), row.storage_key, row.sha256, actorId || null]);
+        await client.query('INSERT INTO library_asset_versions(asset_id,version,snapshot,storage_key,sha256,created_by) VALUES($1,$2,$3::jsonb,$4,$5,$6) ON CONFLICT(asset_id,version) DO NOTHING', [id, updatedRow.version, JSON.stringify({ displayName: updatedRow.display_name, originalName: updatedRow.original_name, altText: updatedRow.alt_text, caption: updatedRow.caption, description: updatedRow.description, isPublic: updatedRow.is_public, metadata: updatedRow.metadata, byteSize: Number(updatedRow.byte_size) }), row.storage_key, row.sha256, actorId || null]);
         await client.query('COMMIT'); return updatedRow;
       } catch (e) { await client.query('ROLLBACK').catch(()=>{}); throw e; } finally { client.release(); }
     },
@@ -192,6 +220,7 @@ function createLibraryStore({ pool, root = path.resolve(process.env.LIBRARY_ROOT
       let committed = false;
       try {
         await client.query('BEGIN');
+        await lockSiteQuota(client, siteId);
         const selected = await client.query("SELECT * FROM library_assets WHERE site_id=$1 AND id=$2 AND deleted_at IS NULL AND status='active' FOR UPDATE", [siteId, id]);
         const old = selected.rows[0];
         if (!old) throw libraryError('Library asset not found.', 'ERR_VIRGOSCORPIO_HUB_LIBRARY_NOT_FOUND', 404);
@@ -199,10 +228,12 @@ function createLibraryStore({ pool, root = path.resolve(process.env.LIBRARY_ROOT
         if (!KIND_MIMES[old.asset_kind]?.has(detected)) throw libraryError('A new asset version must keep the same library category.', 'ERR_VIRGOSCORPIO_HUB_LIBRARY_TYPE');
         const ext = EXTENSIONS[detected];
         if (!ext) throw libraryError('Replacement MIME type is not supported.');
+        // The superseded version remains retained, so a replacement adds a full new object to the site's usage.
+        await assertSiteQuota(client, siteId, data.length);
         const nextVersion = old.version + 1;
         storageKey = `${siteId}/${id}/v${nextVersion}.${ext}`;
         const digest = createHash('sha256').update(data).digest('hex');
-        const oldSnapshot = { displayName: old.display_name, originalName: old.original_name, altText: old.alt_text, caption: old.caption, description: old.description, isPublic: old.is_public, metadata: old.metadata };
+        const oldSnapshot = { displayName: old.display_name, originalName: old.original_name, altText: old.alt_text, caption: old.caption, description: old.description, isPublic: old.is_public, metadata: old.metadata, byteSize: Number(old.byte_size) };
         await client.query('INSERT INTO library_asset_versions(asset_id,version,snapshot,storage_key,sha256,created_by) VALUES($1,$2,$3::jsonb,$4,$5,$6) ON CONFLICT(asset_id,version) DO NOTHING', [id, old.version, JSON.stringify(oldSnapshot), old.storage_key, old.sha256, old.updated_by]);
         await put(storageKey, data, detected);
         const result = await client.query(`UPDATE library_assets SET original_name=$3,storage_key=$4,mime_type=$5,byte_size=$6,sha256=$7,version=$8,optimization_status='pending',updated_by=$9,updated_at=now(),status=$11,malware_scan_status=$12,malware_scan_engine=$13,malware_scanned_at=CASE WHEN $12='clean' THEN now() ELSE NULL END,is_public=CASE WHEN $12='clean' THEN is_public ELSE false END,metadata=metadata || $14::jsonb
