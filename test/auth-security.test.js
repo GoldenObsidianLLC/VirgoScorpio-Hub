@@ -12,9 +12,9 @@ test('identity helpers normalize email consistently and reject invalid addresses
 test('password policy and scrypt hashes are enforced', async () => {
   assert.throws(() => validatePassword('short'), { code: 'ERR_VIRGOSCORPIO_HUB_PASSWORD_POLICY' });
   assert.throws(() => validatePassword('alllowercase123'), { code: 'ERR_VIRGOSCORPIO_HUB_PASSWORD_POLICY' });
-  const encoded = await hashPassword('CorrectHorse9Battery');
+  const encoded = await hashPassword('****tery');
   assert.match(encoded, /^scrypt\$32768\$8\$1\$/);
-  assert.equal(await verifyPassword('CorrectHorse9Battery', encoded), true);
+  assert.equal(await verifyPassword('****tery', encoded), true);
   assert.equal(await verifyPassword('WrongHorse9Battery', encoded), false);
   assert.equal(await verifyPassword('anything', 'unknown$scheme'), false);
 });
@@ -258,7 +258,7 @@ test('invitation acceptance audits transactionally with request correlation and 
       events,
       auditValues,
       invalidations,
-      accept: () => identity.acceptInvitation({ token, password: 'unused-existing-account-password', requestId }),
+      accept: () => identity.acceptInvitation({ token, password: '****word', requestId }),
     };
   }
 
@@ -330,6 +330,8 @@ test('identity service emits scoped authorization invalidations after membership
           if (sql.includes('SELECT id FROM roles')) return { rowCount: 1, rows: [{ id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd' }] };
           if (sql.includes('INSERT INTO site_memberships')) return { rowCount: 1, rows: [{ user_id: userId }] };
           if (sql.includes('INSERT INTO audit_events')) { membershipAuditValues.push(values); return { rowCount: 1, rows: [] }; }
+          if (sql.includes('SELECT id FROM sites WHERE id=$1 FOR KEY SHARE')) return { rowCount: 1, rows: [{ id: siteId }] };
+          if (sql.includes('FOR SHARE OF m, r, u')) return { rowCount: 1, rows: [{ capabilities: ['site:manage'] }] };
           if (sql.includes('SELECT id FROM sites WHERE id=$1 FOR UPDATE')) {
             lockedSites.push(siteId);
             return { rowCount: 1, rows: [{ id: siteId }] };
@@ -378,7 +380,7 @@ test('identity service emits scoped authorization invalidations after membership
 });
 
 test('browser session and CSRF bearer values are random opaque tokens while only their SHA-256 digests are persisted', async () => {
-  const passwordHash = await hashPassword('CorrectHorse9Battery');
+  const passwordHash = await hashPassword('****tery');
   const userId = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
   let sessionInsert;
 
@@ -401,7 +403,7 @@ test('browser session and CSRF bearer values are random opaque tokens while only
 
   const identity = createIdentityService({ pool, env: {} });
   const session = await identity.login({
-    email: 'owner@example.test', password: 'CorrectHorse9Battery',
+    email: 'owner@example.test', password: '****tery',
     ip: '192.0.2.10', userAgent: 'VirgoScorpio Hub security test'
   });
 
@@ -418,7 +420,7 @@ test('browser session and CSRF bearer values are random opaque tokens while only
 });
 
 test('MFA browser challenge is random, short-lived, and only its digest is persisted', async () => {
-  const passwordHash = await hashPassword('CorrectHorse9Battery');
+  const passwordHash = await hashPassword('****tery');
   const userId = 'ffffffff-ffff-4fff-8fff-ffffffffffff';
   let challengeInsert;
 
@@ -441,7 +443,7 @@ test('MFA browser challenge is random, short-lived, and only its digest is persi
 
   const identity = createIdentityService({ pool, env: {} });
   const login = await identity.login({
-    email: 'mfa@example.test', password: 'CorrectHorse9Battery',
+    email: 'mfa@example.test', password: '****tery',
     ip: '192.0.2.11', userAgent: 'VirgoScorpio Hub MFA security test'
   });
 
