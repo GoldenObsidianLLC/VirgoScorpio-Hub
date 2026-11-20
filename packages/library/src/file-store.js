@@ -189,6 +189,7 @@ function createLibraryStore({ pool, root = path.resolve(process.env.LIBRARY_ROOT
       const nextScanMetadata = { status: scan.status, engine: scan.engine, scannedAt: scan.clean ? new Date().toISOString() : null };
       const client = await pool.connect();
       let storageKey = null;
+      let staleVariantKeys = [];
       let committed = false;
       try {
         await client.query('BEGIN');
@@ -208,12 +209,16 @@ function createLibraryStore({ pool, root = path.resolve(process.env.LIBRARY_ROOT
         const result = await client.query(`UPDATE library_assets SET original_name=$3,storage_key=$4,mime_type=$5,byte_size=$6,sha256=$7,version=$8,optimization_status='pending',updated_by=$9,updated_at=now(),status=$11,malware_scan_status=$12,malware_scan_engine=$13,malware_scanned_at=CASE WHEN $12='clean' THEN now() ELSE NULL END,is_public=CASE WHEN $12='clean' THEN is_public ELSE false END,metadata=metadata || $14::jsonb
           WHERE site_id=$1 AND id=$2 AND version=$10 RETURNING id,site_id,asset_kind,display_name,original_name,mime_type,byte_size,sha256,alt_text,caption,description,is_public,version,status,optimization_status,malware_scan_status,malware_scan_engine,metadata,updated_at`, [siteId, id, safeFileName || old.original_name, storageKey, detected, data.length, digest, nextVersion, actorId || null, old.version, nextStatus, scan.status, scan.engine, JSON.stringify({securityScan:nextScanMetadata})]);
         if (!result.rows[0]) throw libraryError('Asset version is stale.', 'ERR_VIRGOSCORPIO_HUB_VERSION_CONFLICT', 409);
+        // Derivatives are generated from the previous bytes; they must never be served for the new version.
+        const staleVariants = await client.query('DELETE FROM media_variants WHERE asset_id=$1 RETURNING storage_key', [id]);
+        staleVariantKeys = (staleVariants.rows || []).map(row => row.storage_key).filter(Boolean);
         await client.query('INSERT INTO library_asset_versions(asset_id,version,snapshot,storage_key,sha256,created_by) VALUES($1,$2,$3::jsonb,$4,$5,$6) ON CONFLICT(asset_id,version) DO NOTHING', [id, nextVersion, JSON.stringify({ displayName: old.display_name, originalName: sanitizeDisplayName(fileName || old.original_name), mimeType: detected, byteSize: data.length }), storageKey, digest, actorId || null]);
         if (typeof onVersionReplaced === 'function') {
           await onVersionReplaced({ queryable: client, result: result.rows[0] });
         }
         await client.query('COMMIT');
         committed = true;
+        for (const staleKey of staleVariantKeys) await remove(staleKey).catch(() => {});
         return result.rows[0];
       } catch (error) {
         await client.query('ROLLBACK').catch(() => {});
@@ -237,7 +242,7 @@ function createLibraryStore({ pool, root = path.resolve(process.env.LIBRARY_ROOT
       if (sniffMime(data) !== row.mime_type || !KIND_MIMES[row.asset_kind]?.has(row.mime_type)) return null;
       return { ...row, data };
     },
-    async createVariant({ siteId, id, variantKey, data, mimeType, width = null, height = null }) {
+    async createVariant({ siteId, id, variantKey, data, mimeType, width = null, height = null, expectedVersion = null }) {
       if (!/^[a-z0-9][a-z0-9_-]{0,60}$/.test(String(variantKey)) || !Buffer.isBuffer(data) || data.length < 1 || data.length > maxFileBytes || typeof mimeType !== 'string') {
         throw libraryError('Variant metadata or bytes are invalid.');
       }
@@ -251,12 +256,17 @@ function createLibraryStore({ pool, root = path.resolve(process.env.LIBRARY_ROOT
       if (!KIND_MIMES[asset.asset_kind]?.has(detected)) {
         throw libraryError('Variant MIME type does not match the parent library category.', 'ERR_VIRGOSCORPIO_HUB_LIBRARY_TYPE');
       }
+      // The variant must derive from the asset version the caller read; a replaced version invalidates it.
+      const sourceVersion = expectedVersion === null || expectedVersion === undefined ? asset.version : Number(expectedVersion);
+      if (!Number.isInteger(sourceVersion) || sourceVersion !== asset.version) throw libraryError('Asset version is stale.', 'ERR_VIRGOSCORPIO_HUB_VERSION_CONFLICT', 409);
       const ext = EXTENSIONS[detected];
       if (!ext) throw libraryError('Variant MIME type is not allowed.');
       const storageKey = `${siteId}/${id}/variants/${variantKey}-${randomUUID()}.${ext}`; const digest = createHash('sha256').update(data).digest('hex');
       await put(storageKey,data,mimeType);
       try {
-        const result = await pool.query(`INSERT INTO media_variants(asset_id,variant_key,storage_key,mime_type,byte_size,width,height,sha256) VALUES($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT(asset_id,variant_key) DO UPDATE SET storage_key=EXCLUDED.storage_key,mime_type=EXCLUDED.mime_type,byte_size=EXCLUDED.byte_size,width=EXCLUDED.width,height=EXCLUDED.height,sha256=EXCLUDED.sha256,created_at=now() RETURNING id,asset_id,variant_key,mime_type,byte_size,width,height,sha256`,[id,variantKey,storageKey,mimeType,data.length,width,height,digest]);
+        // FOR SHARE serializes against replaceVersion's row lock so a concurrent replacement cannot leave a stale variant behind.
+        const result = await pool.query(`INSERT INTO media_variants(asset_id,variant_key,storage_key,mime_type,byte_size,width,height,sha256) SELECT $1::uuid,$2::text,$3::text,$4::text,$5::bigint,$6::int,$7::int,$8::text FROM library_assets WHERE site_id=$9 AND id=$1::uuid AND version=$10 AND deleted_at IS NULL AND status='active' FOR SHARE ON CONFLICT(asset_id,variant_key) DO UPDATE SET storage_key=EXCLUDED.storage_key,mime_type=EXCLUDED.mime_type,byte_size=EXCLUDED.byte_size,width=EXCLUDED.width,height=EXCLUDED.height,sha256=EXCLUDED.sha256,created_at=now() RETURNING id,asset_id,variant_key,mime_type,byte_size,width,height,sha256`,[id,variantKey,storageKey,mimeType,data.length,width,height,digest,siteId,sourceVersion]);
+        if (!result.rows[0]) throw libraryError('Asset version is stale.', 'ERR_VIRGOSCORPIO_HUB_VERSION_CONFLICT', 409);
         return result.rows[0];
       } catch (error) { await remove(storageKey); throw error; }
     },
