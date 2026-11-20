@@ -6,6 +6,7 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const { PRODUCT_VERSION } = require('../packages/domain/src/version');
 const { renderReleaseReadinessMarkdown } = require('./release-readiness-report');
+const { REQUIRED_EVIDENCE_GATE_IDS } = require('./release-readiness-gates');
 const {
   hasNoHighAuditFindings,
   hasSuccessfulPlaywrightSummary,
@@ -1007,6 +1008,11 @@ function requireReadinessSnapshot(value, runtime, expected) {
       gateIds.some(id => typeof id !== 'string' || !id) ||
       new Set(gateIds).size !== gateIds.length) {
     throw new Error('Preliminary ' + runtime + ' release-readiness snapshot contains missing or duplicated gate IDs.');
+  }
+  const missingGateIds = REQUIRED_EVIDENCE_GATE_IDS.filter(id => !gateIds.includes(id));
+  if (missingGateIds.length) {
+    throw new Error('Preliminary ' + runtime + ' release-readiness snapshot omits required evidence gates: ' +
+      missingGateIds.join(', ') + '.');
   }
 
   const normalized = JSON.parse(JSON.stringify(value));

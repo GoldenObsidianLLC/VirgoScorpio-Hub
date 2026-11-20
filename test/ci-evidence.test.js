@@ -63,10 +63,11 @@ function createFixtures(t, { npmVersion = EXPECTED_NPM_VERSION } = {}) {
     checks: readinessChecks,
     evidenceGates: [
       { id: 'postgres-memgraph-live', title: 'PostgreSQL/Memgraph', status: 'BLOCKED', evidencePath: 'artifacts/evidence/postgres-memgraph-live.json', details: 'Producer artifact not yet available.' },
-      { id: 'tenant-isolation-review', title: 'Independent tenant review', status: 'MISSING_EVIDENCE', evidencePath: 'artifacts/evidence/tenant-isolation-review.json', details: 'Independent review remains open.' },
-      { id: 'observability-production', title: 'Production observability', status: 'MISSING_EVIDENCE', evidencePath: 'artifacts/evidence/observability-production.json', details: 'Deployment evidence remains open.' },
+      ...require('../scripts/release-readiness-gates').REQUIRED_EVIDENCE_GATE_IDS
+        .filter(id => id !== 'postgres-memgraph-live')
+        .map(id => ({ id, title: id, status: 'MISSING_EVIDENCE', evidencePath: 'artifacts/evidence/' + id + '.json', details: 'Evidence remains open.' })),
     ],
-    summary: { pass: 4, partial: 1, blocked: 1, missingEvidence: 2, notRun: 0 },
+    summary: { pass: 4, partial: 1, blocked: 1, missingEvidence: 14, notRun: 0 },
     supplementalEvidence: [
       { id: 'fresh-migrations', title: 'Fresh PostgreSQL migrations and idempotency', status: 'MISSING_EVIDENCE', details: 'Dedicated producer has not completed yet.' },
     ],
@@ -748,7 +749,7 @@ test('finalizes canonical readiness only after every exact-source producer and m
   assert.equal(report.evidenceGates.find(gate => gate.id === 'tenant-isolation-review').status, 'MISSING_EVIDENCE');
   assert.equal(report.summary.pass, 5);
   assert.equal(report.summary.blocked, 0);
-  assert.equal(report.summary.missingEvidence, 2);
+  assert.equal(report.summary.missingEvidence, 14);
   const migrationSupplement = report.supplementalEvidence.find(item => item.id === 'fresh-migrations');
   assert.equal(migrationSupplement.status, 'PASS');
   assert.equal(migrationSupplement.evidencePath, 'artifacts/evidence/postgres-memgraph/fresh-migrations.json');
