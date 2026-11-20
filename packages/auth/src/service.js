@@ -279,6 +279,9 @@ function createIdentityService({ pool, env = process.env, clock = () => Date.now
     async resetPassword({ token, password }) {
       validatePassword(password);
       if (typeof token !== 'string' || token.length < 32 || token.length > 200) throw authError(400, 'ERR_VIRGOSCORPIO_HUB_RESET_TOKEN_INVALID', 'Password reset token is invalid or expired.');
+      // Reject unknown, consumed, or expired tokens with a cheap indexed lookup before the memory-hard scrypt work.
+      const precheck = await pool.query("SELECT 1 FROM identity_action_tokens WHERE token_hash=$1 AND purpose='password-reset' AND consumed_at IS NULL AND expires_at>now() LIMIT 1", [digest(token)]);
+      if (!precheck.rows[0]) throw authError(400, 'ERR_VIRGOSCORPIO_HUB_RESET_TOKEN_INVALID', 'Password reset token is invalid or expired.');
       const passwordHash = await hashPassword(password); const client = await pool.connect();
       try {
         await client.query('BEGIN');
