@@ -203,9 +203,13 @@ function createIdentityService({ pool, env = process.env, clock = () => Date.now
         }
         if (acceptedStep !== credential.last_used_step) await client.query('UPDATE user_mfa_credentials SET last_used_step=$2,updated_at=now() WHERE user_id=$1', [challenge.user_id, acceptedStep]);
         await client.query('UPDATE auth_mfa_challenges SET consumed_at=now() WHERE id=$1', [challenge.challenge_id]);
-        await client.query('COMMIT');
+        // The session is created inside the transaction that holds the challenge row lock. A concurrent
+        // password reset consumes the user's challenges first, so it either invalidates this challenge
+        // before it is accepted or waits for this commit and then revokes the session created here.
         const user = { id: challenge.user_id, email: challenge.email, display_name: challenge.display_name, status: challenge.status };
-        return { ...(await createSession(user, { ip, userAgent })), mfaRequired: false };
+        const created = await createSession(user, { ip, userAgent }, client);
+        await client.query('COMMIT');
+        return { ...created, mfaRequired: false };
       } catch (error) { await client.query('ROLLBACK').catch(() => {}); throw error; }
       finally { client.release(); }
     },
@@ -284,6 +288,9 @@ function createIdentityService({ pool, env = process.env, clock = () => Date.now
         await client.query('BEGIN');
         const result = await client.query("SELECT id,user_id FROM identity_action_tokens WHERE token_hash=$1 AND purpose='password-reset' AND consumed_at IS NULL AND expires_at>now() FOR UPDATE", [digest(token)]);
         const action = result.rows[0]; if (!action) throw authError(400, 'ERR_VIRGOSCORPIO_HUB_RESET_TOKEN_INVALID', 'Password reset token is invalid or expired.');
+        // Invalidate pending MFA challenges issued under the old password. This must precede the user
+        // update so lock ordering (challenge, then user) matches completeMfaLogin.
+        await client.query('UPDATE auth_mfa_challenges SET consumed_at=now() WHERE user_id=$1 AND consumed_at IS NULL', [action.user_id]);
         await client.query('UPDATE users SET password_hash=$2,updated_at=now() WHERE id=$1', [action.user_id, passwordHash]);
         await client.query('UPDATE identity_action_tokens SET consumed_at=now() WHERE id=$1', [action.id]);
         await client.query('UPDATE auth_sessions SET revoked_at=now() WHERE user_id=$1 AND revoked_at IS NULL', [action.user_id]);
