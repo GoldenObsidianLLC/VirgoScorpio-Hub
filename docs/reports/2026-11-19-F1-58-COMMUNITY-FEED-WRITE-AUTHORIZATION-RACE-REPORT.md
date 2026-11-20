@@ -1,9 +1,12 @@
 # F1.58 — Community Feed Write Authorization Race Report
 
-**Status:** Committed and pushed; PR #228 OPEN; candidate CI green on push and PR workflows; maintainer review pending
+**Status:** Merged through PR #228; exact-main workflow #44675989750 passed 7/7 jobs; no formal PR review submissions were recorded
 **Date:** 19 November 2026 (America/Chicago)
 **Repository:** `GoldenObsidianLLC/VirgoScorpio-Hub`
-**Base main SHA:** `a1e0fb0cf605c6f34f9e85c252593ae1b508e0b2` (documentation-only PR #226 after F1.57)
+**Original base main SHA:** `a1e0fb0cf605c6f34f9e85c252593ae1b508e0b2` (documentation-only PR #226 after F1.57)
+**Merge / current main SHA:** `619819230dac2e8d169ce71af7c6a41f0630cf27`
+**Merged PR:** [#228](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/228) (merged 19 November 2026 America/Chicago; 20 November 2026 UTC)
+**Candidate head before merge:** `9b7638e73baf64c8e06238ea5d7dad962952a7a3`
 **Candidate branch:** `security/f1-58-community-feed-write-authorization-2026-11-19`
 **Issue:** [#227 — Revalidate community feed writes at the final authorization boundary](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/227)
 **Parent:** [#124 — Maintainer-led tenant-isolation hardening](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/124)
@@ -13,11 +16,11 @@
 
 F1.58 addresses a reproducible time-of-check/time-of-use (TOCTOU) authorization gap in `POST /api/v1/sites/:siteId/community/feed`. Before the change, the route performed site, actor and group checks during request preflight, then inserted the activity in a separate unguarded database operation. A lifecycle change between those steps could leave stale authorization in effect.
 
-The candidate reuses the existing PostgreSQL `withTransaction` helper and the established site-first lifecycle lock ordering. It revalidates active actor, selected-site membership and applicable group membership in the same transaction as the final `INSERT ... SELECT`. It also reads the target group's current privacy while holding the group row lock so private/hidden group posts cannot become broadly visible because privacy changed after preflight.
+The merged change reuses the existing PostgreSQL `withTransaction` helper and the established site-first lifecycle lock ordering. It revalidates active actor, selected-site membership and applicable group membership in the same transaction as the final `INSERT ... SELECT`. It also reads the target group's current privacy while holding the group row lock so private/hidden group posts cannot become broadly visible because privacy changed after preflight.
 
 The change preserves current routes, request/response shape, privacy semantics and error contracts. It introduces no runtime helper abstraction, schema migration, endpoint, runtime dependency, lockfile or package-version change. A small test-only PostgreSQL lock-wait helper was extracted from an existing integration suite and reused by the new feed serialization tests.
 
-**Candidate outcome:** the focused PostgreSQL 18 integration set passed **58/58** with zero failures/skips across community-feed privacy (22/22) and adjacent tenant community-object isolation (36/36). Local `npm run check` passed **667/670** (zero failures, three conditional skips); artifact verification covered 238 required paths / 269 JavaScript files; `npm audit --audit-level=low` found **0 vulnerabilities**. Exact candidate push run **#44670394214** and PR run **#44670455912** both succeeded on head SHA `42a41b2d8a615a00ebec8b2fd188ae4889f58b41`; the PR run tested merge SHA `8a1b7c85e597ce5a44bdb1769cb225ed6e0cbad8`. PR #228 is open; independent maintainer review and merge remain pending.
+**Merged outcome:** the focused PostgreSQL 18 integration set passed **58/58** with zero failures/skips across community-feed privacy (22/22) and adjacent tenant community-object isolation (36/36). Local `npm run check` passed **667/670** (zero failures, three conditional skips); artifact verification covered 238 required paths / 269 JavaScript files; `npm audit --audit-level=low` found **0 vulnerabilities**. The final candidate push/PR workflows **#44674773963** and **#44674782236** passed on head SHA `9b7638e73baf64c8e06238ea5d7dad962952a7a3`. PR #228 merged at `619819230dac2e8d169ce71af7c6a41f0630cf27`; the exact-main follow-up validation is recorded below. GitHub records zero formal review submissions on PR #228, so this merge is not independent security approval.
 
 ## 2. Reproduced defect and regression design
 
@@ -100,8 +103,29 @@ If the final guarded insert produces no row, the route returns the existing appl
 | Browser editor/accessibility smoke | **9/9 PASS** | Browser job passed all nine smoke tests; this is not manual WCAG or screen-reader acceptance. |
 | CodeQL security analysis | **PASS** | PR and push CodeQL analyses completed successfully. |
 | Candidate CI evidence consolidation | **PASS** | Revision-bound manifests/checksums verified; readiness snapshot 8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE, `readyForProduction=false`. |
-| Signed lockfile/SBOM attestation | **EXPECTED PR SKIP** | Workflow explicitly runs this job only for non-PR `refs/heads/main`; a successful mainline attestation remains required after merge. |
+| Signed lockfile/SBOM attestation | **PASS** | Exact-main workflow #44675989750 generated and verified signed SLSA provenance and SBOM attestations for the mainline dependency lockfile/SBOM. |
 | Independent assurance | **OPEN / NOT PERFORMED** | Maintainer regression evidence does not satisfy independent review #14 or assessment #25. |
+
+### Exact-main post-merge validation — workflow #44675989750
+
+Exact-main push [workflow #44675989750](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44675989750) completed successfully on merge SHA `619819230dac2e8d169ce71af7c6a41f0630cf27`; all **7/7 jobs passed**.
+
+| Producer / gate | Result | Qualification |
+|---|---|---|
+| Node.js 22.23.4 | PASS | 670/670 Hub and 94/94 EnginEx tests; zero failures/skips/TODOs. |
+| Node.js 24.22.1 | PASS | 670/670 Hub and 94/94 EnginEx tests; zero failures/skips/TODOs. |
+| PostgreSQL 18 / Memgraph / Redis live integration | PASS | 180/180 tests; zero failures, skips or TODOs. |
+| Fresh and idempotent migrations | PASS | All 18 migrations applied on first pass; all 18 were skipped as already applied on the second pass. |
+| Browser editor/accessibility smoke | PASS | 9/9 Playwright smoke tests; this is not manual WCAG or screen-reader acceptance. |
+| CodeQL | PASS | Static analysis completed; not an independent application-security review. |
+| Signed lockfile/SBOM attestation | PASS | Mainline SLSA provenance and SBOM attestations created and cryptographically verified. |
+| Exact-source evidence consolidation | PASS | Revision-bound producer manifests, checksums and mainline evidence passed aggregation. |
+
+The source-bound readiness bundle is GitHub Actions artifact `14601349640`. It is bound to `619819230dac2e8d169ce71af7c6a41f0630cf27`; `release-readiness.json` SHA-256 is `03ef7a8de44133ed6f0861187df9a68448d5e1d6ee59c6aa243deeac30b5ed49`, and `release-readiness-ci.json` SHA-256 is `5ee4b594d8873581ee78cd0925dacf5e6c5a24ac7d640b4107a36aaa77380ca6`. The live PostgreSQL/Memgraph producer manifest SHA-256 is `c21525e3194fa45df426a08ac5ca3f518ad526c3e96811b9c46c528387262237`.
+
+The exact-main readiness result remains **8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN**; `readyForProduction=false`; `NOT_PRODUCTION_CERTIFIED`. The PARTIAL items remain the service-less integration diagnostic (47 tests per supported runtime, 1 pass / 46 skipped; not live-test evidence) and the required human dependency/license review (#23). This diagnostic is distinct from the separate 180/180 live integration producer, which passed with zero skips. Independent reviews #14 and #25 remain missing evidence.
+
+**Review caveat:** PR #228 was merged without any formal review submission recorded by GitHub. The implementation and exact-main CI are maintainer/automation evidence only. Independent reviewers must assess the exact merged source SHA; neither #14 nor #25 is closed or satisfied by this merge.
 
 The full local test command initially identified that the generated tenant-isolation inventory had become stale due to the route source change. The existing inventory generator was run; it regenerated the JSON and Markdown map at the unchanged 28/80/21/57 cardinality. The full `npm run check` was rerun after regeneration and passed.
 
@@ -124,7 +148,7 @@ The generated inventory remains a maintainer navigation and drift-detection aid,
 
 ## 6. Release-gate impact
 
-F1.58 is candidate maintainer-led hardening only. It does not change the prior canonical mainline readiness matrix:
+F1.58 is merged at main SHA `619819230dac2e8d169ce71af7c6a41f0630cf27`. Exact-main workflow [#44675989750](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44675989750) passed 7/7 jobs on that exact source, including both supported Node matrices, the live PostgreSQL 18/Memgraph/Redis producer, fresh and idempotent migrations, browser smoke, CodeQL, signed lockfile/SBOM attestations and exact-source evidence consolidation. The source-bound readiness bundle is artifact `14601349640`.
 
 | Classification | Current source-bound count |
 |---|---:|
@@ -134,24 +158,18 @@ F1.58 is candidate maintainer-led hardening only. It does not change the prior c
 | MISSING_EVIDENCE | 14 |
 | NOT_RUN | 0 |
 
-`readyForProduction=false`; final classification remains `NOT_PRODUCTION_CERTIFIED`. **Production remains NO-GO.**
+`readyForProduction=false`; final classification remains `NOT_PRODUCTION_CERTIFIED`. **Production remains NO-GO.** The two PARTIAL classifications are the service-less integration diagnostic (47 tests per supported Node runtime, 1 pass / 46 skipped; skipped cases are not live validation) and qualified human dependency/license review #23. The separate mainline live integration suite passed 180/180 with zero skips.
 
-The latest previously finalized mainline readiness artifact remains #14587571933 and is bound to main SHA `75aeb93ed3db1801f0a0860a33cade90045f4ee6`, not the newer documentation-only main SHA `a1e0fb0cf605c6f34f9e85c252593ae1b508e0b2`. F1.58 now has separate, successful candidate push/PR workflows #44670394214 and #44670455912, with revision-bound CI evidence bound to head SHA `42a41b2d8a615a00ebec8b2fd188ae4889f58b41` and PR merge SHA `8a1b7c85e597ce5a44bdb1769cb225ed6e0cbad8`. The PR evidence artifact reports 8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE and `readyForProduction=false`. It is candidate CI, not mainline evidence; signed lockfile/SBOM attestation is intentionally skipped on pull_request events and must pass in the post-merge mainline workflow.
-
-The 14 missing production evidence categories remain unchanged: independent tenant isolation (#14); identity provider and recovery (#15); malware scanning corpus/legacy clearance (#16); live cloud storage (#17); Stripe lifecycle (#18); manual accessibility/browser acceptance (#19); commerce parity (#20); community parity (#21); plugin isolation (#22); qualified human dependency/license/SBOM review (#23); load/fault/backup/restore (#24); independent platform security assessment (#25); operations and release approval (#26); and production observability. Product/provider scope #13 and zero-reserve governance #32 also remain separate open decisions.
+GitHub records zero formal review submissions on PR #228. The merge and green mainline CI are maintainer/automation evidence only; independent tenant-isolation review #14 and platform security assessment #25 remain open and not performed. The 14 missing production-evidence categories remain: independent tenant isolation (#14); identity provider and recovery (#15); malware scanning corpus/legacy clearance (#16); live cloud storage (#17); Stripe lifecycle (#18); manual accessibility/browser acceptance (#19); commerce parity (#20); community parity (#21); plugin isolation (#22); qualified human dependency/license/SBOM review (#23); load/fault/backup/restore (#24); independent platform security assessment (#25); operations and release approval (#26); and production observability. Product/provider scope #13 and zero-reserve governance #32 also remain separate open decisions.
 
 No assessor engagement, spending, risk waiver, production-data test, deployment, release tag, GitHub Release, package publication or certification is authorized. Package `0.6.2` stays private and unreleased. No SemVer increment is warranted.
 
 ## 7. Next steps
 
-1. Candidate commit `42a41b2d8a615a00ebec8b2fd188ae4889f58b41` is pushed; PR #228 is open and its push/PR workflows #44670394214 and #44670455912 both passed.
-2. Hosted evidence is recorded above: Node 22/24 matrices, live PostgreSQL/Memgraph/Redis (180/180, zero skips), 18/18 fresh plus 18/18 idempotent migrations, browser smoke 9/9, CodeQL and CI evidence consolidation all passed. The supply-chain attestation job correctly skipped because this is a pull request; its mainline run remains mandatory after merge.
-3. Obtain an independent maintainer review of the SQL lock order and final INSERT predicates against membership removal, group join and group create lifecycle paths. Keep the public/member comment and privacy-narrowing positive controls.
-4. PR #228 is not merged. The repository main branch is not protected and the PR has no submitted review yet; do not treat green CI alone as review approval. Merge only after a maintainer review is recorded and the post-merge mainline attestation/evidence workflow passes.
-5. After merge, capture fresh exact-main evidence and reconcile the release-gate report, changelog, README and roadmap against that exact source. Keep historical run-bound evidence intact.
+1. **Completed:** F1.58 merge and exact-main validation are source-bound to `619819230dac2e8d169ce71af7c6a41f0630cf27`; workflow #44675989750 passed 7/7 jobs, including the mainline signed lockfile/SBOM attestation.
+2. **Required retrospective review:** PR #228 merged without a formal review submission. Do not treat merge status or automation as review approval. Obtain an independent review of the merged SQL lock order and final `INSERT ... SELECT` predicates against membership removal, group join and group creation lifecycle paths.
+3. **Independent assurance:** keep #14 (tenant isolation/authorization) and #25 (platform security assessment) open until qualified independent reviewers deliver source-bound findings and retest evidence for the exact merged source. Include the F1.58 feed-write path and adjacent community lifecycle transactions in scope.
+4. Continue source-anchored review of adjacent site-scoped community lifecycle mutations only when a concrete invariant gap is reproduced. Do not pre-create F1.59 or add generalized helpers without evidence.
+5. Keep provider, product, legal, operations and production-readiness gates separate. Package `0.6.2` remains private/unreleased; no SemVer increment, tag, publication, deployment or certification is authorized.
 
-Continue source-anchored review of adjacent site-scoped community lifecycle mutations only when a concrete invariant gap is reproduced. Do not pre-create F1.59 or add a generalized helper without evidence.
-
----
-
-**Evidence boundary:** These are maintainer-produced implementation and local test results for an unmerged candidate. Independent tenant review #14, platform security assessment #25 and all provider/product/legal/operational release gates remain separate.
+**Evidence boundary:** F1.58 is merged maintainer-led authorization hardening with passing exact-main CI and signed mainline supply-chain attestations. The PR had zero formal review submissions; these implementation, test and workflow results are maintainer/automation evidence only, not independent assurance. Independent tenant review #14, platform security assessment #25 and all provider/product/legal/operational release gates remain separate.
