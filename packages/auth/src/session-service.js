@@ -38,11 +38,11 @@ function createSessionService({
     await onAuthorizationChange(Object.freeze({ ...change }));
   }
 
-  async function createSession(user, metadata = {}) {
+  async function createSession(user, metadata = {}, queryable = pool) {
     const token = randomBytes(32).toString('base64url');
     const csrf = randomBytes(32).toString('base64url');
     const expiresAt = new Date(clock() + sessionTtlMs);
-    await pool.query(
+    await queryable.query(
       `INSERT INTO auth_sessions(user_id,token_hash,csrf_hash,expires_at,user_agent_hash,ip_hash)
        VALUES($1,$2,$3,$4,$5,$6)`,
       [
