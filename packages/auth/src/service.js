@@ -6,6 +6,8 @@ const scryptAsync = promisify(require('node:crypto').scrypt);
 const PASSWORD_MIN = 12;
 const PASSWORD_MAX = 128;
 const SESSION_TTL_HOURS = 12;
+const MFA_ACCOUNT_FAILURE_LIMIT = 10;
+const MFA_ACCOUNT_FAILURE_WINDOW_MINUTES = 15;
 const { generateTotpSecret, verifyTotp, totpUri, encryptSecret, decryptSecret, generateRecoveryCodes } = require('./totp');
 const { createSessionService } = require('./session-service');
 const { withTransaction } = require('../../db/src/transaction');
@@ -187,6 +189,18 @@ function createIdentityService({ pool, env = process.env, clock = () => Date.now
           WHERE c.token_hash=$1 AND c.consumed_at IS NULL AND c.expires_at>now() FOR UPDATE OF c`, [digest(challengeToken)]);
         const challenge = found.rows[0];
         if (!challenge || challenge.attempts >= 5 || challenge.status !== 'active' || !challenge.mfa_enabled) throw authError(401, 'ERR_VIRGOSCORPIO_HUB_MFA_CHALLENGE_INVALID', 'MFA challenge is invalid or expired.');
+        // Account-wide MFA retry budget: failures are aggregated across every challenge issued to the user
+        // within the window, so issuing a fresh challenge (password or federated first factor) cannot reset it.
+        // The advisory lock serialises concurrent verifications for the same account across challenges.
+        await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`virgoscorpio_hub-mfa-verify:${challenge.user_id}`]);
+        const failureResult = await client.query(
+          `SELECT COALESCE(SUM(attempts),0)::integer AS failures FROM auth_mfa_challenges WHERE user_id=$1 AND created_at > now() - ($2::integer * interval '1 minute')`,
+          [challenge.user_id, MFA_ACCOUNT_FAILURE_WINDOW_MINUTES]);
+        if (Number(failureResult.rows[0]?.failures || 0) >= MFA_ACCOUNT_FAILURE_LIMIT) {
+          const error = authError(429, 'ERR_VIRGOSCORPIO_HUB_MFA_THROTTLED', 'Too many failed MFA attempts. Try again later.');
+          error.retryAfterSeconds = MFA_ACCOUNT_FAILURE_WINDOW_MINUTES * 60;
+          throw error;
+        }
         const credentialResult = await client.query('SELECT secret_ciphertext,last_used_step,pending_secret FROM user_mfa_credentials WHERE user_id=$1 FOR UPDATE', [challenge.user_id]);
         const credential = credentialResult.rows[0];
         if (!credential || credential.pending_secret) throw authError(401, 'ERR_VIRGOSCORPIO_HUB_MFA_NOT_CONFIGURED', 'Multi-factor authentication is not configured.');
