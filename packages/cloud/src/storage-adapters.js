@@ -5,8 +5,8 @@ function cloudEndpointAllowed(endpoint, env = process.env) {
   let parsed;
   try { parsed = new URL(endpoint); } catch { return false; }
   if (!['http:','https:'].includes(parsed.protocol) || !parsed.hostname || parsed.username || parsed.password || parsed.search || parsed.hash) return false;
-  if (String(env.NODE_ENV || '').toLowerCase() !== 'production') return true;
-  if (parsed.protocol !== 'https:') return false;
+  // The destination allowlist is enforced in every environment (fail closed); HTTPS is additionally required in production.
+  if (String(env.NODE_ENV || '').toLowerCase() === 'production' && parsed.protocol !== 'https:') return false;
   const allow = String(env.VIRGOSCORPIO_HUB_CLOUD_ENDPOINT_ALLOWLIST || '').split(',').map(item => item.trim().toLowerCase()).filter(Boolean);
   // Exact authority matching (hostname and optional port). No wildcard suffixes.
   return allow.includes(parsed.host.toLowerCase());
