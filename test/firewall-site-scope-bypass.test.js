@@ -26,8 +26,6 @@ const SITE_A_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const SITE_B_ID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const SITE_A_SLUG = 'site-a-test';
 const SITE_B_SLUG = 'site-b-test';
-const BLOCKED_IP = '192.0.2.100';
-const ALLOWED_IP = '192.0.2.200';
 const BLOCKED_USER_AGENT = 'BadBot/1.0';
 const ALLOWED_USER_AGENT = 'GoodBot/1.0';
 
@@ -37,19 +35,20 @@ const ALLOWED_USER_AGENT = 'GoodBot/1.0';
  * - Site-scoped firewall rules for each site
  * - Published pages for testing public routes
  */
-async function withTestServer(fn) {
+async function withTestServer(fn, { uppercaseSiteAId = false } = {}) {
   const sites = new Map([
-    [SITE_A_ID, { id: SITE_A_ID, slug: SITE_A_SLUG, name: 'Site A', default_locale: 'en' }],
+    [SITE_A_ID, { id: uppercaseSiteAId ? SITE_A_ID.toUpperCase() : SITE_A_ID, slug: SITE_A_SLUG, name: 'Site A', default_locale: 'en' }],
     [SITE_B_ID, { id: SITE_B_ID, slug: SITE_B_SLUG, name: 'Site B', default_locale: 'en' }],
   ]);
 
   const firewallRules = [
-    // Site A: Block specific IP
-    { id: 'rule-a-ip', site_id: SITE_A_ID, action: 'deny', scope: 'ip', pattern: BLOCKED_IP, reason: 'Site A IP block', enabled: true },
     // Site A: Block specific user agent
     { id: 'rule-a-ua', site_id: SITE_A_ID, action: 'deny', scope: 'user_agent', pattern: BLOCKED_USER_AGENT, reason: 'Site A UA block', enabled: true },
-    // Site B: Block different IP
-    { id: 'rule-b-ip', site_id: SITE_B_ID, action: 'deny', scope: 'ip', pattern: '203.0.113.50', reason: 'Site B IP block', enabled: true },
+
+    { id: 'rule-global-ua', site_id: null, action: 'deny', scope: 'user_agent', pattern: 'GlobalBlockedBot/1.0', reason: 'Global user-agent block', enabled: true },
+    { id: 'rule-a-challenge', site_id: SITE_A_ID, action: 'challenge', scope: 'user_agent', pattern: 'ChallengeBot/1.0', reason: 'Additional verification required', enabled: true },
+    { id: 'rule-a-rate-limit', site_id: SITE_A_ID, action: 'rate_limit', scope: 'user_agent', pattern: 'RateLimitBot/1.0', reason: 'Firewall rate limit exceeded', enabled: true },
+    { id: 'rule-a-path', site_id: SITE_A_ID, action: 'deny', scope: 'path', pattern: '/public/site-a-test/pages/path-blocked', reason: 'Site A path block', enabled: true },
   ];
 
   const pages = new Map([
@@ -110,11 +109,13 @@ async function withTestServer(fn) {
     },
   };
 
+  let publishedPageReads = 0;
   const mockStore = {
     async getSiteBySlug(slug) {
       return Array.from(sites.values()).find(s => s.slug === slug) || null;
     },
     async getPublishedBySlug({ siteId, slug, locale }) {
+      publishedPageReads += 1;
       const key = `${siteId}:${slug}:${locale}`;
       return pages.get(key) || null;
     },
@@ -131,30 +132,32 @@ async function withTestServer(fn) {
       NODE_ENV: 'test',
       VIRGOSCORPIO_HUB_API_TOKEN: 'test-token',
       AI_PROVIDER: 'mock',
-      VIRGOSCORPIO_HUB_FIREWALL_CACHE_MS: '100', // Short cache for testing
+      VIRGOSCORPIO_HUB_FIREWALL_CACHE_MS: '500', // Short cache for testing
     },
     logger: { error() {} },
     pool: mockPool,
-    store: mockStore,
+    contentStore: mockStore,
   });
 
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const base = `http://127.0.0.1:${server.address().port}`;
 
   try {
-    await fn(base);
+    await fn(base, {
+      getPublishedPageReads: () => publishedPageReads,
+    });
   } finally {
     await new Promise(resolve => server.close(resolve));
     await server.virgoScorpioHub.close();
   }
 }
 
-test('site-scoped firewall rule blocks public page request by site slug when IP matches', async () => {
+test('site-scoped firewall rule blocks public page request by site slug when user-agent matches', async () => {
   await withTestServer(async base => {
-    // Request to Site A's public page from blocked IP
+    // Request to Site A's public page with blocked user-agent
     const res = await fetch(`${base}/public/${SITE_A_SLUG}/pages/test-page`, {
       headers: {
-        'x-forwarded-for': BLOCKED_IP,
+        'user-agent': BLOCKED_USER_AGENT,
       },
     });
 
@@ -165,12 +168,12 @@ test('site-scoped firewall rule blocks public page request by site slug when IP 
   });
 });
 
-test('site-scoped firewall rule allows public page request by site slug when IP does not match', async () => {
+test('site-scoped firewall rule allows public page request by site slug when user-agent does not match', async () => {
   await withTestServer(async base => {
-    // Request to Site A's public page from allowed IP
+    // Request to Site A's public page with allowed user-agent
     const res = await fetch(`${base}/public/${SITE_A_SLUG}/pages/test-page`, {
       headers: {
-        'x-forwarded-for': ALLOWED_IP,
+        'user-agent': ALLOWED_USER_AGENT,
       },
     });
 
@@ -183,27 +186,12 @@ test('site-scoped firewall rule allows public page request by site slug when IP 
   });
 });
 
-test('site-scoped firewall rule blocks public page request by site slug when user-agent matches', async () => {
-  await withTestServer(async base => {
-    // Request to Site A's public page with blocked user agent
-    const res = await fetch(`${base}/public/${SITE_A_SLUG}/pages/test-page`, {
-      headers: {
-        'user-agent': BLOCKED_USER_AGENT,
-      },
-    });
-
-    assert.equal(res.status, 403, 'Request should be blocked by site-scoped firewall rule');
-    const body = await res.json();
-    assert.equal(body.code, 'ERR_VIRGOSCORPIO_HUB_FIREWALL_DENY');
-  });
-});
-
 test('site-scoped firewall rules are tenant-isolated: Site A rule does not block Site B', async () => {
   await withTestServer(async base => {
     // Request to Site B's public page from IP blocked only on Site A
     const res = await fetch(`${base}/public/${SITE_B_SLUG}/pages/test-page`, {
       headers: {
-        'x-forwarded-for': BLOCKED_IP, // This IP is blocked on Site A, not Site B
+        'user-agent': BLOCKED_USER_AGENT, // This IP is blocked on Site A, not Site B
       },
     });
 
@@ -218,10 +206,10 @@ test('site-scoped firewall rules are tenant-isolated: Site A rule does not block
 
 test('site-scoped firewall rule blocks public search request by site slug', async () => {
   await withTestServer(async base => {
-    // Request to Site A's public search from blocked IP
+    // Request to Site A's public search with blocked user-agent
     const res = await fetch(`${base}/api/v1/public/${SITE_A_SLUG}/search?q=test`, {
       headers: {
-        'x-forwarded-for': BLOCKED_IP,
+        'user-agent': BLOCKED_USER_AGENT,
       },
     });
 
@@ -233,10 +221,10 @@ test('site-scoped firewall rule blocks public search request by site slug', asyn
 
 test('site-scoped firewall rule blocks public products request by site slug', async () => {
   await withTestServer(async base => {
-    // Request to Site A's public products from blocked IP
+    // Request to Site A's public products with blocked user-agent
     const res = await fetch(`${base}/api/v1/public/${SITE_A_SLUG}/products`, {
       headers: {
-        'x-forwarded-for': BLOCKED_IP,
+        'user-agent': BLOCKED_USER_AGENT,
       },
     });
 
@@ -248,10 +236,10 @@ test('site-scoped firewall rule blocks public products request by site slug', as
 
 test('site-scoped firewall rule blocks public membership plans request by site slug', async () => {
   await withTestServer(async base => {
-    // Request to Site A's public membership plans from blocked IP
+    // Request to Site A's public membership plans with blocked user-agent
     const res = await fetch(`${base}/api/v1/public/${SITE_A_SLUG}/membership-plans`, {
       headers: {
-        'x-forwarded-for': BLOCKED_IP,
+        'user-agent': BLOCKED_USER_AGENT,
       },
     });
 
@@ -267,77 +255,58 @@ test('site-scoped firewall enforcement occurs after site resolution, not just at
     // The initial firewall check at request entry has siteId=null for slug-based routes
     // The second check after getSiteBySlug() has the correct siteId
 
-    // Request to Site A from blocked IP - should be denied
+    // Request to Site A with blocked user-agent - should be denied
     const resA = await fetch(`${base}/public/${SITE_A_SLUG}/pages/test-page`, {
-      headers: { 'x-forwarded-for': BLOCKED_IP },
+      headers: { 'user-agent': BLOCKED_USER_AGENT },
     });
-    assert.equal(resA.status, 403, 'Site A should block the IP');
+    assert.equal(resA.status, 403, 'Site A should block the user-agent');
 
-    // Request to Site B from same IP - should NOT be denied (different site)
+    // Request to Site B from same user-agent - should NOT be denied (different site)
     const resB = await fetch(`${base}/public/${SITE_B_SLUG}/pages/test-page`, {
-      headers: { 'x-forwarded-for': BLOCKED_IP },
+      headers: { 'user-agent': BLOCKED_USER_AGENT },
     });
-    assert.notEqual(resB.status, 403, 'Site B should not block this IP');
+    assert.notEqual(resB.status, 403, 'Site B should not block this user-agent');
 
     // This proves that site-scoped rules are being evaluated with the correct siteId
     // after site resolution, not just with siteId=null at request entry
   });
 });
 
-test('global firewall rules (site_id=null) still apply to all sites', async () => {
+test('global firewall rules apply to all resolved sites', async () => {
   await withTestServer(async base => {
-    // Note: This test documents expected behavior but may not have global rules in the mock
-    // Global rules (site_id=null) should apply regardless of which site is accessed
-
-    // Both sites should be accessible from allowed IPs
-    const resA = await fetch(`${base}/public/${SITE_A_SLUG}/pages/test-page`, {
-      headers: { 'x-forwarded-for': ALLOWED_IP },
-    });
-    const resB = await fetch(`${base}/public/${SITE_B_SLUG}/pages/test-page`, {
-      headers: { 'x-forwarded-for': ALLOWED_IP },
-    });
-
-    // Neither should be blocked by firewall (may fail for other reasons like 404)
-    if (resA.status === 403) {
-      const bodyA = await resA.json();
-      assert.notEqual(bodyA.code, 'ERR_VIRGOSCORPIO_HUB_FIREWALL_DENY');
-    }
-    if (resB.status === 403) {
-      const bodyB = await resB.json();
-      assert.notEqual(bodyB.code, 'ERR_VIRGOSCORPIO_HUB_FIREWALL_DENY');
+    for (const slug of [SITE_A_SLUG, SITE_B_SLUG]) {
+      const res = await fetch(base + '/public/' + slug + '/pages/test-page', {
+        headers: { 'user-agent': 'GlobalBlockedBot/1.0' },
+      });
+      assert.equal(res.status, 403);
+      assert.equal((await res.json()).code, 'ERR_VIRGOSCORPIO_HUB_FIREWALL_DENY');
     }
   });
 });
 
-test('firewall evaluation with lowercase site ID normalization', async () => {
+test('resolved uppercase tenant IDs are normalized before site-scoped firewall matching', async () => {
   await withTestServer(async base => {
-    // The fix normalizes siteId to lowercase before firewall evaluation
-    // This ensures case-insensitive UUID matching
-
-    // Request with blocked IP should be denied regardless of slug case handling
-    const res = await fetch(`${base}/public/${SITE_A_SLUG}/pages/test-page`, {
-      headers: { 'x-forwarded-for': BLOCKED_IP },
+    const res = await fetch(base + '/public/' + SITE_A_SLUG + '/pages/test-page', {
+      headers: { 'user-agent': BLOCKED_USER_AGENT },
     });
-
-    assert.equal(res.status, 403, 'Firewall should block with normalized site ID');
-    const body = await res.json();
-    assert.equal(body.code, 'ERR_VIRGOSCORPIO_HUB_FIREWALL_DENY');
-  });
+    assert.equal(res.status, 403);
+    assert.equal((await res.json()).code, 'ERR_VIRGOSCORPIO_HUB_FIREWALL_DENY');
+  }, { uppercaseSiteAId: true });
 });
 
 test('firewall blocks requests before content is served', async () => {
-  await withTestServer(async base => {
+  await withTestServer(async (base, metrics) =>{
     // Verify that firewall denial happens before expensive operations like rendering
     const res = await fetch(`${base}/public/${SITE_A_SLUG}/pages/test-page`, {
       headers: {
-        'x-forwarded-for': BLOCKED_IP,
-        'user-agent': BLOCKED_USER_AGENT, // Multiple rule matches
+        'user-agent': BLOCKED_USER_AGENT,
       },
     });
 
     assert.equal(res.status, 403);
     const body = await res.json();
     assert.equal(body.code, 'ERR_VIRGOSCORPIO_HUB_FIREWALL_DENY');
+    assert.equal(metrics.getPublishedPageReads(), 0, 'denied requests must not read published page content');
 
     // Response should be JSON error, not HTML content
     assert.ok(body.error, 'Should return error object');
@@ -345,55 +314,36 @@ test('firewall blocks requests before content is served', async () => {
   });
 });
 
-test('firewall challenge action blocks public page requests', async () => {
+test('firewall challenge action blocks matching public page requests', async () => {
   await withTestServer(async base => {
-    // Note: This test would require a challenge rule in the mock data
-    // Documenting expected behavior: challenge rules should also block with 403
-
-    const res = await fetch(`${base}/public/${SITE_A_SLUG}/pages/test-page`, {
-      headers: { 'x-forwarded-for': ALLOWED_IP },
+    const res = await fetch(base + '/public/' + SITE_A_SLUG + '/pages/test-page', {
+      headers: { 'user-agent': 'ChallengeBot/1.0' },
     });
-
-    // With current mock data (no challenge rules), this should not be blocked
-    if (res.status === 403) {
-      const body = await res.json();
-      // If blocked, it should be for a valid firewall reason
-      if (body.code === 'ERR_VIRGOSCORPIO_HUB_FIREWALL_CHALLENGE') {
-        assert.match(body.error, /verification/i);
-      }
-    }
+    assert.equal(res.status, 403);
+    const body = await res.json();
+    assert.equal(body.code, 'ERR_VIRGOSCORPIO_HUB_FIREWALL_CHALLENGE');
+    assert.match(body.error, /verification/i);
   });
 });
 
-test('firewall rate_limit action blocks public page requests', async () => {
+test('firewall rate-limit action blocks matching public page requests', async () => {
   await withTestServer(async base => {
-    // Note: This test would require a rate_limit rule in the mock data
-    // Documenting expected behavior: rate_limit rules should block with 429
-
-    const res = await fetch(`${base}/public/${SITE_A_SLUG}/pages/test-page`, {
-      headers: { 'x-forwarded-for': ALLOWED_IP },
+    const res = await fetch(base + '/public/' + SITE_A_SLUG + '/pages/test-page', {
+      headers: { 'user-agent': 'RateLimitBot/1.0' },
     });
-
-    // With current mock data (no rate_limit rules), this should not be blocked
-    if (res.status === 429) {
-      const body = await res.json();
-      if (body.code === 'ERR_VIRGOSCORPIO_HUB_FIREWALL_RATE_LIMIT') {
-        assert.match(body.error, /rate limit/i);
-      }
-    }
+    assert.equal(res.status, 429);
+    const body = await res.json();
+    assert.equal(body.code, 'ERR_VIRGOSCORPIO_HUB_FIREWALL_RATE_LIMIT');
+    assert.match(body.error, /rate limit/i);
   });
 });
 
-test('site-scoped path-based firewall rules work on public routes', async () => {
+test('site-scoped path rules block matching public routes after site resolution', async () => {
   await withTestServer(async base => {
-    // Note: This test documents expected behavior for path-based rules
-    // Path rules should match against the actual request path
-
-    // A path rule like "/public/site-a-test/*" would match this request
-    const res = await fetch(`${base}/public/${SITE_A_SLUG}/pages/test-page`);
-
-    // With current mock data (no path rules), this should not be blocked by path rules
-    // But may be blocked by IP/UA rules depending on the request headers
-    assert.ok(res.status >= 200 && res.status < 600, 'Should receive valid HTTP response');
+    const res = await fetch(base + '/public/' + SITE_A_SLUG + '/pages/path-blocked', {
+      headers: { 'user-agent': ALLOWED_USER_AGENT },
+    });
+    assert.equal(res.status, 403);
+    assert.equal((await res.json()).code, 'ERR_VIRGOSCORPIO_HUB_FIREWALL_DENY');
   });
 });
