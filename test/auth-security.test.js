@@ -12,9 +12,9 @@ test('identity helpers normalize email consistently and reject invalid addresses
 test('password policy and scrypt hashes are enforced', async () => {
   assert.throws(() => validatePassword('short'), { code: 'ERR_VIRGOSCORPIO_HUB_PASSWORD_POLICY' });
   assert.throws(() => validatePassword('alllowercase123'), { code: 'ERR_VIRGOSCORPIO_HUB_PASSWORD_POLICY' });
-  const encoded = await hashPassword('CorrectHorse9Battery');
+  const encoded = await hashPassword('****tery');
   assert.match(encoded, /^scrypt\$32768\$8\$1\$/);
-  assert.equal(await verifyPassword('CorrectHorse9Battery', encoded), true);
+  assert.equal(await verifyPassword('****tery', encoded), true);
   assert.equal(await verifyPassword('WrongHorse9Battery', encoded), false);
   assert.equal(await verifyPassword('anything', 'unknown$scheme'), false);
 });
@@ -258,7 +258,7 @@ test('invitation acceptance audits transactionally with request correlation and 
       events,
       auditValues,
       invalidations,
-      accept: () => identity.acceptInvitation({ token, password: 'unused-existing-account-password', requestId }),
+      accept: () => identity.acceptInvitation({ token, password: '****word', requestId }),
     };
   }
 
@@ -378,7 +378,7 @@ test('identity service emits scoped authorization invalidations after membership
 });
 
 test('browser session and CSRF bearer values are random opaque tokens while only their SHA-256 digests are persisted', async () => {
-  const passwordHash = await hashPassword('CorrectHorse9Battery');
+  const passwordHash = await hashPassword('****tery');
   const userId = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
   let sessionInsert;
 
@@ -401,7 +401,7 @@ test('browser session and CSRF bearer values are random opaque tokens while only
 
   const identity = createIdentityService({ pool, env: {} });
   const session = await identity.login({
-    email: 'owner@example.test', password: 'CorrectHorse9Battery',
+    email: 'owner@example.test', password: '****tery',
     ip: '192.0.2.10', userAgent: 'VirgoScorpio Hub security test'
   });
 
@@ -418,7 +418,7 @@ test('browser session and CSRF bearer values are random opaque tokens while only
 });
 
 test('MFA browser challenge is random, short-lived, and only its digest is persisted', async () => {
-  const passwordHash = await hashPassword('CorrectHorse9Battery');
+  const passwordHash = await hashPassword('****tery');
   const userId = 'ffffffff-ffff-4fff-8fff-ffffffffffff';
   let challengeInsert;
 
@@ -441,7 +441,7 @@ test('MFA browser challenge is random, short-lived, and only its digest is persi
 
   const identity = createIdentityService({ pool, env: {} });
   const login = await identity.login({
-    email: 'mfa@example.test', password: 'CorrectHorse9Battery',
+    email: 'mfa@example.test', password: '****tery',
     ip: '192.0.2.11', userAgent: 'VirgoScorpio Hub MFA security test'
   });
 
@@ -460,4 +460,329 @@ test('token digests and equality checks avoid direct token storage assumptions',
   assert.equal(safeEqualText('abc', 'abc'), true);
   assert.equal(safeEqualText('abc', 'abd'), false);
   assert.equal(safeEqualText('abc', 'abcd'), false);
+});
+
+test('login performs equivalent scrypt work for missing and existing users to prevent timing oracle', async t => {
+  const validPasswordHash = await hashPassword('****tery');
+  const userId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+
+  await t.test('missing user triggers dummy hash verification instead of early return', async () => {
+    const verifications = [];
+    const pool = {
+      async query(sql, values) {
+        if (sql.includes('FROM users WHERE lower(email)')) {
+          verifications.push({ type: 'query', email: values[0] });
+          return { rowCount: 0, rows: [] };
+        }
+        throw new Error(`Unexpected query: ${sql}`);
+      }
+    };
+
+    const identity = createIdentityService({ pool, env: {} });
+    const startTime = Date.now();
+    await assert.rejects(
+      identity.login({ email: 'nonexistent@example.test', password: '****tery', ip: '192.0.2.1' }),
+      error => error.statusCode === 401 && error.code === 'ERR_VIRGOSCORPIO_HUB_LOGIN_FAILED'
+    );
+    const duration = Date.now() - startTime;
+
+    assert.equal(verifications.length, 1);
+    assert.equal(verifications[0].email, 'nonexistent@example.test');
+    assert.ok(duration > 50, 'missing user login must perform expensive scrypt work, not return immediately');
+  });
+
+  await t.test('existing user with valid hash performs scrypt verification', async () => {
+    const pool = {
+      async query(sql, values) {
+        if (sql.includes('FROM users WHERE lower(email)')) {
+          return {
+            rowCount: 1,
+            rows: [{
+              id: userId,
+              email: 'existing@example.test',
+              display_name: 'Existing User',
+              status: 'active',
+              password_hash: validPasswordHash,
+              mfa_enabled: false,
+              email_verified_at: new Date()
+            }]
+          };
+        }
+        if (sql.includes('INSERT INTO auth_sessions')) {
+          return { rowCount: 1, rows: [] };
+        }
+        throw new Error(`Unexpected query: ${sql}`);
+      }
+    };
+
+    const identity = createIdentityService({ pool, env: {} });
+    const startTime = Date.now();
+    const session = await identity.login({
+      email: 'existing@example.test',
+      password: '****tery',
+      ip: '192.0.2.2'
+    });
+    const duration = Date.now() - startTime;
+
+    assert.equal(session.user.id, userId);
+    assert.ok(duration > 50, 'existing user login must perform expensive scrypt work');
+  });
+
+  await t.test('existing user with wrong password performs scrypt verification and fails', async () => {
+    const pool = {
+      async query(sql, values) {
+        if (sql.includes('FROM users WHERE lower(email)')) {
+          return {
+            rowCount: 1,
+            rows: [{
+              id: userId,
+              email: 'existing@example.test',
+              display_name: 'Existing User',
+              status: 'active',
+              password_hash: validPasswordHash,
+              mfa_enabled: false,
+              email_verified_at: new Date()
+            }]
+          };
+        }
+        throw new Error(`Unexpected query: ${sql}`);
+      }
+    };
+
+    const identity = createIdentityService({ pool, env: {} });
+    const startTime = Date.now();
+    await assert.rejects(
+      identity.login({ email: 'existing@example.test', password: 'WrongPassword9', ip: '192.0.2.3' }),
+      error => error.statusCode === 401 && error.code === 'ERR_VIRGOSCORPIO_HUB_LOGIN_FAILED'
+    );
+    const duration = Date.now() - startTime;
+
+    assert.ok(duration > 50, 'wrong password must still perform expensive scrypt work');
+  });
+
+  await t.test('user with malformed password hash triggers dummy hash verification', async () => {
+    const pool = {
+      async query(sql, values) {
+        if (sql.includes('FROM users WHERE lower(email)')) {
+          return {
+            rowCount: 1,
+            rows: [{
+              id: userId,
+              email: 'malformed@example.test',
+              display_name: 'Malformed Hash User',
+              status: 'active',
+              password_hash: 'invalid$hash$format',
+              mfa_enabled: false,
+              email_verified_at: new Date()
+            }]
+          };
+        }
+        throw new Error(`Unexpected query: ${sql}`);
+      }
+    };
+
+    const identity = createIdentityService({ pool, env: {} });
+    const startTime = Date.now();
+    await assert.rejects(
+      identity.login({ email: 'malformed@example.test', password: 'AnyPassword9', ip: '192.0.2.4' }),
+      error => error.statusCode === 401 && error.code === 'ERR_VIRGOSCORPIO_HUB_LOGIN_FAILED'
+    );
+    const duration = Date.now() - startTime;
+
+    assert.ok(duration > 50, 'malformed hash must trigger dummy hash verification, not early return');
+  });
+
+  await t.test('user with null password hash triggers dummy hash verification', async () => {
+    const pool = {
+      async query(sql, values) {
+        if (sql.includes('FROM users WHERE lower(email)')) {
+          return {
+            rowCount: 1,
+            rows: [{
+              id: userId,
+              email: 'nullhash@example.test',
+              display_name: 'Null Hash User',
+              status: 'active',
+              password_hash: null,
+              mfa_enabled: false,
+              email_verified_at: new Date()
+            }]
+          };
+        }
+        throw new Error(`Unexpected query: ${sql}`);
+      }
+    };
+
+    const identity = createIdentityService({ pool, env: {} });
+    const startTime = Date.now();
+    await assert.rejects(
+      identity.login({ email: 'nullhash@example.test', password: 'AnyPassword9', ip: '192.0.2.5' }),
+      error => error.statusCode === 401 && error.code === 'ERR_VIRGOSCORPIO_HUB_LOGIN_FAILED'
+    );
+    const duration = Date.now() - startTime;
+
+    assert.ok(duration > 50, 'null hash must trigger dummy hash verification, not early return');
+  });
+
+  await t.test('timing difference between missing and existing users is minimized', async () => {
+    const missingUserPool = {
+      async query(sql) {
+        if (sql.includes('FROM users WHERE lower(email)')) {
+          return { rowCount: 0, rows: [] };
+        }
+        throw new Error(`Unexpected query: ${sql}`);
+      }
+    };
+
+    const existingUserPool = {
+      async query(sql) {
+        if (sql.includes('FROM users WHERE lower(email)')) {
+          return {
+            rowCount: 1,
+            rows: [{
+              id: userId,
+              email: 'existing@example.test',
+              display_name: 'Existing User',
+              status: 'active',
+              password_hash: validPasswordHash,
+              mfa_enabled: false,
+              email_verified_at: new Date()
+            }]
+          };
+        }
+        throw new Error(`Unexpected query: ${sql}`);
+      }
+    };
+
+    const missingIdentity = createIdentityService({ pool: missingUserPool, env: {} });
+    const existingIdentity = createIdentityService({ pool: existingUserPool, env: {} });
+
+    const missingStart = Date.now();
+    await assert.rejects(
+      missingIdentity.login({ email: 'missing@example.test', password: 'TestPassword9', ip: '192.0.2.6' }),
+      error => error.code === 'ERR_VIRGOSCORPIO_HUB_LOGIN_FAILED'
+    );
+    const missingDuration = Date.now() - missingStart;
+
+    const existingStart = Date.now();
+    await assert.rejects(
+      existingIdentity.login({ email: 'existing@example.test', password: 'WrongPassword9', ip: '192.0.2.7' }),
+      error => error.code === 'ERR_VIRGOSCORPIO_HUB_LOGIN_FAILED'
+    );
+    const existingDuration = Date.now() - existingStart;
+
+    const timingRatio = Math.max(missingDuration, existingDuration) / Math.min(missingDuration, existingDuration);
+    assert.ok(
+      timingRatio < 3,
+      `timing ratio between missing (${missingDuration}ms) and existing (${existingDuration}ms) user paths should be similar (ratio: ${timingRatio.toFixed(2)})`
+    );
+    assert.ok(missingDuration > 50, 'missing user path must perform expensive work');
+    assert.ok(existingDuration > 50, 'existing user path must perform expensive work');
+  });
+
+  await t.test('invalid email format triggers dummy hash verification', async () => {
+    const pool = {
+      async query() {
+        throw new Error('Invalid email should not reach database query');
+      }
+    };
+
+    const identity = createIdentityService({ pool, env: {} });
+    const startTime = Date.now();
+    await assert.rejects(
+      identity.login({ email: 'not-an-email', password: 'TestPassword9', ip: '192.0.2.8' }),
+      error => error.statusCode === 401 && error.code === 'ERR_VIRGOSCORPIO_HUB_LOGIN_FAILED'
+    );
+    const duration = Date.now() - startTime;
+
+    assert.ok(duration > 50, 'invalid email must still trigger dummy hash verification');
+  });
+
+  await t.test('empty email triggers dummy hash verification', async () => {
+    const pool = {
+      async query() {
+        throw new Error('Empty email should not reach database query');
+      }
+    };
+
+    const identity = createIdentityService({ pool, env: {} });
+    const startTime = Date.now();
+    await assert.rejects(
+      identity.login({ email: '', password: 'TestPassword9', ip: '192.0.2.9' }),
+      error => error.statusCode === 401 && error.code === 'ERR_VIRGOSCORPIO_HUB_LOGIN_FAILED'
+    );
+    const duration = Date.now() - startTime;
+
+    assert.ok(duration > 50, 'empty email must still trigger dummy hash verification');
+  });
+
+  await t.test('non-string password is safely handled with dummy hash', async () => {
+    const pool = {
+      async query(sql) {
+        if (sql.includes('FROM users WHERE lower(email)')) {
+          return { rowCount: 0, rows: [] };
+        }
+        throw new Error(`Unexpected query: ${sql}`);
+      }
+    };
+
+    const identity = createIdentityService({ pool, env: {} });
+    const startTime = Date.now();
+    await assert.rejects(
+      identity.login({ email: 'test@example.test', password: null, ip: '192.0.2.10' }),
+      error => error.statusCode === 401 && error.code === 'ERR_VIRGOSCORPIO_HUB_LOGIN_FAILED'
+    );
+    const duration = Date.now() - startTime;
+
+    assert.ok(duration > 50, 'non-string password must still trigger dummy hash verification');
+  });
+});
+
+test('dummy password hash is structurally valid and performs equivalent scrypt work', async () => {
+  const { DUMMY_PASSWORD_HASH, isUsableScryptHash } = require('../packages/auth/src/service');
+
+  assert.ok(DUMMY_PASSWORD_HASH, 'DUMMY_PASSWORD_HASH constant must be exported');
+  assert.ok(typeof DUMMY_PASSWORD_HASH === 'string', 'DUMMY_PASSWORD_HASH must be a string');
+  assert.match(DUMMY_PASSWORD_HASH, /^scrypt\$32768\$8\$1\$/, 'DUMMY_PASSWORD_HASH must use standard scrypt parameters');
+
+  const parts = DUMMY_PASSWORD_HASH.split('$');
+  assert.equal(parts.length, 6, 'DUMMY_PASSWORD_HASH must have 6 parts');
+  assert.equal(parts[0], 'scrypt');
+  assert.equal(parts[1], '32768', 'N parameter must match production hashes');
+  assert.equal(parts[2], '8', 'r parameter must match production hashes');
+  assert.equal(parts[3], '1', 'p parameter must match production hashes');
+
+  const salt = Buffer.from(parts[4], 'base64url');
+  const hash = Buffer.from(parts[5], 'base64url');
+  assert.equal(salt.length, 16, 'dummy salt must be 16 bytes');
+  assert.equal(hash.length, 64, 'dummy hash must be 64 bytes');
+
+  assert.equal(isUsableScryptHash(DUMMY_PASSWORD_HASH), true, 'DUMMY_PASSWORD_HASH must pass usability check');
+
+  const startTime = Date.now();
+  const result = await verifyPassword('any-password', DUMMY_PASSWORD_HASH);
+  const duration = Date.now() - startTime;
+
+  assert.equal(result, false, 'dummy hash must never match any password');
+  assert.ok(duration > 50, 'dummy hash verification must perform expensive scrypt work');
+});
+
+test('isUsableScryptHash correctly validates hash structure', () => {
+  const { isUsableScryptHash } = require('../packages/auth/src/service');
+
+  const validHash = `scrypt$32768$8$1$${Buffer.alloc(16, 0x5a).toString('base64url')}$${Buffer.alloc(64, 0xa5).toString('base64url')}`;
+  assert.equal(isUsableScryptHash(validHash), true, 'valid hash structure must pass');
+
+  assert.equal(isUsableScryptHash(null), false, 'null must fail');
+  assert.equal(isUsableScryptHash(undefined), false, 'undefined must fail');
+  assert.equal(isUsableScryptHash(123), false, 'number must fail');
+  assert.equal(isUsableScryptHash(''), false, 'empty string must fail');
+  assert.equal(isUsableScryptHash('not-a-hash'), false, 'invalid format must fail');
+  assert.equal(isUsableScryptHash('bcrypt$10$salt$hash'), false, 'wrong algorithm must fail');
+  assert.equal(isUsableScryptHash('scrypt$16384$8$1$salt$hash'), false, 'wrong N parameter must fail');
+  assert.equal(isUsableScryptHash('scrypt$32768$16$1$salt$hash'), false, 'wrong r parameter must fail');
+  assert.equal(isUsableScryptHash('scrypt$32768$8$2$salt$hash'), false, 'wrong p parameter must fail');
+  assert.equal(isUsableScryptHash(`scrypt$32768$8$1$${Buffer.alloc(8).toString('base64url')}$${Buffer.alloc(64).toString('base64url')}`), false, 'wrong salt length must fail');
+  assert.equal(isUsableScryptHash(`scrypt$32768$8$1$${Buffer.alloc(16).toString('base64url')}$${Buffer.alloc(32).toString('base64url')}`), false, 'wrong hash length must fail');
+  assert.equal(isUsableScryptHash('scrypt$32768$8$1$!!!invalid!!!$hash'), false, 'invalid base64url must fail');
 });
