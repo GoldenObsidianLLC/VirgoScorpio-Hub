@@ -184,14 +184,18 @@ function createIdentityService({ pool, env = process.env, clock = () => Date.now
         if (!challenge || challenge.attempts >= 5 || challenge.status !== 'active' || !challenge.mfa_enabled) throw authError(401, 'ERR_VIRGOSCORPIO_HUB_MFA_CHALLENGE_INVALID', 'MFA challenge is invalid or expired.');
         const credentialResult = await client.query('SELECT secret_ciphertext,last_used_step,pending_secret FROM user_mfa_credentials WHERE user_id=$1 FOR UPDATE', [challenge.user_id]);
         const credential = credentialResult.rows[0];
-        if (!credential || credential.pending_secret) throw authError(401, 'ERR_VIRGOSCORPIO_HUB_MFA_NOT_CONFIGURED', 'Multi-factor authentication is not configured.');
+        if (!credential) throw authError(401, 'ERR_VIRGOSCORPIO_HUB_MFA_NOT_CONFIGURED', 'Multi-factor authentication is not configured.');
         let acceptedStep = credential.last_used_step;
         let valid = false;
-        try {
-          const secret = decryptSecret(credential.secret_ciphertext, env);
-          const step = verifyTotp(secret, String(code || ''), { now: clock(), lastUsedStep: Number(credential.last_used_step) });
-          if (step !== null) { acceptedStep = step; valid = true; }
-        } catch (error) { if (error.code === 'ERR_VIRGOSCORPIO_HUB_MFA_KEY_MISSING' || error.code === 'ERR_VIRGOSCORPIO_HUB_MFA_KEY_INVALID') throw error; }
+        // While a replacement factor is pending (abandoned re-enrollment), the stored secret is unconfirmed
+        // and must not authenticate; the existing recovery codes remain a valid way to sign in and repair.
+        if (!credential.pending_secret) {
+          try {
+            const secret = decryptSecret(credential.secret_ciphertext, env);
+            const step = verifyTotp(secret, String(code || ''), { now: clock(), lastUsedStep: Number(credential.last_used_step) });
+            if (step !== null) { acceptedStep = step; valid = true; }
+          } catch (error) { if (error.code === 'ERR_VIRGOSCORPIO_HUB_MFA_KEY_MISSING' || error.code === 'ERR_VIRGOSCORPIO_HUB_MFA_KEY_INVALID') throw error; }
+        }
         if (!valid && typeof code === 'string' && /^[A-Z0-9_-]{10,32}$/i.test(code)) {
           const recovery = await client.query('UPDATE user_mfa_recovery_codes SET consumed_at=now() WHERE user_id=$1 AND code_hash=$2 AND consumed_at IS NULL RETURNING id', [challenge.user_id, digest(code.toUpperCase())]);
           valid = recovery.rowCount > 0;
@@ -210,13 +214,38 @@ function createIdentityService({ pool, env = process.env, clock = () => Date.now
       finally { client.release(); }
     },
 
-    async beginMfaEnrollment({ userId }) {
-      const userResult = await pool.query("SELECT id,email,status FROM users WHERE id=$1 AND status='active'", [userId]);
-      const user = userResult.rows[0]; if (!user) throw authError(404, 'ERR_VIRGOSCORPIO_HUB_USER_NOT_FOUND', 'Account not found.');
-      const secret = generateTotpSecret(); const encrypted = encryptSecret(secret, env);
-      await pool.query(`INSERT INTO user_mfa_credentials(user_id,secret_ciphertext,pending_secret,last_used_step,updated_at)
-        VALUES($1,$2,true,-1,now()) ON CONFLICT(user_id) DO UPDATE SET secret_ciphertext=EXCLUDED.secret_ciphertext,pending_secret=true,last_used_step=-1,updated_at=now()`, [userId, encrypted]);
-      return { secret, otpauthUrl: totpUri(secret, user.email), issuer: 'VirgoScorpio Hub', digits: 6, periodSeconds: 30 };
+    async beginMfaEnrollment({ userId, password, code }) {
+      // Step-up: changing the MFA factor requires the account password and, when MFA is already active,
+      // a current TOTP code or an unused recovery code. A bare session is not sufficient.
+      const reauthFailed = () => authError(403, 'ERR_VIRGOSCORPIO_HUB_MFA_REAUTH_FAILED', 'Password and, if MFA is enabled, a valid MFA code are required.');
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        const userResult = await client.query("SELECT id,email,status,password_hash,mfa_enabled FROM users WHERE id=$1 AND status='active' FOR UPDATE", [userId]);
+        const user = userResult.rows[0]; if (!user) throw authError(404, 'ERR_VIRGOSCORPIO_HUB_USER_NOT_FOUND', 'Account not found.');
+        if (!await verifyPassword(password, user.password_hash)) throw reauthFailed();
+        if (user.mfa_enabled) {
+          const credentialResult = await client.query('SELECT secret_ciphertext,last_used_step,pending_secret FROM user_mfa_credentials WHERE user_id=$1 FOR UPDATE', [userId]);
+          const credential = credentialResult.rows[0];
+          let verified = false;
+          if (credential && !credential.pending_secret) {
+            try {
+              verified = verifyTotp(decryptSecret(credential.secret_ciphertext, env), String(code || ''), { now: clock(), lastUsedStep: Number(credential.last_used_step) }) !== null;
+            } catch (error) { if (error.code === 'ERR_VIRGOSCORPIO_HUB_MFA_KEY_MISSING' || error.code === 'ERR_VIRGOSCORPIO_HUB_MFA_KEY_INVALID') throw error; }
+          }
+          if (!verified && typeof code === 'string' && /^[A-Z0-9_-]{10,32}$/i.test(code)) {
+            const recovery = await client.query('UPDATE user_mfa_recovery_codes SET consumed_at=now() WHERE user_id=$1 AND code_hash=$2 AND consumed_at IS NULL RETURNING id', [userId, digest(code.toUpperCase())]);
+            verified = recovery.rowCount > 0;
+          }
+          if (!verified) throw reauthFailed();
+        }
+        const secret = generateTotpSecret(); const encrypted = encryptSecret(secret, env);
+        await client.query(`INSERT INTO user_mfa_credentials(user_id,secret_ciphertext,pending_secret,last_used_step,updated_at)
+          VALUES($1,$2,true,-1,now()) ON CONFLICT(user_id) DO UPDATE SET secret_ciphertext=EXCLUDED.secret_ciphertext,pending_secret=true,last_used_step=-1,updated_at=now()`, [userId, encrypted]);
+        await client.query('COMMIT');
+        return { secret, otpauthUrl: totpUri(secret, user.email), issuer: 'VirgoScorpio Hub', digits: 6, periodSeconds: 30 };
+      } catch (error) { await client.query('ROLLBACK').catch(() => {}); throw error; }
+      finally { client.release(); }
     },
 
     async confirmMfaEnrollment({ userId, code }) {

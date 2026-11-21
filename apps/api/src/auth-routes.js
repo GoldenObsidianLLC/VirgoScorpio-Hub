@@ -359,7 +359,8 @@ function createAuthRouteHandlers(dependencies = {}) {
 
     if (req.method === 'POST' && url.pathname === '/api/v1/auth/mfa/enroll') {
       if (actor.isDeveloper) throw fail(403, 'ERR_VIRGOSCORPIO_HUB_FORBIDDEN', 'MFA enrollment requires a real account.');
-      return sendJson(res, 200, { enrollment: await identity.beginMfaEnrollment({ userId: actor.user.id }), requestId });
+      const body = await readJson(req, Math.min(maxBody, MAX_AUTH_BODY_BYTES));
+      return sendJson(res, 200, { enrollment: await identity.beginMfaEnrollment({ userId: actor.user.id, password: body.password, code: body.code }), requestId });
     }
 
     if (req.method === 'POST' && url.pathname === '/api/v1/auth/mfa/confirm') {
