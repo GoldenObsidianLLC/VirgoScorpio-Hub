@@ -1902,8 +1902,8 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
         const pageScopedWorkflow = url.pathname.startsWith('/api/v1/pages/');
         if (action === 'submit-review' || pageScopedWorkflow) {
           const current = await store.getById({ siteId, id });
-          if (action === 'submit-review') await canEditContent(actor, siteId, current);
           if (pageScopedWorkflow) assertPageContent(current);
+          if (action === 'submit-review') await canEditContent(actor, siteId, current);
         }
         const onTransition = identity && actor.user.id
           ? async ({ queryable, result }) => identity.audit(
