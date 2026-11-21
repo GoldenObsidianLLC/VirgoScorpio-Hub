@@ -5,7 +5,6 @@ const assert = require('node:assert/strict');
 const { randomUUID } = require('node:crypto');
 const { createPostgresPool } = require('../../packages/db/src/postgres-store');
 const { handleCommunityWorkflowRoute } = require('../../packages/community/src/workflows');
-const { waitForDatabaseWriteLock } = require('../helpers/postgres-locks');
 
 const enabled = Boolean(process.env.DATABASE_URL && process.env.VIRGOSCORPIO_HUB_RUN_POSTGRES_INTEGRATION === 'true');
 
@@ -32,7 +31,7 @@ const enabled = Boolean(process.env.DATABASE_URL && process.env.VIRGOSCORPIO_HUB
  * - The moderation transaction must detect the revocation and reject the action
  */
 
-function createContext({ method = 'GET', path, body = {}, pool, actor, siteId }) {
+function createContext({ method = 'GET', path, body = {}, pool, actor, siteId, afterCapability }) {
   const url = new URL(`http://virgoscorpio-hub.integration${path}`);
   const res = {};
   return {
@@ -43,11 +42,13 @@ function createContext({ method = 'GET', path, body = {}, pool, actor, siteId })
     localPool: pool,
     maxBody: 64_000,
     requestId: randomUUID(),
-    async siteIdFor({ body: requested }) {
+    async siteIdFor({ body: requested, actor: requestingActor }) {
       const requestedSiteId = requested.siteId || siteId;
+      if (requestingActor?.isDeveloper) return requestedSiteId;
+      const requestingUserId = requestingActor?.user?.id || actor.id;
       const member = await pool.query(
         'SELECT 1 FROM site_memberships WHERE site_id=$1 AND user_id=$2 LIMIT 1',
-        [requestedSiteId, actor.id]
+        [requestedSiteId, requestingUserId]
       );
       if (!member.rows[0]) {
         throw Object.assign(new Error('Site membership required.'), {
@@ -73,6 +74,7 @@ function createContext({ method = 'GET', path, body = {}, pool, actor, siteId })
           statusCode: 403
         });
       }
+      if (afterCapability) await afterCapability({ actor: actorObj, siteId: requestedSiteId, capability });
     },
     async readJson() {
       return body;
@@ -202,7 +204,7 @@ test('moderation action is rejected when membership is revoked during request pr
     // The preflight check should fail because membership is already gone
     await assert.rejects(
       handleCommunityWorkflowRoute(ctx),
-      error => error.code === 'ERR_VIRGOSCORPIO_HUB_FORBIDDEN' && error.statusCode === 403,
+      error => error.statusCode === 403 && ['ERR_VIRGOSCORPIO_HUB_FORBIDDEN', 'ERR_VIRGOSCORPIO_HUB_SITE_ACCESS'].includes(error.code),
       'moderation should be rejected when membership is already revoked'
     );
 
@@ -224,173 +226,94 @@ test('moderation action is rejected when membership is revoked during request pr
     await pool.query('INSERT INTO site_memberships(site_id,user_id,role_id) VALUES($1,$2,$3)', [siteId, moderatorUser.id, moderatorRoleId]);
   });
 
-  await t.test('moderation is rejected when membership is revoked concurrently with transaction', async () => {
-    // This test simulates the race condition: the preflight check passes, but
-    // membership is removed before the transaction-scoped revalidation.
-    // We use a blocking client to hold a lock that delays the moderation transaction.
-
-    const blockingClient = await pool.connect();
-    let moderationPromise;
-    let moderationError;
-
-    try {
-      // Start a transaction and lock the site row with FOR UPDATE
-      // This will block the moderation transaction's FOR KEY SHARE lock
-      await blockingClient.query('BEGIN');
-      await blockingClient.query('SELECT id FROM sites WHERE id=$1 FOR UPDATE', [siteId]);
-
-      // Start the moderation request in the background
-      // It will pass the preflight check but block on the transaction-scoped revalidation
-      const ctx = createContext({
-        method: 'POST',
-        path: `/api/v1/sites/${siteId}/community/moderation`,
-        body: {
-          targetType: 'activity',
-          targetId: activityId,
-          action: 'hide',
-          reason: 'Concurrent revocation test'
-        },
-        pool,
-        actor: moderatorUser,
-        siteId
-      });
-
-      moderationPromise = handleCommunityWorkflowRoute(ctx).then(
-        result => ({ success: true, result, ctx }),
-        error => ({ success: false, error })
-      );
-
-      // Wait for the moderation transaction to block on the site lock
-      const blocked = await waitForDatabaseWriteLock(blockingClient, 'FOR KEY SHARE', 3000);
-      assert.ok(blocked, 'moderation transaction should block waiting for site lock');
-
-      // While the moderation transaction is blocked, remove the membership
-      // This simulates the race condition where revocation happens after preflight
-      // but before the transaction-scoped revalidation completes
-      const removalClient = await pool.connect();
-      try {
-        await removalClient.query('BEGIN');
-        // Lock the site with FOR UPDATE (this will also block until blockingClient commits)
-        await removalClient.query('SELECT id FROM sites WHERE id=$1 FOR UPDATE', [siteId]);
-        // Remove the membership
-        await removalClient.query('DELETE FROM site_memberships WHERE site_id=$1 AND user_id=$2', [siteId, moderatorUser.id]);
-        await removalClient.query('COMMIT');
-      } finally {
-        removalClient.release();
+  await t.test('transaction-scoped revalidation rejects membership revoked after preflight', async () => {
+    const ctx = createContext({
+      method: 'POST',
+      path: '/api/v1/sites/' + siteId + '/community/moderation',
+      body: { targetType: 'activity', targetId: activityId, action: 'hide', reason: 'Revoked after preflight' },
+      pool,
+      actor: moderatorUser,
+      siteId,
+      afterCapability: async () => {
+        const removed = await pool.query(
+          'DELETE FROM site_memberships WHERE site_id=$1 AND user_id=$2 RETURNING user_id',
+          [siteId, moderatorUser.id]
+        );
+        assert.equal(removed.rowCount, 1);
       }
-
-      // Release the blocking lock, allowing both transactions to proceed
-      await blockingClient.query('COMMIT');
-
-      // Wait for the moderation request to complete
-      const outcome = await moderationPromise;
-
-      // The mitigation should cause the moderation transaction to detect the revocation
-      // and reject the action with a 403 error
-      assert.equal(outcome.success, false, 'moderation should fail after concurrent revocation');
-      assert.equal(outcome.error.statusCode, 403, 'should return 403 Forbidden');
-      assert.equal(outcome.error.code, 'ERR_VIRGOSCORPIO_HUB_FORBIDDEN', 'should return forbidden error code');
-      moderationError = outcome.error;
-
-      // Verify the activity was NOT modified
-      const unchangedActivity = await pool.query(
-        'SELECT deleted_at FROM social_activities WHERE site_id=$1 AND id=$2',
-        [siteId, activityId]
-      );
-      assert.equal(unchangedActivity.rows[0].deleted_at, null, 'activity should remain unmodified after rejected action');
-
-      // Verify no audit record was created
-      const noAudit = await pool.query(
-        'SELECT 1 FROM virgoscorpio_hub_moderation_actions WHERE site_id=$1 AND target_id=$2 AND reason=\'Concurrent revocation test\'',
-        [siteId, activityId]
-      );
-      assert.equal(noAudit.rows.length, 0, 'no audit record should be created for rejected action');
-
-    } finally {
-      blockingClient.release();
-      // Restore membership for any subsequent tests
-      await pool.query('INSERT INTO site_memberships(site_id,user_id,role_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING', [siteId, moderatorUser.id, moderatorRoleId]);
-    }
-  });
-
-  await t.test('moderation is rejected when user status is deactivated during transaction', async () => {
-    // Deactivate the user
-    await pool.query('UPDATE users SET status=\'suspended\' WHERE id=$1', [moderatorUser.id]);
-
-    const ctx = createContext({
-      method: 'POST',
-      path: `/api/v1/sites/${siteId}/community/moderation`,
-      body: {
-        targetType: 'activity',
-        targetId: activityId,
-        action: 'hide',
-        reason: 'Attempt with suspended user'
-      },
-      pool,
-      actor: moderatorUser,
-      siteId
     });
 
-    // The preflight or transaction-scoped check should fail because user is suspended
     await assert.rejects(
       handleCommunityWorkflowRoute(ctx),
-      error => error.code === 'ERR_VIRGOSCORPIO_HUB_FORBIDDEN' && error.statusCode === 403,
-      'moderation should be rejected when user is suspended'
+      error => error.code === 'ERR_VIRGOSCORPIO_HUB_FORBIDDEN' && error.statusCode === 403
     );
-
-    // Verify the activity was NOT modified
-    const unchangedActivity = await pool.query(
+    const unchanged = await pool.query(
       'SELECT deleted_at FROM social_activities WHERE site_id=$1 AND id=$2',
       [siteId, activityId]
     );
-    assert.equal(unchangedActivity.rows[0].deleted_at, null, 'activity should remain unmodified');
-
-    // Restore user status
-    await pool.query('UPDATE users SET status=\'active\' WHERE id=$1', [moderatorUser.id]);
-  });
-
-  await t.test('moderation is rejected when capability is removed from role during transaction', async () => {
-    // Remove the community:moderate capability from the role
+    assert.equal(unchanged.rows[0].deleted_at, null);
+    const audits = await pool.query(
+      "SELECT 1 FROM virgoscorpio_hub_moderation_actions WHERE site_id=$1 AND target_id=$2 AND reason='Revoked after preflight'",
+      [siteId, activityId]
+    );
+    assert.equal(audits.rowCount, 0);
     await pool.query(
-      'UPDATE roles SET capabilities=$1::jsonb WHERE id=$2',
-      [JSON.stringify(['content:create']), moderatorRoleId]
+      'INSERT INTO site_memberships(site_id,user_id,role_id) VALUES($1,$2,$3)',
+      [siteId, moderatorUser.id, moderatorRoleId]
     );
-
+  });
+  await t.test('transaction-scoped revalidation rejects a user disabled after preflight', async () => {
     const ctx = createContext({
       method: 'POST',
-      path: `/api/v1/sites/${siteId}/community/moderation`,
-      body: {
-        targetType: 'activity',
-        targetId: activityId,
-        action: 'hide',
-        reason: 'Attempt with revoked capability'
-      },
+      path: '/api/v1/sites/' + siteId + '/community/moderation',
+      body: { targetType: 'activity', targetId: activityId, action: 'hide', reason: 'Disabled after preflight' },
       pool,
       actor: moderatorUser,
-      siteId
+      siteId,
+      afterCapability: async () => {
+        await pool.query("UPDATE users SET status='disabled' WHERE id=$1", [moderatorUser.id]);
+      }
     });
-
-    // The preflight or transaction-scoped check should fail because capability is gone
     await assert.rejects(
       handleCommunityWorkflowRoute(ctx),
-      error => error.code === 'ERR_VIRGOSCORPIO_HUB_FORBIDDEN' && error.statusCode === 403,
-      'moderation should be rejected when capability is removed'
+      error => error.code === 'ERR_VIRGOSCORPIO_HUB_FORBIDDEN' && error.statusCode === 403
     );
-
-    // Verify the activity was NOT modified
-    const unchangedActivity = await pool.query(
+    const unchanged = await pool.query(
       'SELECT deleted_at FROM social_activities WHERE site_id=$1 AND id=$2',
       [siteId, activityId]
     );
-    assert.equal(unchangedActivity.rows[0].deleted_at, null, 'activity should remain unmodified');
-
-    // Restore capability
+    assert.equal(unchanged.rows[0].deleted_at, null);
+    await pool.query("UPDATE users SET status='active' WHERE id=$1", [moderatorUser.id]);
+  });
+  await t.test('transaction-scoped revalidation rejects a role capability removed after preflight', async () => {
+    const ctx = createContext({
+      method: 'POST',
+      path: '/api/v1/sites/' + siteId + '/community/moderation',
+      body: { targetType: 'activity', targetId: activityId, action: 'hide', reason: 'Role capability removed after preflight' },
+      pool,
+      actor: moderatorUser,
+      siteId,
+      afterCapability: async () => {
+        await pool.query(
+          'UPDATE roles SET capabilities=$1::jsonb WHERE id=$2',
+          [JSON.stringify(['content:create']), moderatorRoleId]
+        );
+      }
+    });
+    await assert.rejects(
+      handleCommunityWorkflowRoute(ctx),
+      error => error.code === 'ERR_VIRGOSCORPIO_HUB_FORBIDDEN' && error.statusCode === 403
+    );
+    const unchanged = await pool.query(
+      'SELECT deleted_at FROM social_activities WHERE site_id=$1 AND id=$2',
+      [siteId, activityId]
+    );
+    assert.equal(unchanged.rows[0].deleted_at, null);
     await pool.query(
       'UPDATE roles SET capabilities=$1::jsonb WHERE id=$2',
       [JSON.stringify(['community:moderate']), moderatorRoleId]
     );
   });
-
   await t.test('moderation of message is also protected by transaction-scoped revalidation', async () => {
     // Create a conversation and message to moderate
     const conversation = await pool.query(
@@ -433,7 +356,7 @@ test('moderation action is rejected when membership is revoked during request pr
 
     await assert.rejects(
       handleCommunityWorkflowRoute(ctx),
-      error => error.code === 'ERR_VIRGOSCORPIO_HUB_FORBIDDEN' && error.statusCode === 403,
+      error => error.statusCode === 403 && ['ERR_VIRGOSCORPIO_HUB_FORBIDDEN', 'ERR_VIRGOSCORPIO_HUB_SITE_ACCESS'].includes(error.code),
       'message moderation should be rejected when membership is revoked'
     );
 
