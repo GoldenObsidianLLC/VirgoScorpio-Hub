@@ -19,13 +19,16 @@ function ruleMatches(rule, request) {
   if (rule.scope==='user_agent') return String(request.userAgent||'').toLowerCase().includes(rule.pattern.toLowerCase());
   return false;
 }
+// Hard bounds on stored rules; the cache refresh is also capped so shared memory/CPU stay bounded.
+const MAX_FIREWALL_RULES_PER_SITE = 500;
+const MAX_FIREWALL_RULES_TOTAL = 20000;
 function createFirewall({ pool = null, env = process.env, cacheTtlMs = 5000 } = {}) {
   let cacheUntil = 0; let cached = []; let refreshing = null;
   const staticDeny = String(env.VIRGOSCORPIO_HUB_FIREWALL_DENY_CIDRS || '').split(',').map(x=>x.trim()).filter(Boolean).filter(x=>validateIpPattern(x.includes('/')?'cidr':'ip',x));
   async function refresh() {
     if (!pool) return;
     if (refreshing) return refreshing;
-    refreshing = pool.query("SELECT id,site_id,action,scope,pattern,reason,enabled FROM firewall_rules WHERE enabled=true AND scope IN ('ip','cidr','path','user_agent') ORDER BY created_at ASC")
+    refreshing = pool.query("SELECT id,site_id,action,scope,pattern,reason,enabled FROM firewall_rules WHERE enabled=true AND scope IN ('ip','cidr','path','user_agent') ORDER BY created_at ASC LIMIT " + MAX_FIREWALL_RULES_TOTAL)
       .then(result=>{ cached=result.rows; cacheUntil=Date.now()+cacheTtlMs; }).catch(()=>{ cacheUntil=Date.now()+Math.min(cacheTtlMs,1000); }).finally(()=>{ refreshing=null; });
     return refreshing;
   }
@@ -43,4 +46,4 @@ function createFirewall({ pool = null, env = process.env, cacheTtlMs = 5000 } = 
     clearCache() { cacheUntil=0; }
   });
 }
-module.exports = { createFirewall, validateIpPattern, cidrContains, ruleMatches, ipToInt };
+module.exports = { MAX_FIREWALL_RULES_PER_SITE, MAX_FIREWALL_RULES_TOTAL, createFirewall, validateIpPattern, cidrContains, ruleMatches, ipToInt };
