@@ -184,8 +184,8 @@ test('submit-review requires a site capability and same-site ownership for edit-
   const ownContentId = '33333333-3333-4333-8333-333333333333';
   const otherContentId = '44444444-4444-4444-8444-444444444444';
   const records = new Map([
-    [ownContentId, { id: ownContentId, site_id: siteId, created_by: authorId, version: 1 }],
-    [otherContentId, { id: otherContentId, site_id: siteId, created_by: '55555555-5555-4555-8555-555555555555', version: 1 }],
+    [ownContentId, { id: ownContentId, site_id: siteId, created_by: authorId, version: 1, content_type: 'page' }],
+    [otherContentId, { id: otherContentId, site_id: siteId, created_by: '55555555-5555-4555-8555-555555555555', version: 1, content_type: 'page' }],
   ]);
   const transitions = [];
   const audits = [];
