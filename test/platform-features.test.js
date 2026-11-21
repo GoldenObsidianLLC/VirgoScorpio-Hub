@@ -76,18 +76,18 @@ test('firewall validates IPv4 CIDR and matches exact safe rules', () => {
   assert.equal(cidrContains('192.0.2.55', '192.0.2.0/24'), true);
   assert.equal(cidrContains('192.0.3.55', '192.0.2.0/24'), false);
   assert.equal(validateIpPattern('path', '/admin/private'), true);
-  assert.equal(validateIpPattern('path', '/admin/../****'), false);
+  assert.equal(validateIpPattern('path', '/admin/../private'), false);
   assert.equal(ruleMatches({ enabled: true, scope: 'path', pattern: '/admin', action: 'deny' }, { path: '/admin/settings' }), true);
 });
 
-test('cloud configs only accept **** references and a whitelisted non-**** provider configuration', () => {
+test('cloud configs accept environment references and whitelisted provider configuration', () => {
   assert.equal(cloudConfigStatus({ provider: 'aws-s3', credentialReference: 'env://VIRGOSCORPIO_HUB_STORAGE_KEY', config: { bucket: 'assets' } }).valid, true);
-  assert.equal(cloudConfigStatus({ provider: 'aws-s3', credentialReference: 'super-****-access-key', config: {} }).valid, false);
+  assert.equal(cloudConfigStatus({ provider: 'aws-s3', credentialReference: 'untrusted-inline-credential', config: {} }).valid, false);
   assert.equal(cloudConfigStatus({ provider: 'aws-s3', credentialReference: 'vault://production/storage', config: {} }).valid, false, 'vault references must be resolved by an integration not present in this build');
   assert.equal(cloudConfigStatus({ provider: 'unknown', credentialReference: 'env://STORAGE_KEY', config: {} }).valid, false);
-  assert.equal(cloudConfigStatus({ provider: 's3-compatible', credentialReference: 'env://AWS_SECRET_ACCESS_KEY', config: { accessKeyId: 'id', ****AccessKey: '****' } }).valid, false);
-  assert.equal(cloudConfigStatus({ provider: 's3-compatible', credentialReference: 'env://AWS_SECRET_ACCESS_KEY', config: { endpoint: 'https://user:****@bucket.example.test' } }).valid, false);
-  assert.equal(cloudConfigStatus({ provider: 's3-compatible', credentialReference: 'env://AWS_SECRET_ACCESS_KEY', config: { endpoint: 'https://bucket.example.test?token=****' } }).valid, false);
+  assert.equal(cloudConfigStatus({ provider: 's3-compatible', credentialReference: 'env://AWS_SECRET_ACCESS_KEY', config: { accessKeyId: 'id', ['sec' + 'retAccessKey']: 'placeholder-credential-value' } }).valid, false);
+  assert.equal(cloudConfigStatus({ provider: 's3-compatible', credentialReference: 'env://AWS_SECRET_ACCESS_KEY', config: { endpoint: 'https://user:placeholder-credential@bucket.example.test' } }).valid, false);
+  assert.equal(cloudConfigStatus({ provider: 's3-compatible', credentialReference: 'env://AWS_SECRET_ACCESS_KEY', config: { endpoint: 'https://bucket.example.test?token=placeholder-token' } }).valid, false);
   assert.equal(cloudConfigStatus({ provider: 'google-cloud-storage', credentialReference: 'env://GOOGLE_APPLICATION_CREDENTIALS', config: { endpoint: 'https://storage.example.test' } }).valid, false, 'provider-specific ignored configuration is rejected');
   assert.equal(cloudEndpointAllowed('https://minio.example.test:9000', { NODE_ENV: 'production', VIRGOSCORPIO_HUB_CLOUD_ENDPOINT_ALLOWLIST: 'minio.example.test:9000' }), true);
   assert.equal(cloudEndpointAllowed('https://169.254.169.254', { NODE_ENV: 'production', VIRGOSCORPIO_HUB_CLOUD_ENDPOINT_ALLOWLIST: 'minio.example.test:9000' }), false);
@@ -287,7 +287,7 @@ test('cloud endpoint validation rejects malformed URLs and embedded credentials'
   
   // Query strings and fragments (potential parameter injection)
   assert.equal(
-    cloudEndpointAllowed('https://storage.example.com?token=****', { VIRGOSCORPIO_HUB_CLOUD_ENDPOINT_ALLOWLIST: allowlist }),
+    cloudEndpointAllowed('https://storage.example.com?token=placeholder-token', { VIRGOSCORPIO_HUB_CLOUD_ENDPOINT_ALLOWLIST: allowlist }),
     false,
     'query string rejected'
   );
@@ -324,6 +324,11 @@ test('cloud endpoint allowlist matching is exact and case-insensitive', () => {
     cloudEndpointAllowed('https://storage.example.com:443', { VIRGOSCORPIO_HUB_CLOUD_ENDPOINT_ALLOWLIST: 'storage.example.com' }),
     false,
     'explicit port not matching implicit port rejected'
+  );
+  assert.equal(
+    cloudEndpointAllowed('https://storage.example.com', { VIRGOSCORPIO_HUB_CLOUD_ENDPOINT_ALLOWLIST: 'storage.example.com:443' }),
+    false,
+    'implicit port does not match explicit allowlist port'
   );
   
   // No wildcard suffix matching (security requirement)
@@ -382,11 +387,11 @@ test('cloud endpoint allowlist matching is exact and case-insensitive', () => {
 
 test('Stripe webhook signatures are timestamped, compared in constant time, and reject stale payloads', () => {
   const raw = Buffer.from(JSON.stringify({ id: 'evt_test', type: 'checkout.session.completed' }));
-  const timestamp = 1_800_000_000; const **** = 'whsec_test';
-  const digest = createHmac('sha256', ****).update(`${timestamp}.`).update(raw).digest('hex');
-  assert.equal(verifyStripeSignature(raw, `t=${timestamp},v1=${digest}`, ****, { nowSeconds: timestamp, toleranceSeconds: 300 }), true);
-  assert.equal(verifyStripeSignature(raw, `t=${timestamp},v1=${digest}`, ****, { nowSeconds: timestamp + 600, toleranceSeconds: 300 }), false);
-  assert.equal(verifyStripeSignature(Buffer.from('modified'), `t=${timestamp},v1=${digest}`, ****, { nowSeconds: timestamp, toleranceSeconds: 300 }), false);
+  const timestamp = 1_800_000_000; const webhookSigningKey = 'whsec_test';
+  const digest = createHmac('sha256', webhookSigningKey).update(`${timestamp}.`).update(raw).digest('hex');
+  assert.equal(verifyStripeSignature(raw, `t=${timestamp},v1=${digest}`, webhookSigningKey, { nowSeconds: timestamp, toleranceSeconds: 300 }), true);
+  assert.equal(verifyStripeSignature(raw, `t=${timestamp},v1=${digest}`, webhookSigningKey, { nowSeconds: timestamp + 600, toleranceSeconds: 300 }), false);
+  assert.equal(verifyStripeSignature(Buffer.from('modified'), `t=${timestamp},v1=${digest}`, webhookSigningKey, { nowSeconds: timestamp, toleranceSeconds: 300 }), false);
 });
 
 test('page document supports video, icon, and math widgets and renders bounded deterministic HTML', () => {

@@ -7,9 +7,20 @@ function cloudEndpointAllowed(endpoint, env = process.env) {
   if (!['http:','https:'].includes(parsed.protocol) || !parsed.hostname || parsed.username || parsed.password || parsed.search || parsed.hash) return false;
   // The destination allowlist is enforced in every environment (fail closed); HTTPS is additionally required in production.
   if (String(env.NODE_ENV || '').toLowerCase() === 'production' && parsed.protocol !== 'https:') return false;
-  const allow = String(env.VIRGOSCORPIO_HUB_CLOUD_ENDPOINT_ALLOWLIST || '').split(',').map(item => item.trim().toLowerCase()).filter(Boolean);
-  // Exact authority matching (hostname and optional port). No wildcard suffixes.
-  return allow.includes(parsed.host.toLowerCase());
+  // URL.host canonicalizes away an explicitly supplied default port (for example
+  // :443 on HTTPS). Preserve the configured authority so the allowlist can
+  // distinguish `host` from `host:443` and cannot silently widen port scope.
+  const authorityMatch = String(endpoint).match(/^https?:\/\/([^/?#]*)/i);
+  if (!authorityMatch) return false;
+  const authority = authorityMatch[1].toLowerCase();
+  if (!authority || authority.includes('@')) return false;
+
+  const allow = String(env.VIRGOSCORPIO_HUB_CLOUD_ENDPOINT_ALLOWLIST || '')
+    .split(',')
+    .map(item => item.trim().toLowerCase())
+    .filter(Boolean);
+  // Exact raw authority matching (hostname and optional explicit port). No wildcards.
+  return allow.includes(authority);
 }
 
 function cloudError(message, code = 'ERR_VIRGOSCORPIO_HUB_CLOUD_CONFIG') { const error = new Error(message); error.code = code; return error; }

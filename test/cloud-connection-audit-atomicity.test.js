@@ -227,9 +227,10 @@ async function startProbeServer(t, onProbe = () => {}) {
   return { endpoint: 'http://127.0.0.1:' + server.address().port, requests };
 }
 
-function probeEnvironment() {
+function probeEnvironment(endpoint) {
   return {
     NODE_ENV: 'test',
+    VIRGOSCORPIO_HUB_CLOUD_ENDPOINT_ALLOWLIST: new URL(endpoint).host,
     AWS_ACCESS_KEY_ID: 'f1-42-test-access-key',
     AWS_SECRET_ACCESS_KEY: 'f1-42-test-secret-key',
   };
@@ -337,7 +338,7 @@ test('cloud connection health check probes before opening its persistence transa
   });
   h = createHarness({
     connection: createConnection({ config: probeConfig(endpoint) }),
-    env: probeEnvironment(),
+    env: probeEnvironment(endpoint),
   });
 
   const response = await h.call('POST', itemPath + '/test', {});
@@ -369,7 +370,7 @@ test('cloud connection health check preserves a concurrent disable after a succe
   });
   h = createHarness({
     connection: createConnection({ config: probeConfig(endpoint) }),
-    env: probeEnvironment(),
+    env: probeEnvironment(endpoint),
   });
 
   const response = await h.call('POST', itemPath + '/test', {});

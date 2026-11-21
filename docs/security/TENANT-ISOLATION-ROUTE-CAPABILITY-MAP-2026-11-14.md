@@ -8,7 +8,7 @@ Maintainer-prepared route, capability, data-access, and regression-test navigati
 
 - Status: MAINTAINER_PREPARED_NOT_INDEPENDENTLY_REVIEWED.
 - Generated from the current working-tree implementation anchors and the catalog at docs/security/tenant-isolation-route-inventory.catalog.json.
-- Implementation-source digest: 82f38c78ee897998e0774de688c36eef9f56e7217d26d6e807b7d35695fe1bd4 across 22 files.
+- Implementation-source digest: 132da2782ec5ed0b1c166a5278c8c61aad2594b75b32141f53e39bdb22f6286d across 22 files.
 - Referenced-test digest: 1de455f900e112f5cd0162b750bd0ca2ba9bc63fa7e4f61549b7777060beb123 across 59 files.
 - Inventory size: 28 route/flow families, 80 declared route patterns, 22 source files, and 59 test files.
 - Regenerate with npm run security:tenant-inventory; CI checks freshness with node scripts/generate-tenant-isolation-route-inventory.js --check.
@@ -351,7 +351,7 @@ Tests: test/content-type-routes.test.js, test/collaboration-api.test.js, test/re
 - Capabilities/controls: content:read, site:manage
 - Data-access boundary: navigation_menus
 - Side effects: Create/update/delete versioned navigation configuration; Metadata-only navigation.mega_menu_created, navigation.mega_menu_updated and navigation.mega_menu_deleted identity audit events
-- Source: apps/api/src/platform-routes.js (lines 177, 194, 1038, 1090, 1123)
+- Source: apps/api/src/platform-routes.js (lines 177, 194, 1044, 1096, 1129)
 - Test references: test/tenant-route-capabilities.test.js, test/api.test.js, test/integration/tenant-mega-menu-isolation.integration.test.js, test/mega-menu-audit-atomicity.test.js, test/integration/mega-menu-audit-atomicity.integration.test.js
 - Coverage characterization: **targeted-two-site-plus-transactional-audit-rollback**. Live PostgreSQL A/B route tests cover scoped listing, create, versioned update and delete with the same slug present in both sites. Foreign-site list/update/delete attempts and conflicting header/query/body selectors are rejected before mutation; snapshots prove both tenants remain unchanged after denial. The merged PR #92 regression races two updates with the same expected version and requires exactly one success, one version conflict, one version increment and a final row matching the winning request; the Site B same-slug row remains unchanged. F1.45 adds metadata-only identity audit events for create/update/delete on the same transaction queryable; unit tests prove callback ordering, fail-closed audit availability, stale-version behavior and rollback/retry for all three actions, while the live PostgreSQL route test injects audit_events trigger failures and proves database rollback plus exactly-one-event retry. Consumer rendering/cache invalidation, every presentation variant and independent adversarial review remain separate gates. F1.45 specifically validates the /mega-menus route family; the separate regular /menus route is tracked independently in the navigation-menus family.
 

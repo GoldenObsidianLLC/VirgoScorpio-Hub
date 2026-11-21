@@ -7,7 +7,7 @@ test('cloud endpoint allowlist is enforced in all environments to prevent SSRF',
   // The vulnerability was that cloudEndpointAllowed returned true for non-production environments
   // without checking the allowlist, enabling blind SSRF attacks in dev/test/staging.
   
-  // Note: URL.host includes the port, so allowlist must match exactly
+  // The configured endpoint authority, including an explicitly supplied port, must match exactly.
   const allowlist = 'storage.example.com,minio.internal:9000';
   
   // Production environment: allowlist must be enforced
