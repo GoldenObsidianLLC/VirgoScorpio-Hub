@@ -172,6 +172,14 @@ test('MFA completion creates session within transaction holding challenge lock',
                 }],
               };
             }
+            if (sql.includes('pg_advisory_xact_lock')) {
+              assert.deepEqual(values, ['virgoscorpio_hub-mfa-verify:' + userId]);
+              return { rowCount: 0, rows: [] };
+            }
+            if (sql.includes('COALESCE(SUM(attempts),0)::integer AS failures')) {
+              assert.deepEqual(values, [userId, 15]);
+              return { rowCount: 1, rows: [{ failures: 0 }] };
+            }
             if (sql.includes('FROM user_mfa_credentials') && sql.includes('FOR UPDATE')) {
               events.push('SELECT_CREDENTIAL');
               // Return a credential with encrypted secret (we'll simulate verification success)
@@ -250,6 +258,14 @@ test('MFA completion creates session within transaction holding challenge lock',
                   mfa_enabled: true,
                 }],
               };
+            }
+            if (sql.includes('pg_advisory_xact_lock')) {
+              assert.deepEqual(values, ['virgoscorpio_hub-mfa-verify:' + userId]);
+              return { rowCount: 0, rows: [] };
+            }
+            if (sql.includes('COALESCE(SUM(attempts),0)::integer AS failures')) {
+              assert.deepEqual(values, [userId, 15]);
+              return { rowCount: 1, rows: [{ failures: 0 }] };
             }
             if (sql.includes('FROM user_mfa_credentials') && sql.includes('FOR UPDATE')) {
               events.push('SELECT_CREDENTIAL');
@@ -401,6 +417,14 @@ test('concurrent password reset and MFA completion are serialized by lock orderi
                   mfa_enabled: true,
                 }],
               };
+            }
+            if (sql.includes('pg_advisory_xact_lock')) {
+              assert.deepEqual(values, ['virgoscorpio_hub-mfa-verify:' + userId]);
+              return { rowCount: 0, rows: [] };
+            }
+            if (sql.includes('COALESCE(SUM(attempts),0)::integer AS failures')) {
+              assert.deepEqual(values, [userId, 15]);
+              return { rowCount: 1, rows: [{ failures: 0 }] };
             }
             if (sql.includes('FROM user_mfa_credentials') && sql.includes('FOR UPDATE')) {
               events.push('LOCK_CREDENTIAL');
@@ -605,6 +629,14 @@ test('session creation within MFA transaction prevents race with password reset'
                   mfa_enabled: true,
                 }],
               };
+            }
+            if (sql.includes('pg_advisory_xact_lock')) {
+              assert.deepEqual(values, ['virgoscorpio_hub-mfa-verify:' + userId]);
+              return { rowCount: 0, rows: [] };
+            }
+            if (sql.includes('COALESCE(SUM(attempts),0)::integer AS failures')) {
+              assert.deepEqual(values, [userId, 15]);
+              return { rowCount: 1, rows: [{ failures: 0 }] };
             }
             if (sql.includes('FROM user_mfa_credentials') && sql.includes('FOR UPDATE')) {
               events.push('LOCK_CREDENTIAL');
