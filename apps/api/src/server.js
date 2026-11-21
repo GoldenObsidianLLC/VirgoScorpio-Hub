@@ -554,8 +554,13 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
     const siteAllow = Array.isArray(policy.allowed_providers) ? policy.allowed_providers : [];
     if (!AI_PROVIDERS.has(provider) || !globalAllow.has(provider) || !siteAllow.includes(provider)) throw fail(403, 'ERR_VIRGOSCORPIO_HUB_AI_PROVIDER_NOT_ALLOWED', 'The configured AI provider is not allowed by both the global and site-level policies.');
     if (provider !== 'mock' && (env.AI_ALLOW_EXTERNAL_CONTENT !== 'true' || !policy.allow_external_content)) throw fail(403, 'ERR_VIRGOSCORPIO_HUB_AI_EXTERNAL_CONTENT_DISABLED', 'External AI content processing requires explicit global and site-level approval.');
-    const classification = body.dataClassification || 'public';
-    if (!Object.hasOwn(DATA_CLASSIFICATION_RANK, classification)) throw fail(400, 'ERR_VIRGOSCORPIO_HUB_AI_CLASSIFICATION_INVALID', 'dataClassification must be public, internal, or confidential.');
+    const declaredClassification = body.dataClassification || 'public';
+    if (!Object.hasOwn(DATA_CLASSIFICATION_RANK, declaredClassification)) throw fail(400, 'ERR_VIRGOSCORPIO_HUB_AI_CLASSIFICATION_INVALID', 'dataClassification must be public, internal, or confidential.');
+    // The sensitivity of caller-supplied free-form input cannot be verified server-side, so a
+    // caller-declared label must never lower the classification used for the policy decision.
+    // Whenever input would leave the deployment for an external provider, treat it as
+    // confidential (the same server-enforced level used for saved-page context).
+    const classification = provider !== 'mock' ? 'confidential' : declaredClassification;
     if (DATA_CLASSIFICATION_RANK[classification] > DATA_CLASSIFICATION_RANK[policy.max_data_classification]) throw fail(403, 'ERR_VIRGOSCORPIO_HUB_AI_CLASSIFICATION_BLOCKED', `The site policy does not permit sending ${classification} data to the configured AI provider.`);
     const chars = Math.max(0, Math.min(100_000_000, Number(inputChars) || 0));
     const reserved = await localPool.query(
