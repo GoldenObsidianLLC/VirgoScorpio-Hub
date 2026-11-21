@@ -834,7 +834,7 @@ async function handlePlatformRoute(ctx) {
       if (!validation.valid || !endpointAllowed) {
         throw fail(422, 'ERR_VIRGOSCORPIO_HUB_CLOUD_CONFIG_INVALID', 'Cloud connection failed validation.', [
           ...validation.errors,
-          ...(!endpointAllowed ? ['endpoint must match the deployment allowlist in production'] : []),
+          ...(!endpointAllowed ? ['endpoint must match the deployment allowlist'] : []),
         ]);
       }
       if (typeof body.name !== 'string' || !body.name.trim() || body.name.length > 180) {
@@ -955,6 +955,12 @@ async function handlePlatformRoute(ctx) {
           }
           if (expected === 'azure-blob' && (!container || typeof container !== 'string')) {
             throw new Error('container is not configured');
+          }
+
+          if (config.endpoint && !cloudEndpointAllowed(config.endpoint, env)) {
+            const endpointError = new Error('endpoint is not permitted');
+            endpointError.code = 'ERR_VIRGOSCORPIO_HUB_CLOUD_ENDPOINT_NOT_ALLOWED';
+            throw endpointError;
           }
 
           const probeEnv = {

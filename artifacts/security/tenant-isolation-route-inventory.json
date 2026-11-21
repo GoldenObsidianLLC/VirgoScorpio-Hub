@@ -8,7 +8,7 @@
   "generatedBy": "scripts/generate-tenant-isolation-route-inventory.js",
   "sourceTree": {
     "fileCount": 22,
-    "sha256": "82f38c78ee897998e0774de688c36eef9f56e7217d26d6e807b7d35695fe1bd4",
+    "sha256": "132da2782ec5ed0b1c166a5278c8c61aad2594b75b32141f53e39bdb22f6286d",
     "files": [
       "apps/api/src/ai-task-routes.js",
       "apps/api/src/auth-routes.js",
@@ -1736,7 +1736,7 @@
             {
               "anchor": "const megaMenus",
               "lines": [
-                1038
+                1044
               ]
             },
             {
@@ -1744,8 +1744,8 @@
               "lines": [
                 177,
                 194,
-                1090,
-                1123
+                1096,
+                1129
               ]
             }
           ]
