@@ -8,7 +8,7 @@ const SITE_B = '22222222-2222-4222-8222-222222222222';
 const ACTOR = '33333333-3333-4333-8333-333333333333';
 const RULE = '44444444-4444-4444-8444-444444444444';
 
-function harness({ failEvent = null, deleteMissing = false, failCommit = false } = {}) {
+function harness({ failEvent = null, deleteMissing = false, failCommit = false, siteRuleCount = 0, totalRuleCount = 0, hasDuplicate = false } = {}) {
   const calls = [], rules = new Map(), events = [];
   let snapshot = null, cacheClears = 0, nextClient = 0;
   async function query(client, sql, values = []) {
@@ -19,6 +19,12 @@ function harness({ failEvent = null, deleteMissing = false, failCommit = false }
     if (statement === 'ROLLBACK') {
       if (snapshot) { rules.clear(); for (const [id, row] of snapshot.rules) rules.set(id, row); events.splice(0, events.length, ...snapshot.events); snapshot = null; }
       return { rows: [] };
+    }
+    if (statement.startsWith('SELECT pg_advisory_xact_lock')) {
+      return { rows: [] };
+    }
+    if (statement.startsWith('SELECT (SELECT count(*) FROM firewall_rules WHERE site_id=$1) AS site_count')) {
+      return { rows: [{ site_count: siteRuleCount, total_count: totalRuleCount, duplicate: hasDuplicate }] };
     }
     if (statement.startsWith('INSERT INTO firewall_rules')) {
       const row = { id: RULE, site_id: values[0], action: values[1], scope: values[2], pattern: values[3], reason: values[4], enabled: values[5], created_by: values[6] };
@@ -138,4 +144,56 @@ test('not-found and cross-site firewall deletions do not write events or invalid
   await assert.rejects(foreign.call('DELETE', SITE_B), e => e.statusCode === 404 && e.code === 'ERR_VIRGOSCORPIO_HUB_FIREWALL_RULE_NOT_FOUND');
   assert.equal(foreign.rules.get(RULE).site_id, SITE_A);
   assert.equal(foreign.events.length, 0); assert.equal(foreign.cacheClears, 0);
+});
+
+test('firewall create rejects duplicate rules to prevent unbounded growth', async () => {
+  const h = harness({ hasDuplicate: true });
+  await assert.rejects(
+    h.call('POST', SITE_A, { action: 'deny', scope: 'ip', pattern: '192.0.2.5', reason: 'duplicate test' }),
+    e => e.statusCode === 409 && e.code === 'ERR_VIRGOSCORPIO_HUB_FIREWALL_RULE_DUPLICATE'
+  );
+  assert.equal(h.rules.size, 0, 'duplicate rule must not be inserted');
+  assert.equal(h.events.length, 0, 'duplicate rejection must not write security event');
+  assert.equal(h.cacheClears, 0, 'duplicate rejection must not invalidate cache');
+  assert.ok(h.calls.some(x => x.statement === 'ROLLBACK'), 'duplicate rejection must roll back transaction');
+});
+
+test('firewall create enforces per-site quota to prevent cross-tenant resource exhaustion', async () => {
+  const { MAX_FIREWALL_RULES_PER_SITE } = require('../packages/security/src/firewall');
+  const h = harness({ siteRuleCount: MAX_FIREWALL_RULES_PER_SITE });
+  await assert.rejects(
+    h.call('POST', SITE_A, { action: 'deny', scope: 'ip', pattern: '192.0.2.10', reason: 'quota test' }),
+    e => e.statusCode === 409 && e.code === 'ERR_VIRGOSCORPIO_HUB_FIREWALL_RULE_QUOTA'
+  );
+  assert.equal(h.rules.size, 0, 'rule exceeding site quota must not be inserted');
+  assert.equal(h.events.length, 0, 'quota rejection must not write security event');
+  assert.equal(h.cacheClears, 0, 'quota rejection must not invalidate cache');
+  assert.ok(h.calls.some(x => x.statement === 'ROLLBACK'), 'quota rejection must roll back transaction');
+});
+
+test('firewall create enforces platform-wide quota to prevent shared resource exhaustion', async () => {
+  const { MAX_FIREWALL_RULES_TOTAL } = require('../packages/security/src/firewall');
+  const h = harness({ siteRuleCount: 10, totalRuleCount: MAX_FIREWALL_RULES_TOTAL });
+  await assert.rejects(
+    h.call('POST', SITE_A, { action: 'deny', scope: 'ip', pattern: '192.0.2.20', reason: 'platform quota test' }),
+    e => e.statusCode === 409 && e.code === 'ERR_VIRGOSCORPIO_HUB_FIREWALL_RULE_QUOTA'
+  );
+  assert.equal(h.rules.size, 0, 'rule exceeding platform quota must not be inserted');
+  assert.equal(h.events.length, 0, 'platform quota rejection must not write security event');
+  assert.equal(h.cacheClears, 0, 'platform quota rejection must not invalidate cache');
+  assert.ok(h.calls.some(x => x.statement === 'ROLLBACK'), 'platform quota rejection must roll back transaction');
+});
+
+test('firewall create acquires advisory lock to serialize concurrent quota checks', async () => {
+  const h = harness({ siteRuleCount: 0, totalRuleCount: 0 });
+  const response = await h.call('POST', SITE_A, { action: 'deny', scope: 'ip', pattern: '192.0.2.30', reason: 'lock test' });
+  assert.equal(response.status, 201);
+  const lockCall = h.calls.find(x => x.statement.startsWith('SELECT pg_advisory_xact_lock'));
+  const quotaCall = h.calls.find(x => x.statement.startsWith('SELECT (SELECT count(*) FROM firewall_rules WHERE site_id=$1) AS site_count'));
+  const insertCall = h.calls.find(x => x.statement.startsWith('INSERT INTO firewall_rules'));
+  assert.ok(lockCall, 'advisory lock must be acquired');
+  assert.ok(h.calls.indexOf(lockCall) < h.calls.indexOf(quotaCall), 'lock must be acquired before quota check');
+  assert.ok(h.calls.indexOf(quotaCall) < h.calls.indexOf(insertCall), 'quota check must occur before insert');
+  assert.equal(lockCall.client, quotaCall.client, 'lock and quota check must use same transaction client');
+  assert.equal(quotaCall.client, insertCall.client, 'quota check and insert must use same transaction client');
 });
