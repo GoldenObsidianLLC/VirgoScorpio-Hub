@@ -24,7 +24,7 @@ async function processBatch(pool, {
   try {
     await client.query('BEGIN');
     const result = await client.query(`SELECT id,recipient,template,payload,attempts
-      FROM mail_outbox WHERE status IN ('pending','failed') AND available_at<=now()
+      FROM mail_outbox WHERE status='pending' AND attempts<8 AND available_at<=now()
       ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT $1`, [limit]);
     rows = result.rows;
     if (rows.length) await client.query("UPDATE mail_outbox SET status='processing',locked_at=now() WHERE id=ANY($1::uuid[])", [rows.map(row => row.id)]);
