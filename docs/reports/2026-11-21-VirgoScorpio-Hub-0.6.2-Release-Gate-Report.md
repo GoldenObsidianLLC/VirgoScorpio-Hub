@@ -174,10 +174,14 @@ The candidate includes focused unit regressions for the three event families, mi
 | Durable delivery worker tests | Included in 29/29 focused pass |
 | Memgraph projector tests | Included in 29/29 focused pass |
 | Graph projection worker tests | Included in 29/29 focused pass |
-| New live PostgreSQL regression | Added; **not run live locally** |
-| Local PostgreSQL integration file | **9 skipped / 0 failures**, because the Windows worktree did not have the configured PostgreSQL integration environment/flag |
-| Hosted PR validation | Pending branch push/PR; live PostgreSQL/Memgraph CI remains mandatory |
-| Full `npm run check` | PASS — 683 tests total: 680 passed, 0 failed, 3 conditional Windows skips on Node.js 26.12.1; artifact verification passed 238 required paths and 270 JavaScript syntax checks |
+| New live PostgreSQL regression | PASS in hosted PR CI: subtest 24 executed in the live producer; part of **181/181 passed, 0 failed, 0 skipped** |
+| Local PostgreSQL integration file | **9 skipped / 0 failures**, because the Windows worktree did not have the configured PostgreSQL integration environment/flag; the local skip is not a pass |
+| Hosted PR validation | [PR #278](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/278) remains open. Push [#44892418675](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44892418675) and PR [#44892475091](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44892475091) both completed successfully; the PR workflow completed 6/6 applicable jobs successfully, with the post-merge-only signed SBOM/lockfile attestation skipped by design |
+| Hosted Node 22.23.4 / 24.22.1 | PASS — each runtime passed 683/683 Hub tests and 94/94 EnginEx tests; zero failures/skips in the unit/security test suites |
+| Hosted PostgreSQL 18 / Memgraph | PASS — 181/181 integration tests, 18/18 fresh migrations and 18/18 idempotent second-pass skips |
+| Browser / CodeQL / evidence consolidation | PASS — configured browser/accessibility smoke, CodeQL analysis and exact-source candidate evidence consolidation completed successfully |
+| Candidate readiness / integration artifacts | PASS — readiness artifact #14702289023; live integration artifact #14701979722; producer manifest SHA-256 `bbf3e176c92a8c0659ded2bcf2b6bf2c50bc256da9ce551b00b2e1a681a15c05`; PR readiness is bound to synthetic merge SHA `5b7a18abccecfaf95502d85120654f5c5d67256c` and records 8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE |
+| Full local `npm run check` | PASS — 683 tests total: 680 passed, 0 failed, 3 conditional Windows skips on Node.js 26.12.1; artifact verification passed 238 required paths and 270 JavaScript syntax checks |
 | GitHub merge | Not authorized; issue #230 remains open |
 
 The live PostgreSQL test inserts two isolated sites and a real outbox row whose canonical `site_id` conflicts with the JSON payload's duplicated `siteId`. It exercises the actual durable worker with a single-attempt policy and asserts the handler is never called and the delivery is dead-lettered with the expected scope-mismatch error. A local skip is not a pass; the hosted PostgreSQL job must execute this regression with zero skips.
@@ -208,6 +212,6 @@ See [Outbox Consumer Identity Boundary](../security/OUTBOX-CONSUMER-IDENTITY-BOU
 
 This report is grounded in canonical GitHub Actions readiness artifact `14666785760`, exact-source workflow #44809875826 and its PostgreSQL/Memgraph evidence manifest. The readiness JSON SHA-256 is recorded at the top. Its source revision is `70e800ad33a6d376388576ce76a608f35c595b64`; the PostgreSQL/Memgraph producer manifest is tied to that same revision.
 
-The F1.60 candidate is local work on a separate worktree and is deliberately excluded from the source-bound mainline score. The new PostgreSQL regression was skipped locally because the live integration environment was not enabled. No independent security or tenant-isolation review was conducted as part of this development session.
+The F1.60 candidate is isolated on its own branch/worktree and is deliberately excluded from the exact-main F1.59 readiness artifact. Hosted PR workflow #44892475091 validated the synthetic merge revision `5b7a18abccecfaf95502d85120654f5c5d67256c` for PR head `ea5c2e58921976d1c4d5c758edc0f436f9a73ae3`; its PostgreSQL/Memgraph evidence manifest SHA-256 is `bbf3e176c92a8c0659ded2bcf2b6bf2c50bc256da9ce551b00b2e1a681a15c05`. The PostgreSQL identity regression executed successfully in the 181/181 live suite; the Windows local integration skip is separately reported and was not counted as a pass. No independent security or tenant-isolation review was conducted as part of this development session.
 
 **Final release decision: NO-GO.** Maintain 0.6.2 as a private developer-preview candidate. Do not publish, tag, deploy or represent it as production-certified.

@@ -9,6 +9,7 @@
 **Tech Stack:** Node.js CommonJS, PostgreSQL, `node:test`, Markdown, GitHub Actions.
 
 **Spec:** GitHub issue [#233](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/233); current source-of-truth event contract in `packages/realtime/src/event-contract.js`.
+**Execution status:** Implementation commit `ea5c2e58921976d1c4d5c758edc0f436f9a73ae3` is pushed; [PR #278](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/278) is open. Hosted Node 22/24 and PostgreSQL 18/Memgraph checks passed, including the tenant identity regression. The PR remains unmerged because issue #230's independent reviewer and branch-policy prerequisites are still unmet.
 
 ## Global Constraints
 
@@ -48,13 +49,13 @@
 - `eventEnvelopeFromOutboxRow(row)` returns a v1 envelope whose registered domain payload identity is validated and normalized.
 - Durable delivery handlers retain the existing `{ type, payload, envelope, delivery }` shape; `payload` is the bound envelope payload, never the raw row payload.
 
-- [ ] **Step 1: Write focused failing tests.** Cover all three identity families, mismatched/missing site and aggregate IDs, mixed-case UUID normalization, original-payload immutability, unrelated nested and relationship endpoint IDs, and unregistered internal messages.
-- [ ] **Step 2: Run the focused tests and confirm the new behavior fails for the intended reason.**
+- [x] **Step 1: Write focused failing tests.** Cover all three identity families, mismatched/missing site and aggregate IDs, mixed-case UUID normalization, original-payload immutability, unrelated nested and relationship endpoint IDs, and unregistered internal messages.
+- [x] **Step 2: Run the focused tests and confirm the new behavior fails for the intended reason.**
   Run: `node --test test/outbox-contract.test.js test/outbox-delivery.test.js test/memgraph-projector.test.js`
   Expected: new identity-binding assertions fail because no shared binding helper exists; existing tests remain otherwise valid.
-- [ ] **Step 3: Implement the single declarative domain-event definition registry and shared binding helper.** Derive the existing classification map from the definitions to avoid a second event-family registry. Apply binding from `eventEnvelopeFromOutboxRow`.
-- [ ] **Step 4: Route durable delivery and graph defense-in-depth through the shared helper.** Preserve handler shape, graph error codes, and all delivery SQL/state transitions.
-- [ ] **Step 5: Re-run focused tests and inspect the exact diff.**
+- [x] **Step 3: Implement the single declarative domain-event definition registry and shared binding helper.** Derive the existing classification map from the definitions to avoid a second event-family registry. Apply binding from `eventEnvelopeFromOutboxRow`.
+- [x] **Step 4: Route durable delivery and graph defense-in-depth through the shared helper.** Preserve handler shape, graph error codes, and all delivery SQL/state transitions.
+- [x] **Step 5: Re-run focused tests and inspect the exact diff.**
   Run: `node --test test/outbox-contract.test.js test/outbox-delivery.test.js test/memgraph-projector.test.js test/graph-projection-worker.test.js`
   Expected: all focused tests pass; malformed identity never reaches the handler or graph write.
 
@@ -77,20 +78,20 @@
 - The security boundary document inventories the one active durable registration and the legacy compatibility entry point, clearly separating the Redis realtime bridge.
 - Current release report records the exact source SHA, PR/run evidence, outstanding gates, and an explicit NO-GO / no-SemVer-change decision.
 
-- [ ] **Step 1: Add a live PostgreSQL regression first.** Use isolated fixture sites and real outbox rows to prove mismatched tenant/resource identity is rejected before the delivery handler executes; also verify per-consumer-group delivery and unchanged ordering/retry/replay behavior where a deterministic real integration assertion is practical.
-- [ ] **Step 2: Run the focused integration test.**
+- [x] **Step 1: Add a live PostgreSQL regression first.** Use isolated fixture sites and real outbox rows to prove mismatched tenant/resource identity is rejected before the delivery handler executes; also verify per-consumer-group delivery and unchanged ordering/retry/replay behavior where a deterministic real integration assertion is practical.
+- [x] **Step 2: Run the focused integration test.**
   Run: `node --test test/integration/postgres.integration.test.js`
-  Expected: pass when the documented PostgreSQL integration environment is enabled; otherwise report the exact conditional skip and leave hosted live PostgreSQL CI as a required PR gate.
-- [ ] **Step 3: Document the authoritative identity contract and trust-boundary inventory.** Keep architecture, security model, roadmap, changelog and README statements aligned with implemented behavior and issue #233; link rather than copy long duplicate explanations.
-- [ ] **Step 4: Write the dated 21 November release-gate report.** Do not rewrite the historical 20 November snapshot or claim a newly aggregated readiness score without a source-bound F1.59 artifact.
-- [ ] **Step 5: Verify links, Markdown, JavaScript, and the complete repository check.**
+  Local Windows invocation skipped because the database flag/service was not configured; hosted PR workflow #44892475091 executed the regression in live PostgreSQL 18/Memgraph as subtest 24 and passed 181/181 integration tests with zero skips.
+- [x] **Step 3: Document the authoritative identity contract and trust-boundary inventory.** Keep architecture, security model, roadmap, changelog and README statements aligned with implemented behavior and issue #233; link rather than copy long duplicate explanations.
+- [x] **Step 4: Write and update the dated 21 November release-gate report.** Do not rewrite the historical 20 November snapshot or claim a newly aggregated readiness score without a source-bound F1.59 artifact.
+- [x] **Step 5: Verify links, Markdown, JavaScript, and the complete repository check.**
   Run: `npm run check`
   Expected: exit 0, with exact test totals and conditional skips recorded. Run `git diff --check` and the repository's Markdown relative-link validation if available.
-- [ ] **Step 6: Commit the bounded implementation and documentation.** Do not modify the package version, lockfile, schema or migrations.
+- [x] **Step 6: Commit the bounded implementation and documentation.** Do not modify the package version, lockfile, schema or migrations.
 
 ## Release and integration boundary
 
-- Open a PR against `main` and link issue #233; do not merge it.
+- [x] Opened [PR #278](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/278) against `main`, linked issue #233; do not merge it.
 - Issue #230 currently blocks ordinary merges because a trusted non-author reviewer and enforceable branch review/CI policy are not yet configured.
-- PR-required CI must include Node 22, Node 24, live PostgreSQL/Memgraph/Redis integration, browser/accessibility, CodeQL and candidate evidence consolidation. The mainline-only signed SBOM/lockfile attestation is a post-merge gate, not a PR-required check.
-- Recompute production readiness only from a freshly consolidated exact-main artifact. Until then preserve the last available F1.58 baseline explicitly as historical/inherited evidence and report current production status as NO-GO.
+- Hosted PR workflow #44892475091 completed successfully: Node 22/24 passed 683/683 Hub and 94/94 EnginEx tests; live PostgreSQL 18/Memgraph passed 181/181 with zero skips; fresh/idempotent migrations passed 18/18; browser/accessibility smoke, CodeQL and candidate evidence consolidation passed. Mainline-only signed SBOM/lockfile attestation was skipped by design and remains a post-merge gate.
+- Recompute production readiness only from a freshly consolidated exact-main artifact. F1.59 mainline readiness is the current baseline; the F1.60 PR artifact is candidate-only and cannot replace the exact-main score until merge and post-merge validation. Production remains NO-GO.
