@@ -23,27 +23,120 @@ function ruleMatches(rule, request) {
 const MAX_FIREWALL_RULES_PER_SITE = 500;
 const MAX_FIREWALL_RULES_TOTAL = 20000;
 function createFirewall({ pool = null, env = process.env, cacheTtlMs = 5000 } = {}) {
-  let cacheUntil = 0; let cached = []; let refreshing = null;
-  const staticDeny = String(env.VIRGOSCORPIO_HUB_FIREWALL_DENY_CIDRS || '').split(',').map(x=>x.trim()).filter(Boolean).filter(x=>validateIpPattern(x.includes('/')?'cidr':'ip',x));
+  let cacheUntil = 0;
+  let cached = [];
+  let refreshing = null;
+  let generation = 0;
+  // With a database-backed policy, no dynamic rules are trusted until an exact
+  // generation has been loaded successfully. A deployment without a pool uses
+  // only the validated static deny list and retains the historical pass default.
+  let policyValid = !pool;
+
+  const staticDeny = String(env.VIRGOSCORPIO_HUB_FIREWALL_DENY_CIDRS || '')
+    .split(',')
+    .map(value => value.trim())
+    .filter(Boolean)
+    .filter(value => validateIpPattern(value.includes('/') ? 'cidr' : 'ip', value));
+
   async function refresh() {
     if (!pool) return;
     if (refreshing) return refreshing;
-    refreshing = pool.query("SELECT id,site_id,action,scope,pattern,reason,enabled FROM firewall_rules WHERE enabled=true AND scope IN ('ip','cidr','path','user_agent') ORDER BY created_at ASC LIMIT " + MAX_FIREWALL_RULES_TOTAL)
-      .then(result=>{ cached=result.rows; cacheUntil=Date.now()+cacheTtlMs; }).catch(()=>{ cacheUntil=Date.now()+Math.min(cacheTtlMs,1000); }).finally(()=>{ refreshing=null; });
-    return refreshing;
+
+    const startedGeneration = generation;
+    let current;
+    current = Promise.resolve()
+      .then(() => pool.query(
+        "SELECT id,site_id,action,scope,pattern,reason,enabled FROM firewall_rules WHERE enabled=true AND scope IN ('ip','cidr','path','user_agent') ORDER BY created_at ASC LIMIT " + MAX_FIREWALL_RULES_TOTAL
+      ))
+      .then(result => {
+        // A clearCache() that occurred while the query was in flight makes
+        // these rows stale. Never publish them into the newer cache generation.
+        if (startedGeneration !== generation) return;
+        if (!Array.isArray(result?.rows)) {
+          throw new TypeError('Firewall policy query returned an invalid row set.');
+        }
+        cached = result.rows.slice(0, MAX_FIREWALL_RULES_TOTAL);
+        policyValid = true;
+        cacheUntil = Date.now() + cacheTtlMs;
+      })
+      .catch(() => {
+        if (startedGeneration !== generation) return;
+        // A failed refresh must not leave a previously valid cache trusted.
+        policyValid = false;
+        cacheUntil = Date.now() + Math.min(cacheTtlMs, 1000);
+      })
+      .finally(() => {
+        if (refreshing === current) refreshing = null;
+      });
+
+    refreshing = current;
+    return current;
   }
+
+  async function ensureFresh() {
+    if (policyValid && Date.now() < cacheUntil) return;
+
+    // Retry only when clearCache() invalidated the query while it was in flight.
+    // A successful zero-TTL refresh is still valid for this request; the next
+    // request will refresh again. A failed same-generation refresh fails closed.
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const startedGeneration = generation;
+      await refresh();
+      if (generation === startedGeneration) return;
+    }
+  }
+
   return Object.freeze({
     async evaluate(request) {
-      if (Date.now() >= cacheUntil) await refresh();
-      for (const cidr of staticDeny) if ((cidr.includes('/')&&cidrContains(String(request.ip||''),cidr)) || (!cidr.includes('/')&&String(request.ip||'')===cidr)) return { action:'deny', reason:'deployment-deny-list', ruleId:null };
-      const matches=cached.filter(rule=>ruleMatches(rule,request) && (!rule.site_id || rule.site_id===request.siteId));
-      const deny=matches.find(rule=>rule.action==='deny'); if (deny) return { action:'deny', reason:deny.reason||'firewall-rule', ruleId:deny.id };
-      const challenge=matches.find(rule=>rule.action==='challenge'); if (challenge) return { action:'challenge', reason:challenge.reason||'firewall-rule', ruleId:challenge.id };
-      const rateLimit=matches.find(rule=>rule.action==='rate_limit'); if (rateLimit) return { action:'rate_limit', reason:rateLimit.reason||'firewall-rule', ruleId:rateLimit.id };
-      const allow=matches.find(rule=>rule.action==='allow'); return { action:allow?'allow':'pass', reason:allow?.reason||null, ruleId:allow?.id||null };
+      await ensureFresh();
+
+      for (const cidr of staticDeny) {
+        if (
+          (cidr.includes('/') && cidrContains(String(request.ip || ''), cidr)) ||
+          (!cidr.includes('/') && String(request.ip || '') === cidr)
+        ) {
+          return { action: 'deny', reason: 'deployment-deny-list', ruleId: null };
+        }
+      }
+
+      if (!policyValid) {
+        return { action: 'deny', reason: 'firewall-policy-unavailable', ruleId: null };
+      }
+
+      const matches = cached.filter(rule =>
+        ruleMatches(rule, request) && (!rule.site_id || rule.site_id === request.siteId)
+      );
+      const deny = matches.find(rule => rule.action === 'deny');
+      if (deny) return { action: 'deny', reason: deny.reason || 'firewall-rule', ruleId: deny.id };
+      const challenge = matches.find(rule => rule.action === 'challenge');
+      if (challenge) return { action: 'challenge', reason: challenge.reason || 'firewall-rule', ruleId: challenge.id };
+      const rateLimit = matches.find(rule => rule.action === 'rate_limit');
+      if (rateLimit) return { action: 'rate_limit', reason: rateLimit.reason || 'firewall-rule', ruleId: rateLimit.id };
+      const allow = matches.find(rule => rule.action === 'allow');
+      return { action: allow ? 'allow' : 'pass', reason: allow?.reason || null, ruleId: allow?.id || null };
     },
-    async rules(siteId) { if (Date.now() >= cacheUntil) await refresh(); return cached.filter(r=>!r.site_id||r.site_id===siteId); },
-    clearCache() { cacheUntil=0; }
+
+    async rules(siteId) {
+      await ensureFresh();
+      if (!policyValid) return [];
+      return cached.filter(rule => !rule.site_id || rule.site_id === siteId);
+    },
+
+    clearCache() {
+      generation++;
+      cacheUntil = 0;
+      refreshing = null;
+      if (pool) policyValid = false;
+    }
   });
 }
-module.exports = { MAX_FIREWALL_RULES_PER_SITE, MAX_FIREWALL_RULES_TOTAL, createFirewall, validateIpPattern, cidrContains, ruleMatches, ipToInt };
+
+module.exports = {
+  MAX_FIREWALL_RULES_PER_SITE,
+  MAX_FIREWALL_RULES_TOTAL,
+  createFirewall,
+  validateIpPattern,
+  cidrContains,
+  ruleMatches,
+  ipToInt
+};
