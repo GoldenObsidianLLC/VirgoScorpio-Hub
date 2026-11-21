@@ -111,8 +111,25 @@ function createAuthRouteHandlers(dependencies = {}) {
 
     if (req.method === 'POST' && url.pathname === '/api/v1/auth/password-reset/request') {
       if (!identity) return sendJson(res, 503, { error: 'Authentication requires PostgreSQL.', code: 'ERR_VIRGOSCORPIO_HUB_IDENTITY_DISABLED', requestId });
+      const limit = allowRequest('password-reset:' + (req.socket.remoteAddress || 'unknown'));
+      if (!limit.allowed) {
+        res.setHeader('retry-after', String(limit.retryAfterSeconds));
+        return sendJson(res, 429, { error: 'Too many requests.', code: 'ERR_VIRGOSCORPIO_HUB_RATE_LIMIT', requestId });
+      }
       const body = await readJson(req, Math.min(maxBody, MAX_AUTH_BODY_BYTES));
-      const result = await identity.requestPasswordReset({ email: body.email });
+      // The account lookup, token issuance and mail-outbox write are performed
+      // after the response is committed so that response latency is identical
+      // for existing and non-existing accounts. Only non-production development
+      // token exposure awaits the service, because it must return the token.
+      const exposeDevTokens = env.NODE_ENV !== 'production' && env.VIRGOSCORPIO_HUB_EXPOSE_DEV_TOKENS === 'true';
+      let result = { accepted: true };
+      if (exposeDevTokens) {
+        result = await identity.requestPasswordReset({ email: body.email });
+      } else {
+        Promise.resolve()
+          .then(() => identity.requestPasswordReset({ email: body.email }))
+          .catch(() => { process.stderr.write('Password reset processing failed. requestId=' + requestId + '\n'); });
+      }
       return sendJson(res, 202, {
         ...result,
         message: 'If an active account matches that address, password reset instructions will be sent.',
