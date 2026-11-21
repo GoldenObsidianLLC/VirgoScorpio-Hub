@@ -9,6 +9,10 @@ const { withTransaction } = require('../../db/src/transaction');
 const MAX_BATCH_SIZE = 1_000;
 const DEFAULT_BATCH_SIZE = 100;
 const STRIPE_API_BASE = 'https://api.stripe.com/v1';
+// Checkout Sessions are created with an expiry equal to the local reservation expiry
+// and Stripe never lets a session live beyond 24 hours. A hold that has been overdue
+// for longer than this and still cannot be resolved with the provider is released.
+const MAX_UNRESOLVED_HOLD_SECONDS = 24 * 60 * 60;
 
 function validateBatchSize(batchSize) {
   if (!Number.isInteger(batchSize) || batchSize < 1 || batchSize > MAX_BATCH_SIZE) {
@@ -19,9 +23,9 @@ function validateBatchSize(batchSize) {
   return batchSize;
 }
 
-async function getStripeSession({ secretKey, sessionId, fetchImpl }) {
-  const response = await fetchImpl(`${STRIPE_API_BASE}/checkout/sessions/${encodeURIComponent(sessionId)}`, {
-    method: 'GET',
+async function stripeSessionRequest({ secretKey, sessionId, fetchImpl, method = 'GET', action = '' }) {
+  const response = await fetchImpl(`${STRIPE_API_BASE}/checkout/sessions/${encodeURIComponent(sessionId)}${action}`, {
+    method,
     headers: { Authorization: `Bearer ${secretKey}`, Accept: 'application/json' },
     signal: AbortSignal.timeout(10_000)
   });
@@ -47,11 +51,25 @@ async function getStripeSession({ secretKey, sessionId, fetchImpl }) {
   return session;
 }
 
+function getStripeSession(options) {
+  return stripeSessionRequest(options);
+}
+
+// Ask Stripe to expire a still-open session so that it can no longer be paid; only
+// the provider's confirmation (status 'expired') permits the local hold to be released.
+function expireStripeSession(options) {
+  return stripeSessionRequest({ ...options, method: 'POST', action: '/expire' });
+}
+
 /**
  * Reconcile expired local inventory holds against Stripe's current session state.
  * A local timer is never sufficient evidence to release stock: sessions without a
- * provider ID, provider errors, open sessions, and unpaid completed sessions keep
- * their holds until a definitive webhook or subsequent reconciliation resolves them.
+ * provider ID and unpaid completed sessions (delayed payment methods) keep their
+ * holds until a definitive webhook or subsequent reconciliation resolves them. Open
+ * sessions past the hold period are expired at Stripe and then released. Provider
+ * errors retain the hold only for a bounded period (MAX_UNRESOLVED_HOLD_SECONDS past
+ * expiry), after which the order is failed and the stock released so that finite
+ * inventory cannot be retained indefinitely by abandoned checkouts.
  */
 async function reconcileExpiredStripeCheckouts(pool, {
   secretKey = process.env.STRIPE_SECRET_KEY,
@@ -68,7 +86,11 @@ async function reconcileExpiredStripeCheckouts(pool, {
   }
 
   const candidates = await pool.query(
-    `SELECT o.id AS order_id,o.site_id,o.provider_session_id
+    `SELECT o.id AS order_id,o.site_id,o.provider_session_id,
+            (SELECT EXTRACT(EPOCH FROM (now() - min(r2.expires_at)))::bigint
+               FROM commerce_stock_reservations r2
+              WHERE r2.site_id=o.site_id AND r2.order_id=o.id
+                AND r2.status='reserved' AND r2.expires_at<=now()) AS overdue_seconds
        FROM commerce_orders o
       WHERE o.provider='stripe' AND o.status='pending_payment'
         AND EXISTS (
@@ -92,17 +114,38 @@ async function reconcileExpiredStripeCheckouts(pool, {
       continue;
     }
 
-    let session;
+    const overdueSeconds = Number(order.overdue_seconds);
+    const holdLimitReached = Number.isFinite(overdueSeconds) && overdueSeconds >= MAX_UNRESOLVED_HOLD_SECONDS;
+    const sessionOptions = { secretKey, sessionId: order.provider_session_id, fetchImpl };
+
+    let session = null;
+    let forceRelease = false;
     try {
-      session = await getStripeSession({ secretKey, sessionId: order.provider_session_id, fetchImpl });
+      session = await getStripeSession(sessionOptions);
+      if (session.status === 'open') {
+        // The hold period has elapsed, so the session must no longer be payable.
+        session = await expireStripeSession(sessionOptions);
+      }
     } catch {
       summary.errors += 1;
-      summary.held += 1;
-      continue;
+      if (!holdLimitReached) {
+        summary.held += 1;
+        continue;
+      }
+      forceRelease = true;
     }
 
-    const isExpired = session.status === 'expired' && session.payment_status !== 'paid';
-    const isPaid = session.status === 'complete' && ['paid', 'no_payment_required'].includes(session.payment_status);
+    if (!forceRelease && session.status === 'open') {
+      // Stripe did not confirm expiry; keep the hold unless the bounded limit is reached.
+      if (!holdLimitReached) {
+        summary.held += 1;
+        continue;
+      }
+      forceRelease = true;
+    }
+
+    const isExpired = forceRelease || (session.status === 'expired' && session.payment_status !== 'paid');
+    const isPaid = !forceRelease && session.status === 'complete' && ['paid', 'no_payment_required'].includes(session.payment_status);
     if (!isExpired && !isPaid) {
       summary.held += 1;
       continue;
