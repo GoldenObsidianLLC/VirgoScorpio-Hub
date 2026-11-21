@@ -8,7 +8,7 @@
   "generatedBy": "scripts/generate-tenant-isolation-route-inventory.js",
   "sourceTree": {
     "fileCount": 22,
-    "sha256": "82f38c78ee897998e0774de688c36eef9f56e7217d26d6e807b7d35695fe1bd4",
+    "sha256": "5c2128f9ab89bc511ecb866010e18ad0682f1591230f3b33a5030fb8f7232dbb",
     "files": [
       "apps/api/src/ai-task-routes.js",
       "apps/api/src/auth-routes.js",
@@ -1510,7 +1510,7 @@
             {
               "anchor": "async function handleCommunityWorkflowRoute(",
               "lines": [
-                375
+                399
               ]
             }
           ]
