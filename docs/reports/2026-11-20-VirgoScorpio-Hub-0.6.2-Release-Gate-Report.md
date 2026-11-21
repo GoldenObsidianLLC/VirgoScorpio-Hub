@@ -241,11 +241,31 @@ No release tag, GitHub Release, npm publication, production deployment, producti
 5. **Keep independent assurance and human supply-chain review explicit.** Arrange separately authorized tenant review #14, platform assessment #25 and qualified license/distribution review #23; do not reclassify maintainer evidence.
 6. **Close the remaining operational and product evidence gates** with named owners and retained exact-SHA evidence. Keep production NO-GO until the canonical readiness process and release-owner decision both permit a different outcome.
 
-## 9. Evidence provenance and interpretation
+## 9. Current and historical evidence provenance
 
-- **Merged mainline:** exact main SHA `619819230dac2e8d169ce71af7c6a41f0630cf27`; workflow run [#44675989750](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44675989750); readiness artifact #14601349640; signed supply-chain artifact #14602322573.
-- **Candidate source and latest PR head:** runtime code-validation head `623a5597553ffb783d5a42f9280acd40a06227d3`; initial candidate push/PR runs #44798684028/#44798692834; code-head readiness artifacts #14660651318/#14660646349. The current documentation-only PR branch head is `c46bf837db19d0feeff1d27cfe90aff33e47588c`; latest push/PR runs [#44804183335](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44804183335)/[#44804193472](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44804193472), exact-head push artifact #14660589715 and synthetic-merge PR artifact #14662103518.
-- **Candidate implementation:** [F1.59 implementation report](2026-11-20-F1-59-OUTBOX-PROJECTION-ENVELOPE-SCOPE-REPORT.md), [issue #231](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/231) and [PR #232](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/232).
-- **Authoritative machine readiness:** [RELEASE_READINESS.md](../RELEASE_READINESS.md) and [RELEASE-EVIDENCE.md](../RELEASE-EVIDENCE.md).
+### Current exact-main evidence — F1.59
 
-Historical reports retain their historical source SHAs and run IDs; they are not rewritten to imply later validation. This report is the current 20 November 2026 snapshot and must be superseded by a new source-bound report after a later merge or material gate disposition.
+- **Merged runtime:** F1.59 / [PR #232 MERGED](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/232), issue [#231](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/231), at main SHA `70e800ad33a6d376388576ce76a608f35c595b64`. Runtime implementation commit: `bf36d356913053df069abd825e157dad400a67d2`; final pre-merge PR head (documentation-only): `268d2bd09307128c74cd68eac79d84d42db115a6`.
+- **Exact-main CI:** workflow [#833](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44809875826), run `44809875826`, passed 7/7 jobs on the exact merge SHA.
+- **Readiness artifact:** #14666785760 — archive SHA-256 `dcee92566f66e6bea50e28c301c910f31eac9f51546f63305150a8a9b6a32782`; readiness JSON SHA-256 `7d327cc49a4837f1fb40aedd6ec9cf35ac4e91f95d9347849ed8343c795e8931`; readiness Markdown SHA-256 `4ab5dc983b9225403c0f44dc65a177662a744cc37d3e9ef2620164234e665784`.
+- **Readiness disposition:** 8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN. Overall `NOT_PRODUCTION_CERTIFIED`; production remains NO-GO. The artifact is evidence of the gate state, not a production approval.
+- **Supply-chain evidence:** artifact #14664109557; lockfile SHA-256 `8f3786bcfcd03d0b63761c7107e4d757ae5b45171ba2f6c086ff38c027c8b086`; SBOM SHA-256 `83bf5e9f4a3eaa360ee3e2fe7e20a458d3c0e2e7afc13ab545fbee023207d1e4`.
+- **Merge-governance context:** PR #232 recorded four owner `COMMENTED` review submissions and zero `APPROVED` submissions. Issue [#230](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/230) remains open; this is not a trusted independent approval.
+
+### Historical pre-merge F1.59 candidate provenance
+
+- **Runtime code candidate:** `623a5597553ffb783d5a42f9280acd40a06227d3`; push/PR workflow runs #827/#828.
+- **Intermediate documentation-only candidate:** `c46bf837db19d0feeff1d27cfe90aff33e47588c`; push/PR workflow runs #829/#830.
+- **Final pre-merge candidate:** `268d2bd09307128c74cd68eac79d84d42db115a6`; push/PR workflow runs #831/#832. These candidate runs are historical and are not substitutes for exact-main workflow #833.
+
+### Prior F1.58 exact-main baseline
+
+- PR [#228](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/228), main SHA `619819230dac2e8d169ce71af7c6a41f0630cf27`, workflow #820 / run `44675989750`, readiness artifact #14601349640. This is the previous F1.58 baseline, not the current mainline.
+
+### Canonical evidence and audit references
+
+- Current machine-readable release evidence: [RELEASE_READINESS.md](../RELEASE_READINESS.md), [RELEASE-EVIDENCE.md](../RELEASE-EVIDENCE.md), and [RELEASE-MANIFEST.json](../../RELEASE-MANIFEST.json).
+- F1.59 implementation record: [F1.59 outbox projection envelope report](2026-11-20-F1-59-OUTBOX-PROJECTION-ENVELOPE-SCOPE-REPORT.md), [issue #231](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/231), and [PR #232](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/232).
+- Aikido source-based triage and follow-ups: [Aikido audit triage report](2026-11-20-AIKIDO-SECURITY-AUDIT-TRIAGE-REPORT.md), [issue #234](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/234), [issue #235](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/235), [dependency/license review #23](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/23), and [independent assessment #25](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/25).
+
+Historical candidate reports retain their original source SHAs and run IDs; they are not rewritten to imply later validation. This report is the 20 November 2026 snapshot. A later merge or material gate disposition requires a new source-bound report rather than retroactively changing this snapshot.
