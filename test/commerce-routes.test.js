@@ -161,3 +161,538 @@ test('platform route module preserves its productInput export after commerce ext
     metadata: {}
   });
 });
+
+test('checkout enforces per-customer pending checkout limit to prevent inventory exhaustion', async () => {
+  const events = [];
+  const customerId = '33333333-3333-4333-8333-333333333333';
+  const email = 'buyer@example.test';
+  let advisoryLockCalled = false;
+  let pendingCheckoutQueryCalled = false;
+
+  const pool = {
+    async connect() {
+      return {
+        async query(sql, values) {
+          events.push({ type: 'query', sql, values });
+          
+          // BEGIN transaction
+          if (sql === 'BEGIN') {
+            return { rows: [] };
+          }
+          
+          // Product lookup with FOR UPDATE - return a valid product with inventory
+          if (sql.includes('SELECT * FROM commerce_products') && sql.includes('FOR UPDATE')) {
+            return {
+              rows: [{
+                id: productId,
+                site_id: siteId,
+                slug: 'widget',
+                name: 'Widget',
+                status: 'published',
+                currency: 'USD',
+                price_minor: 1000,
+                inventory_quantity: 100,
+                stock_status: 'in_stock'
+              }]
+            };
+          }
+          
+          // Advisory lock for serializing concurrent checkouts
+          if (sql.includes('pg_advisory_xact_lock')) {
+            advisoryLockCalled = true;
+            return { rows: [] };
+          }
+          
+          // Check for existing pending checkouts
+          if (sql.includes('SELECT count(DISTINCT o.id)::int AS count') && sql.includes('pending_payment')) {
+            pendingCheckoutQueryCalled = true;
+            // Simulate 3 existing pending checkouts (default limit)
+            return { rows: [{ count: 3 }] };
+          }
+          
+          return { rows: [] };
+        },
+        async release() {}
+      };
+    },
+    async query() { return { rows: [] }; }
+  };
+
+  const ctx = createContext({
+    path: `/api/v1/sites/${siteId}/commerce/checkout`,
+    method: 'POST',
+    body: {
+      items: [{ productId, quantity: 10 }],
+      email
+    },
+    pool,
+    events
+  });
+  ctx.actor = { user: { id: customerId, email } };
+  ctx.env = { COMMERCE_MAX_PENDING_CHECKOUTS: 3 };
+
+  await assert.rejects(
+    handleCommerceRoute(ctx),
+    error => {
+      return error.statusCode === 429 &&
+             error.code === 'ERR_VIRGOSCORPIO_HUB_CHECKOUT_PENDING_LIMIT' &&
+             error.message.includes('Too many unpaid checkouts hold inventory');
+    }
+  );
+
+  assert.equal(advisoryLockCalled, true, 'Advisory lock should be acquired');
+  assert.equal(pendingCheckoutQueryCalled, true, 'Pending checkout count should be checked');
+});
+
+test('checkout enforces per-product held units limit to prevent single-product exhaustion', async () => {
+  const events = [];
+  const customerId = '33333333-3333-4333-8333-333333333333';
+  const email = 'buyer@example.test';
+  let heldUnitsQueryCalled = false;
+
+  const pool = {
+    async connect() {
+      return {
+        async query(sql, values) {
+          events.push({ type: 'query', sql, values });
+          
+          // Advisory lock
+          if (sql.includes('pg_advisory_xact_lock')) {
+            return { rows: [] };
+          }
+          
+          // BEGIN transaction
+          if (sql === 'BEGIN') {
+            return { rows: [] };
+          }
+          
+          // Product lookup with FOR UPDATE
+          if (sql.includes('SELECT * FROM commerce_products') && sql.includes('FOR UPDATE')) {
+            return {
+              rows: [{
+                id: productId,
+                site_id: siteId,
+                slug: 'widget',
+                name: 'Widget',
+                status: 'published',
+                currency: 'USD',
+                price_minor: 1000,
+                inventory_quantity: 100,
+                stock_status: 'in_stock'
+              }]
+            };
+          }
+          
+          // Check for existing pending checkouts (pass this check)
+          if (sql.includes('SELECT count(DISTINCT o.id)::int AS count') && sql.includes('pending_payment')) {
+            return { rows: [{ count: 0 }] };
+          }
+          
+          // Check for held units for this product
+          if (sql.includes('SELECT COALESCE(SUM(r.quantity),0)::int AS units') && sql.includes('commerce_stock_reservations')) {
+            heldUnitsQueryCalled = true;
+            // Simulate 20 units already held, requesting 10 more would exceed limit of 25
+            return { rows: [{ units: 20 }] };
+          }
+          
+          return { rows: [] };
+        },
+        async release() {}
+      };
+    },
+    async query() { return { rows: [] }; }
+  };
+
+  const ctx = createContext({
+    path: `/api/v1/sites/${siteId}/commerce/checkout`,
+    method: 'POST',
+    body: {
+      items: [{ productId, quantity: 10 }],
+      email
+    },
+    pool,
+    events
+  });
+  ctx.actor = { user: { id: customerId, email } };
+  ctx.env = { 
+    COMMERCE_MAX_PENDING_CHECKOUTS: 3,
+    COMMERCE_MAX_HELD_UNITS_PER_PRODUCT: 25
+  };
+
+  await assert.rejects(
+    handleCommerceRoute(ctx),
+    error => {
+      return error.statusCode === 429 &&
+             error.code === 'ERR_VIRGOSCORPIO_HUB_CHECKOUT_RESERVATION_LIMIT' &&
+             error.message.includes('per-customer limit for unpaid inventory reservations');
+    }
+  );
+
+  assert.equal(heldUnitsQueryCalled, true, 'Held units check should be performed');
+});
+
+test('checkout allows valid request within both pending checkout and held units limits', async () => {
+  const events = [];
+  const customerId = '33333333-3333-4333-8333-333333333333';
+  const email = 'buyer@example.test';
+  const orderId = '44444444-4444-4444-8444-444444444444';
+  let inventoryDecremented = false;
+  let orderInserted = false;
+  let reservationInserted = false;
+  let stripeSessionCreated = false;
+
+  const pool = {
+    async connect() {
+      return {
+        async query(sql, values) {
+          events.push({ type: 'query', sql, values });
+          
+          // Advisory lock
+          if (sql.includes('pg_advisory_xact_lock')) {
+            return { rows: [] };
+          }
+          
+          // BEGIN transaction
+          if (sql === 'BEGIN') {
+            return { rows: [] };
+          }
+          
+          // Product lookup with FOR UPDATE
+          if (sql.includes('SELECT * FROM commerce_products') && sql.includes('FOR UPDATE')) {
+            return {
+              rows: [{
+                id: productId,
+                site_id: siteId,
+                slug: 'widget',
+                name: 'Widget',
+                status: 'published',
+                currency: 'USD',
+                price_minor: 1000,
+                inventory_quantity: 100,
+                stock_status: 'in_stock',
+                sku: 'WDG-001'
+              }]
+            };
+          }
+          
+          // Check for existing pending checkouts (within limit)
+          if (sql.includes('SELECT count(DISTINCT o.id)::int AS count') && sql.includes('pending_payment')) {
+            return { rows: [{ count: 1 }] };
+          }
+          
+          // Check for held units (within limit)
+          if (sql.includes('SELECT COALESCE(SUM(r.quantity),0)::int AS units')) {
+            return { rows: [{ units: 10 }] };
+          }
+          
+          // Inventory decrement
+          if (sql.includes('UPDATE commerce_products SET inventory_quantity=inventory_quantity-')) {
+            inventoryDecremented = true;
+            return { rows: [{ id: productId }] };
+          }
+          
+          // Order insertion
+          if (sql.includes('INSERT INTO commerce_orders')) {
+            orderInserted = true;
+            return {
+              rows: [{
+                id: orderId,
+                site_id: siteId,
+                customer_id: customerId,
+                email,
+                order_number: 'ORD-001',
+                status: 'pending_payment',
+                currency: 'USD',
+                total_minor: 5000,
+                provider_session_id: null,
+                metadata: {},
+                created_at: new Date()
+              }]
+            };
+          }
+          
+          // Order items insertion
+          if (sql.includes('INSERT INTO commerce_order_items')) {
+            return { rows: [] };
+          }
+          
+          // Stock reservation insertion
+          if (sql.includes('INSERT INTO commerce_stock_reservations')) {
+            reservationInserted = true;
+            return { rows: [] };
+          }
+          
+          // COMMIT
+          if (sql === 'COMMIT') {
+            return { rows: [] };
+          }
+          
+          return { rows: [] };
+        },
+        async release() {}
+      };
+    },
+    async query(sql) {
+      // Check for existing order by idempotency key
+      if (sql.includes('SELECT id,order_number,status,customer_id,email')) {
+        return { rows: [] };
+      }
+      return { rows: [] };
+    }
+  };
+
+  const ctx = createContext({
+    path: `/api/v1/sites/${siteId}/commerce/checkout`,
+    method: 'POST',
+    body: {
+      items: [{ productId, quantity: 5 }],
+      email,
+      idempotencyKey: 'test-checkout-key-001'
+    },
+    pool,
+    events
+  });
+  ctx.actor = { user: { id: customerId, email } };
+  ctx.env = { 
+    COMMERCE_MAX_PENDING_CHECKOUTS: 3,
+    COMMERCE_MAX_HELD_UNITS_PER_PRODUCT: 25,
+    STRIPE_SECRET_KEY: 'sk_test_mock',
+    STRIPE_CHECKOUT_SUCCESS_URL: 'https://example.test/success',
+    STRIPE_CHECKOUT_CANCEL_URL: 'https://example.test/cancel'
+  };
+
+  // The test should proceed through security checks and reach Stripe creation
+  // We expect it to fail at Stripe creation (which is fine for security testing)
+  // The important part is that security checks passed and inventory was decremented
+  try {
+    await handleCommerceRoute(ctx);
+  } catch (error) {
+    // Expected to fail at Stripe or other downstream step
+    // The important part is that security checks passed
+  }
+
+  assert.equal(inventoryDecremented, true, 'Inventory should be decremented after passing limits');
+  assert.equal(orderInserted, true, 'Order should be inserted after passing limits');
+  assert.equal(reservationInserted, true, 'Reservation should be created after passing limits');
+});
+
+test('checkout uses advisory lock to serialize concurrent requests from same customer', async () => {
+  const events = [];
+  const customerId = '33333333-3333-4333-8333-333333333333';
+  const email = 'buyer@example.test';
+  let lockKey = null;
+
+  const pool = {
+    async connect() {
+      return {
+        async query(sql, values) {
+          events.push({ type: 'query', sql, values });
+          
+          // Capture advisory lock key
+          if (sql.includes('pg_advisory_xact_lock')) {
+            lockKey = values[0];
+            assert.ok(lockKey.includes(`commerce-checkout:${siteId}:${customerId}`), 
+              'Lock key should include site and customer ID');
+            return { rows: [] };
+          }
+          
+          // BEGIN transaction
+          if (sql === 'BEGIN') {
+            return { rows: [] };
+          }
+          
+          // Product lookup
+          if (sql.includes('SELECT * FROM commerce_products')) {
+            return {
+              rows: [{
+                id: productId,
+                site_id: siteId,
+                slug: 'widget',
+                name: 'Widget',
+                status: 'published',
+                currency: 'USD',
+                price_minor: 1000,
+                inventory_quantity: 50,
+                stock_status: 'in_stock'
+              }]
+            };
+          }
+          
+          // Pending checkout check - simulate at limit
+          if (sql.includes('SELECT count(DISTINCT o.id)::int AS count')) {
+            return { rows: [{ count: 3 }] };
+          }
+          
+          return { rows: [] };
+        },
+        async release() {}
+      };
+    },
+    async query() { return { rows: [] }; }
+  };
+
+  const ctx = createContext({
+    path: `/api/v1/sites/${siteId}/commerce/checkout`,
+    method: 'POST',
+    body: {
+      items: [{ productId, quantity: 5 }],
+      email
+    },
+    pool,
+    events
+  });
+  ctx.actor = { user: { id: customerId, email } };
+  ctx.env = { COMMERCE_MAX_PENDING_CHECKOUTS: 3 };
+
+  await assert.rejects(
+    handleCommerceRoute(ctx),
+    error => error.code === 'ERR_VIRGOSCORPIO_HUB_CHECKOUT_PENDING_LIMIT'
+  );
+
+  assert.ok(lockKey !== null, 'Advisory lock should be acquired');
+  assert.ok(lockKey.includes(siteId), 'Lock key should include site ID');
+  assert.ok(lockKey.includes(customerId), 'Lock key should include customer ID');
+});
+
+test('checkout limits apply per-customer using customer_id for authenticated users', async () => {
+  const events = [];
+  const customerId = '33333333-3333-4333-8333-333333333333';
+  const email = 'buyer@example.test';
+  let queryUsedCustomerId = false;
+
+  const pool = {
+    async connect() {
+      return {
+        async query(sql, values) {
+          events.push({ type: 'query', sql, values });
+          
+          if (sql.includes('pg_advisory_xact_lock')) {
+            return { rows: [] };
+          }
+          
+          if (sql === 'BEGIN') {
+            return { rows: [] };
+          }
+          
+          if (sql.includes('SELECT * FROM commerce_products')) {
+            return {
+              rows: [{
+                id: productId,
+                site_id: siteId,
+                slug: 'widget',
+                name: 'Widget',
+                status: 'published',
+                currency: 'USD',
+                price_minor: 1000,
+                inventory_quantity: 50,
+                stock_status: 'in_stock'
+              }]
+            };
+          }
+          
+          // Verify customer_id is used in the query
+          if (sql.includes('SELECT count(DISTINCT o.id)::int AS count') && sql.includes('pending_payment')) {
+            queryUsedCustomerId = values.includes(customerId);
+            return { rows: [{ count: 3 }] };
+          }
+          
+          return { rows: [] };
+        },
+        async release() {}
+      };
+    },
+    async query() { return { rows: [] }; }
+  };
+
+  const ctx = createContext({
+    path: `/api/v1/sites/${siteId}/commerce/checkout`,
+    method: 'POST',
+    body: {
+      items: [{ productId, quantity: 5 }],
+      email
+    },
+    pool,
+    events
+  });
+  ctx.actor = { user: { id: customerId, email } };
+  ctx.env = { COMMERCE_MAX_PENDING_CHECKOUTS: 3 };
+
+  await assert.rejects(
+    handleCommerceRoute(ctx),
+    error => error.code === 'ERR_VIRGOSCORPIO_HUB_CHECKOUT_PENDING_LIMIT'
+  );
+
+  assert.equal(queryUsedCustomerId, true, 'Query should use customer_id for authenticated users');
+});
+
+test('checkout limits apply per-email for unauthenticated/guest checkouts', async () => {
+  const events = [];
+  const email = 'guest@example.test';
+  let queryUsedEmail = false;
+
+  const pool = {
+    async connect() {
+      return {
+        async query(sql, values) {
+          events.push({ type: 'query', sql, values });
+          
+          if (sql.includes('pg_advisory_xact_lock')) {
+            // Lock key should use email when no customer ID
+            assert.ok(values[0].includes(email.toLowerCase()), 'Lock should use email for guest');
+            return { rows: [] };
+          }
+          
+          if (sql === 'BEGIN') {
+            return { rows: [] };
+          }
+          
+          if (sql.includes('SELECT * FROM commerce_products')) {
+            return {
+              rows: [{
+                id: productId,
+                site_id: siteId,
+                slug: 'widget',
+                name: 'Widget',
+                status: 'published',
+                currency: 'USD',
+                price_minor: 1000,
+                inventory_quantity: 50,
+                stock_status: 'in_stock'
+              }]
+            };
+          }
+          
+          // Verify email is used in the query when customer_id is null
+          if (sql.includes('SELECT count(DISTINCT o.id)::int AS count') && sql.includes('pending_payment')) {
+            queryUsedEmail = values.includes(email.toLowerCase());
+            return { rows: [{ count: 3 }] };
+          }
+          
+          return { rows: [] };
+        },
+        async release() {}
+      };
+    },
+    async query() { return { rows: [] }; }
+  };
+
+  const ctx = createContext({
+    path: `/api/v1/sites/${siteId}/commerce/checkout`,
+    method: 'POST',
+    body: {
+      items: [{ productId, quantity: 5 }],
+      email
+    },
+    pool,
+    events
+  });
+  ctx.actor = { user: { id: null, email: null } }; // Guest checkout
+  ctx.env = { COMMERCE_MAX_PENDING_CHECKOUTS: 3 };
+
+  await assert.rejects(
+    handleCommerceRoute(ctx),
+    error => error.code === 'ERR_VIRGOSCORPIO_HUB_CHECKOUT_PENDING_LIMIT'
+  );
+
+  assert.equal(queryUsedEmail, true, 'Query should use email for guest checkouts');
+});
