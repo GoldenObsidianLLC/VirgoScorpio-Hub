@@ -105,27 +105,32 @@ function createIdentityService({ pool, env = process.env, clock = () => Date.now
 
   const MAX_LIVE_MFA_CHALLENGES_PER_USER = 5;
 
-  // Creates an MFA challenge while enforcing a per-account retention bound. In the same
-  // statement, expired and consumed challenges for the account are purged and only the newest
-  // (MAX - 1) unexpired, unconsumed challenges are retained, so at most MAX rows exist per account.
+  // Keep the newest five unattempted live challenges plus the bounded history of
+  // failed challenges needed by the account-wide 15-minute MFA retry budget.
+  // The budget caps failed challenge rows at ten (each retained row has >=1 failure);
+  // attempted rows age out after the throttle window, while unused live rows are capped at five.
   async function createMfaChallenge(user) {
     const challengeToken = randomBytes(32).toString('base64url');
     const nowMs = clock();
+    const now = new Date(nowMs);
     const expiresAt = new Date(nowMs + 5 * 60_000);
     await pool.query(
       `WITH purged AS (
          DELETE FROM auth_mfa_challenges
          WHERE user_id=$1 AND (
-           consumed_at IS NOT NULL OR expires_at<=$4
-           OR id IN (
-             SELECT id FROM auth_mfa_challenges
-             WHERE user_id=$1 AND consumed_at IS NULL AND expires_at>$4
-             ORDER BY created_at DESC, id DESC OFFSET $5
+           (attempts=0 AND (consumed_at IS NOT NULL OR expires_at<=$4))
+           OR (attempts>0 AND created_at <= ($4 - interval '15 minutes'))
+           OR (
+             attempts=0 AND id IN (
+               SELECT id FROM auth_mfa_challenges
+               WHERE user_id=$1 AND attempts=0 AND consumed_at IS NULL AND expires_at>$4
+               ORDER BY created_at DESC, id DESC OFFSET $5
+             )
            )
          )
        )
        INSERT INTO auth_mfa_challenges(user_id,token_hash,expires_at) VALUES($1,$2,$3)`,
-      [user.id, digest(challengeToken), expiresAt, new Date(nowMs), MAX_LIVE_MFA_CHALLENGES_PER_USER - 1]
+      [user.id, digest(challengeToken), expiresAt, now, MAX_LIVE_MFA_CHALLENGES_PER_USER - 1]
     );
     return { challengeToken, expiresAt };
   }

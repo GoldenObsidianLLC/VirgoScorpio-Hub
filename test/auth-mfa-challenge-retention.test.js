@@ -33,6 +33,7 @@ test('MFA challenge creation enforces a per-account retention bound', async () =
         assert.match(sql, /DELETE FROM auth_mfa_challenges/);
         assert.match(sql, /WHERE user_id=\$1 AND \(/);
         assert.match(sql, /consumed_at IS NOT NULL OR expires_at<=\$4/);
+        assert.match(sql, /WHERE user_id=\$1 AND attempts=0 AND consumed_at IS NULL AND expires_at>\$4/);
         assert.match(sql, /ORDER BY created_at DESC, id DESC OFFSET \$5/);
         assert.match(sql, /INSERT INTO auth_mfa_challenges\(user_id,token_hash,expires_at\) VALUES\(\$1,\$2,\$3\)/);
         
@@ -218,7 +219,7 @@ test('MFA challenge purge removes expired challenges', async () => {
     email: 'purge-test@example.test',
     display_name: 'Purge Test User',
     status: 'active',
-    password_hash: 'scrypt$32768$8$1$fakehash',
+    password_hash: await hashPassword('ValidPassword123'),
     mfa_enabled: true,
     email_verified_at: new Date(),
   };
@@ -270,6 +271,42 @@ test('MFA challenge purge removes expired challenges', async () => {
   assert.equal(purgeQueries.length, 2, 'Two purge operations should have occurred');
 });
 
+
+test('MFA challenge retention preserves failed-attempt history for the 15-minute account throttle window', async () => {
+  const user = {
+    id: '12121212-1212-4212-8212-121212121212',
+    email: 'mfa-history@example.test',
+    display_name: 'MFA History User',
+    status: 'active',
+    password_hash: await hashPassword('ValidPassword123'),
+    mfa_enabled: true,
+    email_verified_at: new Date(),
+  };
+  const queries = [];
+  const pool = {
+    async query(sql, values) {
+      queries.push({ sql, values });
+      if (sql.includes('SELECT id,email,display_name,status,password_hash,mfa_enabled')) return { rows: [user] };
+      if (sql.includes('WITH purged AS')) {
+        assert.match(sql, /attempts>0 AND created_at <= \(\$4 - interval '15 minutes'\)/,
+          'Failed challenges must remain until the account-wide retry window has elapsed.');
+        assert.match(sql, /attempts=0 AND \(consumed_at IS NOT NULL OR expires_at<=\$4\)/,
+          'Only unattempted consumed/expired challenges may be immediately purged.');
+        assert.match(sql, /WHERE user_id=\$1 AND attempts=0 AND consumed_at IS NULL AND expires_at>\$4/,
+          'The five-live-challenge cap must apply only to unused challenges.');
+        return { rowCount: 1, rows: [] };
+      }
+      throw new Error('Unexpected challenge-retention query: ' + sql);
+    },
+  };
+  const identity = createIdentityService({ pool, env: {}, clock: () => Date.now() });
+  const result = await identity.login({ email: user.email, password: 'ValidPassword123', ip: '192.0.2.151', userAgent: 'test-agent' });
+  assert.equal(result.mfaRequired, true);
+  const purge = queries.find(query => query.sql.includes('WITH purged AS'));
+  assert.ok(purge, 'Challenge allocation should execute the retention statement.');
+  assert.ok(purge.values[3] instanceof Date, 'Retention window must use the injected clock.');
+});
+
 test('MFA challenge retention enforces maximum of 5 live challenges per user', async () => {
   const userId = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
   let clockMs = Date.now();
@@ -280,7 +317,7 @@ test('MFA challenge retention enforces maximum of 5 live challenges per user', a
     email: 'max-challenges@example.test',
     display_name: 'Max Challenges User',
     status: 'active',
-    password_hash: 'scrypt$32768$8$1$fakehash',
+    password_hash: await hashPassword('ValidPassword123'),
     mfa_enabled: true,
     email_verified_at: new Date(),
   };
@@ -297,6 +334,7 @@ test('MFA challenge retention enforces maximum of 5 live challenges per user', a
         assert.equal(values[4], 4, 'Should retain at most 4 existing challenges when inserting a new one');
         
         // Verify the subquery orders by created_at DESC to keep newest
+        assert.match(sql, /WHERE user_id=\$1 AND attempts=0 AND consumed_at IS NULL AND expires_at>\$4/);
         assert.match(sql, /ORDER BY created_at DESC, id DESC OFFSET \$5/);
         
         return { rowCount: 1, rows: [] };
@@ -369,6 +407,7 @@ test('federated login path also enforces MFA challenge retention bound', async (
       if (sql.includes('WITH purged AS')) {
         // Verify federated path also uses the bounded purge CTE
         assert.match(sql, /DELETE FROM auth_mfa_challenges/);
+        assert.match(sql, /WHERE user_id=\$1 AND attempts=0 AND consumed_at IS NULL AND expires_at>\$4/);
         assert.match(sql, /ORDER BY created_at DESC, id DESC OFFSET \$5/);
         assert.equal(values[4], 4, 'Federated login should also enforce retention bound');
         return { rowCount: 1, rows: [] };
@@ -411,7 +450,7 @@ test('MFA challenge creation does not cause unbounded database growth', async ()
     email: 'bounded-growth@example.test',
     display_name: 'Bounded Growth User',
     status: 'active',
-    password_hash: 'scrypt$32768$8$1$fakehash',
+    password_hash: await hashPassword('ValidPassword123'),
     mfa_enabled: true,
     email_verified_at: new Date(),
   };
@@ -478,7 +517,7 @@ test('MFA challenge purge removes consumed challenges', async () => {
     email: 'consumed-purge@example.test',
     display_name: 'Consumed Purge User',
     status: 'active',
-    password_hash: 'scrypt$32768$8$1$fakehash',
+    password_hash: await hashPassword('ValidPassword123'),
     mfa_enabled: true,
     email_verified_at: new Date(),
   };
@@ -536,7 +575,7 @@ test('MFA challenge retention uses correct timestamp for expiry comparison', asy
     email: 'timestamp-test@example.test',
     display_name: 'Timestamp Test User',
     status: 'active',
-    password_hash: 'scrypt$32768$8$1$fakehash',
+    password_hash: await hashPassword('ValidPassword123'),
     mfa_enabled: true,
     email_verified_at: new Date(),
   };
@@ -554,7 +593,7 @@ test('MFA challenge retention uses correct timestamp for expiry comparison', asy
         
         // Verify it's used consistently in both the expiry check and the retention subquery
         const paramCount = (sql.match(/\$4/g) || []).length;
-        assert.equal(paramCount, 2, 'Timestamp parameter should be used twice (expiry and retention)');
+        assert.equal(paramCount, 3, 'Timestamp parameter should be used for unused-expiry, failed-history expiry and live-retention checks');
         
         return { rowCount: 1, rows: [] };
       }
