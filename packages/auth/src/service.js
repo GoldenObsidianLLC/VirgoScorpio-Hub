@@ -53,6 +53,7 @@ async function verifyPassword(password, encoded) {
   } catch { return false; }
 }
 
+const MAX_ACTIVE_OIDC_STATES = 10_000;
 function authError(statusCode, code, message) { const error = new Error(message); error.statusCode = statusCode; error.code = code; return error; }
 function configuredPublicBase(env) {
   const raw = String(env.PUBLIC_BASE_URL || 'http://localhost:8787').replace(/\/$/, '');
@@ -387,7 +388,18 @@ function createIdentityService({ pool, env = process.env, clock = () => Date.now
 
     async createOidcState({ state, nonce, verifier, issuer }) {
       if (![state, nonce, verifier, issuer].every(value => typeof value === 'string' && value.length > 0)) throw authError(400, 'ERR_VIRGOSCORPIO_HUB_OIDC_STATE_INVALID', 'OIDC state data is incomplete.');
-      await pool.query('INSERT INTO auth_oidc_states(state_hash,nonce,code_verifier,issuer,expires_at) VALUES($1,$2,$3,$4,$5)', [digest(state), nonce, verifier, issuer, new Date(clock() + 10 * 60_000)]);
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        // Serialise allocation so the global cap below cannot be exceeded by concurrent unauthenticated starts.
+        await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', ['auth_oidc_states_allocation']);
+        // Reclaim expired and consumed rows before allocating, bounding table growth.
+        await client.query('DELETE FROM auth_oidc_states WHERE expires_at<=now() OR consumed_at IS NOT NULL');
+        const active = await client.query('SELECT count(*)::int AS total FROM auth_oidc_states');
+        if ((active.rows[0]?.total ?? 0) >= MAX_ACTIVE_OIDC_STATES) throw authError(429, 'ERR_VIRGOSCORPIO_HUB_RATE_LIMIT', 'Too many pending SSO attempts. Try again later.');
+        await client.query('INSERT INTO auth_oidc_states(state_hash,nonce,code_verifier,issuer,expires_at) VALUES($1,$2,$3,$4,$5)', [digest(state), nonce, verifier, issuer, new Date(clock() + 10 * 60_000)]);
+        await client.query('COMMIT');
+      } catch (error) { await client.query('ROLLBACK').catch(() => {}); throw error; } finally { client.release(); }
       return { expiresInSeconds: 600 };
     },
 
@@ -398,7 +410,7 @@ function createIdentityService({ pool, env = process.env, clock = () => Date.now
         await client.query('BEGIN');
         const result = await client.query('SELECT id,nonce,code_verifier,issuer FROM auth_oidc_states WHERE state_hash=$1 AND consumed_at IS NULL AND expires_at>now() FOR UPDATE', [digest(state)]);
         const row = result.rows[0]; if (!row) throw authError(400, 'ERR_VIRGOSCORPIO_HUB_OIDC_STATE_INVALID', 'OIDC state is invalid or expired.');
-        await client.query("UPDATE auth_oidc_states SET consumed_at=now(),code_verifier='' WHERE id=$1", [row.id]);
+        await client.query('DELETE FROM auth_oidc_states WHERE id=$1', [row.id]);
         await client.query('COMMIT'); return { nonce: row.nonce, verifier: row.code_verifier, issuer: row.issuer };
       } catch (error) { await client.query('ROLLBACK').catch(() => {}); throw error; } finally { client.release(); }
     },
