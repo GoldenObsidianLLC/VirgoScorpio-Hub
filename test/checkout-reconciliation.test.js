@@ -68,7 +68,7 @@ test('expired Stripe session transitions pending order to failed and releases th
   const pool = fakePool();
   const requests = [];
   const result = await reconcileExpiredStripeCheckouts(pool, {
-    secretKey: TEST_STRIPE_SECRET_KEY, ****mpl: fetchSession({ id: candidate.provider_session_id, status: 'expired', payment_status: 'unpaid' }, requests)
+    secretKey: TEST_STRIPE_SECRET_KEY, fetchImpl: fetchSession({ id: candidate.provider_session_id, status: 'expired', payment_status: 'unpaid' }, requests)
   });
   assert.deepEqual(result, { skipped: false, checked: 1, expired: 1, paid: 0, held: 0, errors: 0, unlinked: 0 });
   assert.equal(pool.state.releases, 1);
@@ -84,7 +84,7 @@ test('checkout reconciliation rolls back the order and inventory transition when
   await assert.rejects(
     reconcileExpiredStripeCheckouts(pool, {
       secretKey: TEST_STRIPE_SECRET_KEY,
-      ****mpl: fetchSession({ id: candidate.provider_session_id, status: 'expired', payment_status: 'unpaid' })
+      fetchImpl: fetchSession({ id: candidate.provider_session_id, status: 'expired', payment_status: 'unpaid' })
     }),
     /database commit failed/
   );
@@ -96,7 +96,7 @@ test('checkout reconciliation rolls back the order and inventory transition when
 test('complete paid Stripe session reconciles pending order and commits the reservation', async () => {
   const pool = fakePool();
   const result = await reconcileExpiredStripeCheckouts(pool, {
-    secretKey: TEST_STRIPE_SECRET_KEY, ****mpl: fetchSession({ id: candidate.provider_session_id, status: 'complete', payment_status: 'paid', payment_intent: 'pi_test_123' })
+    secretKey: TEST_STRIPE_SECRET_KEY, fetchImpl: fetchSession({ id: candidate.provider_session_id, status: 'complete', payment_status: 'paid', payment_intent: 'pi_test_123' })
   });
   assert.equal(result.paid, 1);
   assert.equal(result.expired, 0);
@@ -110,7 +110,7 @@ test('open or unpaid-complete sessions retain reservations', async () => {
     { id: candidate.provider_session_id, status: 'complete', payment_status: 'unpaid' }
   ]) {
     const pool = fakePool();
-    const result = await reconcileExpiredStripeCheckouts(pool, { secretKey: TEST_STRIPE_SECRET_KEY, ****mpl: fetchSession(session) });
+    const result = await reconcileExpiredStripeCheckouts(pool, { secretKey: TEST_STRIPE_SECRET_KEY, fetchImpl: fetchSession(session) });
     assert.equal(result.held, 1);
     assert.equal(pool.state.connects, 0);
     assert.equal(pool.state.releases, 0);
@@ -135,12 +135,12 @@ test('open sessions past the hold period are expired at Stripe and the stock is 
 test('unresolvable provider state releases the hold only after the bounded limit', async () => {
   const failing = async () => { throw new TypeError('socket reset'); };
   const young = fakePool({ candidateRows: [{ ...candidate, overdue_seconds: '3600' }] });
-  const youngResult = await reconcileExpiredStripeCheckouts(young, { secretKey: TEST_STRIPE_SECRET_KEY, ****mpl: failing });
+  const youngResult = await reconcileExpiredStripeCheckouts(young, { secretKey: TEST_STRIPE_SECRET_KEY, fetchImpl: failing });
   assert.equal(youngResult.held, 1);
   assert.equal(young.state.releases, 0);
 
   const old = fakePool({ candidateRows: [{ ...candidate, overdue_seconds: String(24 * 60 * 60) }] });
-  const oldResult = await reconcileExpiredStripeCheckouts(old, { secretKey: TEST_STRIPE_SECRET_KEY, ****mpl: failing });
+  const oldResult = await reconcileExpiredStripeCheckouts(old, { secretKey: TEST_STRIPE_SECRET_KEY, fetchImpl: failing });
   assert.equal(oldResult.errors, 1);
   assert.equal(oldResult.expired, 1);
   assert.equal(old.state.releases, 1);
@@ -148,7 +148,7 @@ test('unresolvable provider state releases the hold only after the bounded limit
   const stuckOpen = fakePool({ candidateRows: [{ ...candidate, overdue_seconds: String(25 * 60 * 60) }] });
   const openResult = await reconcileExpiredStripeCheckouts(stuckOpen, {
     secretKey: TEST_STRIPE_SECRET_KEY,
-    ****mpl: fetchSession({ id: candidate.provider_session_id, status: 'open', payment_status: 'unpaid' })
+    fetchImpl: fetchSession({ id: candidate.provider_session_id, status: 'open', payment_status: 'unpaid' })
   });
   assert.equal(openResult.expired, 1);
   assert.equal(stuckOpen.state.releases, 1);
@@ -174,7 +174,7 @@ test('provider transport and response errors retain inventory and are reported',
 
 test('missing provider credentials skip reconciliation without releasing holds', async () => {
   const pool = fakePool();
-  const result = await reconcileExpiredStripeCheckouts(pool, { secretKey: '', ****mpl: async () => { throw new Error('must not be called'); } });
+  const result = await reconcileExpiredStripeCheckouts(pool, { secretKey: '', fetchImpl: async () => { throw new Error('must not be called'); } });
   assert.equal(result.skipped, true);
   assert.equal(pool.state.connects, 0);
   assert.equal(pool.state.releases, 0);
@@ -206,7 +206,7 @@ test('SECURITY: repeated Stripe lookup failures do not hold inventory indefinite
   const pass1 = fakePool({ candidateRows: [{ ...candidate, overdue_seconds: '3600' }] });
   const result1 = await reconcileExpiredStripeCheckouts(pass1, { 
     secretKey: TEST_STRIPE_SECRET_KEY, 
-    ****mpl: failingFetch 
+    fetchImpl: failingFetch
   });
   assert.equal(result1.errors, 1, 'First pass should report error');
   assert.equal(result1.held, 1, 'First pass should retain hold');
@@ -217,7 +217,7 @@ test('SECURITY: repeated Stripe lookup failures do not hold inventory indefinite
   const pass2 = fakePool({ candidateRows: [{ ...candidate, overdue_seconds: String(24 * 60 * 60) }] });
   const result2 = await reconcileExpiredStripeCheckouts(pass2, { 
     secretKey: TEST_STRIPE_SECRET_KEY, 
-    ****mpl: failingFetch 
+    fetchImpl: failingFetch
   });
   assert.equal(result2.errors, 1, 'Second pass should report error');
   assert.equal(result2.expired, 1, 'Second pass should force-expire');
@@ -300,7 +300,7 @@ test('SECURITY: multiple abandoned checkouts cannot exhaust inventory beyond bou
     
     const result = await reconcileExpiredStripeCheckouts(pool, { 
       secretKey: TEST_STRIPE_SECRET_KEY, 
-      ****mpl: failingFetch 
+      fetchImpl: failingFetch
     });
     
     assert.equal(result.expired, 1, `Checkout ${checkout.order_id} should be expired`);
@@ -317,7 +317,7 @@ test('SECURITY: unpaid complete sessions retain holds only within bounded period
   const youngUnpaid = fakePool({ candidateRows: [{ ...candidate, overdue_seconds: '3600' }] });
   const youngResult = await reconcileExpiredStripeCheckouts(youngUnpaid, { 
     secretKey: TEST_STRIPE_SECRET_KEY, 
-    ****mpl: fetchSession({ id: candidate.provider_session_id, status: 'complete', payment_status: 'unpaid' })
+    fetchImpl: fetchSession({ id: candidate.provider_session_id, status: 'complete', payment_status: 'unpaid' })
   });
   assert.equal(youngResult.held, 1, 'Young unpaid complete should be held');
   assert.equal(youngUnpaid.state.releases, 0, 'Young unpaid complete should not release');
@@ -328,7 +328,7 @@ test('SECURITY: unpaid complete sessions retain holds only within bounded period
   const oldUnpaid = fakePool({ candidateRows: [{ ...candidate, overdue_seconds: String(25 * 60 * 60) }] });
   const oldResult = await reconcileExpiredStripeCheckouts(oldUnpaid, { 
     secretKey: TEST_STRIPE_SECRET_KEY, 
-    ****mpl: fetchSession({ id: candidate.provider_session_id, status: 'complete', payment_status: 'unpaid' })
+    fetchImpl: fetchSession({ id: candidate.provider_session_id, status: 'complete', payment_status: 'unpaid' })
   });
   // Note: Current implementation keeps unpaid complete held indefinitely.
   // This test documents the behavior; if policy changes to bound these too, update assertion.
@@ -344,7 +344,7 @@ test('SECURITY: reconciliation processes expired holds in order preventing starv
   // This test verifies the query is called (implementation detail check)
   await reconcileExpiredStripeCheckouts(pool, { 
     secretKey: TEST_STRIPE_SECRET_KEY, 
-    ****mpl: fetchSession({ id: candidate.provider_session_id, status: 'expired', payment_status: 'unpaid' })
+    fetchImpl: fetchSession({ id: candidate.provider_session_id, status: 'expired', payment_status: 'unpaid' })
   });
   
   const candidateQuery = pool.state.calls.find(c => c.surface === 'pool');
