@@ -21,18 +21,23 @@ function ruleMatches(rule, request) {
 }
 function createFirewall({ pool = null, env = process.env, cacheTtlMs = 5000 } = {}) {
   let cacheUntil = 0; let cached = []; let refreshing = null;
+  // policyValid is true only while the cache reflects a successful read of firewall_rules.
+  // It starts false (when a policy store exists) and is reset by clearCache(), so a failed
+  // refresh in either state fails closed instead of evaluating an empty or outdated rule set.
+  let policyValid = !pool;
   const staticDeny = String(env.VIRGOSCORPIO_HUB_FIREWALL_DENY_CIDRS || '').split(',').map(x=>x.trim()).filter(Boolean).filter(x=>validateIpPattern(x.includes('/')?'cidr':'ip',x));
   async function refresh() {
     if (!pool) return;
     if (refreshing) return refreshing;
     refreshing = pool.query("SELECT id,site_id,action,scope,pattern,reason,enabled FROM firewall_rules WHERE enabled=true AND scope IN ('ip','cidr','path','user_agent') ORDER BY created_at ASC")
-      .then(result=>{ cached=result.rows; cacheUntil=Date.now()+cacheTtlMs; }).catch(()=>{ cacheUntil=Date.now()+Math.min(cacheTtlMs,1000); }).finally(()=>{ refreshing=null; });
+      .then(result=>{ cached=result.rows; policyValid=true; cacheUntil=Date.now()+cacheTtlMs; }).catch(()=>{ cacheUntil=Date.now()+Math.min(cacheTtlMs,1000); }).finally(()=>{ refreshing=null; });
     return refreshing;
   }
   return Object.freeze({
     async evaluate(request) {
       if (Date.now() >= cacheUntil) await refresh();
       for (const cidr of staticDeny) if ((cidr.includes('/')&&cidrContains(String(request.ip||''),cidr)) || (!cidr.includes('/')&&String(request.ip||'')===cidr)) return { action:'deny', reason:'deployment-deny-list', ruleId:null };
+      if (!policyValid) return { action:'deny', reason:'firewall-policy-unavailable', ruleId:null };
       const matches=cached.filter(rule=>ruleMatches(rule,request) && (!rule.site_id || rule.site_id===request.siteId));
       const deny=matches.find(rule=>rule.action==='deny'); if (deny) return { action:'deny', reason:deny.reason||'firewall-rule', ruleId:deny.id };
       const challenge=matches.find(rule=>rule.action==='challenge'); if (challenge) return { action:'challenge', reason:challenge.reason||'firewall-rule', ruleId:challenge.id };
@@ -40,7 +45,7 @@ function createFirewall({ pool = null, env = process.env, cacheTtlMs = 5000 } = 
       const allow=matches.find(rule=>rule.action==='allow'); return { action:allow?'allow':'pass', reason:allow?.reason||null, ruleId:allow?.id||null };
     },
     async rules(siteId) { if (Date.now() >= cacheUntil) await refresh(); return cached.filter(r=>!r.site_id||r.site_id===siteId); },
-    clearCache() { cacheUntil=0; }
+    clearCache() { cacheUntil=0; if (pool) policyValid=false; }
   });
 }
 module.exports = { createFirewall, validateIpPattern, cidrContains, ruleMatches, ipToInt };
