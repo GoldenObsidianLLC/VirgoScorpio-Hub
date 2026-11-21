@@ -83,7 +83,7 @@ test('password-reset service enforces per-account cooldown to prevent token inva
   const userId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
   const userEmail = 'victim@example.com';
 
-  await t.test('service locks user row and checks for recent reset tokens', async () => {
+  await t.test('service acquires per-account reset lock and checks for recent reset tokens', async () => {
     const queries = [];
     const pool = {
       async query(sql, values) {
@@ -105,8 +105,8 @@ test('password-reset service enforces per-account cooldown to prevent token inva
               return { rowCount: 0, rows: [] };
             }
             
-            if (sql.includes('SELECT id FROM users WHERE id=$1 FOR UPDATE')) {
-              assert.deepEqual(values, [userId], 'Should lock the user row');
+            if (sql.includes('SELECT pg_advisory_xact_lock(hashtext($1))')) {
+              assert.deepEqual(values, ['virgoscorpio_hub-password-reset:' + userId], 'Should acquire the per-account reset lock');
               return { rowCount: 1, rows: [{ id: userId }] };
             }
             
@@ -128,9 +128,9 @@ test('password-reset service enforces per-account cooldown to prevent token inva
     // Should return accepted without creating new token
     assert.deepEqual(result, { accepted: true });
 
-    // Verify the sequence: BEGIN, lock user, check recent tokens, ROLLBACK
+    // Verify the sequence: BEGIN, acquire account reset lock, check recent tokens, ROLLBACK
     assert.equal(queries[0].sql, 'BEGIN');
-    assert.ok(queries[1].sql.includes('FOR UPDATE'), 'Should lock user row');
+    assert.ok(queries[1].sql.includes('pg_advisory_xact_lock'), 'Should acquire per-account reset lock');
     assert.ok(queries[2].sql.includes('created_at > now() - interval'), 'Should check for recent tokens');
     assert.equal(queries[3].sql, 'ROLLBACK', 'Should rollback when cooldown is active');
     
@@ -157,7 +157,7 @@ test('password-reset service enforces per-account cooldown to prevent token inva
               return { rowCount: 0, rows: [] };
             }
             
-            if (sql.includes('SELECT id FROM users WHERE id=$1 FOR UPDATE')) {
+            if (sql.includes('SELECT pg_advisory_xact_lock(hashtext($1))')) {
               return { rowCount: 1, rows: [{ id: userId }] };
             }
             
@@ -192,7 +192,7 @@ test('password-reset service enforces per-account cooldown to prevent token inva
 
     // Verify the full sequence executed
     assert.equal(queries[0].sql, 'BEGIN');
-    assert.ok(queries[1].sql.includes('FOR UPDATE'), 'Should lock user row');
+    assert.ok(queries[1].sql.includes('pg_advisory_xact_lock'), 'Should acquire per-account reset lock');
     assert.ok(queries[2].sql.includes('created_at > now() - interval'), 'Should check for recent tokens');
     assert.ok(queries[3].sql.includes('UPDATE identity_action_tokens SET consumed_at=now()'), 'Should consume old tokens');
     assert.ok(queries[4].sql.includes('INSERT INTO identity_action_tokens'), 'Should create new token');
@@ -215,7 +215,7 @@ test('password-reset service enforces per-account cooldown to prevent token inva
             if (sql === 'BEGIN' || sql === 'ROLLBACK') {
               return { rowCount: 0, rows: [] };
             }
-            if (sql.includes('FOR UPDATE')) {
+            if (sql.includes('pg_advisory_xact_lock')) {
               return { rowCount: 1, rows: [{ id: userId }] };
             }
             if (sql.includes('created_at > now() - interval')) {
@@ -261,7 +261,7 @@ test('password-reset prevents token invalidation and mail amplification attacks'
             if (sql === 'BEGIN' || sql === 'ROLLBACK') {
               return { rowCount: 0, rows: [] };
             }
-            if (sql.includes('FOR UPDATE')) {
+            if (sql.includes('pg_advisory_xact_lock')) {
               return { rowCount: 1, rows: [{ id: userId }] };
             }
             if (sql.includes('created_at > now() - interval')) {
@@ -296,7 +296,7 @@ test('password-reset prevents token invalidation and mail amplification attacks'
     assert.equal(mailInsertionCount, 0, 'No mail should be queued during cooldown');
   });
 
-  await t.test('FOR UPDATE lock serializes concurrent requests per account', async () => {
+  await t.test('advisory transaction lock serializes concurrent reset requests per account', async () => {
     const lockSequence = [];
     
     const pool = {
@@ -313,9 +313,9 @@ test('password-reset prevents token invalidation and mail amplification attacks'
               lockSequence.push('BEGIN');
               return { rowCount: 0, rows: [] };
             }
-            if (sql.includes('SELECT id FROM users WHERE id=$1 FOR UPDATE')) {
-              lockSequence.push('LOCK_USER');
-              assert.deepEqual(values, [userId], 'Should lock the correct user');
+            if (sql.includes('SELECT pg_advisory_xact_lock(hashtext($1))')) {
+              lockSequence.push('LOCK_ACCOUNT');
+              assert.deepEqual(values, ['virgoscorpio_hub-password-reset:' + userId], 'Should acquire the reset lock for the correct user');
               return { rowCount: 1, rows: [{ id: userId }] };
             }
             if (sql.includes('created_at > now() - interval')) {
@@ -339,10 +339,10 @@ test('password-reset prevents token invalidation and mail amplification attacks'
     await identity.requestPasswordReset({ email: userEmail });
 
     // Verify the lock is acquired before checking cooldown
-    const lockIndex = lockSequence.indexOf('LOCK_USER');
+    const lockIndex = lockSequence.indexOf('LOCK_ACCOUNT');
     const checkIndex = lockSequence.indexOf('CHECK_COOLDOWN');
     
-    assert.ok(lockIndex >= 0, 'User row should be locked');
+    assert.ok(lockIndex >= 0, 'Account reset lock should be acquired');
     assert.ok(checkIndex >= 0, 'Cooldown should be checked');
     assert.ok(lockIndex < checkIndex, 'Lock must be acquired before checking cooldown');
   });
@@ -359,7 +359,7 @@ test('password-reset prevents token invalidation and mail amplification attacks'
         return {
           async query(sql) {
             if (sql === 'BEGIN' || sql === 'ROLLBACK') return { rowCount: 0, rows: [] };
-            if (sql.includes('FOR UPDATE')) return { rowCount: 1, rows: [{ id: userId }] };
+            if (sql.includes('pg_advisory_xact_lock')) return { rowCount: 1, rows: [{ id: userId }] };
             if (sql.includes('created_at > now() - interval')) return { rowCount: 1, rows: [{ '?column?': 1 }] };
             throw new Error('Unexpected query');
           },
@@ -469,8 +469,8 @@ test('password-reset security properties are enforced in correct order', async t
               defenseSequence.push('BEGIN_TRANSACTION');
               return { rowCount: 0, rows: [] };
             }
-            if (sql.includes('FOR UPDATE')) {
-              defenseSequence.push('LOCK_USER');
+            if (sql.includes('pg_advisory_xact_lock')) {
+              defenseSequence.push('LOCK_ACCOUNT');
               return { rowCount: 1, rows: [{ id: 'user-id' }] };
             }
             if (sql.includes('created_at > now() - interval')) {
@@ -504,7 +504,7 @@ test('password-reset security properties are enforced in correct order', async t
       'RATE_LIMIT_CHECK',      // First: per-IP rate limit at route level
       'USER_LOOKUP',           // Second: identify the user
       'BEGIN_TRANSACTION',     // Third: start transaction
-      'LOCK_USER',             // Fourth: lock user row to serialize requests
+      'LOCK_ACCOUNT',             // Fourth: acquire the per-account advisory lock
       'COOLDOWN_CHECK',        // Fifth: check per-account cooldown
       'ROLLBACK',              // Sixth: rollback when cooldown is active
       'RELEASE',               // Finally: release connection

@@ -273,9 +273,11 @@ function createIdentityService({ pool, env = process.env, clock = () => Date.now
       const client = await pool.connect();
       try {
         await client.query('BEGIN');
-        // Serialise concurrent requests per account, then enforce a cooldown so that an unauthenticated
-        // caller cannot repeatedly invalidate an issued recovery token or enqueue further reset mail.
-        await client.query('SELECT id FROM users WHERE id=$1 FOR UPDATE', [user.id]);
+        // Serialize reset requests without taking the users row lock. Reset acceptance locks
+        // the action-token row before updating the user; using the same row lock here
+        // would invert order (user -> token versus token -> user) and permit deadlocks.
+        // The transaction-scoped advisory lock still serializes requests per account.
+        await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', ['virgoscorpio_hub-password-reset:' + user.id]);
         const recent = await client.query("SELECT 1 FROM identity_action_tokens WHERE user_id=$1 AND purpose='password-reset' AND created_at > now() - interval '120 seconds' LIMIT 1", [user.id]);
         if (recent.rows && recent.rows.length > 0) {
           await client.query('ROLLBACK');
