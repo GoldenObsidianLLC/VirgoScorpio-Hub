@@ -111,7 +111,21 @@ function createAuthRouteHandlers(dependencies = {}) {
 
     if (req.method === 'POST' && url.pathname === '/api/v1/auth/password-reset/request') {
       if (!identity) return sendJson(res, 503, { error: 'Authentication requires PostgreSQL.', code: 'ERR_VIRGOSCORPIO_HUB_IDENTITY_DISABLED', requestId });
+      const limit = allowRequest('password-reset:' + (req.socket.remoteAddress || 'unknown'));
+      if (!limit.allowed) {
+        res.setHeader('retry-after', String(limit.retryAfterSeconds));
+        return sendJson(res, 429, { error: 'Too many password reset requests.', code: 'ERR_VIRGOSCORPIO_HUB_RATE_LIMIT', requestId });
+      }
       const body = await readJson(req, Math.min(maxBody, MAX_AUTH_BODY_BYTES));
+      const targetEmail = typeof body?.email === 'string' ? body.email.trim().toLowerCase().slice(0, 320) : '';
+      if (targetEmail && !allowRequest('password-reset-target:' + targetEmail).allowed) {
+        // Respond identically to an accepted request so throttling does not reveal account existence.
+        return sendJson(res, 202, {
+          accepted: true,
+          message: 'If an active account matches that address, password reset instructions will be sent.',
+          requestId
+        });
+      }
       const result = await identity.requestPasswordReset({ email: body.email });
       return sendJson(res, 202, {
         ...result,
