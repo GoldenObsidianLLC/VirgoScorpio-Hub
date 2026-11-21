@@ -1,4 +1,18 @@
-# VirgoScorpio Hub 0.6.2 — last finalized source-bound readiness snapshot (21 November 2026; F1.59; workflow #44809875826)
+# VirgoScorpio Hub 0.6.2 — current release-readiness snapshot (21 November 2026; main 6a6b88fb; workflow #1207)
+
+## Current exact-main readiness — 21 November 2026
+
+Current `main` is `6a6b88fb174a4c16571b2f97a8db3e417378caec`. Exact-main [workflow #1207](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44958894563) passed **7/7 jobs**, including Node.js 22/24, live PostgreSQL 18/Memgraph, browser smoke, CodeQL, signed lockfile/SBOM attestation and exact-source evidence consolidation.
+
+The canonical [release-readiness artifact #14728133889](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44958894563/artifacts/14728133889) is bound to that exact main SHA. Its SHA-256 is `e7ed0267e6cc1197c39c6a9c9bbd0b6bb3656308935a714f4255077102989df76`. Classification: **8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN**; `readyForProduction=false`; `NOT_PRODUCTION_CERTIFIED`; decision **NO-GO**.
+
+Node.js 22.23.4 and 24.22.1 each passed 754/754 Hub unit/security tests and 94/94 EnginEx tests. Live PostgreSQL 18/Memgraph passed 180/180 with zero skips; 18/18 fresh migrations and 18/18 idempotent re-entry checks passed. Browser smoke, CodeQL, high-severity npm audit, CycloneDX 1.5 generation/runtime parity (200 components / 201 dependency records), signed mainline lockfile/SBOM attestation and evidence consolidation passed. Browser smoke is not full WCAG acceptance, and audit/CodeQL output still requires human review.
+
+The two PARTIAL items remain the qualified human dependency/license review and service-less integration diagnostics (47 tests per runtime, 1 pass / 46 skipped). The 14 missing production evidence gates remain: independent tenant-isolation review; identity-provider E2E; malware/legacy-asset quarantine; live cloud providers; Stripe lifecycle; full browser/accessibility acceptance; commerce parity; community parity; plugin isolation; human dependency/SBOM/CodeQL review; load/backup/restore; independent platform security assessment; operations/release approval; and production observability. See the [current release-gate report](reports/2026-11-21-VirgoScorpio-Hub-0.6.2-Release-Gate-Report.md).
+
+Package `0.6.2` remains private and unreleased. This CI result does not authorize a release tag, GitHub Release, npm publication or production deployment.
+
+---
 
 ## Historical mainline snapshot — F1.59 / PR #232 (source SHA 70e800ad33a6d376388576ce76a608f35c595b64)
 
@@ -10,7 +24,7 @@ The two PARTIAL rows remain (1) committed dependency lockfile/clean install evid
 
 The 14 missing production evidence areas remain: independent tenant-isolation review; identity-provider E2E; malware/asset quarantine; live cloud providers; Stripe lifecycle; full browser/accessibility acceptance; commerce parity; community parity; plugin isolation; human dependency/SBOM/CodeQL review; load/backup/recovery; independent platform security assessment; operations/release approval; and production observability.
 
-F1.60 / [PR #278](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/278) is a separate unmerged outbox-envelope identity candidate at `1eb1c9ec253cfbbda481eee347552ecdd9a47728`. Its successful candidate workflow and readiness artifact do not alter the exact-main snapshot above and do not authorize production.
+F1.60 / [PR #278](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/278) is an unmerged outbox-envelope identity candidate for issue #233. It has been rebased conflict-free onto current main `6a6b88fb174a4c16571b2f97a8db3e417378caec`; local code-validation head before this documentation refresh was `eadf7f5311fce9d1278b5e3fcde7eabf643e8f53`. Focused outbox/graph tests passed 20/20, and full local `npm run check` passed 757/760 with 3 conditional skips; fresh hosted PR checks on the updated head remain required. This candidate does not alter the exact-main readiness counts or authorize production.
 
 The active [main-branch ruleset](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/rules/27803491) requires pull requests, seven named CI/security contexts, an up-to-date base, and resolved review threads; force pushes and deletion are blocked and there are no bypass actors. The single-maintainer policy requires documented maintainer self-review but does not require an unavailable external approval. This merge policy does not waive independent production evidence.
 

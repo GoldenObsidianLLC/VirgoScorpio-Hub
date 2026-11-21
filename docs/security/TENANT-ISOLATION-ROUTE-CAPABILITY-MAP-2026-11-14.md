@@ -8,8 +8,8 @@ Maintainer-prepared route, capability, data-access, and regression-test navigati
 
 - Status: MAINTAINER_PREPARED_NOT_INDEPENDENTLY_REVIEWED.
 - Generated from the current working-tree implementation anchors and the catalog at docs/security/tenant-isolation-route-inventory.catalog.json.
-- Implementation-source digest: 132da2782ec5ed0b1c166a5278c8c61aad2594b75b32141f53e39bdb22f6286d across 22 files.
-- Referenced-test digest: 1de455f900e112f5cd0162b750bd0ca2ba9bc63fa7e4f61549b7777060beb123 across 59 files.
+- Implementation-source digest: 6bfd8fe16dfb4a7bb0ed3566d11dad40a79e8d5f336bd07bb94e4e3cc5ecf8fb across 22 files.
+- Referenced-test digest: e4cb13f4c5c640514dcc0b282242fe3c3359221e419fec385974a1c83c0a0e88 across 59 files.
 - Inventory size: 28 route/flow families, 80 declared route patterns, 22 source files, and 59 test files.
 - Regenerate with npm run security:tenant-inventory; CI checks freshness with node scripts/generate-tenant-isolation-route-inventory.js --check.
 
@@ -421,7 +421,7 @@ Tests: test/content-type-routes.test.js, test/collaboration-api.test.js, test/re
 - Capabilities/controls: Worker/maintenance authorization and deployment controls
 - Data-access boundary: Memgraph nodes and relationships; PostgreSQL source/outbox rows; projection version/tombstone state
 - Side effects: Graph projection writes/deletes; Full or scoped rebuild
-- Source: packages/graph/src/memgraph-store.js (lines 19, 35); packages/graph/src/rebuild-projection.js (lines 5, 7, 8, 193, 224, 255); packages/realtime/src/event-contract.js (lines 57, 180)
+- Source: packages/graph/src/memgraph-store.js (lines 19, 26); packages/graph/src/rebuild-projection.js (lines 5, 7, 8, 193, 224, 255); packages/realtime/src/event-contract.js (lines 68, 256)
 - Test references: test/memgraph-projector.test.js, test/graph.test.js, test/graph-rebuild.test.js, test/graph-projection-worker.test.js, test/integration/memgraph.integration.test.js
 - Coverage characterization: **targeted-integration**. Unit tests reject event-type, resource-type, site-scope and aggregate-ID mismatches before Cypher writes; equivalent UUID casing normalizes to the validated envelope. Content, taxonomy and relationship families are exercised, and rebuild tests prove canonical PostgreSQL rows are converted to validated v1 envelopes while preserving content business-version versus projection-version semantics. Local live Memgraph integration was not run when service configuration is absent. Broader assessor work remains for forged/invalid producer envelopes, partition collisions, stale aggregate/replay behavior beyond selected cases, site deletion cleanup and independent tenant-boundary assurance.
 
