@@ -373,6 +373,21 @@ function createWebSocketGateway({
                 afterSequence: command.afterSequence
               });
               if (cleaned || documentSubscriptions.get(contentId) !== entry) return;
+              // Authorization may have been revoked while the sync was being read.
+              // Hub invalidation closes only the hub subscription, so revalidate
+              // both the document grant and the hub subscription before any delivery.
+              if (authorizeDocument && !(await authorizeDocument({
+                principal,
+                sessionId,
+                siteId,
+                contentId
+              }))) {
+                throw realtimeError(403, 'ERR_VIRGOSCORPIO_HUB_REALTIME_FORBIDDEN', 'The principal cannot edit this draft.');
+              }
+              if (!(await hub.reauthorize(documentSubscription))) {
+                throw realtimeError(403, 'ERR_VIRGOSCORPIO_HUB_REALTIME_FORBIDDEN', 'The principal cannot edit this draft.');
+              }
+              if (cleaned || documentSubscriptions.get(contentId) !== entry) return;
               send({
                 type: 'document.joined',
                 contentId,
