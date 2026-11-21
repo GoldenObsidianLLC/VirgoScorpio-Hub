@@ -1431,63 +1431,63 @@
     "localValidationSummary": "PASS: 202 required paths, 211 JavaScript files syntax-checked; 461 unit tests (458 passed, 0 failed, 3 Windows/platform-specific skips); focused AI route/API/context suites 45/45; package-lock audit 0 vulnerabilities."
   },
   "latestMainEvidence": {
-    "reviewedAt": "2026-11-19",
+    "reviewedAt": "2026-11-20",
     "version": "0.6.2",
-    "commit": "db0b641880a5c842ffdcc2cf1dda6bedde58d033",
+    "commit": "70e800ad33a6d376388576ce76a608f35c595b64",
     "pullRequest": {
-      "number": 216,
-      "title": "F1.55: Revalidate friendship acceptance addressee at the write boundary",
-      "mergedAt": "2026-11-19T07:51:37Z",
-      "mergeCommit": "db0b641880a5c842ffdcc2cf1dda6bedde58d033",
-      "head": "84ce5eb71127411573d4a0b5e81dda94ecef3f81",
-      "base": "91a93f370205335321c65d68e706f830251936c3",
-      "formalReviews": 0,
+      "number": 232,
+      "title": "F1.59: Bind graph projections to the validated PostgreSQL outbox envelope",
+      "mergedAt": "2026-11-20T20:16:37Z",
+      "mergeCommit": "70e800ad33a6d376388576ce76a608f35c595b64",
+      "head": "268d2bd09307128c74cd68eac79d84d42db115a6",
+      "base": "619819230dac2e8d169ce71af7c6a41f0630cf27",
+      "formalReviews": 4,
       "inlineReviewThreads": 0,
       "reviewDecision": "NONE"
     },
     "runtimeChange": {
-      "feature": "F1.55",
-      "pullRequest": 216,
-      "issue": 215,
+      "feature": "F1.59",
+      "pullRequest": 232,
+      "issue": 231,
       "issueState": "CLOSED",
       "parentIssue": 124,
-      "branch": "security/f1-55-community-friendship-acceptance-revocation-2026-11-19",
-      "mergeCommit": "db0b641880a5c842ffdcc2cf1dda6bedde58d033",
-      "implementationCommit": "84ce5eb71127411573d4a0b5e81dda94ecef3f81",
-      "pullRequestHead": "84ce5eb71127411573d4a0b5e81dda94ecef3f81",
-      "mergedAt": "2026-11-19T07:51:37Z",
-      "formalReviews": 0,
+      "branch": "security/f1-59-outbox-projection-envelope-scope-2026-11-20",
+      "mergeCommit": "70e800ad33a6d376388576ce76a608f35c595b64",
+      "implementationCommit": "bf36d356913053df069abd825e157dad400a67d2",
+      "pullRequestHead": "268d2bd09307128c74cd68eac79d84d42db115a6",
+      "mergedAt": "2026-11-20T20:16:37Z",
+      "formalReviews": 4,
+      "approvedReviews": 0,
       "inlineReviewThreads": 0
     },
     "previousRuntimeChange": {
-      "feature": "F1.54",
-      "pullRequest": 213,
-      "issue": 212,
+      "feature": "F1.58",
+      "pullRequest": 228,
+      "issue": 227,
       "issueState": "CLOSED",
-      "mergeCommit": "c247e1cb1daa5683c3a74aa6856e9718d92b4557",
-      "implementationCommit": "a2198c4b0cf3ead80bd47718db7b68e666642e3d"
+      "mergeCommit": "619819230dac2e8d169ce71af7c6a41f0630cf27"
     },
-    "previousMainCommit": "c247e1cb1daa5683c3a74aa6856e9718d92b4557",
+    "previousMainCommit": "619819230dac2e8d169ce71af7c6a41f0630cf27",
     "workflow": {
       "name": "VirgoScorpio Hub CI",
-      "runId": 44482863945,
-      "runNumber": 785,
-      "url": "https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44482863945",
+      "runId": 44809875826,
+      "runNumber": 833,
+      "url": "https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44809875826",
       "event": "push",
       "attempt": 1,
-      "completedAt": "2026-11-19T07:54:59Z",
+      "completedAt": "2026-11-20T20:20:12Z",
       "completedJobs": 7,
       "successfulJobs": 7,
-      "sourceRevision": "db0b641880a5c842ffdcc2cf1dda6bedde58d033"
+      "sourceRevision": "70e800ad33a6d376388576ce76a608f35c595b64"
     },
     "results": {
       "node22HubTests": {
-        "passed": 670,
+        "passed": 677,
         "failed": 0,
         "skipped": 0
       },
       "node24HubTests": {
-        "passed": 670,
+        "passed": 677,
         "failed": 0,
         "skipped": 0
       },
@@ -1497,7 +1497,7 @@
         "skipped": 0
       },
       "livePostgresMemgraph": {
-        "passed": 159,
+        "passed": 180,
         "failed": 0,
         "skipped": 0
       },
@@ -1512,30 +1512,32 @@
       },
       "codeql": "PASS",
       "mainlineAttestation": "PASS",
-      "evidenceConsolidation": "PASS",
-      "fullNpmAudit": "0 vulnerabilities",
-      "productionNpmAudit": "0 vulnerabilities"
+      "evidenceConsolidation": "PASS"
     },
     "sbom": {
       "lockfileSha256": "8f3786bcfcd03d0b63761c7107e4d757ae5b45171ba2f6c086ff38c027c8b086",
-      "sbomSha256": "5752c75e28ec77802a2539197be00725a136e251c5941bde3d3f05516459f4c8",
+      "sbomSha256": "83bf5e9f4a3eaa360ee3e2fe7e20a458d3c0e2e7afc13ab545fbee023207d1e4",
       "cyclonedx": "1.5",
       "npm": "11.19.1",
       "componentsPerRuntime": 200,
       "dependencyRecordsPerRuntime": 201,
       "attestations": {
-        "workflow": "https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44482863945",
-        "evidenceArtifact": "https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44482863945/artifacts/14509153178",
-        "verified": true
+        "workflow": "https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44809875826",
+        "evidenceArtifact": "https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44809875826/artifacts/14664109557",
+        "verified": true,
+        "provenanceSubjectsVerified": [
+          "package-lock.json",
+          "virgoscorpio-hub.sbom.cdx.json"
+        ]
       }
     },
     "readiness": {
-      "generatedAt": "2026-11-19T07:54:53.727Z",
-      "artifactId": 14508174935,
-      "archiveSha256": "b4bedbc44d9067d04f5327cc57337f94238c6d18cd93fe1aff2beb74574bc786",
-      "readinessJsonSha256": "47c6a13ea9f4ca49449a618d20dfcf5c6094def7b92d930b7399886513976ea9",
-      "readinessMarkdownSha256": "457053408b0531e2b90057b3ea2af324fa37edd2d8c9dae9cba87f4933f6e8a8",
-      "sourceRevision": "db0b641880a5c842ffdcc2cf1dda6bedde58d033",
+      "generatedAt": "2026-11-20T20:20:08Z",
+      "artifactId": 14666785760,
+      "archiveSha256": "dcee92566f66e6bea50e28c301c910f31eac9f51546f63305150a8a9b6a32782",
+      "readinessJsonSha256": "7d327cc49a4837f1fb40aedd6ec9cf35ac4e91f95d9347849ed8343c795e8931",
+      "readinessMarkdownSha256": "4ab5dc983b9225403c0f44dc65a177662a744cc37d3e9ef2620164234e665784",
+      "sourceRevision": "70e800ad33a6d376388576ce76a608f35c595b64",
       "pass": 8,
       "partial": 2,
       "blocked": 0,
@@ -1546,34 +1548,35 @@
       "decision": "NO_GO"
     },
     "artifactIds": {
-      "readiness": 14508174935,
-      "node22Ci": 14509895007,
-      "node24Ci": 14509227738,
-      "dependency22": 14508749409,
-      "dependency24": 14508469958,
-      "postgresMemgraph": 14508334573,
-      "liveIntegrationNode22": 14508154756,
-      "browser": 14508484755,
-      "codeql": 14508364226,
-      "supplyChainAttestation": 14509153178
+      "readiness": 14666785760,
+      "node22Ci": 14664363924,
+      "node24Ci": 14663294210,
+      "dependency22": 14664363920,
+      "dependency24": 14663124390,
+      "postgresMemgraph": 14664269435,
+      "liveIntegrationNode22": 14664044924,
+      "browser": 14666225541,
+      "codeql": 14666535533,
+      "supplyChainAttestation": 14664109557
     },
     "artifactDigests": {
-      "readiness": "sha256:b4bedbc44d9067d04f5327cc57337f94238c6d18cd93fe1aff2beb74574bc786",
-      "node22Ci": "sha256:e20d4576e754e3cf5043bf1424f7301557bfe03eca07225aa1b2759739475532",
-      "node24Ci": "sha256:85d893179eb306926f36dacdba38fa6ed990573218b44dbfa752580b1514b534",
-      "dependency22": "sha256:58b34baf86bd125d3a60a2d09d516d4ddba863f1c38c112401a60e7c6b781b7d",
-      "dependency24": "sha256:4f302f40baa9d7287b97bcac8f8119e9c776e417f989229bdbb2216262eaf148",
-      "postgresMemgraph": "sha256:5c9ef4f5c8e1c5efcc539ec7870961f72701e40cfcefed3e1dd2976ba479c90b",
-      "liveIntegrationNode22": "sha256:26a9e0a3d16d081074218e4de981ca20acdfd49ef671129248d230099c4a1a29",
-      "browser": "sha256:909aea32c91139c836b1733f0ef83f210776187062740d9346f1f3262bbf1bcd",
-      "codeql": "sha256:34adfe9f34ca373dd513408fa9cd2c2ed8a7ab17ca45d1bbf02f86b5d625ee34",
-      "supplyChainAttestation": "sha256:cbed115fd6ebc153e0aa2b60c3ca50229e73472e46a6979653a5ec16d9ea2686"
+      "readiness": "sha256:dcee92566f66e6bea50e28c301c910f31eac9f51546f63305150a8a9b6a32782",
+      "node22Ci": "sha256:989f44df0e350a8b737a09087989625da9afde7e2f4d20283be75189b13c89a6",
+      "node24Ci": "sha256:9ac8a164ea82d4dfa9476b7f8a1aa40672c309a907fe50f3d6c73999872b77af",
+      "dependency22": "sha256:21c1572dfe019e9f93c82716fc22e2feb411afe4787f42d46cec82e2fde71b38",
+      "dependency24": "sha256:e8a0c79810c84ef402ce6c181c9e19aa97f3cde898d87e3fbe4e6b58b057ae9f",
+      "postgresMemgraph": "sha256:74eab4e8c2f63e2282c23cb0d01425b7e0014d2d84ac47e02115a61d87f92b1a",
+      "liveIntegrationNode22": "sha256:22f3127d486f33249eadb20996bd9830a15091298324c71340ac2e6f93d96466",
+      "browser": "sha256:5cf2abfc8f6e83375607d7a5f4d1d8c701df26b37fdf14c81f8a6afb0ac5da80",
+      "codeql": "sha256:deb486a94e4177d9feb0f5dc07ae1b307672b386964a3bb62e1dcf0f14579f42",
+      "supplyChainAttestation": "sha256:d1e1588bd9761a18a48fd40fdc1fda63e1dca8aa32b73385e31c947e808b859a"
     },
     "review": {
-      "formalPullRequestReviews": 0,
+      "formalPullRequestReviews": 4,
+      "approvedReviews": 0,
       "inlineReviewThreads": 0,
       "reviewDecision": "NONE",
-      "note": "PR #216 merged with zero formal review submissions or inline threads; CI, CodeQL and signed attestations are maintainer/automation evidence only."
+      "note": "PR #232 merged with four owner-account COMMENTED review submissions and zero APPROVED submissions. Passing CI is maintainer/automation evidence only; independent non-author approval remains required under issue #230."
     },
     "release": {
       "gitHubReleasePublished": false,
@@ -1583,21 +1586,20 @@
     },
     "candidateWorkflows": [
       {
-        "runId": 44481965771,
-        "runNumber": 783,
+        "runId": 44808356354,
+        "runNumber": 831,
         "event": "push",
         "conclusion": "success",
-        "headSha": "84ce5eb71127411573d4a0b5e81dda94ecef3f81"
+        "headSha": "268d2bd09307128c74cd68eac79d84d42db115a6"
       },
       {
-        "runId": 44482025200,
-        "runNumber": 784,
+        "runId": 44808366729,
+        "runNumber": 832,
         "event": "pull_request",
-        "conclusion": "success",
-        "headSha": "84ce5eb71127411573d4a0b5e81dda94ecef3f81"
+        "conclusion": "success"
       }
     ],
-    "evidenceScope": "F1.55 is the latest merged runtime increment. PR #216 closed issue #215. Exact-main workflow #785 passed 7/7 on db0b641. Readiness artifact #14508174935: 8 PASS / 2 PARTIAL / 14 MISSING_EVIDENCE; readyForProduction=false; production NO-GO. Zero formal PR reviews or inline threads; maintainer/automation evidence only."
+    "evidenceScope": "Exact-main F1.59 revision and mainline CI #833; candidate runs #831/#832 passed before merge. Aikido findings are tracked in #234/#23/#235 and do not replace independent reviews #14/#25 or merge governance #230."
   },
   "libraryRouteRefactor": {
     "reviewedAt": "2026-11-04",
@@ -2372,48 +2374,49 @@
     ]
   },
   "latestMainSourceEvidence": {
-    "reviewedAt": "2026-11-19",
+    "reviewedAt": "2026-11-20",
     "version": "0.6.2",
-    "sourceRevision": "db0b641880a5c842ffdcc2cf1dda6bedde58d033",
-    "runtimeMergeRevision": "db0b641880a5c842ffdcc2cf1dda6bedde58d033",
-    "previousRuntimeMergeRevision": "c247e1cb1daa5683c3a74aa6856e9718d92b4557",
+    "sourceRevision": "70e800ad33a6d376388576ce76a608f35c595b64",
+    "runtimeMergeRevision": "70e800ad33a6d376388576ce76a608f35c595b64",
+    "previousRuntimeMergeRevision": "619819230dac2e8d169ce71af7c6a41f0630cf27",
     "latestRuntimeChange": {
-      "feature": "F1.55",
-      "issue": 215,
-      "pullRequest": 216,
-      "implementationHead": "84ce5eb71127411573d4a0b5e81dda94ecef3f81",
-      "implementationCommit": "84ce5eb71127411573d4a0b5e81dda94ecef3f81",
-      "mergeCommit": "db0b641880a5c842ffdcc2cf1dda6bedde58d033",
-      "mergedAt": "2026-11-19T07:51:37Z"
+      "feature": "F1.59",
+      "issue": 231,
+      "pullRequest": 232,
+      "implementationHead": "623a5597553ffb783d5a42f9280acd40a06227d3",
+      "implementationCommit": "bf36d356913053df069abd825e157dad400a67d2",
+      "pullRequestHead": "268d2bd09307128c74cd68eac79d84d42db115a6",
+      "mergeCommit": "70e800ad33a6d376388576ce76a608f35c595b64",
+      "mergedAt": "2026-11-20T20:16:37Z"
     },
     "documentationReconciliation": {
-      "pullRequest": 214,
-      "head": "950a082b7f28f731f396f84b5ad04b9f4f8ccebb",
-      "mergeCommit": "91a93f370205335321c65d68e706f830251936c3",
-      "mergedAt": "2026-11-19T06:26:35Z",
-      "documentationOnly": true,
-      "note": "Prior documentation-only reconciliation after F1.54; current runtime PR #216 and exact-main workflow #785 are recorded above."
+      "pullRequest": 232,
+      "branchHead": "268d2bd09307128c74cd68eac79d84d42db115a6",
+      "merged": true,
+      "mergeCommit": "70e800ad33a6d376388576ce76a608f35c595b64",
+      "documentationOnlyCommit": "268d2bd09307128c74cd68eac79d84d42db115a6",
+      "note": "Final branch commit was documentation-only; runtime changes were introduced by F1.59 and validated on exact main."
     },
     "workflow": {
       "name": "VirgoScorpio Hub CI",
-      "runId": 44482863945,
-      "runNumber": 785,
-      "url": "https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44482863945",
+      "runId": 44809875826,
+      "runNumber": 833,
+      "url": "https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44809875826",
       "event": "push",
       "attempt": 1,
-      "completedAt": "2026-11-19T07:54:59Z",
+      "completedAt": "2026-11-20T20:20:12Z",
       "completedJobs": 7,
       "successfulJobs": 7,
-      "sourceRevision": "db0b641880a5c842ffdcc2cf1dda6bedde58d033"
+      "sourceRevision": "70e800ad33a6d376388576ce76a608f35c595b64"
     },
     "results": {
       "node22HubTests": {
-        "passed": 670,
+        "passed": 677,
         "failed": 0,
         "skipped": 0
       },
       "node24HubTests": {
-        "passed": 670,
+        "passed": 677,
         "failed": 0,
         "skipped": 0
       },
@@ -2423,7 +2426,7 @@
         "skipped": 0
       },
       "livePostgresMemgraph": {
-        "passed": 159,
+        "passed": 180,
         "failed": 0,
         "skipped": 0
       },
@@ -2438,30 +2441,28 @@
       },
       "codeql": "PASS",
       "mainlineAttestation": "PASS",
-      "evidenceConsolidation": "PASS",
-      "fullNpmAudit": "0 vulnerabilities",
-      "productionNpmAudit": "0 vulnerabilities"
+      "evidenceConsolidation": "PASS"
     },
     "supplyChain": {
       "lockfileSha256": "8f3786bcfcd03d0b63761c7107e4d757ae5b45171ba2f6c086ff38c027c8b086",
-      "sbomSha256": "5752c75e28ec77802a2539197be00725a136e251c5941bde3d3f05516459f4c8",
+      "sbomSha256": "83bf5e9f4a3eaa360ee3e2fe7e20a458d3c0e2e7afc13ab545fbee023207d1e4",
       "cyclonedx": "1.5",
       "components": 200,
       "dependencyRecords": 201,
-      "verificationSummarySha256": "cbed115fd6ebc153e0aa2b60c3ca50229e73472e46a6979653a5ec16d9ea2686",
       "attestations": {
-        "workflowRun": 44482863945,
-        "artifactId": 14509153178,
+        "workflowRun": 44809875826,
+        "artifactId": 14664109557,
+        "archiveSha256": "d1e1588bd9761a18a48fd40fdc1fda63e1dca8aa32b73385e31c947e808b859a",
         "verified": true
       }
     },
     "readiness": {
-      "generatedAt": "2026-11-19T07:54:53.727Z",
-      "artifactId": 14508174935,
-      "archiveSha256": "b4bedbc44d9067d04f5327cc57337f94238c6d18cd93fe1aff2beb74574bc786",
-      "readinessJsonSha256": "47c6a13ea9f4ca49449a618d20dfcf5c6094def7b92d930b7399886513976ea9",
-      "readinessMarkdownSha256": "457053408b0531e2b90057b3ea2af324fa37edd2d8c9dae9cba87f4933f6e8a8",
-      "sourceRevision": "db0b641880a5c842ffdcc2cf1dda6bedde58d033",
+      "generatedAt": "2026-11-20T20:20:08Z",
+      "artifactId": 14666785760,
+      "archiveSha256": "dcee92566f66e6bea50e28c301c910f31eac9f51546f63305150a8a9b6a32782",
+      "readinessJsonSha256": "7d327cc49a4837f1fb40aedd6ec9cf35ac4e91f95d9347849ed8343c795e8931",
+      "readinessMarkdownSha256": "4ab5dc983b9225403c0f44dc65a177662a744cc37d3e9ef2620164234e665784",
+      "sourceRevision": "70e800ad33a6d376388576ce76a608f35c595b64",
       "pass": 8,
       "partial": 2,
       "blocked": 0,
@@ -2472,29 +2473,29 @@
       "decision": "NO_GO"
     },
     "review": {
-      "runtimePullRequest": 216,
-      "runtimeFormalReviews": 0,
+      "runtimePullRequest": 232,
+      "runtimeFormalReviews": 4,
+      "runtimeApprovedReviews": 0,
       "runtimeInlineReviewThreads": 0,
       "reviewDecision": "NONE",
-      "qualification": "PR #216 merged with zero formal reviews or inline threads; mainline CI and signed attestations are maintainer/automation evidence only."
+      "qualification": "PR #232 merged with four owner COMMENTED submissions and zero approvals. Mainline CI and signed attestations are maintainer/automation evidence only, not independent review. Governance issue #230 remains open."
     },
-    "qualification": "F1.55 revalidates the authenticated friendship addressee account and selected-site membership at the final locked acceptance write. Exact-main CI, live PostgreSQL/Memgraph, migrations, CodeQL and signed attestations validate this exact merge source. This remains maintainer/automation evidence, not independent tenant/security or qualified legal review. Production remains NO-GO / NOT_PRODUCTION_CERTIFIED.",
-    "releaseGateReport": "docs/reports/2026-11-18-VirgoScorpio-Hub-0.6.2-Release-Gate-Report.md",
+    "qualification": "F1.59 is merged and exact-main CI #833 passed all seven jobs on the merge revision. This remains maintainer/automation evidence, not independent tenant/security or qualified legal review. Aikido monitoring is supplemental and does not close the independent review, SAST, secret, dependency, or production evidence obligations. Production remains NO-GO / NOT_PRODUCTION_CERTIFIED.",
+    "releaseGateReport": "docs/reports/2026-11-20-VirgoScorpio-Hub-0.6.2-Release-Gate-Report.md",
     "f151MergeReport": "docs/reports/2026-11-18-F1-51-COMMUNITY-GROUP-JOIN-IDEMPOTENCY-REPORT.md",
     "candidateWorkflows": [
       {
-        "runId": 44481965771,
-        "runNumber": 783,
+        "runId": 44808356354,
+        "runNumber": 831,
         "event": "push",
         "conclusion": "success",
-        "headSha": "84ce5eb71127411573d4a0b5e81dda94ecef3f81"
+        "headSha": "268d2bd09307128c74cd68eac79d84d42db115a6"
       },
       {
-        "runId": 44482025200,
-        "runNumber": 784,
+        "runId": 44808366729,
+        "runNumber": 832,
         "event": "pull_request",
-        "conclusion": "success",
-        "headSha": "84ce5eb71127411573d4a0b5e81dda94ecef3f81"
+        "conclusion": "success"
       }
     ],
     "f152MergeReport": "docs/reports/2026-11-18-F1-52-FRIENDSHIP-ACTIVE-REQUESTER-ACCEPTANCE-REPORT.md"
@@ -2617,43 +2618,44 @@
     "status": "MERGED_TO_MAIN_EXACT_MAIN_CI_PASS"
   },
   "latestMergedIncrementEvidence": {
-    "reviewedAt": "2026-11-19",
+    "reviewedAt": "2026-11-20",
     "version": "0.6.2",
-    "feature": "F1.55",
+    "feature": "F1.59",
     "issue": {
-      "number": 215,
+      "number": 231,
       "state": "CLOSED",
       "parentIssue": 124,
       "closeReason": "completed"
     },
-    "branch": "security/f1-55-community-friendship-acceptance-revocation-2026-11-19",
-    "implementationCommit": "84ce5eb71127411573d4a0b5e81dda94ecef3f81",
-    "mergeCommit": "db0b641880a5c842ffdcc2cf1dda6bedde58d033",
-    "pullRequest": 216,
-    "pullRequestHead": "84ce5eb71127411573d4a0b5e81dda94ecef3f81",
-    "mergedAt": "2026-11-19T07:51:37Z",
-    "mainlineWorkflow": 44482863945,
-    "exactHeadPushWorkflow": 44481965771,
-    "exactHeadPullRequestWorkflow": 44482025200,
+    "branch": "security/f1-59-outbox-projection-envelope-scope-2026-11-20",
+    "implementationCommit": "bf36d356913053df069abd825e157dad400a67d2",
+    "mergeCommit": "70e800ad33a6d376388576ce76a608f35c595b64",
+    "pullRequest": 232,
+    "pullRequestHead": "268d2bd09307128c74cd68eac79d84d42db115a6",
+    "mergedAt": "2026-11-20T20:16:37Z",
+    "mainlineWorkflow": 44809875826,
+    "exactHeadPushWorkflow": 44808356354,
+    "exactHeadPullRequestWorkflow": 44808366729,
     "hostedLiveIntegration": {
-      "passed": 159,
+      "passed": 180,
       "failed": 0,
       "skipped": 0
     },
     "focusedLocalIntegration": {
-      "passed": 26,
+      "passed": 29,
       "failed": 0,
-      "skipped": 0
+      "skipped": 2
     },
     "localNpmCheck": {
-      "passed": 667,
+      "passed": 674,
       "failed": 0,
       "skipped": 3,
-      "platform": "Windows-specific"
+      "total": 677,
+      "platform": "conditional Windows service-based skips"
     },
     "artifactVerification": {
       "requiredPaths": 238,
-      "javascriptFiles": 268
+      "javascriptFiles": 270
     },
     "migrations": {
       "freshApplied": 18,
@@ -2663,17 +2665,17 @@
     "tenantInventory": {
       "families": 28,
       "declaredRoutePatterns": 80,
-      "sourceFiles": 21,
-      "testFiles": 57
+      "sourceFiles": 22,
+      "testFiles": 59
     },
-    "formalReviews": 0,
+    "formalReviews": 4,
     "inlineReviewThreads": 0,
-    "reviewQualification": "PR #216 merged with zero formal reviews or inline review threads. CI and signed attestations are maintainer/automation evidence only, not independent security/legal approval.",
+    "reviewQualification": "PR #232 merged with four owner-account COMMENTED submissions and zero APPROVED submissions. No independent non-author approval was recorded; CI and signed attestations are maintainer/automation evidence only.",
     "productionCertified": false,
     "readyForProduction": false,
     "productionDecision": "NO_GO",
-    "readinessArtifact": 14508174935,
-    "report": "docs/reports/2026-11-19-F1-55-FRIENDSHIP-ACCEPTANCE-AUTHORIZATION-RACE-REPORT.md"
+    "readinessArtifact": 14666785760,
+    "report": "docs/reports/2026-11-20-F1-59-OUTBOX-PROJECTION-ENVELOPE-SCOPE-REPORT.md"
   },
   "historicalMainSourceEvidenceF140": {
     "reviewedAt": "2026-11-16",
