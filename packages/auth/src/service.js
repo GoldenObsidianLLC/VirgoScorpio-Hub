@@ -103,6 +103,33 @@ function createIdentityService({ pool, env = process.env, clock = () => Date.now
     state.count += 1;
   }
 
+  const MAX_LIVE_MFA_CHALLENGES_PER_USER = 5;
+
+  // Creates an MFA challenge while enforcing a per-account retention bound. In the same
+  // statement, expired and consumed challenges for the account are purged and only the newest
+  // (MAX - 1) unexpired, unconsumed challenges are retained, so at most MAX rows exist per account.
+  async function createMfaChallenge(user) {
+    const challengeToken = randomBytes(32).toString('base64url');
+    const nowMs = clock();
+    const expiresAt = new Date(nowMs + 5 * 60_000);
+    await pool.query(
+      `WITH purged AS (
+         DELETE FROM auth_mfa_challenges
+         WHERE user_id=$1 AND (
+           consumed_at IS NOT NULL OR expires_at<=$4
+           OR id IN (
+             SELECT id FROM auth_mfa_challenges
+             WHERE user_id=$1 AND consumed_at IS NULL AND expires_at>$4
+             ORDER BY created_at DESC, id DESC OFFSET $5
+           )
+         )
+       )
+       INSERT INTO auth_mfa_challenges(user_id,token_hash,expires_at) VALUES($1,$2,$3)`,
+      [user.id, digest(challengeToken), expiresAt, new Date(nowMs), MAX_LIVE_MFA_CHALLENGES_PER_USER - 1]
+    );
+    return { challengeToken, expiresAt };
+  }
+
   function safeUser(user) {
     return { id: user.id, email: user.email, displayName: user.display_name, status: user.status, emailVerified: Boolean(user.email_verified_at), mfaEnabled: Boolean(user.mfa_enabled) };
   }
@@ -162,12 +189,12 @@ function createIdentityService({ pool, env = process.env, clock = () => Date.now
       if (env.REQUIRE_VERIFIED_EMAIL === 'true' && !user.email_verified_at) {
         const error = new Error('Verify your email address before signing in.'); error.statusCode = 403; error.code = 'ERR_VIRGOSCORPIO_HUB_EMAIL_NOT_VERIFIED'; throw error;
       }
-      loginBuckets.delete(`${ip || 'unknown'}:${email}`);
       if (user.mfa_enabled) {
-        const challengeToken = randomBytes(32).toString('base64url');
-        await pool.query('INSERT INTO auth_mfa_challenges(user_id,token_hash,expires_at) VALUES($1,$2,$3)', [user.id, digest(challengeToken), new Date(clock() + 5 * 60_000)]);
-        return { mfaRequired: true, challengeToken, user: safeUser(user), expiresAt: new Date(clock() + 5 * 60_000) };
+        // Keep the throttle bucket for MFA-enabled accounts so repeated password-phase logins stay rate limited.
+        const { challengeToken, expiresAt } = await createMfaChallenge(user);
+        return { mfaRequired: true, challengeToken, user: safeUser(user), expiresAt };
       }
+      loginBuckets.delete(`${ip || 'unknown'}:${email}`);
       const created = await createSession(user, { ip, userAgent });
       return { ...created, mfaRequired: false };
     },
@@ -374,9 +401,8 @@ function createIdentityService({ pool, env = process.env, clock = () => Date.now
         await client.query('COMMIT');
       } catch (error) { await client.query('ROLLBACK').catch(() => {}); throw error; } finally { client.release(); }
       if (user.mfa_enabled) {
-        const challengeToken = randomBytes(32).toString('base64url');
-        await pool.query('INSERT INTO auth_mfa_challenges(user_id,token_hash,expires_at) VALUES($1,$2,$3)', [user.id, digest(challengeToken), new Date(clock() + 5 * 60_000)]);
-        return { mfaRequired: true, challengeToken, user: safeUser(user), expiresAt: new Date(clock() + 5 * 60_000) };
+        const { challengeToken, expiresAt } = await createMfaChallenge(user);
+        return { mfaRequired: true, challengeToken, user: safeUser(user), expiresAt };
       }
       return { ...(await createSession(user, { ip, userAgent })), mfaRequired: false };
     },
