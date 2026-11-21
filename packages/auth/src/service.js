@@ -92,8 +92,12 @@ async function insertAuditEvent(queryable, {
 async function lockSiteShared(queryable, siteId) {
   await queryable.query('SELECT id FROM sites WHERE id=$1 FOR KEY SHARE', [siteId]);
 }
-async function requireCurrentSiteManager(queryable, siteId, actorId) {
-  if (actorId === null || actorId === undefined) return;
+async function requireCurrentSiteManager(queryable, siteId, actorId, environment = process.env) {
+  if (actorId === null || actorId === undefined) {
+    // The null-actor compatibility path is reserved for the non-production developer principal.
+    if (environment.NODE_ENV !== 'production') return;
+    throw authError(403, 'ERR_VIRGOSCORPIO_HUB_FORBIDDEN', 'An authenticated actor is required for site management.');
+  }
   const result = await queryable.query(
     `SELECT r.capabilities FROM site_memberships m JOIN roles r ON r.id=m.role_id
      JOIN users u ON u.id=m.user_id WHERE m.user_id=$1 AND m.site_id=$2 AND u.status='active'
@@ -533,7 +537,7 @@ function createIdentityService({ pool, env = process.env, clock = () => Date.now
     async listMembers({ siteId, actorId = null }) {
       const result = await withTransaction(pool, async client => {
         await lockSiteShared(client, siteId);
-        await requireCurrentSiteManager(client, siteId, actorId);
+        await requireCurrentSiteManager(client, siteId, actorId, env);
         return client.query(`SELECT u.id,u.email,u.display_name,u.status,r.slug AS role,m.created_at
           FROM site_memberships m JOIN users u ON u.id=m.user_id JOIN roles r ON r.id=m.role_id
           WHERE m.site_id=$1 ORDER BY r.slug,u.email`, [siteId]);
@@ -548,7 +552,7 @@ function createIdentityService({ pool, env = process.env, clock = () => Date.now
 
       const { user, membership } = await withTransaction(pool, async client => {
         await lockSiteShared(client, siteId);
-        await requireCurrentSiteManager(client, siteId, actorId);
+        await requireCurrentSiteManager(client, siteId, actorId, env);
         const userResult = await client.query("SELECT id,email,display_name,status FROM users WHERE lower(email)=$1 AND status='active'", [email]);
         if (!userResult.rows[0]) { const error = new Error('No active account exists for that email. Create an invitation instead.'); error.statusCode = 404; error.code = 'ERR_VIRGOSCORPIO_HUB_USER_NOT_FOUND'; throw error; }
         const role = await client.query('SELECT id FROM roles WHERE slug=$1', [roleSlug]);
@@ -577,7 +581,7 @@ function createIdentityService({ pool, env = process.env, clock = () => Date.now
         // Serialize membership removals per site. Without this row lock, two active
         // owners can concurrently observe a count of two and remove each other.
         await client.query('SELECT id FROM sites WHERE id=$1 FOR UPDATE', [siteId]);
-        await requireCurrentSiteManager(client, siteId, actorId);
+        await requireCurrentSiteManager(client, siteId, actorId, env);
         const isOwner = await client.query(`SELECT 1 FROM site_memberships m JOIN roles r ON r.id=m.role_id WHERE m.site_id=$1 AND m.user_id=$2 AND r.slug='site-owner'`, [siteId, userId]);
         if (isOwner.rows[0]) {
           const owners = await client.query(`SELECT count(*)::integer AS count FROM site_memberships m JOIN roles r ON r.id=m.role_id JOIN users u ON u.id=m.user_id WHERE m.site_id=$1 AND r.slug='site-owner' AND u.status='active'`, [siteId]);
@@ -614,7 +618,7 @@ function createIdentityService({ pool, env = process.env, clock = () => Date.now
       if (!site.rows[0]) throw authError(404, 'ERR_VIRGOSCORPIO_HUB_SITE_NOT_FOUND', 'Site not found.');
       await withTransaction(pool, async queryable => {
         await lockSiteShared(queryable, siteId);
-        await requireCurrentSiteManager(queryable, siteId, invitedBy);
+        await requireCurrentSiteManager(queryable, siteId, invitedBy, env);
         const inserted = await queryable.query(`INSERT INTO site_invitations(site_id,email,role_id,token_hash,invited_by,expires_at)
           VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT (site_id, (lower(email))) WHERE accepted_at IS NULL DO UPDATE
           SET role_id=EXCLUDED.role_id,token_hash=EXCLUDED.token_hash,invited_by=EXCLUDED.invited_by,expires_at=EXCLUDED.expires_at,created_at=now()

@@ -53,6 +53,37 @@ test('ordinary membership and invitation APIs cannot grant the site-owner role',
   assert.deepEqual(queries, [], 'unsupported owner grants must fail before PostgreSQL side effects');
 });
 
+test('production membership operations fail closed when the actor ID is omitted', async () => {
+  const siteId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+  const transactionQueries = [];
+  const client = {
+    async query(sql) {
+      const normalized = String(sql).replace(/\s+/g, ' ').trim();
+      transactionQueries.push(normalized);
+      if (['BEGIN', 'COMMIT', 'ROLLBACK'].includes(normalized)) return { rowCount: 0, rows: [] };
+      if (normalized === 'SELECT id FROM sites WHERE id=$1 FOR KEY SHARE' || normalized === 'SELECT id FROM sites WHERE id=$1 FOR UPDATE') return { rowCount: 1, rows: [{ id: siteId }] };
+      if (normalized.includes('SELECT r.capabilities') || normalized.includes('INSERT INTO')) throw new Error('A missing production actor must be rejected before membership reads or writes.');
+      throw new Error('Unexpected membership transaction query: ' + normalized);
+    },
+    release() {},
+  };
+  const pool = {
+    async connect() { return client; },
+    async query(sql) {
+      if (sql.includes('SELECT id FROM roles WHERE slug=$1')) return { rowCount: 1, rows: [{ id: 'role-id' }] };
+      if (sql.includes('SELECT slug,name FROM sites WHERE id=$1')) return { rowCount: 1, rows: [{ slug: 'site', name: 'Site' }] };
+      throw new Error('Unexpected pool query: ' + sql);
+    },
+  };
+  const identity = createIdentityService({ pool, env: { NODE_ENV: 'production' } });
+  const forbidden = error => error.statusCode === 403 && error.code === 'ERR_VIRGOSCORPIO_HUB_FORBIDDEN';
+  await assert.rejects(identity.listMembers({ siteId }), forbidden);
+  await assert.rejects(identity.addMember({ siteId, email: 'member@example.test', roleSlug: 'editor' }), forbidden);
+  await assert.rejects(identity.removeMember({ siteId, userId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' }), forbidden);
+  await assert.rejects(identity.createInvitation({ siteId, email: 'invite@example.test', roleSlug: 'viewer' }), forbidden);
+  assert.equal(transactionQueries.filter(sql => sql.includes('SELECT r.capabilities')).length, 0);
+  assert.equal(transactionQueries.filter(sql => sql.includes('INSERT INTO')).length, 0);
+});
 test('site creation writes its owner membership and correlated audit in one transaction', async t => {
   const actorId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
   const siteId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
