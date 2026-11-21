@@ -8,7 +8,7 @@
   "generatedBy": "scripts/generate-tenant-isolation-route-inventory.js",
   "sourceTree": {
     "fileCount": 22,
-    "sha256": "132da2782ec5ed0b1c166a5278c8c61aad2594b75b32141f53e39bdb22f6286d",
+    "sha256": "6bfd8fe16dfb4a7bb0ed3566d11dad40a79e8d5f336bd07bb94e4e3cc5ecf8fb",
     "files": [
       "apps/api/src/ai-task-routes.js",
       "apps/api/src/auth-routes.js",
@@ -36,7 +36,7 @@
   },
   "testTree": {
     "fileCount": 59,
-    "sha256": "1de455f900e112f5cd0162b750bd0ca2ba9bc63fa7e4f61549b7777060beb123",
+    "sha256": "e4cb13f4c5c640514dcc0b282242fe3c3359221e419fec385974a1c83c0a0e88",
     "files": [
       "test/ai-queue-worker.test.js",
       "test/ai-task-queue.test.js",
@@ -2075,7 +2075,7 @@
             {
               "anchor": "validateEventEnvelope(envelope)",
               "lines": [
-                35
+                26
               ]
             }
           ]
@@ -2107,13 +2107,13 @@
             {
               "anchor": "function validateEventEnvelope(",
               "lines": [
-                57
+                68
               ]
             },
             {
               "anchor": "function eventEnvelopeFromOutboxRow(",
               "lines": [
-                180
+                256
               ]
             }
           ]

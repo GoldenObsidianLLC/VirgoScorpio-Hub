@@ -157,12 +157,14 @@ function createOutboxDeliveryWorker({
     let envelope;
     try {
       envelope = eventEnvelopeFromOutboxRow(event);
+      // The validated envelope owns event and aggregate identity. Its payload
+      // is the checked, normalized compatibility copy supplied to handlers.
       await withSpan('outbox.process_event', {
         'virgoscorpio_hub.component': 'outbox',
-        'virgoscorpio_hub.operation': event.event_type
+        'virgoscorpio_hub.operation': envelope.eventType
       }, () => handler({
-        type: event.event_type,
-        payload: event.payload,
+        type: envelope.eventType,
+        payload: envelope.payload,
         envelope,
         delivery: { consumerGroup, attempt: Number(event.delivery_attempts) }
       }));
