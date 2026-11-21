@@ -65,6 +65,7 @@ function createPolicyPool(maxDataClassification = 'confidential') {
   };
   return {
     async query(sql) {
+      if (sql.includes('FROM firewall_rules')) return { rows: [] };
       if (sql.startsWith('INSERT INTO site_ai_policies')) return { rows: [] };
       if (sql.startsWith('SELECT site_id,enabled,allow_external_content')) return { rows: [policy] };
       if (sql.startsWith('INSERT INTO ai_usage_daily')) return { rows: [{ requests: 1, input_chars: 100 }] };
