@@ -389,6 +389,12 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
     }
     return null;
   }
+  async function enforceSiteFirewall(req, url, siteId) {
+    const result = await firewall.evaluate({ ip: req.socket.remoteAddress || 'unknown', path: url.pathname, userAgent: String(req.headers['user-agent'] || '').slice(0, 500), siteId: String(siteId || '').toLowerCase() || null });
+    if (result.action === 'deny') throw fail(403, 'ERR_VIRGOSCORPIO_HUB_FIREWALL_DENY', 'Request blocked by VirgoScorpio Hub firewall policy.');
+    if (result.action === 'challenge') throw fail(403, 'ERR_VIRGOSCORPIO_HUB_FIREWALL_CHALLENGE', 'This request requires an additional verification step.');
+    if (result.action === 'rate_limit') throw fail(429, 'ERR_VIRGOSCORPIO_HUB_FIREWALL_RATE_LIMIT', 'Firewall rate limit exceeded.');
+  }
   async function siteIdFor({ req, url, body, actor, required = true, routeSiteId, requireMembership = true }) {
     const querySiteIds = url.searchParams.getAll('siteId');
     if (querySiteIds.length > 1) {
@@ -415,6 +421,10 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
     if (!siteId && actor.memberships.length > 1) throw fail(400, 'ERR_VIRGOSCORPIO_HUB_SITE_REQUIRED', 'Select a site using x-virgoscorpio-hub-site-id or siteId.');
     if (!siteId) throw fail(400, 'ERR_VIRGOSCORPIO_HUB_SITE_REQUIRED', 'A siteId is required for this operation.');
     if (!ID_RE.test(siteId)) throw fail(400, 'ERR_VIRGOSCORPIO_HUB_INVALID_SITE_ID', 'siteId must be a valid UUID.');
+
+    // Re-evaluate the firewall with the resolved site so site-scoped rules apply to routes
+    // that select the tenant by query, header, body or membership rather than by path.
+    await enforceSiteFirewall(req, url, siteId);
 
     if (requireMembership && !actor.isDeveloper && !(await identity.authorizeSite(actor.user.id, siteId, 'content:read'))) {
       // Read membership directly; the requested capability is checked by route-specific authorization below.
@@ -741,7 +751,7 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
       });
       try {
       const url = new URL(req.url, 'http://localhost');
-      const firewallSite = url.pathname.match(/\/sites\/([0-9a-f-]{36})(?:\/|$)/i)?.[1] || null;
+      const firewallSite = url.pathname.match(/\/sites\/([0-9a-f-]{36})(?:\/|$)/i)?.[1]?.toLowerCase() || null;
       const firewallResult = await firewall.evaluate({ ip: req.socket.remoteAddress || 'unknown', path: url.pathname, userAgent: String(req.headers['user-agent'] || '').slice(0, 500), siteId: firewallSite });
       if (firewallResult.action === 'deny') return sendJson(res, 403, { error: 'Request blocked by VirgoScorpio Hub firewall policy.', code: 'ERR_VIRGOSCORPIO_HUB_FIREWALL_DENY', requestId });
       if (firewallResult.action === 'challenge') return sendJson(res, 403, { error: 'This request requires an additional verification step.', code: 'ERR_VIRGOSCORPIO_HUB_FIREWALL_CHALLENGE', requestId });
@@ -807,6 +817,7 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
       if (req.method === 'GET' && publicPageMatch) {
         if (!store) return sendJson(res, 503, { error: 'Published page delivery requires PostgreSQL.', code: 'ERR_VIRGOSCORPIO_HUB_DATABASE_DISABLED', requestId });
         const site = await store.getSiteBySlug(publicPageMatch[1]); if (!site) return sendJson(res, 404, { error: 'Page not found.', requestId });
+        await enforceSiteFirewall(req, url, site.id);
         const slug = decodeURIComponent(publicPageMatch[2]).replace(/^\/+|\/+$/g, '');
         const locale = url.searchParams.get('locale') || site.default_locale || 'en';
         const page = await store.getPublishedBySlug({ siteId: site.id, slug, locale });
@@ -847,6 +858,7 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
       if (req.method === 'GET' && publicSearchMatch) {
         if (!store) return sendJson(res, 503, { error: 'Search requires PostgreSQL.', code: 'ERR_VIRGOSCORPIO_HUB_DATABASE_DISABLED', requestId });
         const site = await store.getSiteBySlug(publicSearchMatch[1]); if (!site) return sendJson(res, 404, { error: 'Site not found.', requestId });
+        await enforceSiteFirewall(req, url, site.id);
         const query = url.searchParams.get('q') || ''; if (!query.trim() || query.length > 500) return sendJson(res, 400, { error: 'q is required and must be at most 500 characters.', requestId });
         return sendJson(res, 200, { results: await store.search({ siteId: site.id, query, locale: url.searchParams.get('locale') || null, limit: url.searchParams.get('limit') || 20 }), requestId });
       }
@@ -873,6 +885,7 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
         if (!localPool) return sendJson(res, 503, { error: 'Storefront requires PostgreSQL.', code: 'ERR_VIRGOSCORPIO_HUB_DATABASE_DISABLED', requestId });
         const site = await localPool.query('SELECT id,slug FROM sites WHERE slug=$1', [publicProductsMatch[1]]);
         if (!site.rows[0]) return sendJson(res, 404, { error: 'Store not found.', requestId });
+        await enforceSiteFirewall(req, url, site.rows[0].id);
         const result = await localPool.query("SELECT id,slug,name,description,product_type,currency,price_minor,compare_at_price_minor,sku,stock_status,requires_shipping,weight_grams,images,attributes,version,updated_at FROM commerce_products WHERE site_id=$1 AND status='published' ORDER BY created_at DESC LIMIT $2", [site.rows[0].id, Math.min(100, Math.max(1, Number(url.searchParams.get('limit')) || 50))]);
         return sendJson(res, 200, { siteSlug: site.rows[0].slug, products: result.rows, requestId });
       }
@@ -880,6 +893,7 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
       if (req.method === 'GET' && publicPlansMatch) {
         if (!localPool) return sendJson(res, 503, { error: 'Membership plans require PostgreSQL.', code: 'ERR_VIRGOSCORPIO_HUB_DATABASE_DISABLED', requestId });
         const site = await localPool.query('SELECT id,slug FROM sites WHERE slug=$1', [publicPlansMatch[1]]); if (!site.rows[0]) return sendJson(res, 404, { error: 'Site not found.', requestId });
+        await enforceSiteFirewall(req, url, site.rows[0].id);
         const plans = await localPool.query('SELECT id,slug,name,description,price_minor,currency,interval_unit,interval_count FROM membership_plans WHERE site_id=$1 AND active=true ORDER BY price_minor', [site.rows[0].id]);
         return sendJson(res, 200, { siteSlug: site.rows[0].slug, plans: plans.rows, requestId });
       }
