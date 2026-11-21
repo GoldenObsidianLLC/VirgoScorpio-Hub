@@ -196,6 +196,24 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
   const maxBody = boundedInt(env.MAX_REQUEST_BYTES, MAX_BODY_DEFAULT, 1_024, 16 * 1024 * 1024, 'MAX_REQUEST_BYTES');
   const maxMediaBody = Math.max(maxBody, MAX_MEDIA_BODY);
   const allowRequest = createRateLimiter(env);
+  // Process-wide cap on simultaneous anonymous asset deliveries. Each delivery buffers a whole object
+  // (up to the library ceiling), so bounding concurrency bounds aggregate memory, storage reads and hashing.
+  const maxPublicDeliveries = boundedInt(env.PUBLIC_ASSET_MAX_CONCURRENCY, 8, 1, 256, 'PUBLIC_ASSET_MAX_CONCURRENCY');
+  let activePublicDeliveries = 0;
+  function reservePublicDelivery(res, requestId) {
+    if (activePublicDeliveries >= maxPublicDeliveries) {
+      res.setHeader('retry-after', '1');
+      sendJson(res, 503, { error: 'Public asset delivery capacity is exhausted. Retry shortly.', code: 'ERR_VIRGOSCORPIO_HUB_PUBLIC_ASSET_BUSY', requestId });
+      return false;
+    }
+    activePublicDeliveries += 1;
+    let released = false;
+    // The slot is held until the response is fully flushed or the connection is closed, because the buffer is retained until then.
+    const release = () => { if (!released) { released = true; activePublicDeliveries -= 1; } };
+    res.once('close', release);
+    res.once('finish', release);
+    return true;
+  }
   const ai = aiService || createAIService({
     env,
     audit: event => structuredLogger.emit(event.succeeded ? 'info' : 'warn', 'virgoscorpio_hub.ai.audit', {
@@ -838,6 +856,7 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
       const mediaPublicMatch = url.pathname.match(/^\/media\/([0-9a-f-]{36})$/i);
       if (req.method === 'GET' && mediaPublicMatch) {
         if (!mediaStore) return sendJson(res, 404, { error: 'Media not found.', requestId });
+        if (!reservePublicDelivery(res, requestId)) return;
         const asset = await mediaStore.readPublic(mediaPublicMatch[1]);
         if (!asset) return sendJson(res, 404, { error: 'Media not found.', requestId });
         res.writeHead(200, { 'content-type': asset.mime_type, 'content-length': asset.data.length, 'cache-control': 'private, no-store', 'x-content-type-options': 'nosniff', 'content-security-policy': "default-src 'none'; sandbox", 'cross-origin-resource-policy': 'same-site', 'content-disposition': 'inline' });
@@ -854,6 +873,7 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
       const libraryVariantMatch = url.pathname.match(/^\/library\/public\/([0-9a-f-]{36})\/variants\/([a-z0-9][a-z0-9_-]{0,60})$/i);
       if (req.method === 'GET' && libraryVariantMatch) {
         if (!libraryStore) return sendJson(res, 404, { error: 'Asset variant not found.', code: 'ERR_VIRGOSCORPIO_HUB_LIBRARY_NOT_FOUND', requestId });
+        if (!reservePublicDelivery(res, requestId)) return;
         const variant = await libraryStore.readPublicVariant({ assetId: libraryVariantMatch[1], variantKey: libraryVariantMatch[2] });
         if (!variant) return sendJson(res, 404, { error: 'Asset variant not found.', code: 'ERR_VIRGOSCORPIO_HUB_LIBRARY_NOT_FOUND', requestId });
         res.writeHead(200, { 'content-type': variant.mime_type, 'content-length': variant.data.length, 'cache-control': 'private, no-store', 'x-content-type-options': 'nosniff', 'content-security-policy': "default-src 'none'; sandbox", 'cross-origin-resource-policy': 'same-site', 'content-disposition': 'inline' });
@@ -862,6 +882,7 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
       const libraryPublicMatch = url.pathname.match(/^\/library\/public\/([0-9a-f-]{36})$/i);
       if (req.method === 'GET' && libraryPublicMatch) {
         if (!libraryStore) return sendJson(res, 404, { error: 'Asset not found.', code: 'ERR_VIRGOSCORPIO_HUB_LIBRARY_NOT_FOUND', requestId });
+        if (!reservePublicDelivery(res, requestId)) return;
         const asset = await libraryStore.readPublic(libraryPublicMatch[1]);
         if (!asset) return sendJson(res, 404, { error: 'Asset not found.', code: 'ERR_VIRGOSCORPIO_HUB_LIBRARY_NOT_FOUND', requestId });
         const disposition = /^(?:image|video|audio|font)\//.test(asset.mime_type) ? 'inline' : 'attachment';
