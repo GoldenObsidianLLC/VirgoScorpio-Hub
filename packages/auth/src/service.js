@@ -50,6 +50,16 @@ async function verifyPassword(password, encoded) {
     return actual.length === expected.length && timingSafeEqual(actual, expected);
   } catch { return false; }
 }
+// Fixed, structurally valid scrypt record (same cost parameters as real hashes). It is verified when no usable
+// stored hash exists so that failed logins for unknown and known accounts perform equivalent scrypt work.
+const DUMMY_PASSWORD_HASH = `scrypt$32768$8$1$${Buffer.alloc(16, 0x5a).toString('base64url')}$${Buffer.alloc(64, 0xa5).toString('base64url')}`;
+function isUsableScryptHash(encoded) {
+  if (typeof encoded !== 'string') return false;
+  const parts = encoded.split('$');
+  if (parts.length !== 6 || parts[0] !== 'scrypt') return false;
+  if (Number(parts[1]) !== 32768 || Number(parts[2]) !== 8 || Number(parts[3]) !== 1) return false;
+  try { return Buffer.from(parts[4], 'base64url').length === 16 && Buffer.from(parts[5], 'base64url').length === 64; } catch { return false; }
+}
 
 function authError(statusCode, code, message) { const error = new Error(message); error.statusCode = statusCode; error.code = code; return error; }
 function configuredPublicBase(env) {
@@ -155,7 +165,9 @@ function createIdentityService({ pool, env = process.env, clock = () => Date.now
       throttleLogin(`${ip || 'unknown'}:${email || 'invalid'}`);
       const result = email ? await pool.query('SELECT id,email,display_name,status,password_hash,mfa_enabled,email_verified_at FROM users WHERE lower(email)=$1 LIMIT 1', [email]) : { rows: [] };
       const user = result.rows[0];
-      const matches = await verifyPassword(password, user?.password_hash);
+      const usableHash = isUsableScryptHash(user?.password_hash);
+      const passwordMatches = await verifyPassword(typeof password === 'string' ? password : '', usableHash ? user.password_hash : DUMMY_PASSWORD_HASH);
+      const matches = Boolean(user) && usableHash && passwordMatches;
       if (!user || user.status !== 'active' || !matches) {
         const error = new Error('Invalid email or password.'); error.statusCode = 401; error.code = 'ERR_VIRGOSCORPIO_HUB_LOGIN_FAILED'; throw error;
       }
@@ -575,4 +587,4 @@ function createIdentityService({ pool, env = process.env, clock = () => Date.now
   });
 }
 
-module.exports = { createIdentityService, normalizeEmail, validatePassword, hashPassword, verifyPassword, digest, safeEqualText, SESSION_TTL_HOURS, configuredPublicBase, authError };
+module.exports = { createIdentityService, normalizeEmail, validatePassword, hashPassword, verifyPassword, digest, safeEqualText, SESSION_TTL_HOURS, configuredPublicBase, authError, DUMMY_PASSWORD_HASH, isUsableScryptHash };
