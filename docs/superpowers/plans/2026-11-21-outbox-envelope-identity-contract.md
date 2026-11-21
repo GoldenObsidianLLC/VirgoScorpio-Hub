@@ -9,7 +9,7 @@
 **Tech Stack:** Node.js CommonJS, PostgreSQL, `node:test`, Markdown, GitHub Actions.
 
 **Spec:** GitHub issue [#233](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/233); current source-of-truth event contract in `packages/realtime/src/event-contract.js`.
-**Execution status:** Implementation commit `ea5c2e58921976d1c4d5c758edc0f436f9a73ae3` is pushed; [PR #278](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/278) is open. Hosted Node 22/24 and PostgreSQL 18/Memgraph checks passed, including the tenant identity regression. The PR remains unmerged because issue #230's independent reviewer and branch-policy prerequisites are still unmet.
+**Execution status:** Implementation commit `ea5c2e58921976d1c4d5c758edc0f436f9a73ae3` and documentation validation commit `f32936e6943397c6573bccfc7512c7d3e1f1f81e` are pushed; [PR #278](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/278) is open. Final-head push [#44927650089](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44927650089) and PR [#44927654855](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44927654855) completed successfully. The hosted PostgreSQL 18/Memgraph regression passed, including the tenant identity check. The PR remains unmerged because issue #230's independent reviewer and branch-policy prerequisites are still unmet.
 
 ## Global Constraints
 
