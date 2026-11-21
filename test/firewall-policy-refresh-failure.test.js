@@ -50,6 +50,31 @@ test('firewall fails closed when PostgreSQL refresh rejects during startup', asy
   assert.equal(queryCount, 1, 'should have attempted one refresh');
 });
 
+test('firewall fails closed when a refresh after successful policy load fails', async () => {
+  let queryCount = 0;
+  let shouldFail = false;
+  const pool = {
+    async query() {
+      queryCount++;
+      if (shouldFail) throw new Error('database refresh failed after a previously valid cache');
+      return { rows: [] };
+    }
+  };
+  const firewall = createFirewall({ pool, cacheTtlMs: 20 });
+
+  const initial = await firewall.evaluate({ ip: '192.0.2.1', path: '/api/test', userAgent: 'test' });
+  assert.equal(initial.action, 'pass');
+  assert.equal(queryCount, 1);
+
+  shouldFail = true;
+  await new Promise(resolve => setTimeout(resolve, 30));
+
+  const refreshed = await firewall.evaluate({ ip: '192.0.2.1', path: '/api/test', userAgent: 'test' });
+  assert.equal(refreshed.action, 'deny');
+  assert.equal(refreshed.reason, 'firewall-policy-unavailable');
+  assert.equal(refreshed.ruleId, null);
+  assert.equal(queryCount, 2);
+});
 test('firewall fails closed when PostgreSQL refresh rejects after clearCache', async () => {
   let queryCount = 0;
   let shouldFail = false;

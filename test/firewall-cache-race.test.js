@@ -386,7 +386,7 @@ test('firewall cache expiry triggers refresh on next evaluate', async () => {
   assert.equal(queryCount, 2, 'Expired cache should trigger refresh');
 });
 
-test('firewall query error sets short cache TTL and allows retry', async () => {
+test('firewall query error fails closed and retries after short cache TTL', async () => {
   let queryCount = 0;
   let shouldFail = true;
 
@@ -404,7 +404,8 @@ test('firewall query error sets short cache TTL and allows retry', async () => {
 
   // First evaluation with error
   const result1 = await firewall.evaluate({ ip: '192.0.2.1', path: '/', userAgent: 'test', siteId: null });
-  assert.equal(result1.action, 'pass', 'Should pass when query fails');
+  assert.equal(result1.action, 'deny', 'Should fail closed when the policy query fails');
+  assert.equal(result1.reason, 'firewall-policy-unavailable');
   assert.equal(queryCount, 1);
 
   // Fix the error
