@@ -1,8 +1,22 @@
 # VirgoScorpio Hub — Source-bound CI and release evidence
 
-**Current snapshot:** 20 November 2026 America/Chicago. Exact-main F1.58 evidence and unmerged F1.59 candidate evidence are kept separate below.
+**Current snapshot:** 21 November 2026 America/Chicago. Current exact-main evidence is F1.59 / PR #232 at `70e800ad33a6d376388576ce76a608f35c595b64`; historical F1.58 and pre-merge F1.59 records below are retained for traceability.
 
-### Current exact-main evidence snapshot — F1.58 runtime PR #228 / workflow #44675989750 (20 November 2026 America/Chicago)
+### Current exact-main evidence snapshot — F1.59 runtime PR #232 / workflow #44809875826 (21 November 2026 America/Chicago)
+
+Repository `main` is `70e800ad33a6d376388576ce76a608f35c595b64`. Exact-main [workflow #44809875826](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44809875826) passed **7/7 jobs**. Evidence includes Node.js 22/24 checks, PostgreSQL 18/Memgraph live integration **180/180**, all 18 migrations fresh and all 18 idempotent, browser smoke, CodeQL, signed mainline lockfile/SBOM attestation, and exact-source consolidation.
+
+Canonical readiness artifact [#14666785760](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44809875826) is bound to that SHA. Classification: **8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN**, `readyForProduction=false`, `NOT_PRODUCTION_CERTIFIED`, decision **NO-GO**. The partial rows are the outstanding qualified human dependency/license review and service-less integration diagnostics with skips; the live integration result is separate and passed 180/180.
+
+The 14 missing evidence areas are independent tenant-isolation review, identity-provider E2E, malware/asset quarantine, live cloud providers, Stripe lifecycle, full browser/accessibility acceptance, commerce parity, community parity, plugin isolation, human dependency/SBOM/CodeQL review, load/backup/recovery, independent platform security assessment, operations/release approval, and production observability.
+
+The separate F1.60 / [PR #278](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/278) candidate has exact head `1eb1c9ec253cfbbda481eee347552ecdd9a47728`, successful candidate workflow #44928512873, and candidate readiness artifact #14716238340. Its candidate evidence remains separate from mainline and does not certify production.
+
+The active [main ruleset](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/rules/27803491) enforces PRs, seven required CI/security contexts, current-base checks, and conversation resolution; it blocks force pushes and deletion and has no bypass actors. It intentionally does not require an external approval in the single-maintainer model. Independent production-assurance gates remain open.
+
+**Historical snapshot:** 20 November 2026 America/Chicago. The F1.58 exact-main and pre-merge F1.59 candidate evidence below are preserved as historical records; the current snapshot is above.
+
+### Historical exact-main evidence snapshot — F1.58 runtime PR #228 / workflow #44675989750 (20 November 2026 America/Chicago)
 
 Repository `main` is `619819230dac2e8d169ce71af7c6a41f0630cf27` after F1.58 / [PR #228 MERGED](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/228), closing issue #227. Exact-main [workflow #44675989750 / run #820](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44675989750) completed all **7/7 jobs successfully** on that exact main revision.
 
@@ -14,7 +28,7 @@ Repository `main` is `619819230dac2e8d169ce71af7c6a41f0630cf27` after F1.58 / [P
 - Supply-chain attestation artifact **14602322573**, archive SHA-256 `61ddee30dac33b49b500421d13704ef8a7af90db0685103a027bdc6b72cadfe3`, verifies signed provenance and SBOM subjects for the exact committed lockfile and generated CycloneDX SBOM.
 - The two PARTIAL classifications remain human dependency/license review (the lockfile is present and clean install passed, but qualified human review remains open) and service-less integration diagnostics (47 per runtime, 1 pass / 46 skipped; those skips are not live integration evidence). The separate live database producer passed 180/180 with zero skips.
 
-### F1.59 exact-head candidate evidence — PR #232 / issue #231 (20 November 2026 America/Chicago)
+### Historical F1.59 pre-merge exact-head candidate evidence — PR #232 / issue #231 (20 November 2026 America/Chicago)
 
 F1.59 is an unmerged maintainer candidate on branch `security/f1-59-outbox-projection-envelope-scope-2026-11-20`; implementation commit `bf36d356913053df069abd825e157dad400a67d2`, runtime implementation code head `623a5597553ffb783d5a42f9280acd40a06227d3`, and current documentation-only consolidated PR head `c46bf837db19d0feeff1d27cfe90aff33e47588c`. The candidate requires the shared validated v1 PostgreSQL outbox envelope at the graph projector boundary, rejects payload/envelope mismatch before Memgraph writes, and applies the same contract during full rebuild from canonical PostgreSQL rows. It makes no schema, migration, API, dependency, lockfile or SemVer change.
 
@@ -25,7 +39,7 @@ F1.59 is an unmerged maintainer candidate on branch `security/f1-59-outbox-proje
 - PR-event artifact **14660646349** is separately bound to GitHub synthetic merge revision `1b4a2691378222b7127a0dacd2443cd2421c048c`; it must not be described as the exact branch-head or mainline artifact.
 - PR #232 remains OPEN. GitHub has four owner-account COMMENTED submissions (`done`, `done`, `reviewed`, `Reviewed`); none is an approval. No independent non-author approval is recorded. Do not merge until a trusted non-author reviewer approves the latest head.
 
-### Latest F1.59 source-bound documentation refresh — branch head `c46bf837db19d0feeff1d27cfe90aff33e47588c`
+### Historical F1.59 candidate documentation refresh — branch head `c46bf837db19d0feeff1d27cfe90aff33e47588c`
 
 The documentation-only commit `c46bf837db19d0feeff1d27cfe90aff33e47588c` is the current consolidated PR branch head; F1.59 runtime code remains unchanged from implementation head `623a5597553ffb783d5a42f9280acd40a06227d3`. Branch push [#44804183335 / run #829](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44804183335) and PR [#44804193472 / run #830](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44804193472) each completed **7/7 jobs**: six successful functional/evidence jobs and the mainline-only lockfile/SBOM attestation skipped by design. Node.js 22.23.4 and 24.22.1 each passed 677/677 Hub and 94/94 EnginEx tests. Live PostgreSQL/Memgraph integration passed 180/180; 18/18 migrations applied fresh and 18/18 passed idempotent re-entry; graph outage/recovery and canonical rebuild passed; browser/accessibility smoke, CodeQL and source-bound evidence consolidation passed.
 

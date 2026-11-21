@@ -1,6 +1,29 @@
-# VirgoScorpio Hub 0.6.2 — authoritative mainline readiness (20 November 2026; F1.58 runtime; exact-main workflow #44675989750 / run #820)
+# VirgoScorpio Hub 0.6.2 — authoritative mainline readiness (21 November 2026; F1.59 runtime; exact-main workflow #44809875826)
 
-## Latest merged runtime increment — F1.58 (included in current-main readiness)
+## Current mainline snapshot — F1.59 / PR #232 (21 November 2026)
+
+Repository `main` is `70e800ad33a6d376388576ce76a608f35c595b64`, following the merge of F1.59 / [PR #232](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/232). Exact-main [workflow #44809875826](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44809875826) completed successfully with **7/7 jobs**. The mainline run validated the Node.js 22 and 24 matrices, live PostgreSQL 18/Memgraph integration (**180/180**), all 18 migrations on fresh and idempotent passes, browser smoke, CodeQL, signed mainline lockfile/SBOM attestation, and exact-source evidence consolidation.
+
+Canonical readiness artifact [#14666785760](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44809875826) is source-bound to the exact main SHA above. Its classification is **8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN**, with `readyForProduction=false`, `NOT_PRODUCTION_CERTIFIED`, and decision **NO-GO**.
+
+The two PARTIAL rows remain (1) committed dependency lockfile/clean install evidence while qualified human dependency/license review is outstanding, and (2) service-less integration diagnostics with intentional skips. The separate live database integration passed 180/180; service-less skips are not live integration evidence.
+
+The 14 missing production evidence areas remain: independent tenant-isolation review; identity-provider E2E; malware/asset quarantine; live cloud providers; Stripe lifecycle; full browser/accessibility acceptance; commerce parity; community parity; plugin isolation; human dependency/SBOM/CodeQL review; load/backup/recovery; independent platform security assessment; operations/release approval; and production observability.
+
+F1.60 / [PR #278](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/278) is a separate unmerged outbox-envelope identity candidate at `1eb1c9ec253cfbbda481eee347552ecdd9a47728`. Its successful candidate workflow and readiness artifact do not alter the exact-main snapshot above and do not authorize production.
+
+The active [main-branch ruleset](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/rules/27803491) requires pull requests, seven named CI/security contexts, an up-to-date base, and resolved review threads; force pushes and deletion are blocked and there are no bypass actors. The single-maintainer policy requires documented maintainer self-review but does not require an unavailable external approval. This merge policy does not waive independent production evidence.
+
+**Release decision: NO-GO.** Package `0.6.2` remains private/unreleased. No production deployment, publication, release tag, or certification is authorized by these checks.
+
+---
+
+## Historical evidence snapshots
+
+The detailed F1.58 and pre-merge F1.59 narratives below are retained as historical evidence from 20 November 2026. Their present-tense statements describe the repository state at the time those snapshots were written, not the current `main` branch.
+
+
+## Historical merged runtime increment — F1.58 (20 November 2026; superseded by F1.59)
 
 F1.58 community-feed write authorization revalidation merged through [PR #228](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/228), closing [issue #227](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/227), at main SHA `619819230dac2e8d169ce71af7c6a41f0630cf27`. The final `POST /api/v1/sites/:siteId/community/feed` write revalidates the active actor, selected-site membership and applicable group membership in the existing PostgreSQL transaction. It follows site → actor user → selected-site memberships → target group → target-group memberships lock order, re-reads current group privacy under the group lock, and narrows an eligible comment to group visibility when privacy tightens after preflight. Focused PostgreSQL 18 regression passed 58/58 with zero skips.
 
@@ -10,7 +33,7 @@ Canonical readiness artifact [#14601349640](https://github.com/GoldenObsidianLLC
 
 The two PARTIAL rows are (1) committed lockfile and clean `npm ci` validated, while qualified human dependency/license review remains open, and (2) service-less integration diagnostics (47 per runtime; 1 pass / 46 skipped). The service-less skips are not live test results. The separately provisioned live database integration producer passed 180/180 with zero skips.
 
-## Current unmerged maintainer candidate — F1.59 (not part of mainline readiness)
+## Historical F1.59 pre-merge candidate snapshot — 20 November 2026 (subsequently merged to main)
 
 F1.59 is tracked by [issue #231](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/231), under parent #124, and is open in [PR #232](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/232). Implementation-code head: `623a5597553ffb783d5a42f9280acd40a06227d3`; implementation commit: `bf36d356913053df069abd825e157dad400a67d2`. Current consolidated PR branch head is `c46bf837db19d0feeff1d27cfe90aff33e47588c` after a documentation/release-evidence-only commit; no runtime code changed in that commit. The graph projector now requires the validated v1 PostgreSQL outbox envelope, rejects contradictory site/resource/event identity before Memgraph writes, and uses normalized canonical identity. Full rebuild creates the same validated envelope from canonical PostgreSQL snapshot rows; no payload-only fallback remains. Content editorial version remains distinct from aggregate projection version.
 
@@ -20,7 +43,7 @@ PR #232 remains open and unmerged. GitHub records four owner-account COMMENTED s
 
 
 
-## Production release decision
+## Historical production release decision — 20 November 2026 (superseded by current snapshot above)
 
 The 14 missing production evidence gates and their accountable roles remain listed below in the historical gate matrix; the canonical exact-main readiness JSON remains authoritative. Independent tenant review #14 and platform security assessment #25 are OPEN / NOT PERFORMED; qualified dependency/license/SBOM review #23 is OPEN / PARTIAL. Release scope/provider approval #13, load/backup/restore #24, operations/release approval #26 and governance #32 remain open. Issue completion or successful CI does not discharge these separate acceptance requirements.
 

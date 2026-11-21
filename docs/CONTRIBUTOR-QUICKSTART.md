@@ -159,6 +159,12 @@ For a pull request, describe the reason for the change, main paths changed, test
 
 Do not include `.env` files, credentials, access tokens, session cookies, private keys, production/customer data, unredacted database URLs, or database dumps. Do not publish potentially exploitable vulnerability details in a public issue; follow the root [Security policy](../SECURITY.md) for private reporting.
 
+## Main-branch pull-request policy
+
+All routine changes to `main` go through a pull request. Complete the maintainer self-review checklist in the pull-request template, inspect the full diff, and ensure the required GitHub checks pass against the current `main` branch. Review conversations must be resolved before merge. This is a single-maintainer workflow: no external approval is required, and self-review is not independent security assurance.
+
+See [Single-Maintainer Governance](governance/SINGLE-MAINTAINER-GOVERNANCE.md) for the exact required check names, ruleset behavior, and production-certification boundary.
+
 ## 8. Know what a green check means
 
 A successful `npm run check` confirms the configured local artifact/syntax checks and unit/security tests passed in that environment. It does not prove live provider connectivity, exhaustive tenant isolation, browser accessibility acceptance, load capacity, backup/restore, operational recovery, independent security review, or production readiness.
