@@ -392,7 +392,7 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
     return null;
   }
   async function enforceSiteFirewall(req, url, siteId) {
-    const result = await firewall.evaluate({ ip: req.socket.remoteAddress || 'unknown', path: url.pathname, userAgent: String(req.headers['user-agent'] || '').slice(0, 500), siteId: String(siteId || '').toLowerCase() || null });
+    const result = await firewall.evaluate({ ip: req?.socket?.remoteAddress || 'unknown', path: url.pathname, userAgent: String(req?.headers?.['user-agent'] || '').slice(0, 500), siteId: String(siteId || '').toLowerCase() || null });
     if (result.action === 'deny') throw fail(403, 'ERR_VIRGOSCORPIO_HUB_FIREWALL_DENY', 'Request blocked by VirgoScorpio Hub firewall policy.');
     if (result.action === 'challenge') throw fail(403, 'ERR_VIRGOSCORPIO_HUB_FIREWALL_CHALLENGE', 'This request requires an additional verification step.');
     if (result.action === 'rate_limit') throw fail(429, 'ERR_VIRGOSCORPIO_HUB_FIREWALL_RATE_LIMIT', 'Firewall rate limit exceeded.');
@@ -471,8 +471,8 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
     }
     return content;
   }
-  async function ensureSiteCapabilityForAI(actor, url, body, capability = 'ai:use') {
-    const siteId = await siteIdFor({ req: { headers: {}, }, url, body, actor, required: false });
+  async function ensureSiteCapabilityForAI(actor, url, body, capability = 'ai:use', req = null) {
+    const siteId = await siteIdFor({ req: req || { headers: {} }, url, body, actor, required: false });
     if (siteId) await requireCapability(actor, siteId, capability);
     else if (!actor.isDeveloper) {
       const allowed = actor.memberships.some(m => m.capabilities.includes(capability) || m.capabilities.includes('site:manage'));
@@ -483,7 +483,7 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
   const aiTaskRoutes = createAITaskRouteHandlers({
     getTaskStore: getAvailableAITaskStore,
     getProviderInfo: () => ai.providerInfo(),
-    ensureSiteCapability: (actor, url) => ensureSiteCapabilityForAI(actor, url, {}, 'ai:use'),
+    ensureSiteCapability: (actor, url, req) => ensureSiteCapabilityForAI(actor, url, {}, 'ai:use', req),
     sendJson,
     fail
   });
@@ -765,7 +765,7 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
       try {
       const url = new URL(req.url, 'http://localhost');
       const firewallSite = url.pathname.match(/\/sites\/([0-9a-f-]{36})(?:\/|$)/i)?.[1]?.toLowerCase() || null;
-      const firewallResult = await firewall.evaluate({ ip: req.socket.remoteAddress || 'unknown', path: url.pathname, userAgent: String(req.headers['user-agent'] || '').slice(0, 500), siteId: firewallSite });
+      const firewallResult = await firewall.evaluate({ ip: req?.socket?.remoteAddress || 'unknown', path: url.pathname, userAgent: String(req?.headers?.['user-agent'] || '').slice(0, 500), siteId: firewallSite });
       if (firewallResult.action === 'deny') return sendJson(res, 403, { error: 'Request blocked by VirgoScorpio Hub firewall policy.', code: 'ERR_VIRGOSCORPIO_HUB_FIREWALL_DENY', requestId });
       if (firewallResult.action === 'challenge') return sendJson(res, 403, { error: 'This request requires an additional verification step.', code: 'ERR_VIRGOSCORPIO_HUB_FIREWALL_CHALLENGE', requestId });
       if (firewallResult.action === 'rate_limit') return sendJson(res, 429, { error: 'Firewall rate limit exceeded.', code: 'ERR_VIRGOSCORPIO_HUB_FIREWALL_RATE_LIMIT', requestId });
@@ -1726,7 +1726,7 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
 
       if (req.method === 'POST' && url.pathname === '/api/v1/ai/page-draft') {
         const body = await readJson(req, maxBody);
-        const siteId = await ensureSiteCapabilityForAI(actor, url, body, 'ai:use');
+        const siteId = await ensureSiteCapabilityForAI(actor, url, body, 'ai:use', req);
         const context = await prepareAIPageDraftContext({ actor, siteId, body });
         const { result, taskId } = await runGovernedAIForRequest({
           req, res, actor, siteId, body: context.body, action: 'page_draft',
@@ -1741,17 +1741,17 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
         return sendJson(res, 200, { ...result, requestId, taskId, humanReviewRequired: true });
       }
       if (req.method === 'POST' && url.pathname === '/api/v1/ai/content-assist') {
-        const body = await readJson(req, maxBody); const siteId = await ensureSiteCapabilityForAI(actor, url, body, 'ai:use');
+        const body = await readJson(req, maxBody); const siteId = await ensureSiteCapabilityForAI(actor, url, body, 'ai:use', req);
         const { result, taskId } = await runGovernedAIForRequest({ req, res, actor, siteId, body, action: 'content_assist', inputChars: String(body.text || '').length, requestId, run: signal => ai.assistContent({ text: body.text, operation: body.operation || 'make-clearer', tone: body.tone || 'clear and professional', actor: actor.user.id || 'local-development-token', signal }) });
         return sendJson(res, 200, { ...result, requestId, taskId, humanReviewRequired: true });
       }
       if (req.method === 'POST' && url.pathname === '/api/v1/ai/seo') {
-        const body = await readJson(req, maxBody); const siteId = await ensureSiteCapabilityForAI(actor, url, body, 'ai:use');
+        const body = await readJson(req, maxBody); const siteId = await ensureSiteCapabilityForAI(actor, url, body, 'ai:use', req);
         const { result, taskId } = await runGovernedAIForRequest({ req, res, actor, siteId, body, action: 'seo', inputChars: String(body.title || '').length + String(body.content || '').length, requestId, run: signal => ai.generateSeo({ title: body.title, content: body.content, actor: actor.user.id || 'local-development-token', signal }) });
         return sendJson(res, 200, { ...result, requestId, taskId, humanReviewRequired: true });
       }
       if (req.method === 'POST' && url.pathname === '/api/v1/ai/translate') {
-        const body = await readJson(req, maxBody); const siteId = await ensureSiteCapabilityForAI(actor, url, body, 'ai:use');
+        const body = await readJson(req, maxBody); const siteId = await ensureSiteCapabilityForAI(actor, url, body, 'ai:use', req);
         const { result, taskId } = await runGovernedAIForRequest({ req, res, actor, siteId, body, action: 'translate', inputChars: String(body.text || '').length, requestId, run: signal => ai.translate({ text: body.text, targetLanguage: body.targetLanguage, actor: actor.user.id || 'local-development-token', signal }) });
         return sendJson(res, 200, { ...result, requestId, taskId, humanReviewRequired: true });
       }
@@ -2186,9 +2186,9 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
       }
 
       const firewallResult = await firewall.evaluate({
-        ip: req.socket.remoteAddress || 'unknown',
+        ip: req?.socket?.remoteAddress || 'unknown',
         path: url.pathname,
-        userAgent: String(req.headers['user-agent'] || '').slice(0, 500),
+        userAgent: String(req?.headers?.['user-agent'] || '').slice(0, 500),
         siteId
       });
       if (firewallResult.action === 'deny' || firewallResult.action === 'challenge') {
