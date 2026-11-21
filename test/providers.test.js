@@ -216,11 +216,11 @@ test('Anthropic and Gemini adapters use headers rather than logging provider key
     return new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } });
   };
   try {
-    const anthropic = createAnthropicProvider({ apiKey: '****cret', baseUrl: 'https://example.invalid/v1', model: 'test', timeoutMs: 1000 });
+    const anthropic = createAnthropicProvider({ apiKey: 'anthropic-secret', baseUrl: 'https://example.invalid/v1', model: 'test', timeoutMs: 1000 });
     assert.equal(await anthropic.generate({ system: 'Return JSON', input: 'hello', schemaName: 'test', schema }), '{"text":"claude"}');
     const gemini = createGeminiProvider({ apiKey: 'gemini-secret', baseUrl: 'https://example.invalid/v1beta', model: 'test', timeoutMs: 1000 });
     assert.equal(await gemini.generate({ system: 'Return JSON', input: 'hello', schemaName: 'test', schema }), '{"text":"gemini"}');
-    assert.equal(calls[0].headers['x-api-key'], '****cret');
+    assert.equal(calls[0].headers['x-api-key'], 'anthropic-secret');
     assert.equal(calls[1].headers['x-goog-api-key'], 'gemini-secret');
     assert.equal(calls[1].url, 'https://example.invalid/v1beta/interactions');
     assert.equal(calls[1].body.store, false);
