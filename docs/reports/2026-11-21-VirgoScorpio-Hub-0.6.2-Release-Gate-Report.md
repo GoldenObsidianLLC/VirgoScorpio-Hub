@@ -1,8 +1,10 @@
-# VirgoScorpio Hub 0.6.2 — Release Gate Repor
+# VirgoScorpio Hub 0.6.2 — Release Gate Report
+
+**Snapshot scope:** Historical source-bound report for F1.59 main SHA 70e800ad33a6d376388576ce76a608f35c595b64; PR #275 subsequently merged and advanced main to a088fd440768a897e6a19b23264b49598ea3dce4. Post-merge workflow #44943930895 passed Node 22/24, PostgreSQL/Memgraph, browser smoke and CodeQL; mainline SBOM/lockfile attestation was queued at last check. This report is not readiness evidence for the newer SHA.
 
 **Report date:** 21 November 2026 (America/Chicago)
 **Product version:** 0.6.2 (private, unreleased patch candidate)
-**Current mainline:** F1.59 — `70e800ad33a6d376388576ce76a608f35c595b64`
+**Mainline at snapshot:**
 **Current exact-main CI:** [VirgoScorpio Hub CI #44809875826](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44809875826) — completed successfully, 7/7 jobs
 **Canonical evidence artifact:** GitHub Actions artifact `14666785760` (`virgoscorpio_hub-release-readiness-ci`)
 **Canonical readiness file:** `release-readiness.json`, generated 20 November 2026 at 20:20:06.482Z, SHA-256 `7d327cc49a4837f1fb40aedd6ec9cf35ac4e91f95d9347849ed8343c795e8931`

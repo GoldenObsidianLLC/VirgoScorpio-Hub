@@ -1,6 +1,6 @@
-# VirgoScorpio Hub 0.6.2 — authoritative mainline readiness (21 November 2026; F1.59 runtime; exact-main workflow #44809875826)
+# VirgoScorpio Hub 0.6.2 — last finalized source-bound readiness snapshot (21 November 2026; F1.59; workflow #44809875826)
 
-## Current mainline snapshot — F1.59 / PR #232 (21 November 2026)
+## Historical mainline snapshot — F1.59 / PR #232 (source SHA 70e800ad33a6d376388576ce76a608f35c595b64)
 
 Repository `main` is `70e800ad33a6d376388576ce76a608f35c595b64`, following the merge of F1.59 / [PR #232](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/232). Exact-main [workflow #44809875826](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44809875826) completed successfully with **7/7 jobs**. The mainline run validated the Node.js 22 and 24 matrices, live PostgreSQL 18/Memgraph integration (**180/180**), all 18 migrations on fresh and idempotent passes, browser smoke, CodeQL, signed mainline lockfile/SBOM attestation, and exact-source evidence consolidation.
 

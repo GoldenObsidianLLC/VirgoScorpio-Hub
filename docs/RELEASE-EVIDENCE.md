@@ -1,8 +1,8 @@
 # VirgoScorpio Hub — Source-bound CI and release evidence
 
-**Current snapshot:** 21 November 2026 America/Chicago. Current exact-main evidence is F1.59 / PR #232 at `70e800ad33a6d376388576ce76a608f35c595b64`; historical F1.58 and pre-merge F1.59 records below are retained for traceability.
+**Last finalized source-bound readiness snapshot:** 21 November 2026 America/Chicago, F1.59 main SHA 70e800ad33a6d376388576ce76a608f35c595b64. PR #275 later advanced main to a088fd440768a897e6a19b23264b49598ea3dce4; workflow #44943930895 passed Node 22/24, PostgreSQL/Memgraph, browser smoke and CodeQL, while signed mainline lockfile/SBOM attestation was queued at last check. The artifact below remains bound to its original SHA; a refreshed current-main artifact is pending.
 
-### Current exact-main evidence snapshot — F1.59 runtime PR #232 / workflow #44809875826 (21 November 2026 America/Chicago)
+### Historical exact-main evidence snapshot — F1.59 runtime PR #232
 
 Repository `main` is `70e800ad33a6d376388576ce76a608f35c595b64`. Exact-main [workflow #44809875826](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44809875826) passed **7/7 jobs**. Evidence includes Node.js 22/24 checks, PostgreSQL 18/Memgraph live integration **180/180**, all 18 migrations fresh and all 18 idempotent, browser smoke, CodeQL, signed mainline lockfile/SBOM attestation, and exact-source consolidation.
 
