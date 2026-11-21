@@ -8,7 +8,7 @@
   "generatedBy": "scripts/generate-tenant-isolation-route-inventory.js",
   "sourceTree": {
     "fileCount": 22,
-    "sha256": "132da2782ec5ed0b1c166a5278c8c61aad2594b75b32141f53e39bdb22f6286d",
+    "sha256": "ef106f08603a18d8acad1e2229c6c2231389fdeed053a0a7c9f85882963a9af5",
     "files": [
       "apps/api/src/ai-task-routes.js",
       "apps/api/src/auth-routes.js",
@@ -36,7 +36,7 @@
   },
   "testTree": {
     "fileCount": 59,
-    "sha256": "1de455f900e112f5cd0162b750bd0ca2ba9bc63fa7e4f61549b7777060beb123",
+    "sha256": "15510b4cbf9198ddc1ba27f97951747e3326a2cf66d5642e1036f268315129f6",
     "files": [
       "test/ai-queue-worker.test.js",
       "test/ai-task-queue.test.js",
