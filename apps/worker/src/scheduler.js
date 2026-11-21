@@ -64,7 +64,15 @@ async function main() {
         component: 'scheduler', operation: 'run', outcome: 'failure',
         code: error?.code || 'ERR_SCHEDULER', errorType: error?.name || 'Error'
       }); }
-      await new Promise(resolve => { const timer = setTimeout(resolve, interval); controller.signal.addEventListener('abort', () => { clearTimeout(timer); resolve(); }, { once: true }); });
+      await new Promise(resolve => {
+        if (controller.signal.aborted) return resolve();
+        let timer;
+        // The listener is always removed on normal expiry so that no per-cycle closure
+        // remains registered on the process-lifetime signal.
+        const onAbort = () => { clearTimeout(timer); resolve(); };
+        timer = setTimeout(() => { controller.signal.removeEventListener('abort', onAbort); resolve(); }, interval);
+        controller.signal.addEventListener('abort', onAbort, { once: true });
+      });
     }
   } finally {
     try {
