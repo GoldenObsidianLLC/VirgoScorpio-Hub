@@ -6,6 +6,8 @@ const scryptAsync = promisify(require('node:crypto').scrypt);
 const PASSWORD_MIN = 12;
 const PASSWORD_MAX = 128;
 const SESSION_TTL_HOURS = 12;
+const MFA_ACCOUNT_FAILURE_LIMIT = 10;
+const MFA_ACCOUNT_FAILURE_WINDOW_MINUTES = 15;
 const { generateTotpSecret, verifyTotp, totpUri, encryptSecret, decryptSecret, generateRecoveryCodes } = require('./totp');
 const { createSessionService } = require('./session-service');
 const { withTransaction } = require('../../db/src/transaction');
@@ -103,6 +105,38 @@ function createIdentityService({ pool, env = process.env, clock = () => Date.now
     state.count += 1;
   }
 
+  const MAX_LIVE_MFA_CHALLENGES_PER_USER = 5;
+
+  // Keep the newest five unattempted live challenges plus the bounded history of
+  // failed challenges needed by the account-wide 15-minute MFA retry budget.
+  // The budget caps failed challenge rows at ten (each retained row has >=1 failure);
+  // attempted rows age out after the throttle window, while unused live rows are capped at five.
+  async function createMfaChallenge(user) {
+    const challengeToken = randomBytes(32).toString('base64url');
+    const nowMs = clock();
+    const now = new Date(nowMs);
+    const expiresAt = new Date(nowMs + 5 * 60_000);
+    await pool.query(
+      `WITH purged AS (
+         DELETE FROM auth_mfa_challenges
+         WHERE user_id=$1 AND (
+           (attempts=0 AND (consumed_at IS NOT NULL OR expires_at<=$4))
+           OR (attempts>0 AND created_at <= ($4 - interval '15 minutes'))
+           OR (
+             attempts=0 AND id IN (
+               SELECT id FROM auth_mfa_challenges
+               WHERE user_id=$1 AND attempts=0 AND consumed_at IS NULL AND expires_at>$4
+               ORDER BY created_at DESC, id DESC OFFSET $5
+             )
+           )
+         )
+       )
+       INSERT INTO auth_mfa_challenges(user_id,token_hash,expires_at) VALUES($1,$2,$3)`,
+      [user.id, digest(challengeToken), expiresAt, now, MAX_LIVE_MFA_CHALLENGES_PER_USER - 1]
+    );
+    return { challengeToken, expiresAt };
+  }
+
   function safeUser(user) {
     return { id: user.id, email: user.email, displayName: user.display_name, status: user.status, emailVerified: Boolean(user.email_verified_at), mfaEnabled: Boolean(user.mfa_enabled) };
   }
@@ -167,12 +201,12 @@ function createIdentityService({ pool, env = process.env, clock = () => Date.now
       if (env.REQUIRE_VERIFIED_EMAIL === 'true' && !user.email_verified_at) {
         const error = new Error('Verify your email address before signing in.'); error.statusCode = 403; error.code = 'ERR_VIRGOSCORPIO_HUB_EMAIL_NOT_VERIFIED'; throw error;
       }
-      loginBuckets.delete(`${ip || 'unknown'}:${email}`);
       if (user.mfa_enabled) {
-        const challengeToken = randomBytes(32).toString('base64url');
-        await pool.query('INSERT INTO auth_mfa_challenges(user_id,token_hash,expires_at) VALUES($1,$2,$3)', [user.id, digest(challengeToken), new Date(clock() + 5 * 60_000)]);
-        return { mfaRequired: true, challengeToken, user: safeUser(user), expiresAt: new Date(clock() + 5 * 60_000) };
+        // Keep the throttle bucket for MFA-enabled accounts so repeated password-phase logins stay rate limited.
+        const { challengeToken, expiresAt } = await createMfaChallenge(user);
+        return { mfaRequired: true, challengeToken, user: safeUser(user), expiresAt };
       }
+      loginBuckets.delete(`${ip || 'unknown'}:${email}`);
       const created = await createSession(user, { ip, userAgent });
       return { ...created, mfaRequired: false };
     },
@@ -187,6 +221,18 @@ function createIdentityService({ pool, env = process.env, clock = () => Date.now
           WHERE c.token_hash=$1 AND c.consumed_at IS NULL AND c.expires_at>now() FOR UPDATE OF c`, [digest(challengeToken)]);
         const challenge = found.rows[0];
         if (!challenge || challenge.attempts >= 5 || challenge.status !== 'active' || !challenge.mfa_enabled) throw authError(401, 'ERR_VIRGOSCORPIO_HUB_MFA_CHALLENGE_INVALID', 'MFA challenge is invalid or expired.');
+        // Account-wide MFA retry budget: failures are aggregated across every challenge issued to the user
+        // within the window, so issuing a fresh challenge (password or federated first factor) cannot reset it.
+        // The advisory lock serialises concurrent verifications for the same account across challenges.
+        await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`virgoscorpio_hub-mfa-verify:${challenge.user_id}`]);
+        const failureResult = await client.query(
+          `SELECT COALESCE(SUM(attempts),0)::integer AS failures FROM auth_mfa_challenges WHERE user_id=$1 AND created_at > now() - ($2::integer * interval '1 minute')`,
+          [challenge.user_id, MFA_ACCOUNT_FAILURE_WINDOW_MINUTES]);
+        if (Number(failureResult.rows[0]?.failures || 0) >= MFA_ACCOUNT_FAILURE_LIMIT) {
+          const error = authError(429, 'ERR_VIRGOSCORPIO_HUB_MFA_THROTTLED', 'Too many failed MFA attempts. Try again later.');
+          error.retryAfterSeconds = MFA_ACCOUNT_FAILURE_WINDOW_MINUTES * 60;
+          throw error;
+        }
         const credentialResult = await client.query('SELECT secret_ciphertext,last_used_step,pending_secret FROM user_mfa_credentials WHERE user_id=$1 FOR UPDATE', [challenge.user_id]);
         const credential = credentialResult.rows[0];
         if (!credential || credential.pending_secret) throw authError(401, 'ERR_VIRGOSCORPIO_HUB_MFA_NOT_CONFIGURED', 'Multi-factor authentication is not configured.');
@@ -379,9 +425,8 @@ function createIdentityService({ pool, env = process.env, clock = () => Date.now
         await client.query('COMMIT');
       } catch (error) { await client.query('ROLLBACK').catch(() => {}); throw error; } finally { client.release(); }
       if (user.mfa_enabled) {
-        const challengeToken = randomBytes(32).toString('base64url');
-        await pool.query('INSERT INTO auth_mfa_challenges(user_id,token_hash,expires_at) VALUES($1,$2,$3)', [user.id, digest(challengeToken), new Date(clock() + 5 * 60_000)]);
-        return { mfaRequired: true, challengeToken, user: safeUser(user), expiresAt: new Date(clock() + 5 * 60_000) };
+        const { challengeToken, expiresAt } = await createMfaChallenge(user);
+        return { mfaRequired: true, challengeToken, user: safeUser(user), expiresAt };
       }
       return { ...(await createSession(user, { ip, userAgent })), mfaRequired: false };
     },
