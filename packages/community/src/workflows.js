@@ -324,6 +324,30 @@ async function handleModeration(ctx, siteId) {
   }
   const reason = cleanRequiredText(body.reason, MAX_MODERATION_REASON_LENGTH);
   const target = await withTransaction(ctx.localPool, async client => {
+    // Revalidate the moderator inside the mutation transaction. The preflight
+    // capability check precedes the body read and may be stale by now. Lock order
+    // (site, then user/membership/role) matches membership removal, and the shared
+    // row locks make a concurrent revocation either precede this check or wait
+    // until this transaction completes.
+    if (!ctx.actor.isDeveloper) {
+      await client.query('SELECT id FROM sites WHERE id=$1 FOR KEY SHARE', [siteId]);
+      const authorization = await client.query(
+        `SELECT r.capabilities
+           FROM users u
+           JOIN site_memberships m ON m.user_id=u.id AND m.site_id=$1
+           JOIN roles r ON r.id=m.role_id
+          WHERE u.id=$2 AND u.status='active'
+          ORDER BY u.id, m.role_id, r.id
+            FOR SHARE OF u, m, r`,
+        [siteId, ctx.actor.user.id]
+      );
+      const stillAuthorized = authorization.rows.some(row => Array.isArray(row.capabilities) && (
+        row.capabilities.includes('community:moderate') || row.capabilities.includes('site:manage') || row.capabilities.includes('*')
+      ));
+      if (!stillAuthorized) {
+        routeError(ctx, 403, 'ERR_VIRGOSCORPIO_HUB_FORBIDDEN', 'The community:moderate capability is required for this site.');
+      }
+    }
     let result;
     if (body.targetType === 'activity') {
       result = await client.query(
