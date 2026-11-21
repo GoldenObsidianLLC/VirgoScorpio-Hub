@@ -83,3 +83,9 @@ Run npm run dev:doctor after configuring .env. The preflight authenticates DATAB
 ## Documentation discipline
 
 Mark proposed, incomplete, mocked, and live-tested features distinctly. Avoid presenting a module, badge, screenshot, performance claim, or integration as generally available without current evidence. See [Documentation standards](DOCUMENTATION_STANDARDS.md).
+
+## Pull requests and main-branch governance
+
+All routine changes to `main` must arrive through a pull request. The active single-maintainer ruleset requires the configured Node.js, database integration, browser/accessibility, CodeQL, and candidate-evidence checks; the branch must be current with `main`; review conversations must be resolved; and force pushes and deletion are blocked. No external approval is required while this is a single-maintainer project. The maintainer records a complete self-review in the PR template.
+
+See [Single-Maintainer Governance](governance/SINGLE-MAINTAINER-GOVERNANCE.md) for the exact GitHub check contexts, bypass policy, emergency handling, and the separate production-certification boundary.
