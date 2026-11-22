@@ -181,23 +181,26 @@ test('rejects missing or non-sibling anchors and invalid final documents', () =>
   );
 });
 
-test('PostgreSQL store rejects invalid collaboration envelopes before acquiring a client', async () => {
+test('PostgreSQL store rejects malformed collaboration envelopes before acquiring a client', async () => {
   let acquired = false;
   const store = createPostgresStore({
-    pool: {
-      async connect() { acquired = true; throw new Error('connection should not be acquired'); }
-    }
+    pool: { async connect() { acquired = true; throw new Error('connection should not be acquired'); } }
   });
-  await assert.rejects(
-    store.applyCollaborationOperation({
+  const valid = op('document.set_title', { title: 'Valid title' });
+  const missing = { ...valid }; delete missing.baseSequence;
+  const invalidOperations = [
+    { label: 'invalid payload', operation: op('document.set_title', { title: '' }) },
+    { label: 'extra envelope key', operation: { ...valid, unexpected: true } },
+    { label: 'missing envelope key', operation: missing }
+  ];
+  for (const { label, operation } of invalidOperations) {
+    await assert.rejects(store.applyCollaborationOperation({
       siteId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
       contentId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
-      actorId: null,
-      operation: op('document.set_title', { title: '' })
-    }),
-    error => error.code === 'ERR_VIRGOSCORPIO_HUB_INVALID_COLLABORATION_OPERATION'
-  );
-  assert.equal(acquired, false);
+      actorId: null, operation
+    }), error => error.code === 'ERR_VIRGOSCORPIO_HUB_INVALID_COLLABORATION_OPERATION', label);
+    assert.equal(acquired, false, label + ' must fail before acquiring a PostgreSQL client');
+  }
 });
 
 test('rejects collaboration payload values that cannot round-trip through JSON', () => {
@@ -211,180 +214,47 @@ test('rejects collaboration payload values that cannot round-trip through JSON',
   assert.equal(validateCollaborationOperation(bigintValue).valid, false);
 });
 
-test('rejects operations with extra envelope keys to prevent client replay blocking', () => {
-  // Pentest finding: extra envelope keys should be rejected to prevent DoS
-  const validOp = op('document.set_title', { title: 'Valid Title' });
-  
-  // Extra envelope key should be rejected
-  const withExtraEnvelopeKey = { ...validOp, extraKey: 'malicious' };
-  const result = validateCollaborationOperation(withExtraEnvelopeKey);
-  assert.equal(result.valid, false);
-  assert.ok(result.errors.some(err => err.includes('exactly the supported envelope keys')));
-  
-  // Multiple extra envelope keys should also be rejected
-  const withMultipleExtraKeys = { ...validOp, extra1: 'a', extra2: 'b' };
-  const result2 = validateCollaborationOperation(withMultipleExtraKeys);
-  assert.equal(result2.valid, false);
-  assert.ok(result2.errors.some(err => err.includes('exactly the supported envelope keys')));
+test('rejects extra and missing collaboration envelope keys', () => {
+  const valid = op('document.set_title', { title: 'Valid Title' });
+  assert.deepEqual(validateCollaborationOperation(valid), { valid: true, errors: [] });
+  for (const key of Object.keys(valid)) {
+    const candidate = { ...valid }; delete candidate[key];
+    const result = validateCollaborationOperation(candidate);
+    assert.equal(result.valid, false, 'missing envelope key ' + key);
+    assert.ok(result.errors.some(error => error.includes('exactly the supported envelope keys')));
+  }
+  for (const extraKeys of [{ extraKey: 'malicious' }, { extra1: 'a', extra2: 'b' }]) {
+    const result = validateCollaborationOperation({ ...valid, ...extraKeys });
+    assert.equal(result.valid, false);
+    assert.ok(result.errors.some(error => error.includes('exactly the supported envelope keys')));
+  }
 });
 
-test('rejects operations with missing envelope keys', () => {
-  // Missing envelope keys should be rejected
-  const validOp = op('document.set_title', { title: 'Valid Title' });
-  
-  // Missing schemaVersion
-  const { schemaVersion, ...withoutSchemaVersion } = validOp;
-  const result1 = validateCollaborationOperation(withoutSchemaVersion);
-  assert.equal(result1.valid, false);
-  assert.ok(result1.errors.some(err => err.includes('exactly the supported envelope keys')));
-  
-  // Missing opId
-  const { opId, ...withoutOpId } = validOp;
-  const result2 = validateCollaborationOperation(withoutOpId);
-  assert.equal(result2.valid, false);
-  assert.ok(result2.errors.some(err => err.includes('exactly the supported envelope keys')));
-  
-  // Missing clientId
-  const { clientId, ...withoutClientId } = validOp;
-  const result3 = validateCollaborationOperation(withoutClientId);
-  assert.equal(result3.valid, false);
-  assert.ok(result3.errors.some(err => err.includes('exactly the supported envelope keys')));
-  
-  // Missing baseSequence
-  const { baseSequence, ...withoutBaseSequence } = validOp;
-  const result4 = validateCollaborationOperation(withoutBaseSequence);
-  assert.equal(result4.valid, false);
-  assert.ok(result4.errors.some(err => err.includes('exactly the supported envelope keys')));
-  
-  // Missing type
-  const { type, ...withoutType } = validOp;
-  const result5 = validateCollaborationOperation(withoutType);
-  assert.equal(result5.valid, false);
-  assert.ok(result5.errors.some(err => err.includes('exactly the supported envelope keys')));
-  
-  // Missing payload
-  const { payload, ...withoutPayload } = validOp;
-  const result6 = validateCollaborationOperation(withoutPayload);
-  assert.equal(result6.valid, false);
-  assert.ok(result6.errors.some(err => err.includes('exactly the supported envelope keys')));
+test('requires exact payload keys for every supported collaboration operation', () => {
+  const cases = [
+    { type: 'document.set_title', payload: { title: 'Valid title' } },
+    { type: 'node.insert', payload: { node: { id: 'new-node', type: 'widget.text', props: { text: 'X' }, children: [] }, parentId: 'section-1', afterNodeId: null } },
+    { type: 'node.delete', payload: { nodeId: 'heading-1' } },
+    { type: 'node.move', payload: { nodeId: 'heading-1', parentId: 'section-1', afterNodeId: null } },
+    { type: 'node.set_prop', payload: { nodeId: 'heading-1', key: 'text', value: 'New text' } },
+    { type: 'text.insert', payload: { nodeId: 'text-1', key: 'text', offset: 0, text: 'Hello' } },
+    { type: 'text.delete', payload: { nodeId: 'text-1', key: 'text', offset: 0, length: 1 } }
+  ];
+  for (const { type, payload } of cases) {
+    const validOperation = op(type, payload);
+    assert.deepEqual(validateCollaborationOperation(validOperation), { valid: true, errors: [] }, type + ' valid fixture');
+    assert.equal(validateCollaborationOperation(op(type, { ...payload, unexpected: true })).valid, false, type + ' extra key');
+    for (const key of Object.keys(payload)) {
+      const missingPayloadKey = { ...payload }; delete missingPayloadKey[key];
+      assert.equal(validateCollaborationOperation(op(type, missingPayloadKey)).valid, false, type + ' missing ' + key);
+    }
+  }
 });
 
-test('rejects operations with extra payload keys for all operation types', () => {
-  // document.set_title with extra payload key
-  const setTitleOp = op('document.set_title', { title: 'Valid', extraPayloadKey: 'bad' });
-  const result1 = validateCollaborationOperation(setTitleOp);
-  assert.equal(result1.valid, false);
-  assert.ok(result1.errors.some(err => err.includes('payload') || err.includes('title')));
-  
-  // node.insert with extra payload key
-  const insertOp = op('node.insert', {
-    parentId: 'section-1',
-    afterNodeId: 'heading-1',
-    node: { id: 'new-node', type: 'widget.text', props: { text: 'X' }, children: [] },
-    extraPayloadKey: 'bad'
-  });
-  const result2 = validateCollaborationOperation(insertOp);
-  assert.equal(result2.valid, false);
-  assert.ok(result2.errors.some(err => err.includes('payload') || err.includes('invalid')));
-  
-  // node.delete with extra payload key
-  const deleteOp = op('node.delete', { nodeId: 'heading-1', extraPayloadKey: 'bad' });
-  const result3 = validateCollaborationOperation(deleteOp);
-  assert.equal(result3.valid, false);
-  assert.ok(result3.errors.some(err => err.includes('nodeId') || err.includes('invalid')));
-  
-  // node.move with extra payload key
-  const moveOp = op('node.move', {
-    nodeId: 'heading-1',
-    parentId: 'section-1',
-    afterNodeId: null,
-    extraPayloadKey: 'bad'
-  });
-  const result4 = validateCollaborationOperation(moveOp);
-  assert.equal(result4.valid, false);
-  assert.ok(result4.errors.some(err => err.includes('nodeId') || err.includes('invalid')));
-  
-  // node.set_prop with extra payload key
-  const setPropOp = op('node.set_prop', {
-    nodeId: 'heading-1',
-    key: 'text',
-    value: 'New text',
-    extraPayloadKey: 'bad'
-  });
-  const result5 = validateCollaborationOperation(setPropOp);
-  assert.equal(result5.valid, false);
-  assert.ok(result5.errors.some(err => err.includes('nodeId') || err.includes('invalid')));
-  
-  // text.insert with extra payload key
-  const textInsertOp = op('text.insert', {
-    nodeId: 'text-1',
-    key: 'text',
-    offset: 0,
-    text: 'Hello',
-    extraPayloadKey: 'bad'
-  });
-  const result6 = validateCollaborationOperation(textInsertOp);
-  assert.equal(result6.valid, false);
-  assert.ok(result6.errors.some(err => err.includes('nodeId') || err.includes('invalid')));
-  
-  // text.delete with extra payload key
-  const textDeleteOp = op('text.delete', {
-    nodeId: 'text-1',
-    key: 'text',
-    offset: 0,
-    length: 1,
-    extraPayloadKey: 'bad'
-  });
-  const result7 = validateCollaborationOperation(textDeleteOp);
-  assert.equal(result7.valid, false);
-  assert.ok(result7.errors.some(err => err.includes('nodeId') || err.includes('invalid')));
-});
-
-test('rejects operations with missing required payload keys', () => {
-  // document.set_title missing title
-  const setTitleOp = op('document.set_title', {});
-  const result1 = validateCollaborationOperation(setTitleOp);
-  assert.equal(result1.valid, false);
-  assert.ok(result1.errors.some(err => err.includes('payload') || err.includes('title')));
-  
-  // node.insert missing node
-  const insertOp1 = op('node.insert', {
-    parentId: 'section-1',
-    afterNodeId: 'heading-1'
-  });
-  const result2 = validateCollaborationOperation(insertOp1);
-  assert.equal(result2.valid, false);
-  assert.ok(result2.errors.some(err => err.includes('payload') || err.includes('invalid')));
-  
-  // node.delete missing nodeId
-  const deleteOp = op('node.delete', {});
-  const result3 = validateCollaborationOperation(deleteOp);
-  assert.equal(result3.valid, false);
-  assert.ok(result3.errors.some(err => err.includes('nodeId') || err.includes('invalid')));
-  
-  // text.insert missing text
-  const textInsertOp = op('text.insert', {
-    nodeId: 'text-1',
-    key: 'text',
-    offset: 0
-  });
-  const result4 = validateCollaborationOperation(textInsertOp);
-  assert.equal(result4.valid, false);
-  assert.ok(result4.errors.some(err => err.includes('nodeId') || err.includes('invalid') || err.includes('text')));
-});
-
-test('validates that transformed operations preserve exact key sets', () => {
-  // Verify that transformation doesn't introduce or remove keys
-  const validOp = op('document.set_title', { title: 'Test Title' });
-  const transformed = transformCollaborationOperation(validOp, []);
-  
-  // Transformed operation should still validate
-  const result = validateCollaborationOperation(transformed);
-  assert.equal(result.valid, true);
-  
-  // Transformed operation should have exactly the same envelope keys
+test('transformed collaboration operations retain the exact version-1 envelope', () => {
+  const valid = op('document.set_title', { title: 'Test Title' });
+  const transformed = transformCollaborationOperation(valid, []);
   const expectedKeys = ['schemaVersion', 'opId', 'clientId', 'baseSequence', 'type', 'payload'];
-  const actualKeys = Object.keys(transformed);
-  assert.equal(actualKeys.length, expectedKeys.length);
-  assert.ok(expectedKeys.every(key => actualKeys.includes(key)));
+  assert.deepEqual(Object.keys(transformed).sort(), [...expectedKeys].sort());
+  assert.deepEqual(validateCollaborationOperation(transformed), { valid: true, errors: [] });
 });
