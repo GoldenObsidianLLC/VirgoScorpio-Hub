@@ -1,21 +1,22 @@
 # VirgoScorpio Hub 0.6.2 - Current Release Gate Report
 
-**Snapshot:** 21 November 2026, America/Chicago
+**Snapshot:** 22 November 2026, America/Chicago
 **Repository:** [GoldenObsidianLLC/VirgoScorpio-Hub](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub)
-**Current main:** `51cd04e60f1516741f544da35fd58fb965cdc66c`
+**Current main:** `722f527472d46d6bc50c43d793d28f457845c050` (documentation-only successor to code-bearing F1.60 merge `51cd04e60f1516741f544da35fd58fb965cdc66c`)
 **F1.60 merge:** [PR #278](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/278) - merged; [issue #233](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/233) closed
-**Exact-main workflow:** [#1220 / run 44963806344](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44963806344) - **7/7 jobs passed**
-**Source-bound release artifact:** [#14730264543](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44963806344/artifacts/14730264543)
-**Canonical readiness JSON SHA-256:** `b01e476b280650e4eb6d2c930d4a5939bbf5fcde22b4d44a8bdb18a74f97da00`
+**Documentation synchronization:** [PR #281](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/281) - merged; no runtime changes
+**Exact-main workflow:** [#1223 / run 44968358247](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44968358247) - **7/7 jobs passed**
+**Source-bound release artifact:** [#14732965831](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44968358247/artifacts/14732965831)
+**Canonical readiness JSON SHA-256:** `a96c5bbe83541f9f74068ddc34e6f3ba937c437c4514415b70f8987afa3afbad`
 **Package:** `0.6.2`, private and unreleased
 
 > **Release decision: NO-GO.** Exact-main CI, live integration evidence, and signed supply-chain attestation pass. Production certification does not. Do not tag, publish, deploy, or promote package 0.6.2 to production.
 
 ## 1. Executive status
 
-The post-merge mainline workflow validates the current main SHA `51cd04e60f1516741f544da35fd58fb965cdc66c`. All seven jobs passed: Node.js 22, Node.js 24, PostgreSQL/Memgraph integration, browser smoke, CodeQL, signed dependency lockfile/SBOM attestation, and exact-source CI evidence consolidation.
+The latest post-merge mainline workflow validates exact current main `722f527472d46d6bc50c43d793d28f457845c050`. This revision is a documentation-only successor to the F1.60 code-bearing merge `51cd04e60f1516741f544da35fd58fb965cdc66c`; the runtime source was unchanged. All seven jobs passed: Node.js 22, Node.js 24, PostgreSQL/Memgraph/Redis-backed integration, browser smoke, CodeQL, signed dependency lockfile/SBOM attestation, and exact-source CI evidence consolidation.
 
-The finalized source-bound readiness artifact was generated at `2026-11-21T23:54:35.523Z` and reports:
+The finalized source-bound readiness artifact was generated at `2026-11-22T00:51:37.901Z` and reports:
 
 | Readiness classification | Count |
 |---|---:|
@@ -27,7 +28,7 @@ The finalized source-bound readiness artifact was generated at `2026-11-21T23:54
 
 It sets `readyForProduction=false` and `releaseClassification=NOT_PRODUCTION_CERTIFIED`. The two PARTIAL items are the human dependency/license review and service-less integration diagnostics. Fourteen production evidence packages remain missing. Zero BLOCKED items does not imply release readiness.
 
-The artifact records a clean source tree at `51cd04e60f1516741f544da35fd58fb965cdc66c`, a clean EnginEx submodule pinned to `d99e021f55664f006b5e65b4a58202f9c7bc4f4b`, and exact-source evidence consolidation with revision-bound manifests/checksums.
+The artifact records a clean source tree at `722f527472d46d6bc50c43d793d28f457845c050`, a clean EnginEx submodule pinned to `d99e021f55664f006b5e65b4a58202f9c7bc4f4b`, and exact-source evidence consolidation with revision-bound manifests/checksums.
 
 ## 2. Exact-main CI and technical evidence
 
@@ -44,7 +45,7 @@ The artifact records a clean source tree at `51cd04e60f1516741f544da35fd58fb965c
 | Signed lockfile/SBOM attestation | **PASS** | Required on mainline; attestation job succeeded |
 | CI evidence consolidation | **PASS** | Exact-source producer manifests and checksums validated |
 
-The live database producer manifest SHA-256 is `c043329e573118ff489d0576ac4c7feb6d8f399c54bf6a9620536f191fa48ebb`. It binds the 181/181 integration result and the 18/18 fresh plus 18/18 idempotent migration run to `51cd04e60f1516741f544da35fd58fb965cdc66c`. The database and containers were disposable CI infrastructure, not production credentials, production data, or a production recovery exercise.
+The live database producer manifest SHA-256 for the latest exact-main run is `17ca515d59722a427f6ecf4384c63ff9d9ec8d8558a77bbd420a55fc140b2ad6`. It binds the 181/181 integration result and the 18/18 fresh plus 18/18 idempotent migration run to `722f527472d46d6bc50c43d793d28f457845c050`; the runtime code-bearing parent remains `51cd04e60f1516741f544da35fd58fb965cdc66c`. The database and containers were disposable CI infrastructure, not production credentials, production data, or a production recovery exercise.
 
 The separate service-less diagnostic remains PARTIAL: 48 tests per supported runtime, 1 pass and 47 skipped. Those skips are not live integration evidence and are not counted as passes. The live PostgreSQL/Memgraph/Redis integration producer is separate and passed 181/181.
 
