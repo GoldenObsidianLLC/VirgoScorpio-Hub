@@ -8,7 +8,7 @@ const SITE_ID = '11111111-1111-4111-8111-111111111111';
 const CONTENT_ID = '33333333-3333-4333-8333-333333333333';
 const ACTOR_ID = '22222222-2222-4222-8222-222222222222';
 
-function createRecordingPool(initialStatus = 'draft') {
+function createRecordingPool(initialStatus = 'draft', contentType = 'page') {
   const calls = [];
   const previous = {
     id: CONTENT_ID,
@@ -16,7 +16,7 @@ function createRecordingPool(initialStatus = 'draft') {
     title: 'Transaction callback test',
     slug: 'transaction-callback-test',
     locale: 'en',
-    content_type: 'page',
+    content_type: contentType,
     status: initialStatus,
     body: { schemaVersion: 1, type: 'page', title: 'Transaction callback test', children: [] },
     version: 1,
@@ -28,7 +28,7 @@ function createRecordingPool(initialStatus = 'draft') {
       const normalized = String(sql).replace(/\s+/g, ' ').trim();
       calls.push(normalized);
       if (normalized.startsWith('SELECT id,site_id,title,slug,locale,content_type,status,body,version,published_snapshot')) {
-        return { rows: [{ ...previous }] };
+        return { rows: params[2] && previous.content_type !== params[2] ? [] : [{ ...previous }] };
       }
       if (normalized.startsWith('UPDATE content_items SET status=$3')) {
         return {
@@ -108,6 +108,33 @@ test('all editorial transition methods invoke the audit callback inside their ex
     const commitIndex = recording.calls.findIndex(sql => sql === 'COMMIT');
     assert.ok(outboxIndex >= 0 && outboxIndex < callbackIndex, scenario.method + ' writes its outbox event before the callback');
     assert.ok(callbackIndex < commitIndex, scenario.method + ' must await audit before COMMIT');
+  }
+});
+
+test('all editorial transition methods enforce the expected content type before writing', async () => {
+  for (const scenario of ACTIONS) {
+    const recording = createRecordingPool(scenario.status, 'product');
+    const store = createPostgresStore({ pool: recording.pool });
+    const input = {
+      siteId: SITE_ID,
+      id: CONTENT_ID,
+      actorId: ACTOR_ID,
+      expectedVersion: 1,
+      expectedContentType: 'page',
+      ...(scenario.method === 'scheduleContent'
+        ? { scheduledAt: new Date(Date.now() + 5 * 60_000).toISOString() }
+        : {}),
+    };
+
+    await assert.rejects(
+      store[scenario.method](input),
+      error => error.statusCode === 404 && error.code === 'ERR_VIRGOSCORPIO_HUB_CONTENT_NOT_FOUND',
+      scenario.method + ' must not transition a custom record through a page-scoped operation',
+    );
+
+    assert.ok(recording.calls.some(sql => sql === 'ROLLBACK'));
+    assert.equal(recording.calls.some(sql => sql.startsWith('UPDATE content_items SET status=')), false);
+    assert.equal(recording.calls.some(sql => sql.startsWith('INSERT INTO content_workflow_events')), false);
   }
 });
 
