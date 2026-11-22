@@ -4,6 +4,10 @@ All notable project-level changes should be recorded here. This changelog does n
 
 ## 0.6.2 (unreleased patch candidate)
 
+### Studio collaboration operation-envelope hardening (F1.62)
+
+- Server-side collaboration validation now requires the exact six-key version-1 operation envelope and the exact payload key set for each supported operation type. Malformed operations are rejected before PostgreSQL client acquisition/persistence and before local or Redis realtime delivery; inbound Redis document events use the same strict contract. Regression tests cover missing/extra envelope keys, all seven operation payload types, the PostgreSQL side-effect boundary and Redis fan-out/publication. The tenant-isolation test-fingerprint inventory was regenerated and freshness-checked. Merged through [PR #263](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/263) at `9c563482ad0db51a4576b4154ad59580b8d69fc9`. Valid v1 operations remain compatible; no route/API shape, wire-version, schema, migration, dependency, lockfile, package-version or SemVer change. This does not close independent security/tenant-isolation or release gates.
+
 ### Scheduler polling releases shutdown listeners after each interval (F1.61 merged; [PR #283](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/283); tracked by issue #277; supersedes closed [Aikido PR #272](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/272))
 
 - A single `waitForSchedulerInterval` helper owns each polling timer and transient shutdown listener. Both resources are released on interval completion and shutdown; an already-aborted signal and timer setup failure are handled without retaining listeners.
