@@ -4,6 +4,22 @@ All notable project-level changes should be recorded here. This changelog does n
 
 ## 0.6.2 (unreleased patch candidate)
 
+### F1.66 - recheck WebSocket document authorization before snapshot delivery ([PR #290](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/290); merged at `daf18f63115e6456800447d66b640247e58121b6`)
+
+- Document collaboration join revalidates the specific edit grant after the asynchronous sync read and after awaited hub-subscription reauthorization, immediately before sending `document.joined` or protected snapshot data.
+- Consolidates the repeated check in the gateway's private `assertDocumentAuthorization` helper. Three deferred race regressions cover document/session revocation during sync, hub-subscription invalidation during sync, and `content:edit:own` revocation during hub reauthorization.
+- Focused WebSocket suite passed 25/25. Exact-main workflow #45074920350 passed 7/7 jobs, including 804/804 Hub tests on Node 22.23.4, 94/94 EnginEx tests, 190/190 live PostgreSQL/Memgraph tests with zero skips, 18/18 fresh/idempotent migrations, browser smoke, CodeQL, signed lockfile/SBOM attestation and evidence consolidation. No API/wire schema, database, dependency, lockfile, package-version or SemVer change.
+
+### F1.65 - enforce confidential classification for external AI providers ([PR #289](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/289); merged at `0986d003ff4f052e34a5ebf6f36636e802c85d0d`)
+
+- Non-mock AI providers now enforce `confidential` classification server-side; caller-supplied classification cannot lower the external-provider data handling boundary. Mock-provider behavior and existing provider/site allowlists plus external-content approval gates remain intact.
+- Corrects provider allowlist fixtures so classification regressions reach the intended guard. Focused classification tests passed 18/18; hosted Node 22/24, live PostgreSQL/Memgraph, browser, CodeQL and evidence jobs passed. No API/schema/dependency/lockfile/package-version/SemVer change.
+
+### F1.64 - revalidate community moderation authorization in the mutation transaction ([PR #288](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/288); merged at `8ed6336e4a8086d6fd01274912bfdd4ede581243`)
+
+- Community moderation now revalidates active account, selected-site membership and role capabilities within the same transaction as the moderation mutation and audit write. Site/user/membership/role locks serialize against concurrent member revocation.
+- Adds a deterministic PostgreSQL lock-wait regression and uses the shared test helper. Hosted PostgreSQL/Memgraph integration passed 190/190 with zero skips; Node 22/24, browser and CodeQL passed. No API/schema/migration/dependency/lockfile/package-version/SemVer change.
+
 ### Page endpoints enforce the page content-type boundary (F1.63 merged; [PR #286](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/286); supersedes closed-without-merge [Aikido PR #241](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/241))
 
 - Page-only detail, draft/update, revision-list/read/restore and all seven workflow routes now reject custom content types with the existing non-disclosing 404 contract. The database repeats the expected `page` type predicate in the locked `saveDraft` and shared workflow-transition transactions, so preflight checks are not the only boundary. Revision queries bind the content type in SQL, and collaboration persistence/sync reads remain page-only.
