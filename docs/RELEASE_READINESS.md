@@ -1,4 +1,22 @@
-# VirgoScorpio Hub 0.6.2 - current release-readiness snapshot (22 November 2026; main 85315d8; workflow #1240)
+# VirgoScorpio Hub 0.6.2 - current release-readiness snapshot (22 November 2026; main `b8d3def`; workflow #1245)
+
+## Current exact-main readiness - 22 November 2026
+
+Current `main` is `b8d3def47dab80b6df1c70dbcdf46e99c2ecd40d`, including F1.63 page/custom-record content-type isolation merged through [PR #286](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/286). It also includes F1.62 / [PR #263](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/263), F1.61 / [PR #283](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/283), and prior runtime history. Exact-main [workflow #1245 / run 45049120924](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45049120924) passed **7/7 jobs** on this exact SHA: Node.js 22, Node.js 24, live PostgreSQL/Memgraph/Redis integration, browser/accessibility smoke, CodeQL, signed lockfile/SBOM attestation and exact-source evidence consolidation.
+
+Canonical [release-readiness artifact #14765156372](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45049120924/artifacts/14765156372) is source-bound to exact current main. Archive SHA-256: `2e0181e8bbcf5f267fe90931a64d1f7f3827deed2d26fe63aac5cd88d17bb9c0`; readiness JSON SHA-256: `67e545d0398ffa68f0833c583636a69e47ed120983050d3afbfdab93fb315886`; readiness Markdown SHA-256: `f2df34217248f0ac2f6d9e54f2b0b874f46a6af92c4c0d73b9faf8ac5cc959a1`. Generated at `2026-11-22T17:26:12.698Z`. Classification: **8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN**; `readyForProduction=false`; `NOT_PRODUCTION_CERTIFIED`; decision **NO-GO**.
+
+Node.js 22.23.4 and 24.22.1 each passed **780/780 Hub tests** and **94/94 EnginEx tests**. Live PostgreSQL 18/Memgraph/Redis-backed integration passed **181/181** with zero failures/skips; **18/18** fresh migrations and **18/18** idempotent re-entry checks passed. Browser smoke, CodeQL, signed mainline lockfile/SBOM attestation and evidence consolidation passed. The separate service-less diagnostic (48 tests per runtime, 1 pass / 47 skipped) remains PARTIAL; those skips are not live integration passes.
+
+F1.63 / [PR #286](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/286) is merged at `b8d3def47dab80b6df1c70dbcdf46e99c2ecd40d`. Page-only detail, draft/update, revision, restore and workflow routes reject custom content types with the existing non-disclosing 404 contract. The shared PostgreSQL store repeats the expected `page` predicate inside locked draft-save and workflow-transition transactions; revision queries bind the type in SQL; collaboration persistence/sync reads remain page-scoped. Updated-head PR workflow #1244 passed all seven required contexts, including both Node matrices, live database integration, migrations, browser smoke, CodeQL and candidate evidence consolidation. The superseded Aikido [PR #241](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/241) was closed without merging; its scanner fingerprint has not been independently mapped or cleared. Umbrella issue [#277](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/277) remains open for remaining findings. This is maintainer engineering/CI evidence, not independent tenant-isolation assurance.
+
+The two PARTIAL items remain (1) qualified human dependency/license review and (2) service-less integration diagnostics. Fourteen missing production evidence gates remain: independent tenant-isolation review; identity-provider E2E; malware/legacy-asset quarantine; live cloud providers; Stripe lifecycle; full browser/accessibility acceptance; commerce parity; community parity; plugin isolation; human dependency/SBOM/CodeQL review; load/backup/restore; independent platform security assessment; operations/release approval; and production observability. See the [current release-gate report](reports/2026-11-21-VirgoScorpio-Hub-0.6.2-Release-Gate-Report.md).
+
+F1.62 collaboration-envelope validation and F1.61 scheduler abort-listener cleanup are included in the same current main SHA and exact-main workflow above. No route/API shape, wire version, schema, migration, dependency, lockfile, package-version or SemVer change was introduced by F1.63. Package `0.6.2` remains private and unreleased. Do not tag, publish, deploy, or promote it; this CI result does not authorize production release.
+
+---
+
+## Historical readiness snapshot before F1.63 (main `85315d873af73a71dc5223f02ac196b924efc928`; workflow #1240)
 
 ## Current exact-main readiness - 22 November 2026
 

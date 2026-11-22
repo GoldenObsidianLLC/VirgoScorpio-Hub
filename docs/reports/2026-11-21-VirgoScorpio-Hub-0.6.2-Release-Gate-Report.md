@@ -2,24 +2,25 @@
 
 **Snapshot:** 22 November 2026, America/Chicago
 **Repository:** [GoldenObsidianLLC/VirgoScorpio-Hub](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub)
-**Current main:** `85315d873af73a71dc5223f02ac196b924efc928` (documentation-only PR #285 follows the F1.62 runtime merge `9c563482ad0db51a4576b4154ad59580b8d69fc9`; F1.61 scheduler cleanup remains merged through PR #283; F1.60 code-bearing baseline `51cd04e60f1516741f544da35fd58fb965cdc66c`)
-**F1.60 merge:** [PR #278](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/278) - merged; [issue #233](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/233) closed
-**Documentation synchronization:** PRs #281, #282, [#284](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/284) and [#285](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/285) are merged. F1.61 runtime PR #283 and F1.62 runtime PR #263 are merged.
-**Exact-main workflow:** [#1240 / run 44984783839](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44984783839) - **7/7 jobs passed**
-**Source-bound release artifact:** [#14739740143](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44984783839/artifacts/14739740143)
-**Canonical readiness JSON SHA-256:** `e5554dd039d1df44f31e9a0b4bd79d483d0784e521329cdb2546e28313a10545`
+**Current main:** `b8d3def47dab80b6df1c70dbcdf46e99c2ecd40d` (F1.63 page/custom-record isolation merged through PR #286; F1.62 collaboration-envelope hardening through PR #263; F1.61 scheduler cleanup through PR #283; F1.60 code-bearing baseline `51cd04e60f1516741f544da35fd58fb965cdc66c`)
+**Runtime increments:** F1.61 / PR #283, F1.62 / PR #263 and F1.63 / PR #286 are merged
+**Documentation synchronization:** PRs #281, #282, [#284](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/284) and [#285](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/285) are merged
+**Superseded candidate:** Aikido PR [#241](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/241) is closed without merge; its scanner fingerprint remains unmapped
+**Exact-main workflow:** [#1245 / run 45049120924](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45049120924) - **7/7 jobs passed**
+**Source-bound release artifact:** [#14765156372](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45049120924/artifacts/14765156372)
+**Canonical readiness JSON SHA-256:** `67e545d0398ffa68f0833c583636a69e47ed120983050d3afbfdab93fb315886`
 **Package:** `0.6.2`, private and unreleased
-**Readiness artifact archive SHA-256:** `22fec20fa714a21b5264539761adc9b2bca8c464c327fb3d389e17007ceda922`
-**Live-integration artifact:** [#14739700216](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44984783839/artifacts/14739700216), archive SHA-256 `81593c848564f7dd33a8bc4486883069e6305efec619ba8b5e662699efe4c665`
-**Supply-chain attestation artifact:** [#14738534081](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44984783839/artifacts/14738534081), archive SHA-256 `6f8f676dffa440664193e2e66400e48034d92ad36e6ab8a579510445efc3eb15`
+**Readiness artifact archive SHA-256:** `2e0181e8bbcf5f267fe90931a64d1f7f3827deed2d26fe63aac5cd88d17bb9c0`
+**Live-integration artifact:** [#14765295298](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45049120924/artifacts/14765295298), archive SHA-256 `ebde71c0b0402f856b39d8116e9f6f3b376f5de82b8dd3c6d423a72ff0e1adc5`
+**Supply-chain attestation artifact:** [#14765011753](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45049120924/artifacts/14765011753), archive SHA-256 `c945d752fb3d32d1b27ed075cd376f810e792e2c2b1013ac0e361f7d50b9ca3a`
 
 > **Release decision: NO-GO.** Exact-main CI, live integration evidence, and signed supply-chain attestation pass. Production certification does not. Do not tag, publish, deploy, or promote package 0.6.2 to production.
 
 ## 1. Executive status
 
-The latest post-merge mainline workflow #1240 validates exact current main `85315d873af73a71dc5223f02ac196b924efc928`, following documentation-only PR #285 and including the F1.62 collaboration operation-envelope runtime merged through PR #263 at `9c563482ad0db51a4576b4154ad59580b8d69fc9`. It also includes F1.61 / PR #283 and prior runtime history. All seven jobs passed: Node.js 22, Node.js 24, PostgreSQL/Memgraph/Redis-backed integration, browser/accessibility smoke, CodeQL, signed dependency lockfile/SBOM attestation, and exact-source CI evidence consolidation.
+The latest post-merge mainline workflow #1245 validates exact current main `b8d3def47dab80b6df1c70dbcdf46e99c2ecd40d`, including F1.63 page/custom-record content-type isolation merged through PR #286. The same source includes F1.62 / PR #263, F1.61 / PR #283 and prior runtime changes. All seven jobs passed: Node.js 22, Node.js 24, PostgreSQL/Memgraph/Redis-backed integration, browser/accessibility smoke, CodeQL, signed dependency lockfile/SBOM attestation and exact-source CI evidence consolidation.
 
-The finalized source-bound readiness artifact [#14739740143](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44984783839/artifacts/14739740143), archive SHA-256 `22fec20fa714a21b5264539761adc9b2bca8c464c327fb3d389e17007ceda922` and JSON SHA-256 `e5554dd039d1df44f31e9a0b4bd79d483d0784e521329cdb2546e28313a10545`, was generated at `2026-11-22T04:25:55.257Z` on exact current main and reports:
+The finalized source-bound readiness artifact [#14765156372](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45049120924/artifacts/14765156372), archive SHA-256 `2e0181e8bbcf5f267fe90931a64d1f7f3827deed2d26fe63aac5cd88d17bb9c0` and JSON SHA-256 `67e545d0398ffa68f0833c583636a69e47ed120983050d3afbfdab93fb315886`, was generated at `2026-11-22T17:26:12.698Z` on exact current main and reports:
 
 | Readiness classification | Count |
 |---|---:|
@@ -29,13 +30,17 @@ The finalized source-bound readiness artifact [#14739740143](https://github.com/
 | MISSING_EVIDENCE | **14** |
 | NOT_RUN | **0** |
 
-It sets `readyForProduction=false` and `releaseClassification=NOT_PRODUCTION_CERTIFIED`. The two PARTIAL items are the human dependency/license review and service-less integration diagnostics. Fourteen production evidence packages remain missing. Zero BLOCKED items does not imply release readiness.
+It sets `readyForProduction=false` and `releaseClassification=NOT_PRODUCTION_CERTIFIED`. The two PARTIAL items are qualified human dependency/license review and service-less integration diagnostics. Fourteen production evidence packages remain missing. Zero BLOCKED items does not imply release readiness.
 
-The artifact records a clean source tree at `85315d873af73a71dc5223f02ac196b924efc928`, a clean EnginEx submodule pinned to `d99e021f55664f006b5e65b4a58202f9c7bc4f4b`, and exact-source evidence consolidation with revision-bound manifests/checksums.
+The artifact records a clean source tree at `b8d3def47dab80b6df1c70dbcdf46e99c2ecd40d`, a clean EnginEx submodule pinned to `d99e021f55664f006b5e65b4a58202f9c7bc4f4b`, and exact-source evidence consolidation with revision-bound manifests/checksums.
 
-## F1.63 page/custom-record content-type isolation - candidate, not merged
+## F1.63 page/custom-record content-type isolation - merged
 
-F1.63 / [PR #286](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/286) is a maintainer candidate that replaces stale, unmerged Aikido [PR #241](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/241). It is not included in current main `85315d873af73a71dc5223f02ac196b924efc928` or exact-main workflow #1240 above. Page-only routes reject non-page records with the existing non-disclosing 404 contract; the shared PostgreSQL store repeats expected content type inside locked draft-save and workflow-transition transactions, revision queries bind the type, and collaboration persistence/sync queries are page-scoped. Focused route/store/workflow/collaboration tests passed 71/71 with zero failures/skips. Full local `npm run check` on Node.js 26.12.1 passed 780 tests (777 passed, 0 failed, 3 conditional Windows skips); artifact/syntax verification passed (238 required paths, 278 JavaScript files) and tenant inventory freshness passed with source SHA-256 `36c8a2a8eb50d464ceaa1f07c14a67d9d5aa5714b4ad26f1883360f3d2d8e602`. Hosted PR merge-ref [workflow #44991934925](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44991934925) and matching branch-push run #44991901818 passed all seven required PR status contexts. Node 22/24 each passed 780/780 Hub tests and 94/94 EnginEx tests; live PostgreSQL/Memgraph/Redis integration passed 181/181 with zero skips; all 18 fresh and 18 idempotent migration checks passed; browser smoke, CodeQL and candidate evidence consolidation passed. Live integration artifact [#14742202939](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44991934925/artifacts/14742202939) is bound to merge-ref SHA `9d738cbd49c5d45cd24a5ca08ca1778810c94de9`. Mainline-only lockfile/SBOM attestation is intentionally post-merge. This is not independent tenant-isolation assurance and closes no release gate.
+F1.63 / [PR #286](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/286) merged at main SHA `b8d3def47dab80b6df1c70dbcdf46e99c2ecd40d`. Page-only detail, draft/update, revision-list/read/restore and all seven workflow routes reject custom content types with the existing non-disclosing 404 contract. The shared PostgreSQL store repeats the expected `page` content-type predicate inside the row-lock transaction for `saveDraft` and workflow transitions, preventing preflight-only TOCTOU gaps. Revision queries bind the type in SQL; generic callers retain prior behavior when the optional type argument is omitted or `null`; collaboration persistence/sync reads remain page-only.
+
+Focused API/store/workflow/collaboration tests passed 71/71. Full local Node.js 26.12.1 `npm run check` passed 780 total (777 passed, 0 failed, 3 conditional Windows skips); artifact/syntax verification and tenant-inventory freshness passed (28 families / 80 route patterns / 22 source files / 59 test files). Updated-head PR workflow #1244 / run 45048442993 passed all seven required PR status contexts: Node 22/24 each passed 780/780 Hub and 94/94 EnginEx tests; live PostgreSQL/Memgraph/Redis integration passed 181/181 with zero failures/skips; 18/18 fresh migrations and 18/18 idempotent re-entry checks passed; browser smoke, CodeQL and candidate evidence consolidation passed. Exact-main workflow #1245 then passed 7/7 on the actual merge SHA, including mainline-only signed lockfile/SBOM attestation.
+
+Aikido PR [#241](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/241) was closed without merging as superseded by this narrower transaction-backed implementation. Its scanner fingerprint has not been independently mapped or cleared; umbrella issue [#277](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/277) remains open for remaining Aikido work. The tenant inventory remains maintainer-prepared, not independent tenant-isolation assessment. F1.63 changes no public API/wire shape, schema, migration, dependency, lockfile, package version or SemVer and closes no independent production evidence gate.
 
 ## F1.62 collaboration operation-envelope hardening - merged
 
@@ -49,8 +54,8 @@ F1.61 / [PR #283](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/283
 
 | Gate | Exact-main result | Scope and limitation |
 |---|---|---|
-| Node.js 22.23.4 | **PASS** | Hub unit/security 771/771; EnginEx 94/94; zero skips |
-| Node.js 24.22.1 | **PASS** | Hub unit/security 771/771; EnginEx 94/94; zero skips |
+| Node.js 22.23.4 | **PASS** | Hub unit/security 780/780; EnginEx 94/94; zero skips |
+| Node.js 24.22.1 | **PASS** | Hub unit/security 780/780; EnginEx 94/94; zero skips |
 | PostgreSQL 18 / Memgraph / Redis-backed integration | **PASS** | 181/181 live integration tests; zero failures and skips |
 | Fresh migrations | **PASS** | 18/18 applied to an isolated disposable database |
 | Migration idempotency | **PASS** | 18/18 safely skipped on the second application |
@@ -60,7 +65,7 @@ F1.61 / [PR #283](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/283
 | Signed lockfile/SBOM attestation | **PASS** | Required on mainline; attestation job succeeded |
 | CI evidence consolidation | **PASS** | Exact-source producer manifests and checksums validated |
 
-The live database producer manifest SHA-256 for the latest exact-main run is `dddffcaeb781f4564929672f51dc2d0665c34769d93c23a6f7253b5c14e50fdd`. It binds the 181/181 integration result and the 18/18 fresh plus 18/18 idempotent migration run to `85315d873af73a71dc5223f02ac196b924efc928`; the database and containers were disposable CI infrastructure, not production credentials, production data, or a production recovery exercise.
+The live database producer manifest SHA-256 for the latest exact-main run is `e4932c410e6983d7ca88cf8a9b655062d08eb70d63dc61c9aca3e23fe74e683d`. It binds the 181/181 integration result and the 18/18 fresh plus 18/18 idempotent migration run to `b8d3def47dab80b6df1c70dbcdf46e99c2ecd40d`; the database and containers were disposable CI infrastructure, not production credentials, production data, or a production recovery exercise.
 
 The separate service-less diagnostic remains PARTIAL: 48 tests per supported runtime, 1 pass and 47 skipped. Those skips are not live integration evidence and are not counted as passes. The live PostgreSQL/Memgraph/Redis integration producer is separate and passed 181/181.
 
@@ -107,7 +112,7 @@ A maintainer test, threat model, route inventory, green CI result, or generated 
 
 ### Aikido autofix batch
 
-The inventory for PRs #237-#276 contains 40 proposals: **30 open, 6 merged and 4 closed without merge**. Merged: #237, #254, #260, #261, #262 and #275. Closed without merge: #238, #268, #271 and #276. Each remaining proposal must be checked against its exact head, current base, scanner fingerprint, rule/CWE, severity and affected code path. A green check alone does not prove a scanner finding or a correct fix. Do not bulk-merge generated changes.
+A live GitHub state sweep on 22 November 2026 found 40 Aikido proposals (#237-#276): **27 open, 7 merged and 6 closed without merge**. Merged: #237, #254, #260, #261, #262, #263 and #275. Closed without merge: #238, #241, #268, #271, #272 and #276. Open: #239, #240, #242, #243, #244, #245, #246, #247, #248, #249, #250, #251, #252, #253, #255, #256, #257, #258, #259, #264, #265, #266, #267, #269, #270, #273 and #274. F1.62 / PR #263 is merged; F1.63 / PR #286 supersedes closed-without-merge PR #241, but the associated scanner fingerprint remains unmapped. Each remaining proposal must be checked against its exact head, current base, scanner fingerprint, rule/CWE, severity and affected code path. A green check alone does not prove a scanner finding or a correct fix. Do not bulk-merge generated changes.
 
 The 20 November Aikido aggregate report recorded 12 open SAST findings (0 critical, 3 high, 5 medium, 4 low) and one low secret-history item. These aggregate counts require per-finding export, reproduction and disposition.
 
@@ -142,12 +147,12 @@ The earlier pre-rebase PR attempt failed because the generated tenant-isolation 
 
 ## 6. Recommended next steps
 
-1. Close the independent tenant-isolation review #14 with an assessor scope that explicitly includes merge SHA `51cd04e60f1516741f544da35fd58fb965cdc66c`, adversarial two-site coverage, findings and retest.
-2. Complete independent platform security assessment #25 against the exact merge SHA and disposition critical/high findings through remediation or authorized risk acceptance.
+1. Complete independent tenant-isolation review #14 with an assessor scope that explicitly includes current exact-main SHA `b8d3def47dab80b6df1c70dbcdf46e99c2ecd40d` (including F1.60-F1.63), adversarial two-site coverage, findings and retest.
+2. Complete independent platform security assessment #25 against current exact-main SHA `b8d3def47dab80b6df1c70dbcdf46e99c2ecd40d` and disposition critical/high findings through remediation or authorized risk acceptance.
 3. Complete qualified dependency/license review #23 using the current lockfile, CycloneDX SBOM, provenance and attestation bundle; CI attestation is not human approval.
 4. Execute workload/load/soak, backup/restore, fault injection and documented RPO/RTO drills under #24.
 5. Complete operations ownership, deployment/migration/rollback/secret/incident runbooks and a release-owner decision under #26.
 6. Close remaining identity, malware, cloud, Stripe, accessibility, commerce, community, plugin and production-observability evidence gates.
 7. Continue issue #277 with individual scanner-fingerprint reconciliation and exact-head review. Keep #234 and #235 separate; triage detailed findings safely and verify authorized domain scan history independently.
 
-**Release discipline:** keep `0.6.2` private and unreleased. Do not create a release tag, GitHub Release, npm publication or production deployment until required independent evidence packages are accepted and a separately approved release decision is recorded. No SemVer increment is justified by F1.60.
+**Release discipline:** keep `0.6.2` private and unreleased. Do not create a release tag, GitHub Release, npm publication or production deployment until required independent evidence packages are accepted and a separately approved release decision is recorded. The compatible F1.60-F1.63 engineering increments do not justify a SemVer increment.
