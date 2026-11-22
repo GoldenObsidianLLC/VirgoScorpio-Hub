@@ -26,6 +26,11 @@ function nextMessage(socket, timeoutMs = 1_000) {
   });
 }
 
+function createDeferred() {
+  let resolve;
+  const promise = new Promise(resolvePromise => { resolve = resolvePromise; });
+  return { promise, resolve };
+}
 function connect(url, headers = {}) {
   return new Promise((resolve, reject) => {
     const socket = new WebSocket(url, { headers });
@@ -499,6 +504,143 @@ test('WebSocket document collaboration requires an active session and edit or ed
 
 });
 
+test('WebSocket document join revalidates the document grant after a deferred sync read', async t => {
+  const contentId = '22222222-2222-4222-8222-222222222222';
+  const userId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const syncEntered = createDeferred();
+  const releaseSync = createDeferred();
+  let sessionActive = true;
+  let sessionChecks = 0;
+  const identityService = {
+    async authenticate(token) {
+      if (token !== 'editor-session-token') return null;
+      return {
+        sessionId: 'editor-session',
+        expiresAt: new Date(Date.now() + 60_000).toISOString(),
+        user: { id: userId, email: 'editor@example.test', status: 'active' },
+        memberships: [{ siteId: SITE_ID, capabilities: ['content:read', 'content:edit:own'] }]
+      };
+    },
+    async isSessionActive({ userId: candidateUserId, sessionId }) {
+      sessionChecks += 1;
+      return sessionActive && candidateUserId === userId && sessionId === 'editor-session';
+    },
+    async authorizeSite(_userId, _siteId, capability) {
+      return capability === 'content:read' || capability === 'content:edit' || capability === 'content:edit:own';
+    }
+  };
+  const snapshot = {
+    schemaVersion: 1,
+    documentId: 'doc-revoked-during-sync',
+    type: 'page',
+    title: 'Confidential snapshot that must not be delivered',
+    children: []
+  };
+  const store = {
+    async getById({ siteId, id }) {
+      return siteId === SITE_ID && id === contentId
+        ? { id, site_id: SITE_ID, content_type: 'page', status: 'draft', created_by: userId }
+        : null;
+    },
+    async getCollaborationSync() {
+      syncEntered.resolve();
+      await releaseSync.promise;
+      return {
+        reloadRequired: true,
+        sequence: 12,
+        oldestReplaySequence: 0,
+        document: snapshot
+      };
+    }
+  };
+  const { url, origin } = await createServer(t, { identityService, contentStore: store });
+  const socket = await connect(url, { authorization: 'Bearer editor-session-token', origin });
+  t.after(() => socket.close());
+  assert.equal((await nextMessage(socket)).type, 'connection.ready');
+
+  socket.send(JSON.stringify({ type: 'document.join', contentId, afterSequence: 0 }));
+  await syncEntered.promise;
+  const checksBeforeRevocation = sessionChecks;
+  assert.ok(checksBeforeRevocation > 0, 'the initial document grant is authorized before the sync read');
+  sessionActive = false;
+  releaseSync.resolve();
+
+  const denied = await nextMessage(socket);
+  assert.equal(denied.type, 'document.error');
+  assert.equal(denied.code, 'ERR_VIRGOSCORPIO_HUB_REALTIME_FORBIDDEN');
+  assert.ok(sessionChecks > checksBeforeRevocation, 'the document grant is rechecked after the sync read');
+  assert.equal(socket._messages.length, 0, 'no document.joined or protected snapshot frame was queued');
+  await assert.rejects(nextMessage(socket, 30), /Timed out waiting for WebSocket message/);
+});
+
+test('WebSocket document join reauthorizes the hub subscription after a deferred sync read', async t => {
+  const contentId = '22222222-2222-4222-8222-222222222222';
+  const syncEntered = createDeferred();
+  const releaseSync = createDeferred();
+  const underlyingHub = createRealtimeHub({ authorizeSubscribe: async () => true });
+  const revokedSubscriptions = new WeakSet();
+  let documentSubscription = null;
+  let documentReauthorizationCount = 0;
+  const hub = {
+    async subscribe(input) {
+      const subscription = await underlyingHub.subscribe(input);
+      if (input.topic === 'document:' + contentId) documentSubscription = subscription;
+      return subscription;
+    },
+    async reauthorize(subscription) {
+      if (subscription === documentSubscription) {
+        documentReauthorizationCount += 1;
+        if (revokedSubscriptions.has(subscription)) return false;
+      }
+      return underlyingHub.reauthorize(subscription);
+    },
+    publish: input => underlyingHub.publish(input),
+    invalidateAuthorization: scope => underlyingHub.invalidateAuthorization(scope),
+    close: () => underlyingHub.close(),
+    get subscriberCount() { return underlyingHub.subscriberCount; }
+  };
+  const snapshot = {
+    schemaVersion: 1,
+    documentId: 'doc-invalidated-during-sync',
+    type: 'page',
+    title: 'Revoked hub snapshot that must not be delivered',
+    children: []
+  };
+  const store = {
+    async getById({ siteId, id }) {
+      return siteId === SITE_ID && id === contentId
+        ? { id, site_id: SITE_ID, content_type: 'page', status: 'draft', created_by: null }
+        : null;
+    },
+    async getCollaborationSync() {
+      syncEntered.resolve();
+      await releaseSync.promise;
+      return {
+        reloadRequired: true,
+        sequence: 15,
+        oldestReplaySequence: 0,
+        document: snapshot
+      };
+    }
+  };
+  const { url, origin } = await createServer(t, { contentStore: store, realtimeHub: hub });
+  const socket = await connect(url, { authorization: 'Bearer ' + TOKEN, origin });
+  t.after(() => socket.close());
+  assert.equal((await nextMessage(socket)).type, 'connection.ready');
+
+  socket.send(JSON.stringify({ type: 'document.join', contentId, afterSequence: 0 }));
+  await syncEntered.promise;
+  assert.ok(documentSubscription, 'the document-topic hub subscription is active during sync');
+  revokedSubscriptions.add(documentSubscription);
+  releaseSync.resolve();
+
+  const denied = await nextMessage(socket);
+  assert.equal(denied.type, 'document.error');
+  assert.equal(denied.code, 'ERR_VIRGOSCORPIO_HUB_REALTIME_FORBIDDEN');
+  assert.equal(documentReauthorizationCount, 1, 'the closed hub subscription is reauthorized after sync');
+  assert.equal(socket._messages.length, 0, 'no document.joined or protected snapshot frame was queued');
+  await assert.rejects(nextMessage(socket, 30), /Timed out waiting for WebSocket message/);
+});
 test('WebSocket collaboration returns canonical reload data or a bounded REST reload instruction', async t => {
   const contentId = '22222222-2222-4222-8222-222222222222';
   const snapshot = {
