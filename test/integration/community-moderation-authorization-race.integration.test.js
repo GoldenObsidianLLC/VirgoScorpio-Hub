@@ -392,19 +392,23 @@ test('moderation action is rejected when membership is revoked during request pr
         [siteId, moderatorUser.id]
       );
 
+      let preflightCompleted;
+      const preflight = new Promise(resolve => { preflightCompleted = resolve; });
       const ctx = createContext({
         method: 'POST',
         path: `/api/v1/sites/${siteId}/community/moderation`,
         body: { targetType: 'activity', targetId: activityId, action: 'hide', reason: 'Concurrent membership revocation' },
         pool,
         actor: moderatorUser,
-        siteId
+        siteId,
+        afterCapability: async () => preflightCompleted()
       });
       moderationPromise = handleCommunityWorkflowRoute(ctx).then(
         value => ({ kind: 'resolved', value }),
         error => ({ kind: 'rejected', error })
       );
 
+      await preflight;
       const lockObserved = await waitForDatabaseWriteLock(revocationClient, 'FOR KEY SHARE');
 
       await revocationClient.query(lockObserved ? 'COMMIT' : 'ROLLBACK');
