@@ -2,21 +2,24 @@
 
 **Snapshot:** 22 November 2026, America/Chicago
 **Repository:** [GoldenObsidianLLC/VirgoScorpio-Hub](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub)
-**Current main:** `722f527472d46d6bc50c43d793d28f457845c050` (documentation-only successor to code-bearing F1.60 merge `51cd04e60f1516741f544da35fd58fb965cdc66c`)
+**Current main:** `9f4e60a59e971aff0d2f6ec7266a4c67d4fa92bd` (documentation-only successor to code-bearing F1.60 merge `51cd04e60f1516741f544da35fd58fb965cdc66c`)
 **F1.60 merge:** [PR #278](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/278) - merged; [issue #233](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/233) closed
-**Documentation synchronization:** [PR #281](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/281) - merged; no runtime changes
-**Exact-main workflow:** [#1223 / run 44968358247](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44968358247) - **7/7 jobs passed**
-**Source-bound release artifact:** [#14732965831](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44968358247/artifacts/14732965831)
-**Canonical readiness JSON SHA-256:** `a96c5bbe83541f9f74068ddc34e6f3ba937c437c4514415b70f8987afa3afbad`
+**Documentation synchronization:** [PR #281](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/281) and [PR #282](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/282) - both merged; no runtime changes
+**Exact-main workflow:** [#1226 / run 44969759500](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44969759500) - **7/7 jobs passed**
+**Source-bound release artifact:** [#14733167605](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44969759500/artifacts/14733167605)
+**Canonical readiness JSON SHA-256:** `e93e4fb557d8c613aa1bc9d283f25b702cf33511dc955c3980badb224b9214bd`
 **Package:** `0.6.2`, private and unreleased
+**Readiness artifact archive SHA-256:** `4bf4973d14027ef78d85368b3cdb9a6effa58f6e73d694dd8b48f0e8ba3169e2`
+**Live-integration artifact:** [#14733455622](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44969759500/artifacts/14733455622), archive SHA-256 `53fe09df61eacadd562059d633f35f435e48be14565f28b3f2a97ea8fd3235a4`
+**Supply-chain attestation artifact:** [#14733336271](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44969759500/artifacts/14733336271), archive SHA-256 `622912a0634e222229324358ab4b8e22dbee54103706b68dc421fe94b535b7ff`
 
 > **Release decision: NO-GO.** Exact-main CI, live integration evidence, and signed supply-chain attestation pass. Production certification does not. Do not tag, publish, deploy, or promote package 0.6.2 to production.
 
 ## 1. Executive status
 
-The latest post-merge mainline workflow validates exact current main `722f527472d46d6bc50c43d793d28f457845c050`. This revision is a documentation-only successor to the F1.60 code-bearing merge `51cd04e60f1516741f544da35fd58fb965cdc66c`; the runtime source was unchanged. All seven jobs passed: Node.js 22, Node.js 24, PostgreSQL/Memgraph/Redis-backed integration, browser smoke, CodeQL, signed dependency lockfile/SBOM attestation, and exact-source CI evidence consolidation.
+The latest post-merge mainline workflow #1226 validates exact current main `9f4e60a59e971aff0d2f6ec7266a4c67d4fa92bd`. This revision is a documentation-only successor to the F1.60 code-bearing merge `51cd04e60f1516741f544da35fd58fb965cdc66c`; runtime source was unchanged by documentation-only PRs #281 and #282. All seven jobs passed: Node.js 22, Node.js 24, PostgreSQL/Memgraph/Redis-backed integration, browser smoke, CodeQL, signed dependency lockfile/SBOM attestation, and exact-source CI evidence consolidation.
 
-The finalized source-bound readiness artifact was generated at `2026-11-22T00:51:37.901Z` and reports:
+The finalized source-bound readiness artifact was generated at `2026-11-22T01:08:24.748Z` and reports:
 
 | Readiness classification | Count |
 |---|---:|
@@ -28,7 +31,11 @@ The finalized source-bound readiness artifact was generated at `2026-11-22T00:51
 
 It sets `readyForProduction=false` and `releaseClassification=NOT_PRODUCTION_CERTIFIED`. The two PARTIAL items are the human dependency/license review and service-less integration diagnostics. Fourteen production evidence packages remain missing. Zero BLOCKED items does not imply release readiness.
 
-The artifact records a clean source tree at `722f527472d46d6bc50c43d793d28f457845c050`, a clean EnginEx submodule pinned to `d99e021f55664f006b5e65b4a58202f9c7bc4f4b`, and exact-source evidence consolidation with revision-bound manifests/checksums.
+The artifact records a clean source tree at `9f4e60a59e971aff0d2f6ec7266a4c67d4fa92bd`, a clean EnginEx submodule pinned to `d99e021f55664f006b5e65b4a58202f9c7bc4f4b`, and exact-source evidence consolidation with revision-bound manifests/checksums.
+
+## F1.61 candidate boundary
+
+Scheduler abort-listener cleanup is proposed in [PR #283](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/283), replacing unmerged Aikido [PR #272](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/272). PR #283 is a feature-branch candidate based on main SHA `9f4e60a59e971aff0d2f6ec7266a4c67d4fa92bd`; it is not included in the exact-main workflow or readiness artifact documented here. Its local checks do not change the release classification or close any production evidence gate.
 
 ## 2. Exact-main CI and technical evidence
 
@@ -45,7 +52,7 @@ The artifact records a clean source tree at `722f527472d46d6bc50c43d793d28f45784
 | Signed lockfile/SBOM attestation | **PASS** | Required on mainline; attestation job succeeded |
 | CI evidence consolidation | **PASS** | Exact-source producer manifests and checksums validated |
 
-The live database producer manifest SHA-256 for the latest exact-main run is `17ca515d59722a427f6ecf4384c63ff9d9ec8d8558a77bbd420a55fc140b2ad6`. It binds the 181/181 integration result and the 18/18 fresh plus 18/18 idempotent migration run to `722f527472d46d6bc50c43d793d28f457845c050`; the runtime code-bearing parent remains `51cd04e60f1516741f544da35fd58fb965cdc66c`. The database and containers were disposable CI infrastructure, not production credentials, production data, or a production recovery exercise.
+The live database producer manifest SHA-256 for the latest exact-main run is `7691082fe722c550949311375b3d5b80b89784b09fe6ff1eead9abba7adf0858`. It binds the 181/181 integration result and the 18/18 fresh plus 18/18 idempotent migration run to `9f4e60a59e971aff0d2f6ec7266a4c67d4fa92bd`; the runtime code-bearing parent remains `51cd04e60f1516741f544da35fd58fb965cdc66c`. The database and containers were disposable CI infrastructure, not production credentials, production data, or a production recovery exercise.
 
 The separate service-less diagnostic remains PARTIAL: 48 tests per supported runtime, 1 pass and 47 skipped. Those skips are not live integration evidence and are not counted as passes. The live PostgreSQL/Memgraph/Redis integration producer is separate and passed 181/181.
 
