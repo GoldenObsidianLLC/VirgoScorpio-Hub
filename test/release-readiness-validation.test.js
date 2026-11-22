@@ -50,18 +50,18 @@ test('fresh migration evidence must match version, source revision, migration in
     sourceRevision: 'a'.repeat(40),
     gate: 'fresh-migrations',
     status: 'PASS',
-    migrationCount: 18,
-    firstPass: '18/18 migrations applied',
-    secondPass: '18/18 migrations skipped as already applied',
+    migrationCount: 19,
+    firstPass: '19/19 migrations applied',
+    secondPass: '19/19 migrations skipped as already applied',
     cleanup: 'disposable database dropped',
   };
-  assert.equal(isFreshMigrationEvidence(current, 18, '0.6.2', 'a'.repeat(40)), true);
+  assert.equal(isFreshMigrationEvidence(current, 19, '0.6.2', 'a'.repeat(40)), true);
   assert.equal(isFreshMigrationEvidence(current, 17, '0.6.2', 'a'.repeat(40)), false);
-  assert.equal(isFreshMigrationEvidence(current, 18, '0.6.1', 'a'.repeat(40)), false);
-  assert.equal(isFreshMigrationEvidence(current, 18, '0.6.2', 'b'.repeat(40)), false);
-  assert.equal(isFreshMigrationEvidence({ ...current, version: '0.5.1', migrationCount: 14 }, 18, '0.6.2', 'a'.repeat(40)), false);
-  assert.equal(isFreshMigrationEvidence({ ...current, secondPass: '15/15 migrations skipped as already applied' }, 18, '0.6.2', 'a'.repeat(40)), false);
-  assert.equal(isFreshMigrationEvidence({ ...current, status: 'BLOCKED' }, 18, '0.6.2', 'a'.repeat(40)), false);
+  assert.equal(isFreshMigrationEvidence(current, 19, '0.6.1', 'a'.repeat(40)), false);
+  assert.equal(isFreshMigrationEvidence(current, 19, '0.6.2', 'b'.repeat(40)), false);
+  assert.equal(isFreshMigrationEvidence({ ...current, version: '0.5.1', migrationCount: 14 }, 19, '0.6.2', 'a'.repeat(40)), false);
+  assert.equal(isFreshMigrationEvidence({ ...current, secondPass: '15/15 migrations skipped as already applied' }, 19, '0.6.2', 'a'.repeat(40)), false);
+  assert.equal(isFreshMigrationEvidence({ ...current, status: 'BLOCKED' }, 19, '0.6.2', 'a'.repeat(40)), false);
 });
 
 test('Playwright validation requires a positive passed count and rejects failures or skips', () => {

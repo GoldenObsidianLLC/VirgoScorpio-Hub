@@ -19,6 +19,11 @@ const packageManager = require('../package.json').packageManager;
 const EXPECTED_NPM_VERSION = /^npm@(\d+\.\d+\.\d+)$/.exec(packageManager || '')?.[1] || null;
 if (!EXPECTED_NPM_VERSION) throw new Error('package.json must pin an exact npm packageManager version.');
 
+function getVersionedMigrationCount() {
+  const directory = path.resolve(__dirname, '..', 'database', 'migrations');
+  return fs.readdirSync(directory).filter(file => /^[0-9]+_[a-z0-9_-]+[.]sql$/i.test(file)).length;
+}
+
 function normalizeSbomInventory(sbom) {
   if (sbom?.bomFormat !== 'CycloneDX' || !Array.isArray(sbom.components) || !Array.isArray(sbom.dependencies)) {
     throw new Error('SBOM must contain CycloneDX components and dependency records.');
@@ -505,7 +510,10 @@ function validateJobEvidence(jobConfig, directory, expected, apiJob) {
             tap.cancelled !== 0 || tap.skipped !== 0 || tap.todo !== 0) {
           errors.push('Dedicated live integration TAP summary is missing, inconsistent, or contains skips/failures.');
         }
-        if (!isFreshMigrationEvidence(migrations, 18, PRODUCT_VERSION, expected.mergeSha)) errors.push('Fresh migration evidence does not match this product version/source revision or prove all 18 migrations and the idempotent rerun.');
+        const requiredMigrationCount = getVersionedMigrationCount();
+        if (!isFreshMigrationEvidence(migrations, requiredMigrationCount, PRODUCT_VERSION, expected.mergeSha)) {
+          errors.push('Fresh migration evidence does not match this product version/source revision or prove all ' + requiredMigrationCount + ' migrations and the idempotent rerun.');
+        }
         const outage = readEvidenceFile(directory, 'artifacts/evidence/memgraph-outage-live.log').toString('utf8');
         const rebuild = readEvidenceFile(directory, 'artifacts/evidence/graph-rebuild-live.log').toString('utf8');
         if (!outage.includes('REAL MEMGRAPH OUTAGE RESULT: PASS')) errors.push('Memgraph outage/recovery evidence lacks its success marker.');
@@ -662,7 +670,7 @@ function writePostgresMemgraphReleaseEvidence({ root, directory, expected, apiJo
   const migrations = JSON.parse(readEvidenceFile(directory, 'artifacts/evidence/fresh-migrations.json').toString('utf8'));
   if (live.status !== 'PASS' || !Number.isInteger(live.tests) || live.tests < 1 ||
       live.passed !== live.tests || live.failed !== 0 || live.cancelled !== 0 || live.skipped !== 0 || live.todo !== 0 ||
-      !isFreshMigrationEvidence(migrations, 18, PRODUCT_VERSION, expected.mergeSha)) {
+      !isFreshMigrationEvidence(migrations, getVersionedMigrationCount(), PRODUCT_VERSION, expected.mergeSha)) {
     throw new Error('The PostgreSQL/Memgraph live test and migration summaries no longer satisfy the release evidence contract.');
   }
 
@@ -1053,11 +1061,12 @@ function verifyPostgresMemgraphReleaseRecord({ root, evidence, expected, manifes
       integration.skipped !== 0 || integration.todo !== 0) {
     throw new Error('Database evidence does not contain a positive zero-failure, zero-skip live integration result.');
   }
-  if (!migrations || migrations.migrationCount !== 18 ||
-      typeof migrations.firstPass !== 'string' || !/18\/18 migrations applied/i.test(migrations.firstPass) ||
-      typeof migrations.secondPass !== 'string' || !/18\/18 migrations skipped/i.test(migrations.secondPass) ||
-      typeof migrations.cleanup !== 'string' || !/disposable database dropped/i.test(migrations.cleanup)) {
-    throw new Error('Database evidence does not prove the fresh 18-migration install, idempotent second pass, and disposable database cleanup.');
+  const expectedMigrationCount = getVersionedMigrationCount();
+  if (!migrations || migrations.migrationCount !== expectedMigrationCount ||
+      migrations.firstPass !== expectedMigrationCount + '/' + expectedMigrationCount + ' migrations applied' ||
+      migrations.secondPass !== expectedMigrationCount + '/' + expectedMigrationCount + ' migrations skipped as already applied' ||
+      migrations.cleanup !== 'disposable database dropped') {
+    throw new Error('Database evidence does not prove the current versioned migration inventory, idempotent second pass, and disposable database cleanup.');
   }
 
   const requiredArtifacts = [
@@ -1122,7 +1131,7 @@ function verifyPostgresMemgraphReleaseRecord({ root, evidence, expected, manifes
     }
   }
   const migrationEvidence = JSON.parse(fs.readFileSync(migrationPath, 'utf8'));
-  if (!isFreshMigrationEvidence(migrationEvidence, 18, PRODUCT_VERSION, expected.mergeSha)) {
+  if (!isFreshMigrationEvidence(migrationEvidence, getVersionedMigrationCount(), PRODUCT_VERSION, expected.mergeSha)) {
     throw new Error('Copied database migration evidence failed exact-source and idempotency re-validation.');
   }
   const live = JSON.parse(fs.readFileSync(livePath, 'utf8'));
@@ -1232,11 +1241,13 @@ function finalizeReleaseReadiness({
   }
   databaseGate.status = 'PASS';
   databaseGate.evidencePath = 'artifacts/evidence/postgres-memgraph-live.json';
+  const freshMigrationCount = postgresEvidence.results.migrations.migrationCount;
   databaseGate.details = 'Exact-source revision ' + expected.mergeSha + ' was validated in GitHub Actions workflow run ' + expected.runId +
     ' attempt ' + expected.runAttempt + ' passed ' + postgresEvidence.results.integration.passed +
     '/' + postgresEvidence.results.integration.tests +
-    ' live PostgreSQL/Memgraph tests with zero failures/skips; 18/18 fresh migrations applied and ' +
-    '18/18 skipped on the idempotent second pass. Producer manifest SHA-256: ' +
+    ' live PostgreSQL/Memgraph tests with zero failures/skips; ' + freshMigrationCount + '/' + freshMigrationCount +
+    ' fresh migrations applied and ' + freshMigrationCount + '/' + freshMigrationCount +
+    ' skipped on the idempotent second pass. Producer manifest SHA-256: ' +
     databaseProducer.manifestSha256 + '.';
 
   const migrationSupplementals = report.supplementalEvidence
@@ -1246,7 +1257,9 @@ function finalizeReleaseReadiness({
   }
   migrationSupplementals[0].status = 'PASS';
   migrationSupplementals[0].evidencePath = 'artifacts/evidence/postgres-memgraph/fresh-migrations.json';
-  migrationSupplementals[0].details = 'Exact-source PostgreSQL producer evidence passed all 18/18 fresh migrations, 18/18 idempotent second-pass skips, and disposable database cleanup. Producer manifest SHA-256: ' +
+  migrationSupplementals[0].details = 'Exact-source PostgreSQL producer evidence passed all ' + freshMigrationCount + '/' + freshMigrationCount +
+    ' fresh migrations, ' + freshMigrationCount + '/' + freshMigrationCount +
+    ' idempotent second-pass skips, and disposable database cleanup. Producer manifest SHA-256: ' +
     databaseProducer.manifestSha256 + '.';
 
   // Retain the original per-runtime snapshots as diagnostics. Their original

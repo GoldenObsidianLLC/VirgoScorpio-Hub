@@ -28,6 +28,8 @@ On Node.js 26.12.1, `npm run check` passed: 808 tests, 805 passed, zero failures
 
 The PostgreSQL integration regression was syntax-checked but not executed locally because local integration services/environment were not configured. Hosted PR CI must demonstrate live PostgreSQL migration 0019, fresh migration application, idempotent re-entry, and the test cases above before merge.
 
+The first hosted PR run (#45082096262) caught a stale repository gate, not a migration execution error: `scripts/test-fresh-migrations.js` and downstream evidence validators were hard-coded to expect 18 migrations, while this candidate correctly introduced migration 0019 (19 total). The candidate now derives the migration count from the ordered `database/migrations` inventory and carries that same count through producer evidence, validation, and finalization. CI evidence fixtures now assert 19/19 application and idempotent skips. Focused evidence/readiness tests pass locally; hosted CI must be rerun against this corrected commit before merge.
+
 ## Compatibility and release boundary
 
 No HTTP route, response shape, object-storage URL, package dependency, npm lockfile, package version, or SemVer change is intended. Existing public variant URLs continue to use the same API routes; legacy unbound rows fail closed rather than being silently promoted. Package 0.6.2 remains private/unreleased. This candidate is not production certification; independent tenant-isolation review #14 and platform security review #25 remain open, and release readiness remains NO-GO / NOT_PRODUCTION_CERTIFIED until all independent evidence gates are satisfied.
