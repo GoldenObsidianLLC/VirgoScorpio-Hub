@@ -4,12 +4,12 @@ All notable project-level changes should be recorded here. This changelog does n
 
 ## 0.6.2 (unreleased patch candidate)
 
-### Scheduler polling releases shutdown listeners after each interval (F1.61 candidate; [PR #283](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/283); tracked by issue #277; supersedes unmerged [Aikido PR #272](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/272))
+### Scheduler polling releases shutdown listeners after each interval (F1.61 merged; [PR #283](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/283); tracked by issue #277; supersedes closed [Aikido PR #272](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/272))
 
 - A single `waitForSchedulerInterval` helper owns each polling timer and transient shutdown listener. Both resources are released on interval completion and shutdown; an already-aborted signal and timer setup failure are handled without retaining listeners.
 - Seven regression tests call the production helper directly with deterministic signal/timer adapters. They cover normal completion, abort, already-aborted startup, abort during listener registration, timer setup failure, native `AbortController` compatibility, and 100 consecutive polling cycles with zero retained listeners or timers.
 - This replaces the unmerged Aikido PR #272 implementation rather than importing its copied helper tests. The replacement tests exercise the actual scheduler code path and assert listener/timer counts.
-- No public API, database schema, migration, dependency, lockfile, package-version or SemVer change. Poll cadence and shutdown ownership remain unchanged. PR #283 is a feature-branch candidate; hosted PR CI is pending and this change is not part of current mainline evidence.
+- No public API, database schema, migration, dependency, lockfile, package-version or SemVer change. Poll cadence and shutdown ownership remain unchanged. Merged at `ade194014aecea72e27b7cce149e979a1f8465c5` (runtime commit `12d4b56a6dcd5b393f1fbbc0ca4c99e8e2d73b2e`). Exact-main workflow [#1231](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/44974826827) passed 7/7: Node 22/24 each 767/767 Hub tests and 94/94 EnginEx tests, 181/181 live PostgreSQL/Memgraph/Redis integration tests, 18/18 fresh plus 18/18 idempotent migrations, browser smoke, CodeQL, signed lockfile/SBOM attestation and source-bound evidence consolidation. Readiness remains 8 PASS / 2 PARTIAL / 14 MISSING_EVIDENCE / NO-GO; F1.61 closes no independent production gate.
 
 
 ### Durable outbox handlers bind domain identity to the canonical envelope (F1.60; [PR #278 MERGED](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/278); issue #233 CLOSED; merge SHA `51cd04e60f1516741f544da35fd58fb965cdc66c`; parent #124)
