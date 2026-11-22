@@ -25,6 +25,7 @@ async function withServer(fn, { env = {}, identityService, aiService, pool } = {
       NODE_ENV: 'test',
       VIRGOSCORPIO_HUB_API_TOKEN: 'test-secret-token',
       AI_PROVIDER: 'mock',
+      AI_ALLOWED_PROVIDERS: 'mock,openai-responses,openai-compatible,anthropic,gemini',
       MAX_REQUEST_BYTES: '16384',
       RATE_LIMIT_MAX_REQUESTS: '100',
       ...env
@@ -67,7 +68,7 @@ function createPolicyPool({ maxDataClassification = 'confidential', allowExterna
     site_id: siteId,
     enabled: true,
     allow_external_content: allowExternalContent,
-    allowed_providers: ['mock', 'openai-responses', 'anthropic'],
+    allowed_providers: ['mock', 'openai-responses', 'openai-compatible', 'anthropic', 'gemini'],
     max_data_classification: maxDataClassification,
     daily_request_limit: 100,
     daily_input_chars_limit: 100_000,
