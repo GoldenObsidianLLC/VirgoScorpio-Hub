@@ -262,17 +262,31 @@ test('library media variants validate file signatures and parent asset categorie
   webp.write('WEBP', 8, 'ascii');
   let variantRow = null;
   let insertCount = 0;
+  const calls = [];
   const pool = {
     async query(sql, args) {
+      calls.push({ sql, args });
       if (/SELECT id,asset_kind,version FROM library_assets/.test(sql)) return { rows: [{ id: 'asset-one', asset_kind: 'image', version: 1 }] };
       if (/INSERT INTO media_variants/.test(sql)) {
         insertCount += 1;
-        variantRow = { id: 'variant-one', asset_id: args[0], variant_key: args[1], storage_key: args[2], mime_type: args[3], byte_size: args[4], sha256: args[7], asset_kind: 'image' };
+        variantRow = { id: 'variant-one', asset_id: args[0], variant_key: args[1], storage_key: args[2], mime_type: args[3], byte_size: args[4], sha256: args[7], source_version: args[8], asset_kind: 'image' };
         return { rows: [{ ...variantRow }] };
       }
-      if (/FROM media_variants v JOIN library_assets a/.test(sql)) return { rows: variantRow ? [{ ...variantRow }] : [] };
+      if (/FROM media_variants v JOIN library_assets a/.test(sql)) return { rows: variantRow?.source_version === 1 ? [{ ...variantRow }] : [] };
       throw new Error('Unexpected library variant query.');
-    }
+    },
+    async connect() {
+      return {
+        async query(sql, args) {
+          if (['BEGIN', 'COMMIT', 'ROLLBACK'].includes(sql)) {
+            calls.push({ sql, args });
+            return { rows: [] };
+          }
+          return pool.query(sql, args);
+        },
+        release() { calls.push({ sql: 'RELEASE' }); },
+      };
+    },
   };
   const store = createLibraryStore({ pool, root, requireMalwareScan: false });
   await assert.rejects(() => store.createVariant({ siteId: 'site-one', id: 'asset-one', variantKey: 'webp-optimized', data: Buffer.from('not a WebP image'), mimeType: 'image/webp' }), { code: 'ERR_VIRGOSCORPIO_HUB_LIBRARY_TYPE' });
@@ -281,14 +295,74 @@ test('library media variants validate file signatures and parent asset categorie
   assert.deepEqual(await fs.promises.readdir(root), [], 'invalid variants must be rejected before writing object bytes');
   const created = await store.createVariant({ siteId: 'site-one', id: 'asset-one', variantKey: 'webp-optimized', data: webp, mimeType: 'image/webp' });
   assert.equal(created.mime_type, 'image/webp');
+  assert.equal(created.source_version, 1);
   assert.equal(insertCount, 1);
+  assert.equal(calls.find(call => /INSERT INTO media_variants/.test(call.sql))?.args[8], 1);
+  assert.ok(calls.some(call => typeof call.sql === 'string' && /FOR SHARE/.test(call.sql)), 'variant insertion holds a shared lock on the expected parent version');
   const readable = await store.readPublicVariant({ assetId: 'asset-one', variantKey: 'webp-optimized' });
   assert.deepEqual(readable.data, webp);
+  const publicReadQuery = calls.find(call => typeof call.sql === 'string' && /FROM media_variants v JOIN library_assets a/.test(call.sql));
+  assert.match(publicReadQuery.sql, /v\.source_version=a\.version/, 'public derivative lookup binds the stored variant to the current source version');
+  variantRow.source_version = null;
+  assert.equal(await store.readPublicVariant({ assetId: 'asset-one', variantKey: 'webp-optimized' }), null, 'legacy/unbound derivative rows fail closed');
+  variantRow.source_version = 1;
   const corrupted = Buffer.from('not a WebP image');
   await fs.promises.writeFile(path.join(root, variantRow.storage_key), corrupted);
   variantRow.byte_size = corrupted.length;
   variantRow.sha256 = require('node:crypto').createHash('sha256').update(corrupted).digest('hex');
   assert.equal(await store.readPublicVariant({ assetId: 'asset-one', variantKey: 'webp-optimized' }), null, 'a matching stored hash must not override a MIME signature mismatch');
+});
+
+test('library optimization status updates can be guarded by the source asset version', async () => {
+  const calls = [];
+  const pool = {
+    async query(sql, args) { calls.push({ sql, args }); return { rows: [] }; },
+  };
+  const store = createLibraryStore({ pool, requireMalwareScan: false });
+  const stale = await store.markOptimization({
+    siteId: 'site-one', id: 'asset-one', status: 'failed', details: { reason: 'stale' }, expectedVersion: 7,
+  });
+  assert.equal(stale, null, 'an update for a replaced asset version affects no rows');
+  assert.match(calls[0].sql, /AND \(\$5::integer IS NULL OR version=\$5\)/);
+  assert.equal(calls[0].args[4], 7);
+
+  await store.markOptimization({ siteId: 'site-one', id: 'asset-one', status: 'pending' });
+  assert.equal(calls[1].args[4], null, 'legacy callers remain compatible when no version is supplied');
+});
+test('metadata-only library versions advance only already-bound derivative source versions transactionally', async () => {
+  const calls = [];
+  const oldAsset = {
+    id: 'asset-one', site_id: 'site-one', version: 4, display_name: 'Private image',
+    original_name: 'image.png', alt_text: '', caption: '', description: '',
+    is_public: false, metadata: {}, storage_key: 'site-one/asset-one/v4.png',
+    sha256: 'a'.repeat(64), updated_by: 'user-one',
+  };
+  const updatedAsset = { ...oldAsset, version: 5, is_public: true, updated_at: new Date().toISOString() };
+  const pool = {
+    async connect() {
+      return {
+        async query(sql, args) {
+          calls.push({ sql, args });
+          if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') return { rows: [] };
+          if (/SELECT \* FROM library_assets/.test(sql)) return { rows: [{ ...oldAsset }] };
+          if (/UPDATE library_assets SET/.test(sql)) return { rows: [{ ...updatedAsset }] };
+          return { rows: [] };
+        },
+        release() { calls.push({ sql: 'RELEASE' }); },
+      };
+    },
+  };
+  const store = createLibraryStore({ pool, requireMalwareScan: false });
+  const result = await store.updateMetadata({
+    siteId: 'site-one', id: 'asset-one', expectedVersion: 4, patch: { isPublic: true },
+  });
+  assert.equal(result.version, 5);
+  assert.equal(result.is_public, true);
+  const binding = calls.find(call => /UPDATE media_variants SET source_version/.test(call.sql));
+  assert.ok(binding, 'the same-byte derivative binding is advanced as part of the version transaction');
+  assert.match(binding.sql, /WHERE asset_id=\$1 AND source_version=\$2/);
+  assert.deepEqual(binding.args, ['asset-one', 4, 5]);
+  assert.ok(calls.indexOf(binding) < calls.findIndex(call => call.sql === 'COMMIT'), 'binding update precedes commit');
 });
 
 test('production library uploads fail closed when scanner is missing, detects malware, or times out', async t => {

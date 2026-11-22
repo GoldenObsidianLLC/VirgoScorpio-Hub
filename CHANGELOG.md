@@ -4,6 +4,13 @@ All notable project-level changes should be recorded here. This changelog does n
 
 ## 0.6.2 (unreleased patch candidate)
 
+### F1.67 candidate - bind public media variants to their source asset version ([issue #292](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/292))
+
+- Adds migration 0019 with nullable `media_variants.source_version`. New derivatives record the exact parent asset version; public reads require equality with the current asset version. Historical rows are intentionally left unbound and fail closed until regenerated.
+- Variant insertion locks the parent version through the transaction. A content replacement removes all prior derivative rows atomically, then deletes their objects after commit; rollback retains the old rows and objects. Metadata-only version increments carry forward only derivatives already bound to the immediately prior version because the source bytes are unchanged.
+- The optimization route pins variant creation and status transitions to the source version it optimized, preventing a stale job from publishing a derivative or overwriting the replacement asset's optimization status.
+- Regression coverage includes replacement/audit rollback, post-replacement publication, legacy unbound rows, same-byte metadata updates, stale job/version rejection and the upload/replacement concurrency race. Local Node.js 26.12.1 `npm run check` passed 808 tests (805 passed, 0 failed, 3 conditional Windows skips); EnginEx passed 94 tests (91 passed, 0 failed, 3 conditional Windows skips); tenant inventory freshness and syntax/diff checks passed. The live PostgreSQL integration regression is included for hosted CI; it was not run locally because local integration services were not configured. Candidate is based on main `afb3c32d4dac14a8ea35208041060dd19ddc6277` and awaits hosted validation/review. No npm dependency, lockfile, package-version or SemVer change. No production/release approval is implied.
+
 ### F1.66 - recheck WebSocket document authorization before snapshot delivery ([PR #290](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/290); merged at `daf18f63115e6456800447d66b640247e58121b6`)
 
 - Document collaboration join revalidates the specific edit grant after the asynchronous sync read and after awaited hub-subscription reauthorization, immediately before sending `document.joined` or protected snapshot data.
