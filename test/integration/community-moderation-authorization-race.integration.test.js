@@ -5,11 +5,12 @@ const assert = require('node:assert/strict');
 const { randomUUID } = require('node:crypto');
 const { createPostgresPool } = require('../../packages/db/src/postgres-store');
 const { handleCommunityWorkflowRoute } = require('../../packages/community/src/workflows');
+const { waitForDatabaseWriteLock } = require('../helpers/postgres-locks');
 
 const enabled = Boolean(process.env.DATABASE_URL && process.env.VIRGOSCORPIO_HUB_RUN_POSTGRES_INTEGRATION === 'true');
 
 /**
- * Integration test suite for F1-60: Community moderation authorization race condition.
+ * Integration test suite for F1.64: Community moderation authorization revalidation.
  *
  * This test verifies that the mitigation for the post-revocation authorization
  * vulnerability prevents a moderator from completing a moderation action after
@@ -374,6 +375,67 @@ test('moderation action is rejected when membership is revoked during request pr
     await pool.query('INSERT INTO site_memberships(site_id,user_id,role_id) VALUES($1,$2,$3)', [siteId, moderatorUser.id, moderatorRoleId]);
   });
 
+  await t.test('moderation waits for an in-flight member revocation before authorizing', async () => {
+    const revocationClient = await pool.connect();
+    let revocationOpen = false;
+    let moderationPromise;
+    let moderationOutcome;
+
+    try {
+      await revocationClient.query('BEGIN');
+      revocationOpen = true;
+      // Match the production removeMember lock order and hold the site row while
+      // removing the membership, so the moderation transaction must serialize.
+      await revocationClient.query('SELECT id FROM sites WHERE id=$1 FOR UPDATE', [siteId]);
+      await revocationClient.query(
+        'DELETE FROM site_memberships WHERE site_id=$1 AND user_id=$2',
+        [siteId, moderatorUser.id]
+      );
+
+      const ctx = createContext({
+        method: 'POST',
+        path: `/api/v1/sites/${siteId}/community/moderation`,
+        body: { targetType: 'activity', targetId: activityId, action: 'hide', reason: 'Concurrent membership revocation' },
+        pool,
+        actor: moderatorUser,
+        siteId
+      });
+      moderationPromise = handleCommunityWorkflowRoute(ctx).then(
+        value => ({ kind: 'resolved', value }),
+        error => ({ kind: 'rejected', error })
+      );
+
+      const lockObserved = await waitForDatabaseWriteLock(revocationClient, 'FOR KEY SHARE');
+
+      await revocationClient.query(lockObserved ? 'COMMIT' : 'ROLLBACK');
+      revocationOpen = false;
+      moderationOutcome = moderationOutcome || await moderationPromise;
+      assert.equal(lockObserved, true, 'moderation must wait on the site lock held by member revocation');
+      assert.equal(moderationOutcome.kind, 'rejected', 'moderation must re-read authorization after revocation commits');
+      assert.equal(moderationOutcome.error.statusCode, 403);
+      assert.equal(moderationOutcome.error.code, 'ERR_VIRGOSCORPIO_HUB_FORBIDDEN');
+
+      const unchanged = await pool.query(
+        'SELECT deleted_at FROM social_activities WHERE site_id=$1 AND id=$2',
+        [siteId, activityId]
+      );
+      assert.equal(unchanged.rows[0].deleted_at, null, 'revoked moderator must not mutate the target');
+      const audits = await pool.query(
+        'SELECT 1 FROM virgoscorpio_hub_moderation_actions WHERE site_id=$1 AND target_id=$2 AND reason=$3',
+        [siteId, activityId, 'Concurrent membership revocation']
+      );
+      assert.equal(audits.rowCount, 0, 'revoked moderation must not write an audit action');
+
+      await pool.query(
+        'INSERT INTO site_memberships(site_id,user_id,role_id) VALUES($1,$2,$3)',
+        [siteId, moderatorUser.id, moderatorRoleId]
+      );
+    } finally {
+      if (revocationOpen) await revocationClient.query('ROLLBACK').catch(() => {});
+      if (moderationPromise && !moderationOutcome) moderationOutcome = await moderationPromise;
+      revocationClient.release();
+    }
+  });
   await t.test('developer actor bypasses transaction-scoped revalidation', async () => {
     // Remove membership to ensure developer bypass works
     await pool.query('DELETE FROM site_memberships WHERE site_id=$1 AND user_id=$2', [siteId, moderatorUser.id]);

@@ -324,11 +324,11 @@ async function handleModeration(ctx, siteId) {
   }
   const reason = cleanRequiredText(body.reason, MAX_MODERATION_REASON_LENGTH);
   const target = await withTransaction(ctx.localPool, async client => {
-    // Revalidate the moderator inside the mutation transaction. The preflight
-    // capability check precedes the body read and may be stale by now. Lock order
-    // (site, then user/membership/role) matches membership removal, and the shared
-    // row locks make a concurrent revocation either precede this check or wait
-    // until this transaction completes.
+    // Revalidate the moderator inside the mutation transaction. The
+    // capability check may be stale after body parsing; the site lock is
+    // acquired before user/membership/role locks, matching the member-removal
+    // path; shared row locks make concurrent account, membership, and role changes
+    // wait until the moderation transaction completes.
     if (!ctx.actor.isDeveloper) {
       await client.query('SELECT id FROM sites WHERE id=$1 FOR KEY SHARE', [siteId]);
       const authorization = await client.query(
