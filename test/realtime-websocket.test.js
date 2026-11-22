@@ -31,6 +31,7 @@ function createDeferred() {
   const promise = new Promise(resolvePromise => { resolve = resolvePromise; });
   return { promise, resolve };
 }
+
 function connect(url, headers = {}) {
   return new Promise((resolve, reject) => {
     const socket = new WebSocket(url, { headers });
@@ -641,6 +642,83 @@ test('WebSocket document join reauthorizes the hub subscription after a deferred
   assert.equal(socket._messages.length, 0, 'no document.joined or protected snapshot frame was queued');
   await assert.rejects(nextMessage(socket, 30), /Timed out waiting for WebSocket message/);
 });
+
+test('WebSocket document join rechecks the document grant after hub reauthorization completes', async t => {
+  const contentId = '22222222-2222-4222-8222-222222222222';
+  const userId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const reauthorizationEntered = createDeferred();
+  const releaseReauthorization = createDeferred();
+  let editAllowed = true;
+  const identityService = {
+    async authenticate(token) {
+      if (token !== 'editor-session-token') return null;
+      return {
+        sessionId: 'editor-session',
+        expiresAt: new Date(Date.now() + 60_000).toISOString(),
+        user: { id: userId, email: 'editor@example.test', status: 'active' },
+        memberships: [{ siteId: SITE_ID, capabilities: ['content:read', 'content:edit:own'] }]
+      };
+    },
+    async isSessionActive({ userId: candidateUserId, sessionId }) {
+      return candidateUserId === userId && sessionId === 'editor-session';
+    },
+    async authorizeSite(_userId, _siteId, capability) {
+      if (capability === 'content:read') return true;
+      if (capability === 'content:edit') return false;
+      return capability === 'content:edit:own' && editAllowed;
+    }
+  };
+  const underlyingHub = createRealtimeHub({ authorizeSubscribe: async () => true });
+  const hub = {
+    subscribe: input => underlyingHub.subscribe(input),
+    async reauthorize(subscription) {
+      reauthorizationEntered.resolve();
+      await releaseReauthorization.promise;
+      return underlyingHub.reauthorize(subscription);
+    },
+    publish: input => underlyingHub.publish(input),
+    invalidateAuthorization: scope => underlyingHub.invalidateAuthorization(scope),
+    close: () => underlyingHub.close(),
+    get subscriberCount() { return underlyingHub.subscriberCount; }
+  };
+  const store = {
+    async getById({ siteId, id }) {
+      return siteId === SITE_ID && id === contentId
+        ? { id, site_id: SITE_ID, content_type: 'page', status: 'draft', created_by: userId }
+        : null;
+    },
+    async getCollaborationSync() {
+      return {
+        reloadRequired: true,
+        sequence: 18,
+        oldestReplaySequence: 0,
+        document: {
+          schemaVersion: 1,
+          documentId: 'doc-capability-revoked-during-reauthorization',
+          type: 'page',
+          title: 'Must not be delivered after edit capability revocation',
+          children: []
+        }
+      };
+    }
+  };
+  const { url, origin } = await createServer(t, { identityService, contentStore: store, realtimeHub: hub });
+  const socket = await connect(url, { authorization: 'Bearer editor-session-token', origin });
+  t.after(() => socket.close());
+  assert.equal((await nextMessage(socket)).type, 'connection.ready');
+
+  socket.send(JSON.stringify({ type: 'document.join', contentId, afterSequence: 0 }));
+  await reauthorizationEntered.promise;
+  editAllowed = false;
+  releaseReauthorization.resolve();
+
+  const denied = await nextMessage(socket);
+  assert.equal(denied.type, 'document.error');
+  assert.equal(denied.code, 'ERR_VIRGOSCORPIO_HUB_REALTIME_FORBIDDEN');
+  assert.equal(socket._messages.length, 0, 'no document.joined or protected snapshot frame was queued');
+  await assert.rejects(nextMessage(socket, 30), /Timed out waiting for WebSocket message/);
+});
+
 test('WebSocket collaboration returns canonical reload data or a bounded REST reload instruction', async t => {
   const contentId = '22222222-2222-4222-8222-222222222222';
   const snapshot = {
