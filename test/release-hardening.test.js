@@ -296,6 +296,8 @@ test('library media variants validate file signatures and parent asset categorie
   const created = await store.createVariant({ siteId: 'site-one', id: 'asset-one', variantKey: 'webp-optimized', data: webp, mimeType: 'image/webp' });
   assert.equal(created.mime_type, 'image/webp');
   assert.equal(created.source_version, 1);
+  const variantInsert = calls.find(call => /INSERT INTO media_variants/.test(call.sql));
+  assert.match(variantInsert.sql, /RETURNING[^;]*storage_key/i, 'the store returns the derivative object key for lifecycle cleanup');
   assert.equal(insertCount, 1);
   assert.equal(calls.find(call => /INSERT INTO media_variants/.test(call.sql))?.args[8], 1);
   assert.ok(calls.some(call => typeof call.sql === 'string' && /FOR SHARE/.test(call.sql)), 'variant insertion holds a shared lock on the expected parent version');

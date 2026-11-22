@@ -293,7 +293,7 @@ function createLibraryStore({ pool, root = path.resolve(process.env.LIBRARY_ROOT
           throw libraryError('Variant MIME type does not match the parent library category.', 'ERR_VIRGOSCORPIO_HUB_LIBRARY_TYPE');
         }
         const result = await client.query(
-          'INSERT INTO media_variants(asset_id,variant_key,storage_key,mime_type,byte_size,width,height,sha256,source_version) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT(asset_id,variant_key) DO UPDATE SET storage_key=EXCLUDED.storage_key,mime_type=EXCLUDED.mime_type,byte_size=EXCLUDED.byte_size,width=EXCLUDED.width,height=EXCLUDED.height,sha256=EXCLUDED.sha256,source_version=EXCLUDED.source_version,created_at=now() RETURNING id,asset_id,variant_key,mime_type,byte_size,width,height,sha256,source_version',
+          'INSERT INTO media_variants(asset_id,variant_key,storage_key,mime_type,byte_size,width,height,sha256,source_version) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT(asset_id,variant_key) DO UPDATE SET storage_key=EXCLUDED.storage_key,mime_type=EXCLUDED.mime_type,byte_size=EXCLUDED.byte_size,width=EXCLUDED.width,height=EXCLUDED.height,sha256=EXCLUDED.sha256,source_version=EXCLUDED.source_version,created_at=now() RETURNING id,asset_id,variant_key,storage_key,mime_type,byte_size,width,height,sha256,source_version',
           [id, variantKey, storageKey, mimeType, data.length, width, height, digest, sourceVersion]
         );
         commitAttempted = true;

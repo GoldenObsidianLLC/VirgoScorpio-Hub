@@ -56,7 +56,7 @@ test('fresh migration evidence must match version, source revision, migration in
     cleanup: 'disposable database dropped',
   };
   assert.equal(isFreshMigrationEvidence(current, 19, '0.6.2', 'a'.repeat(40)), true);
-  assert.equal(isFreshMigrationEvidence(current, 17, '0.6.2', 'a'.repeat(40)), false);
+  assert.equal(isFreshMigrationEvidence(current, 18, '0.6.2', 'a'.repeat(40)), false, 'the previous 18-migration inventory must not satisfy current evidence');
   assert.equal(isFreshMigrationEvidence(current, 19, '0.6.1', 'a'.repeat(40)), false);
   assert.equal(isFreshMigrationEvidence(current, 19, '0.6.2', 'b'.repeat(40)), false);
   assert.equal(isFreshMigrationEvidence({ ...current, version: '0.5.1', migrationCount: 14 }, 19, '0.6.2', 'a'.repeat(40)), false);
