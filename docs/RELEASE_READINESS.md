@@ -1,6 +1,20 @@
-# VirgoScorpio Hub 0.6.2 - current release-readiness snapshot (22 November 2026 America/Chicago; F1.67 latest merged; main fccd708; workflow #45096332836)
+# VirgoScorpio Hub 0.6.2 - current release-readiness snapshot (22 November 2026 America/Chicago; F1.68 latest merged; main c4c5fb6; workflow #45099497274)
+## Current exact-main readiness - 22 November 2026 (America/Chicago; F1.68 / PR #296)
 
-## Current exact-main readiness - 22 November 2026 (America/Chicago; post-PR #294)
+Current main is c4c5fb6328d2747d1d9b9c43aab70fc93d4eb96e after F1.68 / [PR #296](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/296); [issue #295](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/295) is closed. F1.67 / PR #293 remains the previous merged runtime increment. Exact-main [workflow #45099497274](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45099497274) completed success at 2026-11-23T02:22:24Z with 7/7 jobs successful: Node 22.23.4, Node 24.22.1, PostgreSQL/Memgraph integration, browser smoke, CodeQL, signed lockfile/SBOM attestation and exact-source evidence consolidation.
+
+Canonical [mainline readiness artifact #14784563967](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45099497274/artifacts/14784563967) is source-bound to c4c5fb6328d2747d1d9b9c43aab70fc93d4eb96e. ZIP SHA-256 f7c6471dca00ed81a7506cd696393b37ac7a1a5e7b0ff3c6a1391a6bb600c8cd; readiness JSON SHA-256 33853c0a8ea3ae91869f21f532f27a1119e91d677786da74c4207cab617ba166; readiness Markdown SHA-256 a2a982d19a9a33bdbc9519837d51af497095d3b99d7601dd2b22ebf5a1eeadb4. The formal classification remains 8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN; readyForProduction=false; NOT_PRODUCTION_CERTIFIED; NO-GO.
+
+Node 22.23.4 and 24.22.1 each passed 810/810 Hub and 94/94 EnginEx tests. Live PostgreSQL/Memgraph integration passed 194/194 with zero failures/skips; 19/19 migrations applied fresh and 19/19 idempotent re-entry checks passed. Real Memgraph outage/outbox replay, canonical graph rebuild, browser smoke 9/9, CodeQL and exact-source evidence consolidation all passed.
+
+Mainline signed supply-chain [artifact #14785021415](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45099497274/artifacts/14785021415): ZIP SHA-256 e063bb7c04b9050ecb91de053b6176d0a102e267d9ed8156f0a297f3964edac6; verification summary SHA-256 6ce77f20da2aff065101e3b11f3f183466dc37f085e3651ee60fd9e8469bbe66. Verified subjects include package-lock SHA-256 8f3786bcfcd03d0b63761c7107e4d757ae5b45171ba2f6c086ff38c027c8b086 and CycloneDX SBOM SHA-256 802e8a77baf39b58954e55002b4d685dcbe771d983efeec851e6c7517540f01a. Sigstore/Rekor verification is bound to refs/heads/main and the exact c4c5fb6 source. This is provenance, not qualified human dependency/license approval.
+
+The readiness artifact's embedded workflowRun status records in_progress at capture because the aggregate evidence step generated the report immediately before its own completion. GitHub's final run result is success with all seven jobs completed successfully; this capture-time detail does not change source binding, evidence finalization, or the final workflow result.
+
+F1.68 is the latest merged runtime increment; no migration, dependency, lockfile, public API, package-version or SemVer change. Package 0.6.2 remains private/unreleased. The previous F1.67 and documentation-only PR #294 snapshots below are historical records.
+
+
+## Historical exact-main readiness - 22 November 2026 (America/Chicago; post-PR #294, before F1.68)
 
 Current main is fccd708a439efd3e29cc7fd0b1da00a8ab9d1b7d after documentation-only [PR #294](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/294); the latest merged runtime increment remains F1.67 / [PR #293](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/293) at runtime commit 4da6f26730ff0634ffe01f85790bedf0a255c4e3. Exact-main [workflow #45096332836](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45096332836) passed 7/7 jobs on fccd708: Node 22, Node 24, live PostgreSQL/Memgraph integration, browser smoke, CodeQL, signed lockfile/SBOM attestation and exact-source evidence consolidation.
 
