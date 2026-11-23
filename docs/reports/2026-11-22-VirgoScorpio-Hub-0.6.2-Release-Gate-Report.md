@@ -7,13 +7,13 @@
 
 ## 1. Executive decision
 
-F1.67, public-library media-variant source-version binding, merged through [PR #293](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/293) at main commit 4da6f26730ff0634ffe01f85790bedf0a255c4e3. The PR closed [issue #292](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/292). This is a maintainer security and integrity improvement, not production certification.
+F1.67, public-library media-variant source-version binding, remains the latest merged runtime increment through [PR #293](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/293) at runtime commit 4da6f26730ff0634ffe01f85790bedf0a255c4e3. Documentation-only [PR #294](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/294) advanced main to fccd708a439efd3e29cc7fd0b1da00a8ab9d1b7d and synchronized the exact-main readiness baseline. This is maintainer implementation and automation evidence, not production certification.
 
 The updated PR candidate completed hosted workflow [#1272 / run 45087499845](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45087499845). Node.js 22.23.4 and 24.22.1 each passed 809/809 Hub tests and 94/94 EnginEx tests. Live PostgreSQL/Memgraph integration passed 194/194 with zero failures or skips; all 19 migrations applied on the fresh database and were recognized on idempotent re-entry. Browser smoke, CodeQL, dependency/SBOM parity, and candidate evidence consolidation passed. The signed lockfile/SBOM attestation job is intentionally mainline-only and was skipped on the PR event.
 
 Exact-main workflow #45088000378 completed successfully on merge SHA 4da6f26730ff0634ffe01f85790bedf0a255c4e3 at 2026-11-23T00:22:16Z. All seven jobs passed: Node 22.23.4, Node 24.22.1, live PostgreSQL/Memgraph integration, browser smoke, CodeQL, signed lockfile/SBOM attestation, and exact-source evidence consolidation. The exact-main readiness artifact is source-bound to the merged revision and records 8 PASS / 2 PARTIAL / 14 MISSING_EVIDENCE, readyForProduction=false, NOT_PRODUCTION_CERTIFIED / NO-GO.
 
-The canonical post-merge exact-main readiness artifact 14779454147 reports **8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN**. It is source-bound to 4da6f26730ff0634ffe01f85790bedf0a255c4e3. This is not a weighted score. Passing CI does not close independent assurance, operational, acceptance, or release-owner evidence.
+The latest exact-main baseline is [workflow #45096332836](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45096332836) on main SHA fccd708a439efd3e29cc7fd0b1da00a8ab9d1b7d. Canonical readiness artifact #14783736045 reports **8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN**, readyForProduction=false and NO-GO. This is not a weighted score. Passing CI does not close independent assurance, operational, acceptance, or release-owner evidence.
 
 **No release action is authorized.** Do not create a tag or GitHub Release, publish to npm, bump SemVer, certify production, or deploy 0.6.2.
 
@@ -21,15 +21,15 @@ The canonical post-merge exact-main readiness artifact 14779454147 reports **8 P
 
 | Item | Evidence |
 |---|---|
-| Current main SHA | 4da6f26730ff0634ffe01f85790bedf0a255c4e3 |
-| Previous main SHA | afb3c32d4dac14a8ea35208041060dd19ddc6277 |
+| Current main SHA | fccd708a439efd3e29cc7fd0b1da00a8ab9d1b7d (documentation-only PR #294 after F1.67 runtime SHA 4da6f26730ff0634ffe01f85790bedf0a255c4e3) |
+| Previous main SHA | 4da6f26730ff0634ffe01f85790bedf0a255c4e3 |
 | Runtime increment | F1.67 - public media-variant source-version binding |
 | PR | [#293](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/293), merged 22 November 2026 (America/Chicago) |
 | Issue | [#292](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/292), closed by merge |
 | PR head validated | 50daa6440dea5f0e209fcb0885ab6a8592c4c331 |
 | Synthetic PR merge ref | 60adf51e6e11227b33b3107d32fc63683ab52430 |
 | Candidate CI | [Workflow #1272 / run 45087499845](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45087499845), success |
-| Post-merge main CI | [Run 45088000378](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45088000378), completed success (7/7) |
+| Latest exact-main CI | [Run 45096332836](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45096332836), completed success (7/7) on fccd708 |
 | Vendored EnginEx | 7.0.0 at pinned commit d99e021f55664f006b5e65b4a58202f9c7bc4f4b |
 | Package | 0.6.2, private, unreleased |
 
@@ -49,9 +49,16 @@ F1.67 binds public media derivatives to the exact source version that produced t
 
 The ambiguous-COMMIT regression simulates PostgreSQL applying COMMIT and then dropping the acknowledgement. It verifies both the prior version object and potentially referenced replacement object remain, the original error propagates, and cleanup attempts to close the transaction. Existing pre-COMMIT audit-failure coverage continues to verify rollback compensation.
 
+### Current development candidate - F1.68
+
+F1.68 is under development on branch security/f1-68-login-timing-oracle-2026-11-22 and tracked by [issue #295](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/295). The candidate equalizes password-verification KDF work for unknown accounts and missing/malformed stored hashes using a fixed dummy scrypt record. Dummy results can never authenticate; stored-hash parsing is strict/canonical and length-bounded; oversized/non-string candidates remain ineligible even though bounded KDF work still runs. Existing generic 401 behavior and per-IP/email throttling remain unchanged. Deterministic tests inject a KDF spy across six input shapes rather than relying on wall-clock thresholds.
+
+Local checks: npm run check passed 810 total (807 passed, zero failed, three conditional platform skips); EnginEx passed 94 total (91 passed, zero failed, three conditional Windows skips); tenant inventory freshness and git diff --check passed. This is not merged and has no hosted PR result yet. It is related to Aikido tracking #234/#273 but no scanner fingerprint is mapped or marked resolved. No migration, dependency, API, package version or SemVer change. See the [F1.68 implementation report](2026-11-22-F1-68-LOGIN-TIMING-ORACLE-HARDENING-REPORT.md).
+
+
 ## 4. Formal readiness gate summary
 
-The canonical exact-main readiness artifact 14779454147 was generated at 2026-11-23T00:22:12.856Z and is source-bound to main SHA 4da6f26730ff0634ffe01f85790bedf0a255c4e3. It records:
+The current canonical exact-main readiness artifact 14783736045 is source-bound to main SHA fccd708a439efd3e29cc7fd0b1da00a8ab9d1b7d after documentation PR #294. It records:
 
 | Formal status | Count |
 |---|---:|
@@ -61,7 +68,7 @@ The canonical exact-main readiness artifact 14779454147 was generated at 2026-11
 | MISSING_EVIDENCE | 14 |
 | NOT_RUN | 0 |
 
-readyForProduction=false; releaseClassification=NOT_PRODUCTION_CERTIFIED; decision=NO-GO. Artifact ZIP SHA-256: 2b4166717a52bf2e4c3b486414d6005a87ca3f3937ad0522af0ed37d9ca7d240; release-readiness.json SHA-256: 0e056623c2fd9df9dbe12e5436754cadb3bd8bf17cad1048e7873210bd48ed90; release-readiness.md SHA-256: d938e87e6151e7e4b46c7df13ed7d6e32392124d9083a77b35519a1362e8a8de; release-readiness-ci.json SHA-256: cc1b38bc39006f4696272878ee07cc76c2fd76a02f66c052d6b7fd6c7eaea217.
+readyForProduction=false; releaseClassification=NOT_PRODUCTION_CERTIFIED; decision=NO-GO. Artifact ZIP SHA-256: da110efa0f422c6ad6193884831d3b8692557ab75a1dacef821fc5a6a096ac02; release-readiness.json SHA-256: 83838a770034b091c6321a54e450a9df250ed053b43e88dc87155a0fe88cee78; release-readiness.md SHA-256: 2212f7a26d6ff08d7ad8c83088fb9ac722c1e556361ee92120a1e4c93ed596e5.
 
 ### 4.1 Formal checks
 
@@ -175,6 +182,17 @@ Mainline-only signed supply-chain attestation artifact:
 - Provenance subject binding matches main SHA 4da6f26730ff0634ffe01f85790bedf0a255c4e3 and refs/heads/main. The GitHub attestation job passed; the artifact includes a Sigstore bundle and Rekor transparency-log inclusion proof. This verifies supply-chain provenance for these subjects, not human dependency/license approval.
 
 The PR candidate artifact #14779074502 remains separately source-bound to its synthetic PR merge ref and is not the exact-main artifact above. The exact-main run is complete; NO-GO is caused by missing independent, operational, and acceptance evidence, not a failing mainline CI job.
+### 5.4 Latest exact-main baseline after documentation PR #294
+
+Main is fccd708a439efd3e29cc7fd0b1da00a8ab9d1b7d after documentation-only PR #294. Exact-main workflow [#45096332836](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45096332836) completed success with all 7/7 jobs: Node 22.23.4, Node 24.22.1, live PostgreSQL/Memgraph integration, browser editor/accessibility smoke, CodeQL, signed lockfile/SBOM attestation, and exact-source evidence consolidation.
+
+Canonical current readiness artifact [#14783736045](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45096332836/artifacts/14783736045), ZIP SHA-256 da110efa0f422c6ad6193884831d3b8692557ab75a1dacef821fc5a6a096ac02; readiness JSON SHA-256 83838a770034b091c6321a54e450a9df250ed053b43e88dc87155a0fe88cee78; readiness Markdown SHA-256 2212f7a26d6ff08d7ad8c83088fb9ac722c1e556361ee92120a1e4c93ed596e5. The exact-main classification remains 8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN, readyForProduction=false, NOT_PRODUCTION_CERTIFIED / NO-GO.
+
+Live integration passed 194/194 tests, zero failures/skips, 19/19 fresh migration applications, and 19/19 idempotent re-entry checks. The existing Memgraph outage/outbox recovery and canonical graph rebuild coverage also passed. Mainline signed supply-chain artifact [#14783183173](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45096332836/artifacts/14783183173), ZIP SHA-256 262cfe46b7501c07eef812e0a50c2ef9cee3d49b43931bb4fce63188a9958a2e; verification summary SHA-256 2b78a9cd6da63020527f29b35dfb677c20208474330c339431b9deec2543e5fd. Provenance is bound to fccd708 and refs/heads/main. It verifies lockfile/SBOM provenance, not human dependency/license approval.
+
+This is the current main baseline for F1.68 review. F1.68 remains branch-only and does not alter these readiness counts.
+
+
 ## 6. Security, governance, and scanner follow-up
 
 Independent assurance items remain open:
