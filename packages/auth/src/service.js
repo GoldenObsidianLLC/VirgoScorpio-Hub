@@ -39,20 +39,48 @@ async function hashPassword(password) {
   const key = await scryptAsync(password, salt, 64, { N: 32768, r: 8, p: 1, maxmem: 128 * 1024 * 1024 });
   return `scrypt$32768$8$1$${salt.toString('base64url')}$${Buffer.from(key).toString('base64url')}`;
 }
-async function verifyPassword(password, encoded) {
-  if (typeof password !== 'string' || typeof encoded !== 'string') return false;
+const DUMMY_PASSWORD_HASH = 'scrypt$32768$8$1$' + Buffer.alloc(16, 0x5a).toString('base64url') + '$' + Buffer.alloc(64, 0xa5).toString('base64url');
+
+function parseScryptHash(encoded) {
+  if (typeof encoded !== 'string' || encoded.length > 126) return null;
   const parts = encoded.split('$');
-  if (parts.length !== 6 || parts[0] !== 'scrypt') return false;
-  const N = Number(parts[1]); const r = Number(parts[2]); const p = Number(parts[3]);
-  if (N !== 32768 || r !== 8 || p !== 1) return false;
+  if (parts.length !== 6 || parts[0] !== 'scrypt') return null;
+  if (parts[1] !== '32768' || parts[2] !== '8' || parts[3] !== '1') return null;
+  const N = 32768; const r = 8; const p = 1;
   try {
-    const salt = Buffer.from(parts[4], 'base64url'); const expected = Buffer.from(parts[5], 'base64url');
-    if (salt.length !== 16 || expected.length !== 64) return false;
-    const actual = Buffer.from(await scryptAsync(password, salt, expected.length, { N, r, p, maxmem: 128 * 1024 * 1024 }));
-    return actual.length === expected.length && timingSafeEqual(actual, expected);
-  } catch { return false; }
+    const salt = Buffer.from(parts[4], 'base64url');
+    const expected = Buffer.from(parts[5], 'base64url');
+    if (salt.length !== 16 || expected.length !== 64) return null;
+    // Buffer's decoder is permissive. Require canonical base64url encodings so
+    // malformed stored hashes consistently use the same dummy verification path.
+    if (salt.toString('base64url') !== parts[4] || expected.toString('base64url') !== parts[5]) return null;
+    return { N, r, p, salt, expected };
+  } catch {
+    return null;
+  }
 }
 
+async function verifyPassword(password, encoded, deriveKey = scryptAsync) {
+  const parsed = parseScryptHash(encoded);
+  // Unknown accounts, legacy/malformed hashes, and valid hashes all perform the
+  // same scrypt work. The dummy record is structurally identical to a real hash.
+  const verification = parsed || parseScryptHash(DUMMY_PASSWORD_HASH);
+  if (!verification || typeof deriveKey !== 'function') return false;
+  const candidateEligible = typeof password === 'string' && password.length <= PASSWORD_MAX;
+  const candidatePassword = candidateEligible ? password : '';
+  try {
+    const actual = Buffer.from(await deriveKey(candidatePassword, verification.salt, verification.expected.length, {
+      N: verification.N,
+      r: verification.r,
+      p: verification.p,
+      maxmem: 128 * 1024 * 1024,
+    }));
+    const matches = actual.length === verification.expected.length && timingSafeEqual(actual, verification.expected);
+    return Boolean(parsed) && candidateEligible && matches;
+  } catch {
+    return false;
+  }
+}
 const MAX_ACTIVE_OIDC_STATES = 10_000;
 function authError(statusCode, code, message) { const error = new Error(message); error.statusCode = statusCode; error.code = code; return error; }
 function configuredPublicBase(env) {
@@ -195,6 +223,7 @@ function createIdentityService({ pool, env = process.env, clock = () => Date.now
       throttleLogin(`${ip || 'unknown'}:${email || 'invalid'}`);
       const result = email ? await pool.query('SELECT id,email,display_name,status,password_hash,mfa_enabled,email_verified_at FROM users WHERE lower(email)=$1 LIMIT 1', [email]) : { rows: [] };
       const user = result.rows[0];
+      // Always verify, including unknown accounts; verifyPassword performs dummy scrypt for absent/malformed hashes.
       const matches = await verifyPassword(password, user?.password_hash);
       if (!user || user.status !== 'active' || !matches) {
         const error = new Error('Invalid email or password.'); error.statusCode = 401; error.code = 'ERR_VIRGOSCORPIO_HUB_LOGIN_FAILED'; throw error;

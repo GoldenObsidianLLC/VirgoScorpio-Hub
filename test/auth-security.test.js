@@ -19,6 +19,38 @@ test('password policy and scrypt hashes are enforced', async () => {
   assert.equal(await verifyPassword('anything', 'unknown$scheme'), false);
 });
 
+test('password verification performs fixed-cost dummy scrypt for missing and malformed hashes', async () => {
+  const derivedKey = Buffer.alloc(64, 0x3c);
+  const salt = Buffer.alloc(16, 0x2d);
+  const validHash = 'scrypt$32768$8$1$' + salt.toString('base64url') + '$' + derivedKey.toString('base64url');
+  const calls = [];
+  const deriveKey = async (password, suppliedSalt, keyLength, options) => {
+    calls.push({ password, salt: Buffer.from(suppliedSalt), keyLength, options: { ...options } });
+    return Buffer.from(derivedKey);
+  };
+
+  assert.equal(await verifyPassword('CorrectHorse9Battery', validHash, deriveKey), true);
+  assert.equal(await verifyPassword('CorrectHorse9Battery', null, deriveKey), false);
+  assert.equal(await verifyPassword('CorrectHorse9Battery', 'not-a-scrypt-hash', deriveKey), false);
+  assert.equal(await verifyPassword('x'.repeat(129), undefined, deriveKey), false);
+  assert.equal(await verifyPassword('x'.repeat(129), validHash, deriveKey), false,
+    'oversized input must not authenticate even if the bounded empty candidate matches a legacy hash');
+  assert.equal(await verifyPassword(Buffer.from('CorrectHorse9Battery'), validHash, deriveKey), false,
+    'non-string input must remain ineligible for authentication');
+
+  assert.equal(calls.length, 6, 'all credential shapes must perform one derivation');
+  for (const call of calls) {
+    assert.equal(call.keyLength, 64);
+    assert.equal(call.salt.length, 16);
+    assert.deepEqual(call.options, { N: 32768, r: 8, p: 1, maxmem: 128 * 1024 * 1024 });
+  }
+  assert.equal(calls[0].salt.equals(salt), true, 'valid hashes use their stored salt');
+  assert.equal(calls[1].salt.equals(salt), false, 'unknown users use the fixed dummy salt');
+  assert.equal(calls[2].salt.equals(calls[1].salt), true, 'malformed hashes use the same dummy salt');
+  assert.equal(calls[3].password, '', 'oversized passwords are bounded before scrypt');
+  assert.equal(calls[4].password, '', 'valid stored hashes still use bounded input for oversized passwords');
+  assert.equal(calls[5].password, '', 'non-string passwords are normalized before scrypt');
+});
 test('ordinary membership and invitation APIs cannot grant the site-owner role', async () => {
   const queries = [];
   const pool = {
