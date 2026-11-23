@@ -4,6 +4,14 @@ All notable project-level changes should be recorded here. This changelog does n
 
 ## 0.6.2 (unreleased patch candidate)
 
+### F1.69 - revalidate direct-conversation participants after lock acquisition (candidate, not merged) ([issue #298](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/298); parent [#124](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/124); branch `security/f1-69-community-direct-conversation-revalidation-2026-11-22`)
+
+- The direct-conversation transaction now rechecks that both actor and recipient still have active accounts and selected-site memberships after the pair advisory lock is acquired. It serializes against membership removal with the existing site-row lock order, then locks participant and membership rows deterministically before conversation reuse/creation or notification fan-out. Missing/inactive participants retain the existing generic non-disclosing 404 contract.
+- Unit regressions cover an inactive recipient and missing actor membership. The existing two-site PostgreSQL fixture covers a preflight-to-transaction race for recipient membership removal, recipient account deactivation, and actor membership removal, asserting no conversation, notification or cross-site state side effect. Tenant inventory regenerated: 28 families / 80 route patterns / 22 source files / 61 test files.
+- Focused unit tests pass 10/10. Full local Node.js 26.12.1 `npm run check` passes **812 total tests: 809 passed, 0 failed, 3 conditional platform skips**; artifact verification passes 241 required paths and syntax-checks 283 JavaScript files. Tenant inventory freshness and changed JavaScript syntax checks pass; `git diff --check` passes.
+- Local live PostgreSQL/Memgraph execution is unavailable because the Docker Desktop Linux engine is not running; no local live-pass is claimed. Hosted database CI is required before merge.
+- No API/response, schema, migration, dependency, lockfile, package-version or SemVer change. Candidate status is not a merge, independent assessment, release qualification or production approval. Package 0.6.2 remains private/unreleased; production remains NO-GO / NOT_PRODUCTION_CERTIFIED.
+
 ### F1.68 - equalize password verification work for unknown and malformed accounts ([issue #295](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/295); [PR #296](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/296), merged at main SHA c4c5fb6328d2747d1d9b9c43aab70fc93d4eb96e)
 
 - The shared password verifier now performs one production-parameter scrypt operation for known accounts and unknown/missing/malformed/unsupported stored hashes, using a fixed dummy record that cannot authenticate.
