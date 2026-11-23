@@ -1,6 +1,7 @@
 # VirgoScorpio Hub 0.6.2 - Release Gate Report
 
 **Report date:** 22 November 2026 (America/Chicago)
+**Updated:** 23 November 2026 (America/Chicago)
 **Repository:** GoldenObsidianLLC/VirgoScorpio-Hub
 **Release decision:** **NO-GO - NOT_PRODUCTION_CERTIFIED**
 **Package status:** 0.6.2 remains private and unreleased.
@@ -13,7 +14,7 @@ The updated PR candidate completed hosted workflow [#1272 / run 45087499845](htt
 
 Exact-main workflow #45088000378 completed successfully on merge SHA 4da6f26730ff0634ffe01f85790bedf0a255c4e3 at 2026-11-23T00:22:16Z. All seven jobs passed: Node 22.23.4, Node 24.22.1, live PostgreSQL/Memgraph integration, browser smoke, CodeQL, signed lockfile/SBOM attestation, and exact-source evidence consolidation. The exact-main readiness artifact is source-bound to the merged revision and records 8 PASS / 2 PARTIAL / 14 MISSING_EVIDENCE, readyForProduction=false, NOT_PRODUCTION_CERTIFIED / NO-GO.
 
-The latest exact-main baseline is [workflow #45099497274](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45099497274) on main SHA c4c5fb6328d2747d1d9b9c43aab70fc93d4eb96e. Canonical readiness artifact #14784563967 reports **8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN**, readyForProduction=false and NO-GO. This is not a weighted score. Passing CI does not close independent assurance, operational, acceptance, or release-owner evidence.
+The last code-bearing exact-main baseline is [workflow #45099497274](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45099497274) on main SHA c4c5fb6328d2747d1d9b9c43aab70fc93d4eb96e. The current main tip advanced by documentation-only PR #297 to 287508b16d9c7d3156fab07f975413de2c659ae0; no exact-main readiness workflow on that docs-only SHA was found during the 23 November update. Canonical readiness artifact #14784563967 reports **8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN**, readyForProduction=false and NO-GO. This is not a weighted score. Passing CI does not close independent assurance, operational, acceptance, or release-owner evidence.
 
 **No release action is authorized.** Do not create a tag or GitHub Release, publish to npm, bump SemVer, certify production, or deploy 0.6.2.
 
@@ -21,7 +22,8 @@ The latest exact-main baseline is [workflow #45099497274](https://github.com/Gol
 
 | Item | Evidence |
 |---|---|
-| Current main SHA | c4c5fb6328d2747d1d9b9c43aab70fc93d4eb96e (F1.68 / PR #296 squash merge) |
+| Current main tip | 287508b16d9c7d3156fab07f975413de2c659ae0 (documentation-only PR #297 successor) |
+| Latest code-bearing runtime SHA | c4c5fb6328d2747d1d9b9c43aab70fc93d4eb96e (F1.68 / PR #296 squash merge) |
 | Previous main SHA | fccd708a439efd3e29cc7fd0b1da00a8ab9d1b7d (docs-only PR #294; prior runtime SHA 4da6f26730ff0634ffe01f85790bedf0a255c4e3) |
 | Runtime increment | F1.68 - equalize password verification work for unknown/malformed accounts |
 | PR | [#296](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/296), merged 22 November 2026 (America/Chicago) |
@@ -261,3 +263,39 @@ F1.67 is merged into the 0.6.2 private/unreleased patch candidate. No package ve
 - [Mainline readiness artifact #14779454147](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45088000378/artifacts/14779454147)
 - [Mainline signed supply-chain artifact #14779528541](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45088000378/artifacts/14779528541)
 - [Main branch ruleset #27803491](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/rules/27803491)
+
+## 10. 23 November 2026 update — F1.69 candidate and current release gate
+
+### Current source and release boundary
+
+- Current `main` tip: `287508b16d9c7d3156fab07f975413de2c659ae0` (documentation-only PR #297).
+- Latest merged runtime increment: F1.68 / PR #296 at code-bearing SHA `c4c5fb6328d2747d1d9b9c43aab70fc93d4eb96e`.
+- Last code-bearing exact-main workflow: [#45099497274](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45099497274), completed 7/7 jobs; readiness artifact [#14784563967](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45099497274/artifacts/14784563967) is cryptographically/source-bound to c4c5fb6. It must not be described as a readiness run on current docs-only main SHA 287508.
+- That last canonical readiness result remains **8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN**, `readyForProduction=false`, `NOT_PRODUCTION_CERTIFIED`, **NO-GO**. The formal evidence classifications are not a weighted score and are not changed by F1.69 candidate work.
+- Package remains `virgoscorpio-hub@0.6.2`, `private: true`, unreleased. No version/tag/release/publication/deployment action is authorized.
+
+### F1.69 current candidate — PR #299 / issue #298
+
+F1.69 is an unmerged maintainer candidate on [draft PR #299](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/299), tracked by [issue #298](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/298). Current pushed candidate head is `6282ce294f93d527f40bd02677a6d41e85c2315a`, based on current main tip 287508.
+
+The runtime change retains the existing direct-pair transaction/advisory lock and generic error contract. It revalidates both active user records and both selected-site memberships after the pair lock, using deterministic site → users → memberships row-lock order before reuse/creation and notification fan-out. No API response, schema, migration, dependency, lockfile or SemVer changes are part of this candidate.
+
+Hosted runs #1307 (push) and #1308 (PR) both failed the live PostgreSQL revocation-race assertion at pushed head 6282ce2. Their `pg_stat_activity` evidence showed a fire-and-forget `auth_sessions.last_seen_at` UPDATE from an earlier authenticated test request waiting behind the blocker, so the test correctly rejected it as unrelated to the final authorization query. The first repair gives every race a fresh actor and never-authenticated recipient. A further local-only repair now drains prior session-touch updates by requiring a 100 ms quiet window with no active or lock-waiting `UPDATE auth_sessions SET last_seen_at` before acquiring the blocker (five-second bound). It retains the shared `waitForDatabaseWriteLock` helper and two-site snapshots and does not change production authentication code. The drain repair is not yet pushed or hosted-validated.
+
+The corresponding tenant-isolation inventory was regenerated and committed with 28 families / 80 route patterns / 22 source files / 61 test files. Local Node.js 26.12.1 validation passes: focused community tests 10/10; full `npm run check` 812 tests (809 passed, zero failed, three conditional platform skips); artifact verification 241 required paths / 283 JavaScript files; changed-file syntax checks, inventory freshness and `git diff --check` pass. Local live PostgreSQL/Memgraph execution cannot run because Docker Desktop's Linux engine is unavailable; this is not counted as a pass.
+
+Hosted candidate runs #1304 (pre-fixture-fix DB run) failed on the unrelated session-touch lock wait. Push/PR runs #1305/#1306 used the pre-inventory-refresh head and are superseded as validation evidence. On pushed head 6282ce2, [push workflow #1307](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45125049507) and [PR workflow #1308](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45125057424) both completed **FAIL**. In both, Node 22/24, browser/accessibility and CodeQL passed; PostgreSQL/Memgraph failed the revocation lock-wait proof, and candidate evidence consolidation failed as a consequence. The follow-up quiet-window drain is local/uncommitted and has no hosted evidence yet.
+
+PR #299 remains draft/open. Formal independent code review and independent tenant/site review #14 have not been completed. Platform assessment #25 and qualified dependency/license review #23 remain open. Do not merge until exact-head tests pass and independent review is completed.
+
+### Release-gate status and next steps
+
+F1.69 is candidate engineering progress, not a release-gate closure. The 14 MISSING_EVIDENCE production gates and two PARTIAL statuses from the last exact-main readiness artifact remain unchanged. Priority work remains:
+
+1. Validate the local session-touch drain adjustment with exact-head hosted PostgreSQL/Memgraph CI (including the three deterministic revocation races), Node 22/24, browser/accessibility, CodeQL and evidence consolidation. Do not treat local-only checks as proof of the live database race.
+2. Obtain independent tenant-isolation review #14 and independent platform assessment #25; map findings to source, regressions and independent closure evidence.
+3. Complete qualified dependency/license review #23, current Aikido fingerprint triage (#234/#235/#277), verify scan execution freshness, and avoid claiming scanner alerts resolved without fingerprint/rescan evidence.
+4. Complete remaining provider, malware, object-storage, payment, browser/accessibility, load/soak, restore, operational and release-owner acceptance gates.
+5. Re-run formal release readiness against exact current main after any merge; retain source-bound artifacts and signed supply-chain evidence.
+
+**Decision remains NO-GO / NOT_PRODUCTION_CERTIFIED.** Keep 0.6.2 private and unreleased. No tag, GitHub Release, npm publication, production certification or deployment is authorized.

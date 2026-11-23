@@ -1312,6 +1312,40 @@ test(
     });
 
     await t.test('direct conversation creation rejects participants revoked after request preflight', async () => {
+      // Session last-seen touches are intentionally fire-and-forget. A prior
+      // authenticated request in this integration test may still have one in
+      // flight when the next deterministic lock race starts. Drain those writes
+      // before acquiring the blocker so the observed waiter is the authorization
+      // query under test, not an unrelated auth_sessions update.
+      async function waitForSessionTouchesToSettle(timeoutMs = 5000) {
+        const deadline = Date.now() + timeoutMs;
+        let idleSince = null;
+
+        while (Date.now() < deadline) {
+          const pending = await pool.query(
+            `SELECT pid
+               FROM pg_stat_activity
+              WHERE datname=current_database()
+                AND pid<>pg_backend_pid()
+                AND query ILIKE 'UPDATE auth_sessions SET last_seen_at%'
+                AND (state='active' OR wait_event_type='Lock')
+              LIMIT 1`,
+          );
+
+          if (pending.rows.length) {
+            idleSince = null;
+          } else if (idleSince === null) {
+            idleSince = Date.now();
+          } else if (Date.now() - idleSince >= 100) {
+            return;
+          }
+
+          await new Promise(resolve => setTimeout(resolve, 20));
+        }
+
+        throw new Error('prior auth_sessions last-seen touches did not settle before the direct-conversation lock race');
+      }
+
       async function assertRevocationRace({
         description,
         blockerLock,
@@ -1352,6 +1386,8 @@ test(
           ...headers,
           authorization: `Bearer ${raceSession.token}`,
         };
+
+        await waitForSessionTouchesToSettle();
 
         const blocker = await pool.connect();
         let requestPromise = null;
