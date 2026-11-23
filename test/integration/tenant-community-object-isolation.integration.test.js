@@ -1352,11 +1352,29 @@ test(
             body: JSON.stringify({ recipientId }),
           });
 
-          assert.equal(
-            await waitForDatabaseWriteLock(blocker, blockingQueryFragment),
-            true,
-            `${description}: the request must pass preflight and wait at the final transaction lock`,
-          );
+          const waitingOnFinalLock = await waitForDatabaseWriteLock(blocker, blockingQueryFragment);
+          if (!waitingOnFinalLock) {
+            const [activity, earlyResponse] = await Promise.all([
+              blocker.query(
+                `SELECT pid,state,wait_event_type,wait_event,query,pg_blocking_pids(pid) AS blocking_pids
+                   FROM pg_stat_activity
+                  WHERE datname=current_database() AND pid<>pg_backend_pid()
+                  ORDER BY query_start DESC LIMIT 20`,
+              ),
+              Promise.race([
+                requestPromise.then(async response => ({
+                  status: response.status,
+                  body: await response.clone().text(),
+                })),
+                new Promise(resolve => setTimeout(() => resolve(null), 100)),
+              ]),
+            ]);
+            assert.equal(
+              waitingOnFinalLock,
+              true,
+              `${description}: the request did not wait at the expected final lock; fragment=${blockingQueryFragment}; activity=${JSON.stringify(activity.rows)}; earlyResponse=${JSON.stringify(earlyResponse)}`,
+            );
+          }
 
           await mutate(blocker);
           mutationApplied = true;
