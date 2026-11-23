@@ -1311,6 +1311,117 @@ test(
       await assertSiteBUnchanged();
     });
 
+    await t.test('direct conversation creation rejects participants revoked after request preflight', async () => {
+      const recipientId = userBPublicJoinControl.id;
+      const participantPair = [actorB.id, recipientId].sort();
+      const advisoryKey = `virgoscorpio_hub:direct:${siteB}:${participantPair.join(':')}`;
+
+      async function assertRevocationRace({ description, mutate, restore }) {
+        const siteAStateBefore = await snapshotCommunitySite(pool, siteA);
+        const siteBStateBefore = await snapshotCommunitySite(pool, siteB);
+        const blocker = await pool.connect();
+        let requestPromise = null;
+        let lockReleased = false;
+
+        try {
+          await blocker.query('BEGIN');
+          await blocker.query('SELECT pg_advisory_xact_lock(hashtext($1))', [advisoryKey]);
+          // Mirror removeMember's site-first lock: its membership deletion commits
+          // before the direct-conversation transaction can validate participants.
+          await blocker.query('SELECT id FROM sites WHERE id=$1 FOR UPDATE', [siteB]);
+
+          requestPromise = fetch(`${base}/api/v1/sites/${siteB}/community/conversations`, {
+            method: 'POST',
+            headers: { ...headers, 'content-type': 'application/json' },
+            body: JSON.stringify({ recipientId }),
+          });
+
+          assert.equal(
+            await waitForDatabaseWriteLock(blocker, 'pg_advisory_xact_lock'),
+            true,
+            `${description}: the request must reach and wait at the direct-conversation transaction lock`,
+          );
+
+          await mutate(blocker);
+          await blocker.query('COMMIT');
+          lockReleased = true;
+
+          const response = await requestPromise;
+          const payload = await response.json();
+          assert.equal(response.status, 404, description);
+          assert.equal(payload.code, 'ERR_VIRGOSCORPIO_HUB_COMMUNITY_USER_NOT_FOUND');
+          assert.doesNotMatch(JSON.stringify(payload), new RegExp(recipientId));
+
+          assert.deepEqual(await snapshotCommunitySite(pool, siteA), siteAStateBefore);
+          assert.deepEqual(await snapshotCommunitySite(pool, siteB), siteBStateBefore);
+
+          const conversation = await pool.query(
+            `SELECT c.id
+               FROM social_conversations c
+               JOIN social_conversation_members actor_member
+                 ON actor_member.site_id=c.site_id AND actor_member.conversation_id=c.id
+                AND actor_member.user_id=$2 AND actor_member.left_at IS NULL
+               JOIN social_conversation_members recipient_member
+                 ON recipient_member.site_id=c.site_id AND recipient_member.conversation_id=c.id
+                AND recipient_member.user_id=$3 AND recipient_member.left_at IS NULL
+              WHERE c.site_id=$1 AND c.conversation_type='direct'`,
+            [siteB, actorB.id, recipientId],
+          );
+          assert.deepEqual(conversation.rows, [], 'revoked participants must not gain a direct conversation');
+
+          const createdNotifications = await pool.query(
+            `SELECT id FROM social_notifications
+              WHERE site_id=$1 AND user_id=$2
+                AND notification_type='community.message.conversation_created'
+                AND payload->>'fromUserId'=$3`,
+            [siteB, recipientId, actorB.id],
+          );
+          assert.deepEqual(createdNotifications.rows, [], 'denied creation must not emit recipient notifications');
+        } finally {
+          if (!lockReleased) await blocker.query('ROLLBACK').catch(() => {});
+          if (requestPromise) await requestPromise.catch(() => {});
+          blocker.release();
+          await restore();
+        }
+      }
+
+      await assertRevocationRace({
+        description: 'recipient site-membership removal after preflight',
+        mutate: client => client.query(
+          'DELETE FROM site_memberships WHERE site_id=$1 AND user_id=$2',
+          [siteB, recipientId],
+        ),
+        restore: () => pool.query(
+          'INSERT INTO site_memberships(site_id,user_id,role_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING',
+          [siteB, recipientId, roleId],
+        ),
+      });
+
+      await assertRevocationRace({
+        description: 'recipient account deactivation after preflight',
+        mutate: client => client.query(
+          "UPDATE users SET status='disabled' WHERE id=$1",
+          [recipientId],
+        ),
+        restore: () => pool.query(
+          "UPDATE users SET status='active' WHERE id=$1",
+          [recipientId],
+        ),
+      });
+
+      await assertRevocationRace({
+        description: 'actor site-membership removal after preflight',
+        mutate: client => client.query(
+          'DELETE FROM site_memberships WHERE site_id=$1 AND user_id=$2',
+          [siteB, actorB.id],
+        ),
+        restore: () => pool.query(
+          'INSERT INTO site_memberships(site_id,user_id,role_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING',
+          [siteB, actorB.id, roleId],
+        ),
+      });
+    });
+
     await t.test('friendship requests reject foreign, invited, and disabled recipients without side effects', async () => {
       const blocks = await fetch(`${base}/api/v1/sites/${siteB}/community/blocks`, { headers });
       assert.equal(blocks.status, 200);
