@@ -82,70 +82,6 @@ test(
       DATABASE_URL: process.env.DATABASE_URL,
       DATABASE_POOL_MAX: '10',
     });
-    // Observe session-touch statements at the checked-out-client boundary.
-    // Pool.query delegates through Pool.connect() and client.query(), so wrapping
-    // only Pool.query can miss the callback-based query path used by pg.Pool.
-    const pendingSessionTouches = new Map();
-    const trackedClients = new WeakSet();
-    const originalPoolConnectMethod = pool.connect;
-    const originalPoolConnect = pool.connect.bind(pool);
-    function instrumentSessionTouchClient(client) {
-      if (!client || trackedClients.has(client)) return client;
-      trackedClients.add(client);
-      const originalClientQuery = client.query.bind(client);
-      client.query = (...args) => {
-        const queryText = typeof args[0] === 'string' ? args[0] : args[0]?.text;
-        const queryValues = Array.isArray(args[1]) ? args[1] : args[0]?.values;
-        if (!/^UPDATE auth_sessions SET last_seen_at/i.test(queryText || '')) {
-          return originalClientQuery(...args);
-        }
-
-        const sessionId = queryValues?.[0] ?? null;
-        const callbackIndex = args.length - 1;
-        const callback = args[callbackIndex];
-        const trackingToken = {};
-        pendingSessionTouches.set(trackingToken, sessionId);
-        if (typeof callback === 'function') {
-          args[callbackIndex] = function (...callbackArgs) {
-            pendingSessionTouches.delete(trackingToken);
-            return callback.apply(this, callbackArgs);
-          };
-          try {
-            return originalClientQuery(...args);
-          } catch (error) {
-            pendingSessionTouches.delete(trackingToken);
-            throw error;
-          }
-        }
-
-        try {
-          const result = originalClientQuery(...args);
-          if (result && typeof result.then === 'function') {
-            result.then(
-              () => pendingSessionTouches.delete(trackingToken),
-              () => pendingSessionTouches.delete(trackingToken),
-            );
-          } else {
-            pendingSessionTouches.delete(trackingToken);
-          }
-          return result;
-        } catch (error) {
-          pendingSessionTouches.delete(trackingToken);
-          throw error;
-        }
-      };
-      return client;
-    }
-    pool.connect = (...args) => {
-      if (typeof args[0] === 'function') {
-        const callback = args[0];
-        args[0] = function (error, client, release) {
-          return callback.call(this, error, instrumentSessionTouchClient(client), release);
-        };
-        return originalPoolConnect(...args);
-      }
-      return originalPoolConnect(...args).then(instrumentSessionTouchClient);
-    };
     const siteIds = [];
     const userIds = [];
     let roleId = null;
@@ -175,7 +111,6 @@ test(
         await pool.query('DELETE FROM users WHERE id=ANY($1::uuid[])', [userIds]).catch(() => {});
       }
       if (roleId) await pool.query('DELETE FROM roles WHERE id=$1', [roleId]).catch(() => {});
-      pool.connect = originalPoolConnectMethod;
       await pool.end();
     });
 
@@ -1397,7 +1332,8 @@ test(
               LIMIT 1`,
           );
 
-          if (pending.rows.length || pendingSessionTouches.size > 0) {
+          // pg.Pool exposes waitingCount for queries queued before they have a backend.
+          if (pending.rows.length || pool.waitingCount > 0) {
             idleSince = null;
           } else if (idleSince === null) {
             idleSince = Date.now();
@@ -1452,10 +1388,9 @@ test(
           authorization: `Bearer ${raceSession.token}`,
         };
 
-        // Reset the session-touch throttle before the blocker is acquired. The
-        // target request authenticates this actor after the blocker owns its row
-        // lock; leaving last_seen_at stale would enqueue an unrelated
-        // fire-and-forget UPDATE ahead of the authorization SELECT under test.
+        // Keep the race actor session fresh before blocker acquisition.
+        // Authentication now uses a DB-computed should_touch flag and skips
+        // no-op last_seen_at writes for sessions touched within the last minute.
         const refreshedSession = await pool.query(
           'UPDATE auth_sessions SET last_seen_at=now() WHERE user_id=$1 AND revoked_at IS NULL RETURNING id',
           [raceActor.id],
@@ -1482,10 +1417,7 @@ test(
           const waitingOnFinalLock = await waitForDatabaseWriteLock(blocker, blockingQueryFragment);
           if (!waitingOnFinalLock) {
             const blockerIdentity = await blocker.query('SELECT pg_backend_pid() AS pid');
-            const pendingSessionIds = [...new Set(
-              [...pendingSessionTouches.values()].filter(Boolean),
-            )];
-            const [activity, earlyResponse, pendingTouchOwners] = await Promise.all([
+            const [activity, earlyResponse] = await Promise.all([
               blocker.query(
                 `SELECT a.pid,a.application_name,a.state,a.wait_event_type,a.wait_event,
                         a.backend_xid,a.xact_start,a.query_start,a.query,
@@ -1515,20 +1447,11 @@ test(
                 })),
                 new Promise(resolve => setTimeout(() => resolve(null), 100)),
               ]),
-              pendingSessionIds.length
-                ? blocker.query(
-                    `SELECT s.id AS session_id,s.user_id,u.email,u.status,s.last_seen_at
-                       FROM auth_sessions s JOIN users u ON u.id=s.user_id
-                      WHERE s.id=ANY($1::uuid[])
-                      ORDER BY s.id`,
-                    [pendingSessionIds],
-                  )
-                : Promise.resolve({ rows: [] }),
             ]);
             assert.equal(
               waitingOnFinalLock,
               true,
-              `${description}: final-lock wait not observed; blockerPid=${blockerIdentity.rows[0]?.pid}; fragment=${blockingQueryFragment}; pendingSessionTouches=${JSON.stringify([...pendingSessionTouches.values()])}; pendingTouchOwners=${JSON.stringify(pendingTouchOwners.rows)}; activity=${JSON.stringify(activity.rows)}; earlyResponse=${JSON.stringify(earlyResponse)}`,
+              `${description}: final-lock wait not observed; blockerPid=${blockerIdentity.rows[0]?.pid}; fragment=${blockingQueryFragment}; activity=${JSON.stringify(activity.rows)}; earlyResponse=${JSON.stringify(earlyResponse)}`,
             );
           }
 
