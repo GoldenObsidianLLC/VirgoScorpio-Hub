@@ -1322,13 +1322,13 @@ test(
         const blocker = await pool.connect();
         let requestPromise = null;
         let lockReleased = false;
+        let mutationApplied = false;
 
         try {
           await blocker.query('BEGIN');
           await blocker.query('SELECT pg_advisory_xact_lock(hashtext($1))', [advisoryKey]);
-          // Mirror removeMember's site-first lock: its membership deletion commits
-          // before the direct-conversation transaction can validate participants.
-          await blocker.query('SELECT id FROM sites WHERE id=$1 FOR UPDATE', [siteB]);
+          // Hold only the pair lock so the request passes its preflight and waits
+          // at the transaction boundary before the competing eligibility change.
 
           requestPromise = fetch(`${base}/api/v1/sites/${siteB}/community/conversations`, {
             method: 'POST',
@@ -1343,6 +1343,7 @@ test(
           );
 
           await mutate(blocker);
+          mutationApplied = true;
           await blocker.query('COMMIT');
           lockReleased = true;
 
@@ -1378,7 +1379,17 @@ test(
           );
           assert.deepEqual(createdNotifications.rows, [], 'denied creation must not emit recipient notifications');
         } finally {
-          if (!lockReleased) await blocker.query('ROLLBACK').catch(() => {});
+          if (!lockReleased) {
+            // On an assertion failure, deny the waiting request before releasing
+            // its advisory lock so a failed test cannot leak a successful write
+            // into later scenarios or snapshots.
+            if (requestPromise && !mutationApplied) {
+              await mutate(blocker).then(() => {
+                mutationApplied = true;
+              }).catch(() => {});
+            }
+            await blocker.query(mutationApplied ? 'COMMIT' : 'ROLLBACK').catch(() => {});
+          }
           if (requestPromise) await requestPromise.catch(() => {});
           blocker.release();
           await restore();
