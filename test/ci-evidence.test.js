@@ -115,9 +115,9 @@ function createFixtures(t, { npmVersion = EXPECTED_NPM_VERSION } = {}) {
     gate: 'fresh-migrations',
     status: 'PASS',
     environment: { node: 'v22.23.4' },
-    migrationCount: 18,
-    firstPass: '18/18 migrations applied',
-    secondPass: '18/18 migrations skipped as already applied',
+    migrationCount: 19,
+    firstPass: '19/19 migrations applied',
+    secondPass: '19/19 migrations skipped as already applied',
     cleanup: 'disposable database dropped',
   };
   for (const file of JOBS[2].requiredFiles) {
@@ -267,7 +267,7 @@ test('materializes the formal PostgreSQL/Memgraph release evidence from checksum
   assert.match(stored.command, /test:migrations:fresh.*test:integration:live.*test:integration:memgraph-outage.*test:graph:rebuild/);
   assert.match(stored.environment, /Node\.js v22\.23\.4.*PostgreSQL service postgres:18-alpine/);
   assert.equal(stored.results.integration.tests, 22);
-  assert.equal(stored.results.migrations.migrationCount, 18);
+  assert.equal(stored.results.migrations.migrationCount, 19);
   assert.equal(stored.ciEvidence.jobName, config.jobName);
   assert.equal(Object.hasOwn(stored.ciEvidence, 'jobId'), false);
   assert.equal(stored.ciEvidence.runId, expected.runId);
@@ -752,7 +752,7 @@ test('finalizes canonical readiness only after every exact-source producer and m
   const migrationSupplement = report.supplementalEvidence.find(item => item.id === 'fresh-migrations');
   assert.equal(migrationSupplement.status, 'PASS');
   assert.equal(migrationSupplement.evidencePath, 'artifacts/evidence/postgres-memgraph/fresh-migrations.json');
-  assert.ok(migrationSupplement.details.includes('all 18/18 fresh migrations'));
+  assert.ok(migrationSupplement.details.includes('all 19/19 fresh migrations'));
   assert.equal(report.ciFinalization.status, 'FINALIZED_AFTER_PRODUCER_VALIDATION');
   assert.equal(report.ciFinalization.workflow.runId, expected.runId);
   assert.equal(report.ciFinalization.workflow.runAttempt, expected.runAttempt);

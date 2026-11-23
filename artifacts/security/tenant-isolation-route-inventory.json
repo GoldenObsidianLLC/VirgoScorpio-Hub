@@ -8,7 +8,7 @@
   "generatedBy": "scripts/generate-tenant-isolation-route-inventory.js",
   "sourceTree": {
     "fileCount": 22,
-    "sha256": "bd8f68b933a99693b45dc2ad1aa9620a8030bba08fc16c63d8f277057e4884e9",
+    "sha256": "5738927223a4fe04732978e5833776e8452f02836d49848f846f1e31a2e2772a",
     "files": [
       "apps/api/src/ai-task-routes.js",
       "apps/api/src/auth-routes.js",
@@ -35,8 +35,8 @@
     ]
   },
   "testTree": {
-    "fileCount": 59,
-    "sha256": "831a69ec92cfa26e784e9e522f3b838174426ed74dcb711002131186dfb507e5",
+    "fileCount": 61,
+    "sha256": "2d7d9c687bbc5d1ba1e57cc3313a2e305eeb1bd3324cc10be051acacede69610",
     "files": [
       "test/ai-queue-worker.test.js",
       "test/ai-task-queue.test.js",
@@ -67,6 +67,7 @@
       "test/integration/memgraph.integration.test.js",
       "test/integration/navigation-menu-audit-atomicity.integration.test.js",
       "test/integration/postgres.integration.test.js",
+      "test/integration/public-library-variant-version-binding.integration.test.js",
       "test/integration/redis-presence.integration.test.js",
       "test/integration/reusable-component-audit-atomicity.integration.test.js",
       "test/integration/site-invitation-audit-atomicity.integration.test.js",
@@ -84,6 +85,7 @@
       "test/integration/tenant-public-catalog-isolation.integration.test.js",
       "test/integration/tenant-public-query-loop-isolation.integration.test.js",
       "test/library-routes.test.js",
+      "test/library-variant-route-version.test.js",
       "test/mega-menu-audit-atomicity.test.js",
       "test/memgraph-projector.test.js",
       "test/outbox-contract.test.js",
@@ -105,7 +107,7 @@
     "nonHttpFamilyCount": 4,
     "declaredRoutePatternCount": 80,
     "sourceFileCount": 22,
-    "testFileCount": 59
+    "testFileCount": 61
   },
   "commonControls": [
     {
@@ -1056,13 +1058,13 @@
             {
               "anchor": "async createVariant(",
               "lines": [
-                240
+                254
               ]
             },
             {
               "anchor": "async replaceVersion(",
               "lines": [
-                182
+                185
               ]
             }
           ]
@@ -1071,7 +1073,9 @@
       "tests": [
         "test/library-routes.test.js",
         "test/release-hardening.test.js",
-        "test/integration/tenant-library-media-isolation.integration.test.js"
+        "test/integration/tenant-library-media-isolation.integration.test.js",
+        "test/integration/public-library-variant-version-binding.integration.test.js",
+        "test/library-variant-route-version.test.js"
       ],
       "coverage": {
         "level": "targeted-two-site-and-unit",
@@ -1213,7 +1217,7 @@
             {
               "anchor": "async readPublicVariant(",
               "lines": [
-                226
+                240
               ]
             },
             {
@@ -1228,7 +1232,9 @@
       "tests": [
         "test/release-hardening.test.js",
         "test/integration/tenant-library-media-isolation.integration.test.js",
-        "test/security-boundaries.test.js"
+        "test/security-boundaries.test.js",
+        "test/integration/public-library-variant-version-binding.integration.test.js",
+        "test/library-variant-route-version.test.js"
       ],
       "coverage": {
         "level": "targeted-two-site-revocation-and-no-store",

@@ -4,6 +4,15 @@ All notable project-level changes should be recorded here. This changelog does n
 
 ## 0.6.2 (unreleased patch candidate)
 
+### F1.67 candidate - bind public media variants to their source asset version ([issue #292](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/292); [PR #293](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/293))
+
+- Adds migration 0019 with nullable media_variants.source_version. New derivatives record the exact parent asset version; public reads require equality with the current asset version. Historical rows are intentionally left unbound and fail closed until regenerated.
+- Variant insertion locks the parent version through the transaction. Source replacement invalidates derivative rows atomically, deletes old derivative objects only after commit, and preserves rollback behavior. Metadata-only version increments carry forward only derivatives already bound to the immediately prior version because the source bytes are unchanged.
+- Variant creation and optimization status transitions are pinned to the source version observed by the optimizer. A stale job cannot publish a derivative or overwrite the replacement asset's optimization status.
+- Additional review hardened replacement-object compensation for ambiguous COMMIT acknowledgements. Once COMMIT is attempted, the new object is preserved because the database may have committed its reference; the safe object reconciler can clean any orphan. A focused regression covers the ambiguous outcome while the existing audit-failure regression still verifies rollback and cleanup before COMMIT.
+- Local Node.js 26.12.1 npm run check passed 809 tests (806 passed, 0 failed, 3 conditional platform skips). The targeted library/version-binding suite passed 20 tests with zero failures and one local integration skip. Tenant-isolation inventory is current (28 families / 80 patterns / 22 source files / 61 test files); its freshness check and git diff --check passed.
+- The preceding hosted PR revision passed workflow #1270 / run 45084320128: seven required jobs passed, live PostgreSQL/Memgraph integration passed 194/194 with zero failures/skips, and all 19 migrations passed fresh application and idempotent re-entry. That run predates the additional ambiguous-COMMIT fix above; fresh hosted CI on the updated head remains required before merge. The PostgreSQL/Memgraph/Redis services are not configured in the local environment.
+- No HTTP/API response shape, object-storage URL, dependency, npm lockfile, package version or SemVer change. Package 0.6.2 remains private/unreleased. No release, production or deployment approval is implied.
 ### F1.66 - recheck WebSocket document authorization before snapshot delivery ([PR #290](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/290); merged at `daf18f63115e6456800447d66b640247e58121b6`)
 
 - Document collaboration join revalidates the specific edit grant after the asynchronous sync read and after awaited hub-subscription reauthorization, immediately before sending `document.joined` or protected snapshot data.
