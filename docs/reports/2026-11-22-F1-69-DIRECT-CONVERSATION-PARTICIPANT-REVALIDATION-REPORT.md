@@ -32,7 +32,7 @@ No new helper or parallel conversation workflow was introduced. The existing tra
 
 The unit fixture now models the additional transaction queries and verifies that an inactive participant or missing current membership causes rollback, releases the checked-out client, and does not issue a conversation insert. The focused `test/community-workflows.test.js` suite passes **10/10**.
 
-The existing two-site PostgreSQL integration fixture gains a deterministic preflight/lock-wait regression. A blocker owns the direct-pair advisory lock and the site row, the API request starts and is observed waiting on the pair lock, then the blocker commits one eligibility change before releasing the lock. The API must deny the stale request and leave community snapshots unchanged. Scenarios cover:
+The existing two-site PostgreSQL integration fixture gains deterministic preflight-to-final-lock regressions. For membership-removal scenarios, a blocker holds the selected site row with `FOR UPDATE`, and the API request is observed waiting at its `FOR KEY SHARE` site-row check after passing preflight and acquiring the direct-pair advisory lock. For account deactivation, a blocker holds the recipient user row with `FOR UPDATE`, and the API request is observed waiting at the final ordered participant-row lock query. The blocker commits the eligibility change, the waiting transaction resumes and must deny the stale request, and both site snapshots remain unchanged. Each scenario uses a fresh actor session so a throttled authentication last-seen touch cannot be mistaken for the conversation transaction's lock wait. Scenarios cover:
 
 - Recipient site-membership removal after request preflight.
 - Recipient account deactivation after request preflight.

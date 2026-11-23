@@ -1313,22 +1313,29 @@ test(
 
     await t.test('direct conversation creation rejects participants revoked after request preflight', async () => {
       const recipientId = userBPublicJoinControl.id;
-      const participantPair = [actorB.id, recipientId].sort();
-      const advisoryKey = `virgoscorpio_hub:direct:${siteB}:${participantPair.join(':')}`;
-
-      async function assertRevocationRace({ description, mutate, restore }) {
+      async function assertRevocationRace({
+        description,
+        blockerLock,
+        blockingQueryFragment,
+        mutate,
+        restore,
+      }) {
         const siteAStateBefore = await snapshotCommunitySite(pool, siteA);
         const siteBStateBefore = await snapshotCommunitySite(pool, siteB);
 
-        // The fixture session can age past the one-minute touch throttle while
-        // this serial integration file runs. Refresh it directly so a detached
-        // auth-session touch cannot delay the request before the conversation
-        // transaction reaches its pair advisory lock.
-        const sessionTouch = await pool.query(
-          "UPDATE auth_sessions SET last_seen_at=now() WHERE user_id=$1 AND revoked_at IS NULL",
-          [actorB.id],
-        );
-        assert.ok(sessionTouch.rowCount > 0, 'the authenticated fixture session must remain active');
+        // Use a fresh actor session for each race so its throttled last-seen
+        // touch cannot be delayed by the row lock used to reproduce revocation.
+        const raceSession = await identity.login({
+          email: actorB.email,
+          password: 'Isolation-Password-2026',
+          ip: '127.0.0.1',
+          userAgent: 'f1-69-direct-conversation-race',
+        });
+        assert.equal(raceSession.mfaRequired, false);
+        const raceHeaders = {
+          ...headers,
+          authorization: `Bearer ${raceSession.token}`,
+        };
 
         const blocker = await pool.connect();
         let requestPromise = null;
@@ -1337,39 +1344,19 @@ test(
 
         try {
           await blocker.query('BEGIN');
-          await blocker.query('SELECT pg_advisory_xact_lock(hashtext($1))', [advisoryKey]);
-          // Hold only the pair lock so the request passes its preflight and waits
-          // at the transaction boundary before the competing eligibility change.
+          await blockerLock(blocker);
 
           requestPromise = fetch(`${base}/api/v1/sites/${siteB}/community/conversations`, {
             method: 'POST',
-            headers: { ...headers, 'content-type': 'application/json' },
+            headers: { ...raceHeaders, 'content-type': 'application/json' },
             body: JSON.stringify({ recipientId }),
           });
 
-          const waitingOnPairLock = await waitForDatabaseWriteLock(blocker, 'pg_advisory_xact_lock');
-          if (!waitingOnPairLock) {
-            const [activity, earlyResponse] = await Promise.all([
-              blocker.query(
-                `SELECT pid,state,wait_event_type,wait_event,query,pg_blocking_pids(pid) AS blocking_pids
-                   FROM pg_stat_activity
-                  WHERE datname=current_database() AND pid<>pg_backend_pid()
-                  ORDER BY query_start DESC LIMIT 20`,
-              ),
-              Promise.race([
-                requestPromise.then(async response => ({
-                  status: response.status,
-                  body: await response.clone().text(),
-                })),
-                new Promise(resolve => setTimeout(() => resolve(null), 100)),
-              ]),
-            ]);
-            assert.equal(
-              waitingOnPairLock,
-              true,
-              `${description}: the request did not wait on the pair lock; activity=${JSON.stringify(activity.rows)}; earlyResponse=${JSON.stringify(earlyResponse)}`,
-            );
-          }
+          assert.equal(
+            await waitForDatabaseWriteLock(blocker, blockingQueryFragment),
+            true,
+            `${description}: the request must pass preflight and wait at the final transaction lock`,
+          );
 
           await mutate(blocker);
           mutationApplied = true;
@@ -1427,6 +1414,11 @@ test(
 
       await assertRevocationRace({
         description: 'recipient site-membership removal after preflight',
+        blockerLock: client => client.query(
+          'SELECT id FROM sites WHERE id=$1 FOR UPDATE',
+          [siteB],
+        ),
+        blockingQueryFragment: 'SELECT id FROM sites WHERE id=$1 FOR KEY SHARE',
         mutate: client => client.query(
           'DELETE FROM site_memberships WHERE site_id=$1 AND user_id=$2',
           [siteB, recipientId],
@@ -1439,6 +1431,11 @@ test(
 
       await assertRevocationRace({
         description: 'recipient account deactivation after preflight',
+        blockerLock: client => client.query(
+          'SELECT id FROM users WHERE id=$1 FOR UPDATE',
+          [recipientId],
+        ),
+        blockingQueryFragment: 'SELECT id,status FROM users WHERE id=ANY($1::uuid[])',
         mutate: client => client.query(
           "UPDATE users SET status='disabled' WHERE id=$1",
           [recipientId],
@@ -1451,6 +1448,11 @@ test(
 
       await assertRevocationRace({
         description: 'actor site-membership removal after preflight',
+        blockerLock: client => client.query(
+          'SELECT id FROM sites WHERE id=$1 FOR UPDATE',
+          [siteB],
+        ),
+        blockingQueryFragment: 'SELECT id FROM sites WHERE id=$1 FOR KEY SHARE',
         mutate: client => client.query(
           'DELETE FROM site_memberships WHERE site_id=$1 AND user_id=$2',
           [siteB, actorB.id],
