@@ -82,6 +82,25 @@ test(
       DATABASE_URL: process.env.DATABASE_URL,
       DATABASE_POOL_MAX: '10',
     });
+    // Observe fire-and-forget session-touch queries at the pool boundary as well
+    // as in pg_stat_activity. A query queued inside pg.Pool is not visible to
+    // PostgreSQL until it receives a client, so database-only polling can miss it.
+    const pendingSessionTouches = new Map();
+    const originalPoolQuery = pool.query.bind(pool);
+    pool.query = (...args) => {
+      const queryText = typeof args[0] === 'string' ? args[0] : args[0]?.text;
+      const queryValues = Array.isArray(args[1]) ? args[1] : args[0]?.values;
+      const result = originalPoolQuery(...args);
+      if (/^UPDATE auth_sessions SET last_seen_at/i.test(queryText || '') &&
+          result && typeof result.then === 'function') {
+        pendingSessionTouches.set(result, queryValues?.[0] ?? null);
+        result.then(
+          () => pendingSessionTouches.delete(result),
+          () => pendingSessionTouches.delete(result),
+        );
+      }
+      return result;
+    };
     const siteIds = [];
     const userIds = [];
     let roleId = null;
@@ -111,6 +130,7 @@ test(
         await pool.query('DELETE FROM users WHERE id=ANY($1::uuid[])', [userIds]).catch(() => {});
       }
       if (roleId) await pool.query('DELETE FROM roles WHERE id=$1', [roleId]).catch(() => {});
+      pool.query = originalPoolQuery;
       await pool.end();
     });
 
@@ -1332,7 +1352,7 @@ test(
               LIMIT 1`,
           );
 
-          if (pending.rows.length) {
+          if (pending.rows.length || pendingSessionTouches.size > 0) {
             idleSince = null;
           } else if (idleSince === null) {
             idleSince = Date.now();
@@ -1417,12 +1437,31 @@ test(
           const waitingOnFinalLock = await waitForDatabaseWriteLock(blocker, blockingQueryFragment);
           if (!waitingOnFinalLock) {
             const blockerIdentity = await blocker.query('SELECT pg_backend_pid() AS pid');
-            const [activity, earlyResponse] = await Promise.all([
+            const pendingSessionIds = [...new Set(
+              [...pendingSessionTouches.values()].filter(Boolean),
+            )];
+            const [activity, earlyResponse, pendingTouchOwners] = await Promise.all([
               blocker.query(
-                `SELECT pid,state,wait_event_type,wait_event,backend_xid,query,pg_blocking_pids(pid) AS blocking_pids
-                   FROM pg_stat_activity
-                  WHERE datname=current_database()
-                  ORDER BY query_start DESC LIMIT 30`,
+                `SELECT a.pid,a.application_name,a.state,a.wait_event_type,a.wait_event,
+                        a.backend_xid,a.xact_start,a.query_start,a.query,
+                        pg_blocking_pids(a.pid) AS blocking_pids,
+                        (SELECT json_agg(json_build_object(
+                          'locktype',l.locktype,
+                          'mode',l.mode,
+                          'granted',l.granted,
+                          'relation',l.relation::regclass::text,
+                          'page',l.page,
+                          'tuple',l.tuple,
+                          'transactionid',l.transactionid::text,
+                          'virtualxid',l.virtualxid,
+                          'classid',l.classid,
+                          'objid',l.objid,
+                          'objsubid',l.objsubid
+                        ) ORDER BY l.granted,l.locktype)
+                           FROM pg_locks l WHERE l.pid=a.pid) AS locks
+                   FROM pg_stat_activity a
+                  WHERE a.datname=current_database()
+                  ORDER BY a.query_start DESC LIMIT 30`,
               ),
               Promise.race([
                 requestPromise.then(async response => ({
@@ -1431,11 +1470,20 @@ test(
                 })),
                 new Promise(resolve => setTimeout(() => resolve(null), 100)),
               ]),
+              pendingSessionIds.length
+                ? blocker.query(
+                    `SELECT s.id AS session_id,s.user_id,u.email,u.status,s.last_seen_at
+                       FROM auth_sessions s JOIN users u ON u.id=s.user_id
+                      WHERE s.id=ANY($1::uuid[])
+                      ORDER BY s.id`,
+                    [pendingSessionIds],
+                  )
+                : Promise.resolve({ rows: [] }),
             ]);
             assert.equal(
               waitingOnFinalLock,
               true,
-              `${description}: final-lock wait not observed; blockerPid=${blockerIdentity.rows[0]?.pid}; fragment=${blockingQueryFragment}; activity=${JSON.stringify(activity.rows)}; earlyResponse=${JSON.stringify(earlyResponse)}`,
+              `${description}: final-lock wait not observed; blockerPid=${blockerIdentity.rows[0]?.pid}; fragment=${blockingQueryFragment}; pendingSessionTouches=${JSON.stringify([...pendingSessionTouches.values()])}; pendingTouchOwners=${JSON.stringify(pendingTouchOwners.rows)}; activity=${JSON.stringify(activity.rows)}; earlyResponse=${JSON.stringify(earlyResponse)}`,
             );
           }
 
