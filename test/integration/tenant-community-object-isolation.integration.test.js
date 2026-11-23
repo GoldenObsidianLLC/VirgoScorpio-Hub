@@ -1358,7 +1358,7 @@ test(
 
         try {
           await blocker.query('BEGIN');
-          await blockerLock(blocker);
+          await blockerLock(blocker, raceActor);
 
           requestPromise = fetch(`${base}/api/v1/sites/${siteB}/community/conversations`, {
             method: 'POST',
@@ -1448,10 +1448,10 @@ test(
       await assertRevocationRace({
         description: 'recipient site-membership removal after preflight',
         blockerLock: client => client.query(
-          'SELECT id FROM sites WHERE id=$1 FOR UPDATE',
-          [siteB],
+          'SELECT role_id FROM site_memberships WHERE site_id=$1 AND user_id=$2 ORDER BY role_id FOR UPDATE',
+          [siteB, recipientId],
         ),
-        blockingQueryFragment: 'SELECT id FROM sites WHERE id=$1 FOR KEY SHARE',
+        blockingQueryFragment: 'SELECT user_id FROM site_memberships',
         mutate: client => client.query(
           'DELETE FROM site_memberships WHERE site_id=$1 AND user_id=$2',
           [siteB, recipientId],
@@ -1481,11 +1481,11 @@ test(
 
       await assertRevocationRace({
         description: 'actor site-membership removal after preflight',
-        blockerLock: client => client.query(
-          'SELECT id FROM sites WHERE id=$1 FOR UPDATE',
-          [siteB],
+        blockerLock: (client, raceActor) => client.query(
+          'SELECT role_id FROM site_memberships WHERE site_id=$1 AND user_id=$2 ORDER BY role_id FOR UPDATE',
+          [siteB, raceActor.id],
         ),
-        blockingQueryFragment: 'SELECT id FROM sites WHERE id=$1 FOR KEY SHARE',
+        blockingQueryFragment: 'SELECT user_id FROM site_memberships',
         mutate: (client, raceActor) => client.query(
           'DELETE FROM site_memberships WHERE site_id=$1 AND user_id=$2',
           [siteB, raceActor.id],
