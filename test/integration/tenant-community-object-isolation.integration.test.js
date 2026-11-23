@@ -1312,7 +1312,6 @@ test(
     });
 
     await t.test('direct conversation creation rejects participants revoked after request preflight', async () => {
-      const recipientId = userBPublicJoinControl.id;
       async function assertRevocationRace({
         description,
         blockerLock,
@@ -1320,13 +1319,16 @@ test(
         mutate,
         restore,
       }) {
-        // Give each race a brand-new actor so older fixture-session touches cannot
-        // interfere with the lock observation while the integration file runs.
+        // Give each race fresh participants. The recipient is intentionally never
+        // authenticated, so no earlier request can leave a throttled session touch
+        // waiting behind the authorization lock this test deliberately holds.
         const raceActor = await createUser('Site B Direct Conversation Race Actor', true);
+        const raceRecipient = await createUser('Site B Direct Conversation Race Recipient');
         await pool.query(
-          'INSERT INTO site_memberships(site_id,user_id,role_id) VALUES($1,$2,$3)',
-          [siteB, raceActor.id, roleId],
+          'INSERT INTO site_memberships(site_id,user_id,role_id) VALUES($1,$2,$3),($1,$4,$3)',
+          [siteB, raceActor.id, roleId, raceRecipient.id],
         );
+        const recipientId = raceRecipient.id;
         const siteAStateBefore = await snapshotCommunitySite(pool, siteA);
         const siteBStateBefore = await snapshotCommunitySite(pool, siteB);
 
@@ -1358,7 +1360,7 @@ test(
 
         try {
           await blocker.query('BEGIN');
-          await blockerLock(blocker, raceActor);
+          await blockerLock(blocker, raceActor, raceRecipient);
 
           // Refresh the isolated fixture session only after the blocker owns its
           // participant lock. This prevents the auth service's throttled,
@@ -1401,7 +1403,7 @@ test(
             );
           }
 
-          await mutate(blocker, raceActor);
+          await mutate(blocker, raceActor, raceRecipient);
           mutationApplied = true;
           await blocker.query('COMMIT');
           lockReleased = true;
@@ -1443,7 +1445,7 @@ test(
             // the final authorization lock so a failed test cannot leak a successful write
             // into later scenarios or snapshots.
             if (requestPromise && !mutationApplied) {
-              await mutate(blocker, raceActor).then(() => {
+              await mutate(blocker, raceActor, raceRecipient).then(() => {
                 mutationApplied = true;
               }).catch(() => {});
             }
@@ -1451,41 +1453,41 @@ test(
           }
           if (requestPromise) await requestPromise.catch(() => {});
           blocker.release();
-          await restore(raceActor);
+          await restore(raceActor, raceRecipient);
         }
       }
 
       await assertRevocationRace({
         description: 'recipient site-membership removal after preflight',
-        blockerLock: client => client.query(
+        blockerLock: (client, raceActor, raceRecipient) => client.query(
           'SELECT role_id FROM site_memberships WHERE site_id=$1 AND user_id=$2 ORDER BY role_id FOR UPDATE',
-          [siteB, recipientId],
+          [siteB, raceRecipient.id],
         ),
         blockingQueryFragment: 'SELECT user_id FROM site_memberships',
-        mutate: client => client.query(
+        mutate: (client, raceActor, raceRecipient) => client.query(
           'DELETE FROM site_memberships WHERE site_id=$1 AND user_id=$2',
-          [siteB, recipientId],
+          [siteB, raceRecipient.id],
         ),
-        restore: () => pool.query(
+        restore: (raceActor, raceRecipient) => pool.query(
           'INSERT INTO site_memberships(site_id,user_id,role_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING',
-          [siteB, recipientId, roleId],
+          [siteB, raceRecipient.id, roleId],
         ),
       });
 
       await assertRevocationRace({
         description: 'recipient account deactivation after preflight',
-        blockerLock: client => client.query(
+        blockerLock: (client, raceActor, raceRecipient) => client.query(
           'SELECT id FROM users WHERE id=$1 FOR UPDATE',
-          [recipientId],
+          [raceRecipient.id],
         ),
         blockingQueryFragment: 'SELECT id,status FROM users WHERE id=ANY($1::uuid[])',
-        mutate: client => client.query(
+        mutate: (client, raceActor, raceRecipient) => client.query(
           "UPDATE users SET status='disabled' WHERE id=$1",
-          [recipientId],
+          [raceRecipient.id],
         ),
-        restore: () => pool.query(
+        restore: (raceActor, raceRecipient) => pool.query(
           "UPDATE users SET status='active' WHERE id=$1",
-          [recipientId],
+          [raceRecipient.id],
         ),
       });
 
