@@ -1387,6 +1387,16 @@ test(
           authorization: `Bearer ${raceSession.token}`,
         };
 
+        // Reset the session-touch throttle before the blocker is acquired. The
+        // target request authenticates this actor after the blocker owns its row
+        // lock; leaving last_seen_at stale would enqueue an unrelated
+        // fire-and-forget UPDATE ahead of the authorization SELECT under test.
+        const refreshedSession = await pool.query(
+          'UPDATE auth_sessions SET last_seen_at=now() WHERE user_id=$1 AND revoked_at IS NULL RETURNING id',
+          [raceActor.id],
+        );
+        assert.equal(refreshedSession.rows.length, 1, 'the race actor must have one active session before blocker acquisition');
+
         await waitForSessionTouchesToSettle();
 
         const blocker = await pool.connect();
@@ -1397,16 +1407,6 @@ test(
         try {
           await blocker.query('BEGIN');
           await blockerLock(blocker, raceActor, raceRecipient);
-
-          // Refresh the isolated fixture session only after the blocker owns its
-          // participant lock. This prevents the auth service's throttled,
-          // fire-and-forget last-seen update from becoming an unrelated waiter
-          // before the request reaches direct-conversation authorization.
-          const refreshedSession = await pool.query(
-            'UPDATE auth_sessions SET last_seen_at=now() WHERE user_id=$1 AND revoked_at IS NULL RETURNING id',
-            [raceActor.id],
-          );
-          assert.equal(refreshedSession.rows.length, 1, 'the race actor must have one active session immediately before the request');
 
           requestPromise = fetch(`${base}/api/v1/sites/${siteB}/community/conversations`, {
             method: 'POST',
