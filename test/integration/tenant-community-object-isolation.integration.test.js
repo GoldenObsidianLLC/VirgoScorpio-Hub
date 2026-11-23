@@ -1320,25 +1320,15 @@ test(
         const siteAStateBefore = await snapshotCommunitySite(pool, siteA);
         const siteBStateBefore = await snapshotCommunitySite(pool, siteB);
 
-        // The actor session is created before the full integration suite runs.
-        // Flush its throttled last-seen touch before owning the direct-pair
-        // advisory lock so an unrelated authentication-side-effect query cannot
-        // be mistaken for the conversation transaction's lock wait.
-        const authenticatedActor = await identity.authenticate(session.token);
-        assert.equal(authenticatedActor?.user.id, actorB.id);
-        let sessionTouchFresh = false;
-        for (let attempt = 0; attempt < 100; attempt += 1) {
-          const sessionTouch = await pool.query(
-            "SELECT last_seen_at > now() - interval '1 minute' AS fresh FROM auth_sessions WHERE id=$1",
-            [authenticatedActor.sessionId],
-          );
-          if (sessionTouch.rows[0]?.fresh) {
-            sessionTouchFresh = true;
-            break;
-          }
-          await new Promise(resolve => setTimeout(resolve, 20));
-        }
-        assert.equal(sessionTouchFresh, true, 'actor session activity must settle before the pair-lock race begins');
+        // The fixture session can age past the one-minute touch throttle while
+        // this serial integration file runs. Refresh it directly so a detached
+        // auth-session touch cannot delay the request before the conversation
+        // transaction reaches its pair advisory lock.
+        const sessionTouch = await pool.query(
+          "UPDATE auth_sessions SET last_seen_at=now() WHERE user_id=$1 AND revoked_at IS NULL",
+          [actorB.id],
+        );
+        assert.ok(sessionTouch.rowCount > 0, 'the authenticated fixture session must remain active');
 
         const blocker = await pool.connect();
         let requestPromise = null;
