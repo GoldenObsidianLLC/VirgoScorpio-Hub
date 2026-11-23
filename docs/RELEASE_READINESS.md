@@ -1,19 +1,38 @@
-# VirgoScorpio Hub 0.6.2 - current release-readiness snapshot (22 November 2026; main `daf18f6`; workflow #45074920350)
+# VirgoScorpio Hub 0.6.2 - current release-readiness snapshot (22 November 2026 America/Chicago; F1.67 merged; main 4da6f26; workflow #45088000378)
 
-## Current exact-main readiness - 22 November 2026
+## Current exact-main readiness - 22 November 2026 (America/Chicago)
 
-Current `main` is `daf18f63115e6456800447d66b640247e58121b6`, including F1.64 / [PR #288](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/288), F1.65 / [PR #289](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/289), and F1.66 / [PR #290](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/290). Exact-main [workflow #45074920350](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45074920350) passed **7/7 jobs** on that exact SHA: Node.js 22, Node.js 24, live PostgreSQL/Memgraph integration, browser/accessibility smoke, CodeQL, signed lockfile/SBOM attestation and exact-source CI evidence consolidation.
+Current main is 4da6f26730ff0634ffe01f85790bedf0a255c4e3 after F1.67 / [PR #293](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/293), closing issue #292. Exact-main [workflow #45088000378](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45088000378) passed 7/7 jobs: Node.js 22, Node.js 24, live PostgreSQL/Memgraph integration, browser/accessibility smoke, CodeQL, signed lockfile/SBOM attestation and exact-source evidence consolidation.
 
-Canonical [release-readiness artifact #14775111286](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45074920350/artifacts/14775111286) is source-bound to exact current main. Archive SHA-256: `40a7a79e0ac2f1b97c0292458be8fa72e0249abe51feae6ed844ca2665b5a4f6`; readiness JSON SHA-256: `7e0c6ac94c14fc6a47d7d5e1da9e635a8df9a68f8ed5469ff77cb43b48dd205f`; readiness Markdown SHA-256: `9d1cfd74db4bfa03c6bade05cf1a9f9625212f50ea1e05c1f9ad22703bfd61e0`. Generated at `2026-11-22T22:00:55.494Z`. Classification: **8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN**; `readyForProduction=false`; `NOT_PRODUCTION_CERTIFIED`; decision **NO-GO**.
+Canonical [mainline release-readiness artifact #14779454147](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45088000378/artifacts/14779454147) is bound to exact main. ZIP SHA-256: 2b4166717a52bf2e4c3b486414d6005a87ca3f3937ad0522af0ed37d9ca7d240; readiness JSON SHA-256: 0e056623c2fd9df9dbe12e5436754cadb3bd8bf17cad1048e7873210bd48ed90; readiness Markdown SHA-256: d938e87e6151e7e4b46c7df13ed7d6e32392124d9083a77b35519a1362e8a8de. Generated at 2026-11-23T00:22:12.856Z. Classification: 8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN; readyForProduction=false; NOT_PRODUCTION_CERTIFIED; NO-GO.
 
-Node.js 22.23.4 passed **804/804 Hub tests** and **94/94 EnginEx tests** with zero skips; the Node.js 24.22.1 unit/security/dependency job passed. Live PostgreSQL/Memgraph integration passed **190/190** with zero failures/skips; **18/18** fresh migrations and **18/18** idempotent re-entry checks passed. Browser smoke, CodeQL, signed mainline lockfile/SBOM attestation and evidence consolidation passed. The separate service-less diagnostic suite reported 49 tests (1 pass / 48 skipped) and remains PARTIAL; skipped tests are not live integration passes.
+Node 22.23.4 and 24.22.1 each passed 809/809 Hub tests and 94/94 EnginEx tests. Live PostgreSQL/Memgraph passed 194/194 with zero failures/skips; 19/19 migrations applied fresh and 19/19 idempotent re-entry checks passed. Browser smoke, CodeQL, mainline signed lockfile/SBOM attestation and evidence consolidation passed. Service-less diagnostics remain PARTIAL; skipped tests are not live integration passes.
 
-F1.64 / [PR #288](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/288) revalidates active-account, selected-site membership and role capabilities inside the community moderation mutation transaction. F1.65 / [PR #289](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/289) enforces confidential classification for all non-mock AI-provider requests, independent of caller-supplied classification. F1.66 / [PR #290](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/290) rechecks the document-specific edit grant after sync and hub reauthorization immediately before WebSocket join/snapshot delivery. Focused regression suites passed 25/25 for WebSocket and 18/18 for AI classification.
+The readiness artifact was generated immediately before the GitHub aggregate workflow completed; its embedded workflowRun status is in_progress by capture timing. GitHub records the completed workflow result as success at 2026-11-23T00:22:16Z, with all seven jobs successful. This does not alter the source binding or final run result.
 
-The two PARTIAL items remain (1) qualified human dependency/license review and (2) service-less integration diagnostics. Fourteen missing production evidence gates remain: independent tenant-isolation review; identity-provider E2E; malware/legacy-asset quarantine; live cloud providers; Stripe lifecycle; full browser/accessibility acceptance; commerce parity; community parity; plugin isolation; human dependency/SBOM/CodeQL review; load/backup/restore; independent platform security assessment; operations/release approval; and production observability. Detailed gap ownership remains in the corresponding issues and assessor evidence records.
+Mainline signed supply-chain [artifact #14779528541](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45088000378/artifacts/14779528541): ZIP SHA-256 e741ac7fcd91658da581eab051db999c1eab1ee839f93cdd535925203c1eb895; verification summary SHA-256 2c9702b3fedc91e53a2fde4e54e354d430cee4fadb3dbde16e01e45dc7c9f6cc. Attested package-lock SHA-256 8f3786bcfcd03d0b63761c7107e4d757ae5b45171ba2f6c086ff38c027c8b086; SBOM SHA-256 6c056ef27cf76732af7c7ac72d380cf246aa4c74c22a5b20f9c81e1fecb4e654. Sigstore/Rekor provenance verifies these source-bound subjects, not human dependency/license approval.
 
-The tenant-isolation inventories remain maintainer-prepared, not independently reviewed. Package `0.6.2` remains private and unreleased. Do not tag, publish, deploy, or promote it; passing exact-main CI does not authorize production release. See the [F1.64-F1.66 security-hardening report](reports/2026-11-22-F1-64-66-SECURITY-HARDENING-REPORT.md) and [source-bound evidence ledger](RELEASE-EVIDENCE.md).
+F1.67 adds migration 0019, exact derivative source-version binding, fail-closed legacy reads, transactional invalidation, version-pinned optimizer writes and conservative ambiguous-COMMIT object retention. No API, dependency, lockfile, package-version or SemVer change.
 
+The two PARTIAL classifications remain (1) qualified human dependency/license review and (2) service-less integration diagnostics. Fourteen missing evidence gates remain:
+1. Independent tenant-isolation and authorization review (issue #14).
+2. OIDC/SAML, email delivery and MFA recovery end-to-end.
+3. Live ClamAV, malicious-file corpus and legacy-asset quarantine.
+4. Live S3/GCS/Azure/S3-compatible provider credentials and least privilege.
+5. Stripe webhook replay, ambiguous outcomes and inventory lifecycle.
+6. Full Playwright editor journeys and WCAG/screen-reader acceptance.
+7. Commerce parity acceptance.
+8. Community parity acceptance.
+9. Signed plugin pipeline and adversarial container isolation.
+10. Human-reviewed dependency audit, SBOM/provenance and CodeQL.
+11. Load/soak, fault injection, backup/restore and recovery.
+12. Independent platform security assessment and severe-finding remediation (issue #25).
+13. Deployment runbooks, secrets, rollback, monitoring and release-owner approval.
+14. Production OTLP observability backend, security, governance, ownership and delivery.
+
+Tenant-isolation inventory remains maintainer-prepared, not independently reviewed. Aikido fingerprint mapping remains open in #234/#235/#277; exact findings must be triaged and rescanned rather than inferred from aggregate counts.
+
+Package 0.6.2 remains private and unreleased. Do not tag, publish, deploy or promote it. Passing exact-main CI and signed provenance do not authorize production release. See the [full 22 November release-gate report](reports/2026-11-22-VirgoScorpio-Hub-0.6.2-Release-Gate-Report.md), [F1.67 implementation report](reports/2026-11-22-F1-67-PUBLIC-LIBRARY-VARIANT-VERSION-BINDING-REPORT.md), and [source-bound evidence ledger](RELEASE-EVIDENCE.md).
 ---
 
 ## Historical readiness snapshot before F1.63 (main `85315d873af73a71dc5223f02ac196b924efc928`; workflow #1240)
