@@ -1,8 +1,8 @@
 # F1.68 - Equalize password verification work for unknown and malformed accounts
 
 **Date:** 22 November 2026 (America/Chicago)
-**Status:** Implementation candidate; tracked by [issue #295](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/295) on branch security/f1-68-login-timing-oracle-2026-11-22.
-**Current main baseline:** fccd708a439efd3e29cc7fd0b1da00a8ab9d1b7d (documentation synchronization PR #294).
+**Status:** Merged through [PR #296](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/296); [issue #295](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/295) is closed. Main commit: c4c5fb6328d2747d1d9b9c43aab70fc93d4eb96e.
+**Current main baseline:** c4c5fb6328d2747d1d9b9c43aab70fc93d4eb96e (F1.68 squash merge).
 **Release boundary:** Maintainer-led authentication hardening only; no scanner fingerprint is dispositioned.
 
 ## 1. Finding and threat model
@@ -27,7 +27,7 @@ No migration, dependency, API route, response shape, lockfile, package version, 
 
 ## 3. Regression coverage
 
-A deterministic regression injects a KDF spy and exercises valid, missing, malformed, oversized-with-missing-hash, oversized-with-valid-hash, and non-string-with-valid-hash inputs. It asserts exactly one derivation per input shape, identical N/r/p/key length/maxmem, the stored salt for a valid hash, the fixed dummy salt for missing/malformed hashes, bounded KDF input, and that oversized/non-string inputs cannot authenticate even if the substituted empty candidate were to match.
+A deterministic regression injects a KDF spy and exercises six input shapes: valid stored hash, missing hash, malformed hash, oversized password with missing hash, oversized password with valid hash, and non-string password with valid hash. It asserts exactly one derivation per input shape, identical N/r/p/key length/maxmem, the stored salt for a valid hash, the fixed dummy salt for missing/malformed hashes, bounded KDF input, and that oversized/non-string inputs cannot authenticate even if the substituted empty candidate were to match.
 
 The existing password policy/hash round-trip tests remain in place. The production login path still performs verification for both found and absent users because the identity service always passes the optional stored hash to the shared verifier.
 
@@ -41,14 +41,24 @@ The existing password policy/hash round-trip tests remain in place. The producti
 | Tenant inventory | 28 families / 80 declared route patterns / 22 source files / 61 test files |
 | Tenant inventory freshness | PASS |
 | git diff --check | PASS |
-| Hosted validation | Pending PR |
+| PR #296 hosted validation | PASS - run #45099010532 |
+| Exact-main post-merge validation | PASS - workflow #45099497274, 7/7 jobs |
+| Mainline signed lockfile/SBOM attestation | PASS - artifact #14785021415 |
 
 The inventory was regenerated after the final auth-source change. Current inventory: 28 families / 80 declared route patterns / 22 source files / 61 test files. Source SHA-256: 5738927223a4fe04732978e5833776e8452f02836d49848f846f1e31a2e2772a. Test-reference SHA-256: 17f16b2d2128b39f6fba87a0f44ccad9a71d5f63e9fdad7d9b51e398007e68b3. It remains maintainer-prepared and is not an independent tenant-isolation review.
 
-## 5. Security and release boundary
+## 5. Exact-main post-merge evidence
+
+Main SHA c4c5fb6328d2747d1d9b9c43aab70fc93d4eb96e is source-bound to exact-main [workflow #45099497274](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45099497274), completed success, 7/7 jobs. Node.js 22.23.4 and 24.22.1 each passed 810/810 Hub and 94/94 EnginEx tests. Live PostgreSQL/Memgraph passed 194/194 with zero failures/skips; 19/19 fresh migrations and 19/19 idempotent re-entry checks passed. Browser smoke passed 9/9; CodeQL, signed mainline lockfile/SBOM attestations and exact-source evidence consolidation passed.
+
+Canonical mainline readiness [artifact #14784563967](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45099497274/artifacts/14784563967) remains 8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN, readyForProduction=false and NOT_PRODUCTION_CERTIFIED / NO-GO. Readiness JSON SHA-256 33853c0a8ea3ae91869f21f532f27a1119e91d677786da74c4207cab617ba166; readiness Markdown SHA-256 a2a982d19a9a33bdbc9519837d51af497095d3b99d7601dd2b22ebf5a1eeadb4; containing ZIP SHA-256 f7c6471dca00ed81a7506cd696393b37ac7a1a5e7b0ff3c6a1391a6bb600c8cd.
+
+Signed mainline supply-chain [artifact #14785021415](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45099497274/artifacts/14785021415), archive SHA-256 e063bb7c04b9050ecb91de053b6176d0a102e267d9ed8156f0a297f3964edac6; verification summary SHA-256 6ce77f20da2aff065101e3b11f3f183466dc37f085e3651ee60fd9e8469bbe66. It verifies package-lock SHA-256 8f3786bcfcd03d0b63761c7107e4d757ae5b45171ba2f6c086ff38c027c8b086 and CycloneDX SBOM SHA-256 802e8a77baf39b58954e55002b4d685dcbe771d983efeec851e6c7517540f01a using Sigstore/Rekor. This is source-bound provenance, not a substitute for qualified human dependency/license review.
+
+## 6. Security and release boundary
 
 This change makes the login KDF work uniform for the relevant missing/malformed-hash cases; it does not claim mathematically constant end-to-end response time or eliminate every account-enumeration vector. Network scheduling, database latency, rate limiting, verified-email policy and other authentication flows remain separate concerns.
 
-Related Aikido context: [issue #234](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/234) and bot proposal [PR #273](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/273). The current implementation is maintainer-led and uses deterministic KDF-spy tests rather than flaky wall-clock thresholds. No exact Aikido fingerprint/rule/CWE/source record has been matched or rescanned; no scanner finding is marked fixed or closed.
+Related Aikido context: [issue #234](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/234) and bot proposal [PR #273](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/273). The current implementation is maintainer-led and uses deterministic KDF-spy tests rather than flaky wall-clock thresholds. No exact Aikido fingerprint/rule/CWE/source record has been matched or rescanned; no scanner finding is marked fixed or closed. Bot proposal PR #273 was closed without merge as superseded by this maintainer implementation; that repository-PR disposition does not close or resolve any Aikido finding.
 
 Package 0.6.2 remains private and unreleased. Current exact-main readiness is 8 PASS / 2 PARTIAL / 14 MISSING_EVIDENCE, NOT_PRODUCTION_CERTIFIED / NO-GO. Independent tenant-isolation review #14, qualified dependency/license review #23, and independent platform security assessment #25 remain open. No tag, publication, production certification, deployment or SemVer change is authorized.
