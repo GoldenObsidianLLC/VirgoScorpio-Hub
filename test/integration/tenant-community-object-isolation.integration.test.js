@@ -82,24 +82,69 @@ test(
       DATABASE_URL: process.env.DATABASE_URL,
       DATABASE_POOL_MAX: '10',
     });
-    // Observe fire-and-forget session-touch queries at the pool boundary as well
-    // as in pg_stat_activity. A query queued inside pg.Pool is not visible to
-    // PostgreSQL until it receives a client, so database-only polling can miss it.
+    // Observe session-touch statements at the checked-out-client boundary.
+    // Pool.query delegates through Pool.connect() and client.query(), so wrapping
+    // only Pool.query can miss the callback-based query path used by pg.Pool.
     const pendingSessionTouches = new Map();
-    const originalPoolQuery = pool.query.bind(pool);
-    pool.query = (...args) => {
-      const queryText = typeof args[0] === 'string' ? args[0] : args[0]?.text;
-      const queryValues = Array.isArray(args[1]) ? args[1] : args[0]?.values;
-      const result = originalPoolQuery(...args);
-      if (/^UPDATE auth_sessions SET last_seen_at/i.test(queryText || '') &&
-          result && typeof result.then === 'function') {
-        pendingSessionTouches.set(result, queryValues?.[0] ?? null);
-        result.then(
-          () => pendingSessionTouches.delete(result),
-          () => pendingSessionTouches.delete(result),
-        );
+    const trackedClients = new WeakSet();
+    const originalPoolConnectMethod = pool.connect;
+    const originalPoolConnect = pool.connect.bind(pool);
+    function instrumentSessionTouchClient(client) {
+      if (!client || trackedClients.has(client)) return client;
+      trackedClients.add(client);
+      const originalClientQuery = client.query.bind(client);
+      client.query = (...args) => {
+        const queryText = typeof args[0] === 'string' ? args[0] : args[0]?.text;
+        const queryValues = Array.isArray(args[1]) ? args[1] : args[0]?.values;
+        if (!/^UPDATE auth_sessions SET last_seen_at/i.test(queryText || '')) {
+          return originalClientQuery(...args);
+        }
+
+        const sessionId = queryValues?.[0] ?? null;
+        const callbackIndex = args.length - 1;
+        const callback = args[callbackIndex];
+        const trackingToken = {};
+        pendingSessionTouches.set(trackingToken, sessionId);
+        if (typeof callback === 'function') {
+          args[callbackIndex] = function (...callbackArgs) {
+            pendingSessionTouches.delete(trackingToken);
+            return callback.apply(this, callbackArgs);
+          };
+          try {
+            return originalClientQuery(...args);
+          } catch (error) {
+            pendingSessionTouches.delete(trackingToken);
+            throw error;
+          }
+        }
+
+        try {
+          const result = originalClientQuery(...args);
+          if (result && typeof result.then === 'function') {
+            result.then(
+              () => pendingSessionTouches.delete(trackingToken),
+              () => pendingSessionTouches.delete(trackingToken),
+            );
+          } else {
+            pendingSessionTouches.delete(trackingToken);
+          }
+          return result;
+        } catch (error) {
+          pendingSessionTouches.delete(trackingToken);
+          throw error;
+        }
+      };
+      return client;
+    }
+    pool.connect = (...args) => {
+      if (typeof args[0] === 'function') {
+        const callback = args[0];
+        args[0] = function (error, client, release) {
+          return callback.call(this, error, instrumentSessionTouchClient(client), release);
+        };
+        return originalPoolConnect(...args);
       }
-      return result;
+      return originalPoolConnect(...args).then(instrumentSessionTouchClient);
     };
     const siteIds = [];
     const userIds = [];
@@ -130,7 +175,7 @@ test(
         await pool.query('DELETE FROM users WHERE id=ANY($1::uuid[])', [userIds]).catch(() => {});
       }
       if (roleId) await pool.query('DELETE FROM roles WHERE id=$1', [roleId]).catch(() => {});
-      pool.query = originalPoolQuery;
+      pool.connect = originalPoolConnectMethod;
       await pool.end();
     });
 
