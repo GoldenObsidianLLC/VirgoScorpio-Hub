@@ -1362,6 +1362,7 @@ test(
         description,
         blockerLock,
         blockingQueryFragment,
+        blockingRelationName,
         mutate,
         restore,
       }) {
@@ -1425,10 +1426,15 @@ test(
             body: JSON.stringify({ recipientId }),
           });
 
-          // The route's preflight and pair advisory lock both precede the
-          // transaction's site FOR KEY SHARE query. Seeing this wait proves the
-          // request reached the post-preflight revalidation boundary.
-          const waitingOnSiteLock = await waitForDatabaseWriteLock(blocker, blockingQueryFragment);
+          // The route's preflight and pair advisory lock both precede its site
+          // FOR KEY SHARE row lock. The shared observer verifies the blocked
+          // relation/tuple lock and blocker PID, not a potentially stale query string.
+          const waitingOnSiteLock = await waitForDatabaseWriteLock(
+            blocker,
+            blockingQueryFragment,
+            5000,
+            { relationName: blockingRelationName },
+          );
           if (!waitingOnSiteLock) {
             const blockerIdentity = await blocker.query('SELECT pg_backend_pid() AS pid');
             const [activity, earlyResponse] = await Promise.all([
@@ -1526,7 +1532,8 @@ test(
       await assertRevocationRace({
         description: 'recipient site-membership removal after preflight',
         blockerLock: client => lockSiteForParticipantRevalidation(client, siteB),
-        blockingQueryFragment: 'SELECT id FROM sites WHERE id=$1 FOR KEY SHARE',
+        blockingQueryFragment: 'FOR KEY SHARE',
+        blockingRelationName: 'sites',
         mutate: (client, raceActor, raceRecipient) => client.query(
           'DELETE FROM site_memberships WHERE site_id=$1 AND user_id=$2',
           [siteB, raceRecipient.id],
@@ -1540,7 +1547,8 @@ test(
       await assertRevocationRace({
         description: 'recipient account deactivation after preflight',
         blockerLock: client => lockSiteForParticipantRevalidation(client, siteB),
-        blockingQueryFragment: 'SELECT id FROM sites WHERE id=$1 FOR KEY SHARE',
+        blockingQueryFragment: 'FOR KEY SHARE',
+        blockingRelationName: 'sites',
         mutate: (client, raceActor, raceRecipient) => client.query(
           "UPDATE users SET status='disabled' WHERE id=$1",
           [raceRecipient.id],
@@ -1554,7 +1562,8 @@ test(
       await assertRevocationRace({
         description: 'actor site-membership removal after preflight',
         blockerLock: client => lockSiteForParticipantRevalidation(client, siteB),
-        blockingQueryFragment: 'SELECT id FROM sites WHERE id=$1 FOR KEY SHARE',
+        blockingQueryFragment: 'FOR KEY SHARE',
+        blockingRelationName: 'sites',
         mutate: (client, raceActor) => client.query(
           'DELETE FROM site_memberships WHERE site_id=$1 AND user_id=$2',
           [siteB, raceActor.id],
