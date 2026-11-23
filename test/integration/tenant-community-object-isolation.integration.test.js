@@ -1347,6 +1347,14 @@ test(
         throw new Error('prior auth_sessions last-seen touches did not settle before the direct-conversation lock race');
       }
 
+      async function lockDirectConversationPair(client, siteId, actorId, recipientId) {
+        const pair = [actorId, recipientId].sort();
+        return client.query(
+          'SELECT pg_advisory_xact_lock(hashtext($1))',
+          [`virgoscorpio_hub:direct:${siteId}:${pair.join(':')}`],
+        );
+      }
+
       async function assertRevocationRace({
         description,
         blockerLock,
@@ -1356,7 +1364,7 @@ test(
       }) {
         // Give each race fresh participants. The recipient is intentionally never
         // authenticated, so no earlier request can leave a throttled session touch
-        // waiting behind the authorization lock this test deliberately holds.
+        // queued ahead of the pair-lock barrier used to reproduce this race.
         const raceActor = await createUser('Site B Direct Conversation Race Actor', true);
         const raceRecipient = await createUser('Site B Direct Conversation Race Recipient');
         await pool.query(
@@ -1368,7 +1376,7 @@ test(
         const siteBStateBefore = await snapshotCommunitySite(pool, siteB);
 
         // Use a fresh actor session for each race so its throttled last-seen
-        // touch cannot be delayed by the row lock used to reproduce revocation.
+        // touch cannot obscure the pair-advisory-lock wait under test.
         const raceSession = await identity.login({
           email: raceActor.email,
           password: 'Isolation-Password-2026',
@@ -1414,8 +1422,11 @@ test(
             body: JSON.stringify({ recipientId }),
           });
 
-          const waitingOnFinalLock = await waitForDatabaseWriteLock(blocker, blockingQueryFragment);
-          if (!waitingOnFinalLock) {
+          // The direct-conversation preflight runs before the transaction's
+          // pair advisory lock. Seeing this wait proves the request passed
+          // preflight but has not yet reached transactional participant revalidation.
+          const waitingOnPairLock = await waitForDatabaseWriteLock(blocker, blockingQueryFragment);
+          if (!waitingOnPairLock) {
             const blockerIdentity = await blocker.query('SELECT pg_backend_pid() AS pid');
             const [activity, earlyResponse] = await Promise.all([
               blocker.query(
@@ -1449,9 +1460,9 @@ test(
               ]),
             ]);
             assert.equal(
-              waitingOnFinalLock,
+              waitingOnPairLock,
               true,
-              `${description}: final-lock wait not observed; blockerPid=${blockerIdentity.rows[0]?.pid}; fragment=${blockingQueryFragment}; activity=${JSON.stringify(activity.rows)}; earlyResponse=${JSON.stringify(earlyResponse)}`,
+              `${description}: direct-pair advisory-lock wait not observed; blockerPid=${blockerIdentity.rows[0]?.pid}; fragment=${blockingQueryFragment}; activity=${JSON.stringify(activity.rows)}; earlyResponse=${JSON.stringify(earlyResponse)}`,
             );
           }
 
@@ -1494,7 +1505,7 @@ test(
         } finally {
           if (!lockReleased) {
             // On an assertion failure, deny the waiting request before releasing
-            // the final authorization lock so a failed test cannot leak a successful write
+            // the pair advisory lock so a failed test cannot leak a successful write
             // into later scenarios or snapshots.
             if (requestPromise && !mutationApplied) {
               await mutate(blocker, raceActor, raceRecipient).then(() => {
@@ -1511,11 +1522,10 @@ test(
 
       await assertRevocationRace({
         description: 'recipient site-membership removal after preflight',
-        blockerLock: (client, raceActor, raceRecipient) => client.query(
-          'SELECT role_id FROM site_memberships WHERE site_id=$1 AND user_id=$2 ORDER BY role_id FOR UPDATE',
-          [siteB, raceRecipient.id],
+        blockerLock: (client, raceActor, raceRecipient) => lockDirectConversationPair(
+          client, siteB, raceActor.id, raceRecipient.id,
         ),
-        blockingQueryFragment: 'SELECT user_id FROM site_memberships',
+        blockingQueryFragment: 'pg_advisory_xact_lock',
         mutate: (client, raceActor, raceRecipient) => client.query(
           'DELETE FROM site_memberships WHERE site_id=$1 AND user_id=$2',
           [siteB, raceRecipient.id],
@@ -1528,11 +1538,10 @@ test(
 
       await assertRevocationRace({
         description: 'recipient account deactivation after preflight',
-        blockerLock: (client, raceActor, raceRecipient) => client.query(
-          'SELECT id FROM users WHERE id=$1 FOR UPDATE',
-          [raceRecipient.id],
+        blockerLock: (client, raceActor, raceRecipient) => lockDirectConversationPair(
+          client, siteB, raceActor.id, raceRecipient.id,
         ),
-        blockingQueryFragment: 'SELECT id,status FROM users WHERE id=ANY($1::uuid[])',
+        blockingQueryFragment: 'pg_advisory_xact_lock',
         mutate: (client, raceActor, raceRecipient) => client.query(
           "UPDATE users SET status='disabled' WHERE id=$1",
           [raceRecipient.id],
@@ -1545,11 +1554,10 @@ test(
 
       await assertRevocationRace({
         description: 'actor site-membership removal after preflight',
-        blockerLock: (client, raceActor) => client.query(
-          'SELECT role_id FROM site_memberships WHERE site_id=$1 AND user_id=$2 ORDER BY role_id FOR UPDATE',
-          [siteB, raceActor.id],
+        blockerLock: (client, raceActor, raceRecipient) => lockDirectConversationPair(
+          client, siteB, raceActor.id, raceRecipient.id,
         ),
-        blockingQueryFragment: 'SELECT user_id FROM site_memberships',
+        blockingQueryFragment: 'pg_advisory_xact_lock',
         mutate: (client, raceActor) => client.query(
           'DELETE FROM site_memberships WHERE site_id=$1 AND user_id=$2',
           [siteB, raceActor.id],
