@@ -1320,17 +1320,31 @@ test(
         mutate,
         restore,
       }) {
+        // Give each race a brand-new actor so older fixture-session touches cannot
+        // interfere with the lock observation while the integration file runs.
+        const raceActor = await createUser('Site B Direct Conversation Race Actor', true);
+        await pool.query(
+          'INSERT INTO site_memberships(site_id,user_id,role_id) VALUES($1,$2,$3)',
+          [siteB, raceActor.id, roleId],
+        );
         const siteAStateBefore = await snapshotCommunitySite(pool, siteA);
         const siteBStateBefore = await snapshotCommunitySite(pool, siteB);
 
         // Use a fresh actor session for each race so its throttled last-seen
         // touch cannot be delayed by the row lock used to reproduce revocation.
         const raceSession = await identity.login({
-          email: actorB.email,
+          email: raceActor.email,
           password: 'Isolation-Password-2026',
           ip: '127.0.0.1',
           userAgent: 'f1-69-direct-conversation-race',
         });
+        const raceSessionState = await pool.query(
+          `SELECT last_seen_at > now() - interval '1 minute' AS fresh
+             FROM auth_sessions WHERE user_id=$1 AND revoked_at IS NULL`,
+          [raceActor.id],
+        );
+        assert.equal(raceSessionState.rows.length, 1);
+        assert.equal(raceSessionState.rows[0].fresh, true, 'race actor session must start within the touch throttle window');
         assert.equal(raceSession.mfaRequired, false);
         const raceHeaders = {
           ...headers,
@@ -1354,12 +1368,13 @@ test(
 
           const waitingOnFinalLock = await waitForDatabaseWriteLock(blocker, blockingQueryFragment);
           if (!waitingOnFinalLock) {
+            const blockerIdentity = await blocker.query('SELECT pg_backend_pid() AS pid');
             const [activity, earlyResponse] = await Promise.all([
               blocker.query(
-                `SELECT pid,state,wait_event_type,wait_event,query,pg_blocking_pids(pid) AS blocking_pids
+                `SELECT pid,state,wait_event_type,wait_event,backend_xid,query,pg_blocking_pids(pid) AS blocking_pids
                    FROM pg_stat_activity
-                  WHERE datname=current_database() AND pid<>pg_backend_pid()
-                  ORDER BY query_start DESC LIMIT 20`,
+                  WHERE datname=current_database()
+                  ORDER BY query_start DESC LIMIT 30`,
               ),
               Promise.race([
                 requestPromise.then(async response => ({
@@ -1372,11 +1387,11 @@ test(
             assert.equal(
               waitingOnFinalLock,
               true,
-              `${description}: the request did not wait at the expected final lock; fragment=${blockingQueryFragment}; activity=${JSON.stringify(activity.rows)}; earlyResponse=${JSON.stringify(earlyResponse)}`,
+              `${description}: final-lock wait not observed; blockerPid=${blockerIdentity.rows[0]?.pid}; fragment=${blockingQueryFragment}; activity=${JSON.stringify(activity.rows)}; earlyResponse=${JSON.stringify(earlyResponse)}`,
             );
           }
 
-          await mutate(blocker);
+          await mutate(blocker, raceActor);
           mutationApplied = true;
           await blocker.query('COMMIT');
           lockReleased = true;
@@ -1400,7 +1415,7 @@ test(
                  ON recipient_member.site_id=c.site_id AND recipient_member.conversation_id=c.id
                 AND recipient_member.user_id=$3 AND recipient_member.left_at IS NULL
               WHERE c.site_id=$1 AND c.conversation_type='direct'`,
-            [siteB, actorB.id, recipientId],
+            [siteB, raceActor.id, recipientId],
           );
           assert.deepEqual(conversation.rows, [], 'revoked participants must not gain a direct conversation');
 
@@ -1409,16 +1424,16 @@ test(
               WHERE site_id=$1 AND user_id=$2
                 AND notification_type='community.message.conversation_created'
                 AND payload->>'fromUserId'=$3`,
-            [siteB, recipientId, actorB.id],
+            [siteB, recipientId, raceActor.id],
           );
           assert.deepEqual(createdNotifications.rows, [], 'denied creation must not emit recipient notifications');
         } finally {
           if (!lockReleased) {
             // On an assertion failure, deny the waiting request before releasing
-            // its advisory lock so a failed test cannot leak a successful write
+            // the final authorization lock so a failed test cannot leak a successful write
             // into later scenarios or snapshots.
             if (requestPromise && !mutationApplied) {
-              await mutate(blocker).then(() => {
+              await mutate(blocker, raceActor).then(() => {
                 mutationApplied = true;
               }).catch(() => {});
             }
@@ -1426,7 +1441,7 @@ test(
           }
           if (requestPromise) await requestPromise.catch(() => {});
           blocker.release();
-          await restore();
+          await restore(raceActor);
         }
       }
 
@@ -1471,13 +1486,13 @@ test(
           [siteB],
         ),
         blockingQueryFragment: 'SELECT id FROM sites WHERE id=$1 FOR KEY SHARE',
-        mutate: client => client.query(
+        mutate: (client, raceActor) => client.query(
           'DELETE FROM site_memberships WHERE site_id=$1 AND user_id=$2',
-          [siteB, actorB.id],
+          [siteB, raceActor.id],
         ),
-        restore: () => pool.query(
+        restore: raceActor => pool.query(
           'INSERT INTO site_memberships(site_id,user_id,role_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING',
-          [siteB, actorB.id, roleId],
+          [siteB, raceActor.id, roleId],
         ),
       });
     });
