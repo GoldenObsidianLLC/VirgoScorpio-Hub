@@ -254,6 +254,68 @@ test('library version replacement rolls back and removes the new object when aud
   assert.equal(fs.existsSync(path.join(root, newKey)), false, 'the replacement object must be removed');
 });
 
+test('library version replacement preserves the new object when COMMIT acknowledgement is ambiguous', async t => {
+  const root = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'vsh-library-replace-commit-ambiguous-'));
+  t.after(() => fs.promises.rm(root, { recursive: true, force: true }));
+  const siteId = 'site-one';
+  const assetId = 'asset-one';
+  const oldBytes = Buffer.from('original library file');
+  const newBytes = Buffer.from('replacement library file');
+  const oldKey = siteId + '/' + assetId + '/v1.txt';
+  const newKey = siteId + '/' + assetId + '/v2.txt';
+  await fs.promises.mkdir(path.dirname(path.join(root, oldKey)), { recursive: true });
+  await fs.promises.writeFile(path.join(root, oldKey), oldBytes);
+  const calls = [];
+  const commitError = new Error('connection dropped after PostgreSQL committed');
+  let commitApplied = false;
+  const pool = {
+    async connect() {
+      return {
+        async query(sql, args) {
+          calls.push({ sql, args });
+          if (/SELECT \* FROM library_assets/.test(sql)) {
+            return { rows: [{
+              id: assetId, site_id: siteId, version: 1, status: 'active',
+              asset_kind: 'document', storage_key: oldKey, sha256: 'a'.repeat(64),
+              display_name: 'original.txt', original_name: 'original.txt',
+              alt_text: '', caption: '', description: '', is_public: false, metadata: {},
+              mime_type: 'text/plain', byte_size: oldBytes.length, updated_by: 'actor-one',
+            }] };
+          }
+          if (/UPDATE library_assets SET original_name/.test(sql)) {
+            return { rows: [{
+              id: assetId, site_id: siteId, version: 2, status: 'quarantined',
+              asset_kind: 'document', display_name: 'original.txt', original_name: 'replacement.txt',
+              mime_type: 'text/plain', byte_size: newBytes.length, sha256: args[6],
+              alt_text: '', caption: '', description: '', is_public: false, metadata: {},
+            }] };
+          }
+          if (sql === 'COMMIT') {
+            commitApplied = true;
+            throw commitError;
+          }
+          return { rows: [], rowCount: 1 };
+        },
+        release() { calls.push({ sql: 'RELEASE' }); },
+      };
+    },
+  };
+  const store = createLibraryStore({ pool, root, requireMalwareScan: false });
+
+  await assert.rejects(
+    store.replaceVersion({
+      siteId, id: assetId, actorId: 'actor-one', expectedVersion: 1,
+      dataBase64: newBytes.toString('base64'), mimeType: 'text/plain', fileName: 'replacement.txt',
+    }),
+    error => error === commitError,
+  );
+
+  assert.equal(commitApplied, true, 'the simulated database commit completed before its acknowledgement was lost');
+  assert.ok(calls.some(call => call.sql === 'ROLLBACK'), 'cleanup still attempts to close the client transaction');
+  assert.equal(fs.existsSync(path.join(root, oldKey)), true, 'the previous object remains available to the version history');
+  assert.equal(fs.existsSync(path.join(root, newKey)), true,
+    'the replacement object must remain because the committed row may reference it');
+});
 test('library media variants validate file signatures and parent asset categories before storage', async t => {
   const root = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'vsh-library-variants-'));
   t.after(() => fs.promises.rm(root, { recursive: true, force: true }));

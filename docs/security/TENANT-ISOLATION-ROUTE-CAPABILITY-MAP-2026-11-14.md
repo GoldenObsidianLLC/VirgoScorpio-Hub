@@ -8,8 +8,8 @@ Maintainer-prepared route, capability, data-access, and regression-test navigati
 
 - Status: MAINTAINER_PREPARED_NOT_INDEPENDENTLY_REVIEWED.
 - Generated from the current working-tree implementation anchors and the catalog at docs/security/tenant-isolation-route-inventory.catalog.json.
-- Implementation-source digest: cdc9deb8ead60a4e71eef5bd54623f0863eece44ed5d6006cb00a742d48d8bf8 across 22 files.
-- Referenced-test digest: ef08271502819b6d30105915e18c32669926c19f8c1b569d44750a95a920fde7 across 61 files.
+- Implementation-source digest: 5738927223a4fe04732978e5833776e8452f02836d49848f846f1e31a2e2772a across 22 files.
+- Referenced-test digest: 2d7d9c687bbc5d1ba1e57cc3313a2e305eeb1bd3324cc10be051acacede69610 across 61 files.
 - Inventory size: 28 route/flow families, 80 declared route patterns, 22 source files, and 61 test files.
 - Regenerate with npm run security:tenant-inventory; CI checks freshness with node scripts/generate-tenant-isolation-route-inventory.js --check.
 
@@ -211,7 +211,7 @@ Tests: test/content-type-routes.test.js, test/collaboration-api.test.js, test/re
 - Capabilities/controls: library:manage
 - Data-access boundary: library_assets; library_asset_versions; media_variants; local or cloud object storage; malware scan state
 - Side effects: Upload/replace object bytes; Metadata/version writes; Optimization variants; Quarantine/publication flags; Audit
-- Source: apps/api/src/library-routes.js (lines 22, 23); packages/library/src/file-store.js (lines 185, 251)
+- Source: apps/api/src/library-routes.js (lines 22, 23); packages/library/src/file-store.js (lines 185, 254)
 - Test references: test/library-routes.test.js, test/release-hardening.test.js, test/integration/tenant-library-media-isolation.integration.test.js, test/integration/public-library-variant-version-binding.integration.test.js, test/library-variant-route-version.test.js
 - Coverage characterization: **targeted-two-site-and-unit**. A/B tests cover selected metadata/history/download/optimize/delete attempts and local bytes. Provider-specific storage, legacy assets, every variant type and live malware corpus remain open.
 
@@ -239,7 +239,7 @@ Tests: test/content-type-routes.test.js, test/collaboration-api.test.js, test/re
 - Capabilities/controls: Public asset publication flag and active/quarantine state
 - Data-access boundary: media assets and object storage; library_assets; media_variants
 - Side effects: Read-only byte delivery; successful responses use private, no-store and recheck database visibility on each request. Shared-cache/CDN overrides remain deployment-review items.
-- Source: apps/api/src/server.js (lines 849, 865, 873); packages/library/src/file-store.js (lines 150, 237)
+- Source: apps/api/src/server.js (lines 849, 865, 873); packages/library/src/file-store.js (lines 150, 240)
 - Test references: test/release-hardening.test.js, test/integration/tenant-library-media-isolation.integration.test.js, test/security-boundaries.test.js, test/integration/public-library-variant-version-binding.integration.test.js, test/library-variant-route-version.test.js
 - Coverage characterization: **targeted-two-site-revocation-and-no-store**. The live two-site integration suite reads a public library asset and variant, revokes visibility through the authorized metadata route, and confirms the next origin request returns 404; it also verifies public media revocation and private, no-store success headers. S3 tests prove direct public CDN mode fails closed and objects are stored private/no-store. The tests do not validate reverse-proxy/CDN overrides, provider IAM/bucket policy, purging legacy direct-CDN URLs already issued before this change, or every asset/variant type; those remain deployment and independent-review work.
 

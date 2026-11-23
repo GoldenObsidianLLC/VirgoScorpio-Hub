@@ -193,7 +193,7 @@ function createLibraryStore({ pool, root = path.resolve(process.env.LIBRARY_ROOT
       const client = await pool.connect();
       let storageKey = null;
       let staleVariantKeys = [];
-      let committed = false;
+      let commitAttempted = false;
       try {
         await client.query('BEGIN');
         const selected = await client.query("SELECT * FROM library_assets WHERE site_id=$1 AND id=$2 AND deleted_at IS NULL AND status='active' FOR UPDATE", [siteId, id]);
@@ -221,14 +221,17 @@ function createLibraryStore({ pool, root = path.resolve(process.env.LIBRARY_ROOT
         if (typeof onVersionReplaced === 'function') {
           await onVersionReplaced({ queryable: client, result: result.rows[0] });
         }
+        commitAttempted = true;
         await client.query('COMMIT');
-        committed = true;
         // Database references are gone after commit; clean up derivative objects best-effort.
         for (const staleKey of staleVariantKeys) await remove(staleKey).catch(() => {});
         return result.rows[0];
       } catch (error) {
         await client.query('ROLLBACK').catch(() => {});
-        if (storageKey && !committed) await remove(storageKey).catch(() => {});
+        // COMMIT may have succeeded even when its acknowledgement is lost.
+        // Preserve the object after a COMMIT attempt; reconciliation can remove an orphan safely,
+        // but deleting an object referenced by a committed row would corrupt the asset.
+        if (storageKey && !commitAttempted) await remove(storageKey).catch(() => {});
         throw error;
       } finally {
         client.release();
