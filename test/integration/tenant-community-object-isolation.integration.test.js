@@ -1336,11 +1336,29 @@ test(
             body: JSON.stringify({ recipientId }),
           });
 
-          assert.equal(
-            await waitForDatabaseWriteLock(blocker, 'pg_advisory_xact_lock'),
-            true,
-            `${description}: the request must reach and wait at the direct-conversation transaction lock`,
-          );
+          const waitingOnPairLock = await waitForDatabaseWriteLock(blocker, 'pg_advisory_xact_lock');
+          if (!waitingOnPairLock) {
+            const [activity, earlyResponse] = await Promise.all([
+              blocker.query(
+                `SELECT pid,state,wait_event_type,wait_event,query,pg_blocking_pids(pid) AS blocking_pids
+                   FROM pg_stat_activity
+                  WHERE datname=current_database() AND pid<>pg_backend_pid()
+                  ORDER BY query_start DESC LIMIT 20`,
+              ),
+              Promise.race([
+                requestPromise.then(async response => ({
+                  status: response.status,
+                  body: await response.clone().text(),
+                })),
+                new Promise(resolve => setTimeout(() => resolve(null), 100)),
+              ]),
+            ]);
+            assert.equal(
+              waitingOnPairLock,
+              true,
+              `${description}: the request did not wait on the pair lock; activity=${JSON.stringify(activity.rows)}; earlyResponse=${JSON.stringify(earlyResponse)}`,
+            );
+          }
 
           await mutate(blocker);
           mutationApplied = true;
