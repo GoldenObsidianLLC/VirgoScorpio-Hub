@@ -5,10 +5,10 @@ const { createIdentityService, digest } = require('../packages/auth/src/service'
 
 /**
  * Security test suite for password-reset DoS mitigation.
- * 
- * Pentest finding: Unauthenticated password-reset requests perform expensive 
+ *
+ * Pentest finding: Unauthenticated password-reset requests perform expensive
  * scrypt before token rejection.
- * 
+ *
  * Mitigation:
  * 1. Route-specific rate limiting applied before body parsing or hashing
  * 2. Token existence check before expensive scrypt operation
@@ -32,7 +32,7 @@ test('password reset rejects invalid tokens before expensive scrypt hashing', as
     };
 
     const identity = createIdentityService({ pool, env: {} });
-    const fakeToken = 'a'.repeat(64); // Valid length but nonexistent
+    const fakeToken = 'a'.repeat(64); // Valid length but nonexisten
     const password = 'ValidPassword123';
 
     await assert.rejects(
@@ -155,11 +155,11 @@ test('password reset rejects invalid tokens before expensive scrypt hashing', as
     const result = await identity.resetPassword({ token: validToken, password });
 
     assert.deepEqual(result, { reset: true });
-    
-    // Verify precheck was executed first
+
+    // Verify precheck was executed firs
     assert.match(queries[0].sql, /SELECT 1 FROM identity_action_tokens/);
     assert.match(queries[0].sql, /LIMIT 1/);
-    
+
     // Verify transaction was opened after precheck
     assert.equal(queries[1].sql, 'BEGIN');
   });
@@ -177,7 +177,7 @@ test('password reset rejects invalid tokens before expensive scrypt hashing', as
     const identity = createIdentityService({ pool, env: {} });
     const password = 'ValidPassword123';
 
-    // Token too short
+    // Token too shor
     await assert.rejects(
       identity.resetPassword({ token: 'short', password }),
       error => error.statusCode === 400 && error.code === 'ERR_VIRGOSCORPIO_HUB_RESET_TOKEN_INVALID'
@@ -209,7 +209,7 @@ test('password reset rejects invalid tokens before expensive scrypt hashing', as
     const identity = createIdentityService({ pool, env: {} });
     const validToken = 'e'.repeat(64);
 
-    // Password too short
+    // Password too shor
     await assert.rejects(
       identity.resetPassword({ token: validToken, password: 'short' }),
       error => error.code === 'ERR_VIRGOSCORPIO_HUB_PASSWORD_POLICY'
@@ -290,13 +290,13 @@ test('password reset completion route applies rate limiting before body parsing'
 
     await authRoutes.handlePublic({ req, res, url, requestId });
 
-    // Verify allowRequest was called first
+    // Verify allowRequest was called firs
     assert.equal(events[0], 'allowRequest', 'Rate limit check must be first');
     assert.equal(allowRequestKey, 'password-reset-complete:192.0.2.1', 'Rate limit key must include route prefix and IP');
-    
+
     // Verify body was parsed after rate limit check
     assert.equal(events[1], 'readJson', 'Body parsing must happen after rate limit check');
-    
+
     // Verify resetPassword was called after body parsing
     assert.equal(events[2], 'resetPassword', 'Password reset must happen after body parsing');
   });
@@ -320,13 +320,13 @@ test('password reset completion route applies rate limiting before body parsing'
 
     // Verify allowRequest was called
     assert.equal(events[0], 'allowRequest', 'Rate limit check must be first');
-    
-    // Verify 429 response was sent
+
+    // Verify 429 response was sen
     assert.equal(events[1], 'sendJson:429', 'Must return 429 when rate limited');
-    
+
     // Verify body was NOT parsed
     assert.equal(events.includes('readJson'), false, 'Body parsing must be skipped when rate limited');
-    
+
     // Verify resetPassword was NOT called
     assert.equal(events.includes('resetPassword'), false, 'Password reset must be skipped when rate limited');
   });
@@ -372,7 +372,7 @@ test('password reset mitigation prevents resource exhaustion attack', async () =
   // Verify mitigation effectiveness
   assert.equal(precheckCount, attackRequests, 'Precheck should execute for each request');
   assert.equal(transactionCount, 0, 'No transactions should be opened for invalid tokens');
-  
+
   // Note: We can't directly measure scrypt calls in this test without instrumenting
   // the hashPassword function, but the key security property is that the precheck
   // rejects invalid tokens before hashPassword is ever called. The test structure
@@ -417,14 +417,14 @@ test('password reset precheck query uses indexed lookup', async () => {
   );
 
   const precheckQuery = queries[0];
-  
+
   // Verify query structure supports indexed lookup
   assert.match(precheckQuery.sql, /WHERE token_hash=\$1/, 'Query must filter by token_hash (indexed column)');
   assert.match(precheckQuery.sql, /purpose='password-reset'/, 'Query must filter by purpose');
   assert.match(precheckQuery.sql, /consumed_at IS NULL/, 'Query must filter by consumed_at');
   assert.match(precheckQuery.sql, /expires_at>now\(\)/, 'Query must filter by expires_at');
   assert.match(precheckQuery.sql, /LIMIT 1/, 'Query must use LIMIT 1 for efficiency');
-  
+
   // Verify token digest is passed as parameter
   assert.equal(precheckQuery.values.length, 1, 'Query must have exactly one parameter');
   assert.match(precheckQuery.values[0], /^[a-f0-9]{64}$/, 'Parameter must be token digest');
