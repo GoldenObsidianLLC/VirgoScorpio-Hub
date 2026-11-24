@@ -18,6 +18,7 @@ test('waitForDatabaseWriteLock observes a matching statement blocked by the supp
   assert.equal(queries.length, 2);
   assert.match(queries[1].sql, /a.wait_event_type='Lock'/);
   assert.match(queries[1].sql, /\$1=ANY\(pg_blocking_pids\(a\.pid\)\)/);
+  assert.match(queries[1].sql, /a\.state='active'/);
   assert.match(queries[1].sql, /a\.query ILIKE \$2/);
   assert.deepEqual(queries[1].values, [4321, '%for key share%']);
 });
@@ -35,6 +36,9 @@ test('waitForDatabaseWriteLock can identify a blocked row lock by relation evide
   assert.equal(await waitForDatabaseWriteLock(client, 'FOR KEY SHARE', 5000, { relationName: 'sites' }), true);
   assert.equal(queries.length, 2);
   assert.match(queries[1].sql, /relation_lock\.relation=to_regclass\(\$2\)/);
+  assert.doesNotMatch(queries[1].sql, /a\.state='active'/);
+  assert.match(queries[1].sql, /a\.wait_event_type='Lock'/);
+  assert.match(queries[1].sql, /\$1=ANY\(pg_blocking_pids\(a\.pid\)\)/);
   assert.match(queries[1].sql, /relation_lock\.mode='RowShareLock'/);
   assert.match(queries[1].sql, /tuple_lock\.locktype='tuple'/);
   assert.match(queries[1].sql, /transaction_wait\.mode='ShareLock'/);

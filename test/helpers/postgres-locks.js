@@ -44,7 +44,7 @@ async function waitForDatabaseWriteLock(client, queryFragment, timeoutMs = 5000,
   // statement in pg_stat_activity while waiting on a row transaction ID), the
   // caller may identify the requested row-lock target by its pg_locks evidence.
   const waitPredicate = relationName === null
-    ? 'AND a.query ILIKE $2'
+    ? "AND a.state='active' AND a.query ILIKE $2"
     : `AND EXISTS (
          SELECT 1 FROM pg_locks relation_lock
           WHERE relation_lock.pid=a.pid
@@ -77,7 +77,6 @@ async function waitForDatabaseWriteLock(client, queryFragment, timeoutMs = 5000,
          FROM pg_stat_activity a
         WHERE a.datname=current_database()
           AND a.pid<>$1
-          AND a.state='active'
           AND a.wait_event_type='Lock'
           AND $1=ANY(pg_blocking_pids(a.pid))
           ${waitPredicate}
