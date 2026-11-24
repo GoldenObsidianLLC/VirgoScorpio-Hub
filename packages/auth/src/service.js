@@ -39,20 +39,48 @@ async function hashPassword(password) {
   const key = await scryptAsync(password, salt, 64, { N: 32768, r: 8, p: 1, maxmem: 128 * 1024 * 1024 });
   return `scrypt$32768$8$1$${salt.toString('base64url')}$${Buffer.from(key).toString('base64url')}`;
 }
-async function verifyPassword(password, encoded) {
-  if (typeof password !== 'string' || typeof encoded !== 'string') return false;
+const DUMMY_PASSWORD_HASH = 'scrypt$32768$8$1$' + Buffer.alloc(16, 0x5a).toString('base64url') + '$' + Buffer.alloc(64, 0xa5).toString('base64url');
+
+function parseScryptHash(encoded) {
+  if (typeof encoded !== 'string' || encoded.length > 126) return null;
   const parts = encoded.split('$');
-  if (parts.length !== 6 || parts[0] !== 'scrypt') return false;
-  const N = Number(parts[1]); const r = Number(parts[2]); const p = Number(parts[3]);
-  if (N !== 32768 || r !== 8 || p !== 1) return false;
+  if (parts.length !== 6 || parts[0] !== 'scrypt') return null;
+  if (parts[1] !== '32768' || parts[2] !== '8' || parts[3] !== '1') return null;
+  const N = 32768; const r = 8; const p = 1;
   try {
-    const salt = Buffer.from(parts[4], 'base64url'); const expected = Buffer.from(parts[5], 'base64url');
-    if (salt.length !== 16 || expected.length !== 64) return false;
-    const actual = Buffer.from(await scryptAsync(password, salt, expected.length, { N, r, p, maxmem: 128 * 1024 * 1024 }));
-    return actual.length === expected.length && timingSafeEqual(actual, expected);
-  } catch { return false; }
+    const salt = Buffer.from(parts[4], 'base64url');
+    const expected = Buffer.from(parts[5], 'base64url');
+    if (salt.length !== 16 || expected.length !== 64) return null;
+    // Buffer's decoder is permissive. Require canonical base64url encodings so
+    // malformed stored hashes consistently use the same dummy verification path.
+    if (salt.toString('base64url') !== parts[4] || expected.toString('base64url') !== parts[5]) return null;
+    return { N, r, p, salt, expected };
+  } catch {
+    return null;
+  }
 }
 
+async function verifyPassword(password, encoded, deriveKey = scryptAsync) {
+  const parsed = parseScryptHash(encoded);
+  // Unknown accounts, legacy/malformed hashes, and valid hashes all perform the
+  // same scrypt work. The dummy record is structurally identical to a real hash.
+  const verification = parsed || parseScryptHash(DUMMY_PASSWORD_HASH);
+  if (!verification || typeof deriveKey !== 'function') return false;
+  const candidateEligible = typeof password === 'string' && password.length <= PASSWORD_MAX;
+  const candidatePassword = candidateEligible ? password : '';
+  try {
+    const actual = Buffer.from(await deriveKey(candidatePassword, verification.salt, verification.expected.length, {
+      N: verification.N,
+      r: verification.r,
+      p: verification.p,
+      maxmem: 128 * 1024 * 1024,
+    }));
+    const matches = actual.length === verification.expected.length && timingSafeEqual(actual, verification.expected);
+    return Boolean(parsed) && candidateEligible && matches;
+  } catch {
+    return false;
+  }
+}
 const MAX_ACTIVE_OIDC_STATES = 10_000;
 function authError(statusCode, code, message) { const error = new Error(message); error.statusCode = statusCode; error.code = code; return error; }
 function configuredPublicBase(env) {
@@ -225,6 +253,7 @@ function createIdentityService({ pool, env = process.env, clock = () => Date.now
       throttleLogin(`${ip || 'unknown'}:${email || 'invalid'}`);
       const result = email ? await pool.query('SELECT id,email,display_name,status,password_hash,mfa_enabled,email_verified_at FROM users WHERE lower(email)=$1 LIMIT 1', [email]) : { rows: [] };
       const user = result.rows[0];
+      // Always verify, including unknown accounts; verifyPassword performs dummy scrypt for absent/malformed hashes.
       const matches = await verifyPassword(password, user?.password_hash);
       if (!user || user.status !== 'active' || !matches) {
         const error = new Error('Invalid email or password.'); error.statusCode = 401; error.code = 'ERR_VIRGOSCORPIO_HUB_LOGIN_FAILED'; throw error;
@@ -285,9 +314,13 @@ function createIdentityService({ pool, env = process.env, clock = () => Date.now
         }
         if (acceptedStep !== credential.last_used_step) await client.query('UPDATE user_mfa_credentials SET last_used_step=$2,updated_at=now() WHERE user_id=$1', [challenge.user_id, acceptedStep]);
         await client.query('UPDATE auth_mfa_challenges SET consumed_at=now() WHERE id=$1', [challenge.challenge_id]);
-        await client.query('COMMIT');
+        // The session is created inside the transaction that holds the challenge row lock. A concurrent
+        // password reset consumes the user's challenges first, so it either invalidates this challenge
+        // before it is accepted or waits for this commit and then revokes the session created here.
         const user = { id: challenge.user_id, email: challenge.email, display_name: challenge.display_name, status: challenge.status };
-        return { ...(await createSession(user, { ip, userAgent })), mfaRequired: false };
+        const created = await createSession(user, { ip, userAgent }, client);
+        await client.query('COMMIT');
+        return { ...created, mfaRequired: false };
       } catch (error) { await client.query('ROLLBACK').catch(() => {}); throw error; }
       finally { client.release(); }
     },
@@ -366,6 +399,9 @@ function createIdentityService({ pool, env = process.env, clock = () => Date.now
         await client.query('BEGIN');
         const result = await client.query("SELECT id,user_id FROM identity_action_tokens WHERE token_hash=$1 AND purpose='password-reset' AND consumed_at IS NULL AND expires_at>now() FOR UPDATE", [digest(token)]);
         const action = result.rows[0]; if (!action) throw authError(400, 'ERR_VIRGOSCORPIO_HUB_RESET_TOKEN_INVALID', 'Password reset token is invalid or expired.');
+        // Invalidate pending MFA challenges issued under the old password. This must precede the user
+        // update so lock ordering (challenge, then user) matches completeMfaLogin.
+        await client.query('UPDATE auth_mfa_challenges SET consumed_at=now() WHERE user_id=$1 AND consumed_at IS NULL', [action.user_id]);
         await client.query('UPDATE users SET password_hash=$2,updated_at=now() WHERE id=$1', [action.user_id, passwordHash]);
         await client.query('UPDATE identity_action_tokens SET consumed_at=now() WHERE id=$1', [action.id]);
         await client.query('UPDATE auth_sessions SET revoked_at=now() WHERE user_id=$1 AND revoked_at IS NULL', [action.user_id]);
@@ -614,11 +650,12 @@ function createIdentityService({ pool, env = process.env, clock = () => Date.now
       const role = await pool.query('SELECT id FROM roles WHERE slug=$1', [roleSlug]);
       const token = randomBytes(32).toString('base64url');
       const expiresAt = new Date(clock() + 7 * 24 * 60 * 60_000);
-      const site = await pool.query('SELECT slug,name FROM sites WHERE id=$1', [siteId]);
-      if (!site.rows[0]) throw authError(404, 'ERR_VIRGOSCORPIO_HUB_SITE_NOT_FOUND', 'Site not found.');
       await withTransaction(pool, async queryable => {
         await lockSiteShared(queryable, siteId);
         await requireCurrentSiteManager(queryable, siteId, invitedBy, env);
+        // Read site metadata only after the transaction has revalidated the manager.
+        const site = await queryable.query('SELECT slug,name FROM sites WHERE id=$1', [siteId]);
+        if (!site.rows[0]) throw authError(404, 'ERR_VIRGOSCORPIO_HUB_SITE_NOT_FOUND', 'Site not found.');
         const inserted = await queryable.query(`INSERT INTO site_invitations(site_id,email,role_id,token_hash,invited_by,expires_at)
           VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT (site_id, (lower(email))) WHERE accepted_at IS NULL DO UPDATE
           SET role_id=EXCLUDED.role_id,token_hash=EXCLUDED.token_hash,invited_by=EXCLUDED.invited_by,expires_at=EXCLUDED.expires_at,created_at=now()

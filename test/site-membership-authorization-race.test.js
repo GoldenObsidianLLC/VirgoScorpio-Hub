@@ -361,6 +361,12 @@ test('createInvitation rejects revoked actor inside transaction', async () => {
     e.sql.includes('INSERT INTO mail_outbox')
   );
   assert.equal(mailEvent, undefined, 'Mail outbox record must not be created after authorization failure');
+
+  // Protected site metadata must not be read until the transactional actor check passes.
+  const siteReadEvent = pool.events.find(e =>
+    e.sql.includes('SELECT slug,name FROM sites')
+  );
+  assert.equal(siteReadEvent, undefined, 'Site metadata must not be read after authorization failure');
 });
 
 test('createInvitation succeeds when actor remains authorized throughout transaction', async () => {
@@ -382,13 +388,18 @@ test('createInvitation succeeds when actor remains authorized throughout transac
   const authCheckIndex = events.findIndex(e =>
     e.sql.includes('FOR SHARE OF m, r, u') && e.inTransaction
   );
+  const siteReadIndex = events.findIndex(e =>
+    e.sql.includes('SELECT slug,name FROM sites')
+  );
   const insertIndex = events.findIndex(e =>
     e.sql.includes('INSERT INTO site_invitations')
   );
 
   assert.ok(authCheckIndex >= 0, 'Authorization check must occur');
+  assert.ok(siteReadIndex >= 0, 'Site metadata is read for an authorized invitation');
   assert.ok(insertIndex >= 0, 'Invitation insertion must occur');
-  assert.ok(authCheckIndex < insertIndex, 'Authorization check must occur before insertion');
+  assert.ok(authCheckIndex < siteReadIndex, 'Authorization must be revalidated before reading site metadata');
+  assert.ok(siteReadIndex < insertIndex, 'Site metadata must be read before invitation insertion');
 });
 
 test('operations with null actorId bypass authorization check (developer principal)', async () => {
