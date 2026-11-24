@@ -40,7 +40,8 @@
 - Expected-version checks prevent silent lost updates.
 
 ### SSO, AI governance, and media
-- SAML request correlation and replay checks use PostgreSQL-backed shared cache state; cache entries are periodically purged. Optional SP request signing requires a matching RSA private key and X.509 certificate. This path still requires live IdP interoperability and key-rotation tests.
+- OIDC and SAML callbacks now bind one-time server-side request state to a short-lived browser cookie scoped to `/api/v1/auth`; the cookie is HttpOnly and expires after ten minutes. OIDC uses SameSite=Lax for its top-level GET callback. SAML uses SameSite=None with Secure when secure cookies are enabled so the cross-site POST can carry the correlation cookie; the non-TLS development profile omits SameSite because a Secure-less SameSite=None cookie would be rejected by browsers. The callback compares cookie state with the returned state using a timing-safe byte comparison before consuming server-side state or accepting the identity response. Browser binding supplements, and does not replace, server-side expiry, issuer/nonce/RelayState validation and one-time replay protection.
+- SAML request correlation and replay checks use PostgreSQL-backed shared cache state; cache entries are periodically purged. Optional SP request signing requires a matching RSA private key and X.509 certificate. OIDC/SAML live IdP interoperability, proxy/TLS behavior and signing-key rotation still require release-gate validation.
 - Site AI policies can constrain allowed providers, external-content processing, data classification, and daily request/input-character budgets. These controls need concurrency and bypass testing against live PostgreSQL.
 - S3-compatible media storage is available behind the media adapter; bucket policy, object lifecycle, public/private delivery, and CDN behavior must be tested with the target provider.
 

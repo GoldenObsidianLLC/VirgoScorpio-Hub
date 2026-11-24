@@ -1,6 +1,6 @@
 'use strict';
 
-const { randomBytes } = require('node:crypto');
+const { randomBytes, timingSafeEqual } = require('node:crypto');
 const { createAuthorizationRequest, exchangeAndVerify, configFromEnv } = require('../../../packages/auth/src/oidc');
 const { parseCookies, serializeAuthCookie } = require('./auth-cookies');
 
@@ -19,8 +19,23 @@ function createAuthRouteHandlers(dependencies = {}) {
     fail,
     readJson,
     readForm,
-    sameSecret
+    sameSecret,
+    oidcServices = {}
   } = dependencies;
+
+  if (!oidcServices || typeof oidcServices !== 'object' || Array.isArray(oidcServices)) {
+    throw new TypeError('Authentication routes require an OIDC services object when provided.');
+  }
+  const createOidcAuthorizationRequest = oidcServices.createAuthorizationRequest || createAuthorizationRequest;
+  const exchangeOidcAuthorizationCode = oidcServices.exchangeAndVerify || exchangeAndVerify;
+  const getOidcConfiguration = oidcServices.configFromEnv || configFromEnv;
+  for (const [name, value] of Object.entries({
+    createAuthorizationRequest: createOidcAuthorizationRequest,
+    exchangeAndVerify: exchangeOidcAuthorizationCode,
+    configFromEnv: getOidcConfiguration
+  })) {
+    if (typeof value !== 'function') throw new TypeError('Authentication routes require OIDC service ' + name + '().');
+  }
 
   for (const [name, value] of Object.entries({
     env,
@@ -39,6 +54,32 @@ function createAuthRouteHandlers(dependencies = {}) {
   }
   if (typeof secureCookies !== 'boolean') throw new TypeError('Authentication routes require an explicit secure-cookie setting.');
   if (!Number.isInteger(maxBody) || maxBody < 1_024) throw new TypeError('Authentication routes require a valid request body limit.');
+
+  // Federated transactions are bound to the browser that started them by a
+  // short-lived HttpOnly cookie holding the same value as the state/RelayState.
+  // The SAML ACS is a cross-site POST, so its cookie needs SameSite=None (which
+  // requires Secure); without TLS (development only) the attribute is omitted.
+  const SSO_BINDING_PATH = '/api/v1/auth';
+  const OIDC_BINDING_COOKIE = 'vsh_oidc_state';
+  const SAML_BINDING_COOKIE = 'vsh_saml_state';
+
+  function bindingCookie(name, value, maxAge) {
+    const sameSite = name === SAML_BINDING_COOKIE ? (secureCookies ? 'None' : null) : 'Lax';
+    return serializeAuthCookie(name, value, { httpOnly: true, secure: secureCookies, sameSite, path: SSO_BINDING_PATH, maxAge });
+  }
+
+  function requireBrowserBinding(req, name, state) {
+    const bound = parseCookies(req.headers.cookie || '')[name];
+    let matches = false;
+    if (typeof bound === 'string' && typeof state === 'string' && bound.length > 0) {
+      const left = Buffer.from(bound, 'utf8');
+      const right = Buffer.from(state, 'utf8');
+      matches = left.length === right.length && timingSafeEqual(left, right);
+    }
+    if (!matches) {
+      throw fail(400, 'ERR_VIRGOSCORPIO_HUB_SSO_BROWSER_BINDING', 'The sign-in response does not belong to a sign-in started in this browser.');
+    }
+  }
 
   /**
    * Handle unauthenticated login, account recovery, bootstrap, invitation, and
@@ -211,7 +252,12 @@ function createAuthRouteHandlers(dependencies = {}) {
       if (target.protocol !== 'https:' && !(env.NODE_ENV !== 'production' && target.protocol === 'http:')) {
         throw fail(502, 'ERR_VIRGOSCORPIO_HUB_SAML_IDP_URL', 'SAML identity provider redirect must use HTTPS.');
       }
-      res.writeHead(302, { location: target.href, 'cache-control': 'no-store', 'referrer-policy': 'no-referrer' });
+      res.writeHead(302, {
+        location: target.href,
+        'cache-control': 'no-store',
+        'referrer-policy': 'no-referrer',
+        'set-cookie': bindingCookie(SAML_BINDING_COOKIE, state, 600)
+      });
       res.end();
       return true;
     }
@@ -219,6 +265,7 @@ function createAuthRouteHandlers(dependencies = {}) {
     if (url.pathname === '/api/v1/auth/saml/acs' && req.method === 'POST') {
       if (!samlAuth || !identity) throw fail(503, 'ERR_VIRGOSCORPIO_HUB_SAML_DISABLED', 'SAML SSO is not enabled or identity storage is unavailable.');
       const form = await readForm(req, Math.min(maxBody, MAX_SAML_FORM_BYTES));
+      requireBrowserBinding(req, SAML_BINDING_COOKIE, form.RelayState);
       const saved = await identity.consumeOidcState({ state: form.RelayState });
       if (saved.issuer !== samlAuth.externalIssuer()) throw fail(401, 'ERR_VIRGOSCORPIO_HUB_SAML_STATE_ISSUER', 'The SAML relay state issuer does not match.');
       const assertion = await samlAuth.validatePostResponse({ SAMLResponse: form.SAMLResponse });
@@ -235,14 +282,18 @@ function createAuthRouteHandlers(dependencies = {}) {
         ip: req.socket.remoteAddress,
         userAgent: String(req.headers['user-agent'] || '').slice(0, 500)
       });
+      const clearBinding = bindingCookie(SAML_BINDING_COOKIE, '', 0);
       if (session.mfaRequired) {
         res.writeHead(303, {
           location: '/admin?mfa=required',
           'cache-control': 'no-store',
           'referrer-policy': 'no-referrer',
-          'set-cookie': serializeAuthCookie('vsh_mfa_challenge', session.challengeToken, {
-            httpOnly: true, secure: secureCookies, sameSite: 'Strict', path: '/api/v1/auth/mfa', maxAge: 300
-          })
+          'set-cookie': [
+            serializeAuthCookie('vsh_mfa_challenge', session.challengeToken, {
+              httpOnly: true, secure: secureCookies, sameSite: 'Strict', path: '/api/v1/auth/mfa', maxAge: 300
+            }),
+            clearBinding
+          ]
         });
         res.end();
         return true;
@@ -254,7 +305,8 @@ function createAuthRouteHandlers(dependencies = {}) {
         'referrer-policy': 'no-referrer',
         'set-cookie': [
           serializeAuthCookie('vsh_session', session.token, { httpOnly: true, secure: secureCookies, maxAge }),
-          serializeAuthCookie('vsh_csrf', session.csrf, { secure: secureCookies, maxAge })
+          serializeAuthCookie('vsh_csrf', session.csrf, { secure: secureCookies, maxAge }),
+          clearBinding
         ]
       });
       res.end();
@@ -268,9 +320,14 @@ function createAuthRouteHandlers(dependencies = {}) {
         res.setHeader('retry-after', String(limit.retryAfterSeconds));
         return sendJson(res, 429, { error: 'Too many SSO attempts.', code: 'ERR_VIRGOSCORPIO_HUB_RATE_LIMIT', requestId });
       }
-      const request = await createAuthorizationRequest(env);
+      const request = await createOidcAuthorizationRequest(env);
       await identity.createOidcState(request);
-      res.writeHead(302, { location: request.authorizationUrl, 'cache-control': 'no-store', 'referrer-policy': 'no-referrer' });
+      res.writeHead(302, {
+        location: request.authorizationUrl,
+        'cache-control': 'no-store',
+        'referrer-policy': 'no-referrer',
+        'set-cookie': bindingCookie(OIDC_BINDING_COOKIE, request.state, 600)
+      });
       res.end();
       return true;
     }
@@ -282,10 +339,11 @@ function createAuthRouteHandlers(dependencies = {}) {
       if (url.searchParams.has('error') || !code || !state) {
         throw fail(400, 'ERR_VIRGOSCORPIO_HUB_OIDC_CALLBACK_INVALID', 'The identity provider did not complete sign-in.');
       }
+      requireBrowserBinding(req, OIDC_BINDING_COOKIE, state);
       const savedState = await identity.consumeOidcState({ state });
-      const config = configFromEnv(env);
+      const config = getOidcConfiguration(env);
       if (!config || savedState.issuer !== config.issuer) throw fail(400, 'ERR_VIRGOSCORPIO_HUB_OIDC_STATE_INVALID', 'OIDC state does not match the configured issuer.');
-      const external = await exchangeAndVerify({ code, nonce: savedState.nonce, verifier: savedState.verifier, env });
+      const external = await exchangeOidcAuthorizationCode({ code, nonce: savedState.nonce, verifier: savedState.verifier, env });
       if (external.issuer !== savedState.issuer) throw fail(401, 'ERR_VIRGOSCORPIO_HUB_OIDC_ISSUER_MISMATCH', 'The external identity issuer did not match the sign-in request.');
       const session = await identity.loginFederated({
         issuer: external.issuer,
@@ -294,14 +352,18 @@ function createAuthRouteHandlers(dependencies = {}) {
         ip: req.socket.remoteAddress,
         userAgent: String(req.headers['user-agent'] || '').slice(0, 500)
       });
+      const clearBinding = bindingCookie(OIDC_BINDING_COOKIE, '', 0);
       if (session.mfaRequired) {
         res.writeHead(303, {
           location: '/admin?mfa=required',
           'cache-control': 'no-store',
           'referrer-policy': 'no-referrer',
-          'set-cookie': serializeAuthCookie('vsh_mfa_challenge', session.challengeToken, {
-            httpOnly: true, secure: secureCookies, sameSite: 'Strict', path: '/api/v1/auth/mfa', maxAge: 300
-          })
+          'set-cookie': [
+            serializeAuthCookie('vsh_mfa_challenge', session.challengeToken, {
+              httpOnly: true, secure: secureCookies, sameSite: 'Strict', path: '/api/v1/auth/mfa', maxAge: 300
+            }),
+            clearBinding
+          ]
         });
         res.end();
         return true;
@@ -313,7 +375,8 @@ function createAuthRouteHandlers(dependencies = {}) {
         'referrer-policy': 'no-referrer',
         'set-cookie': [
           serializeAuthCookie('vsh_session', session.token, { httpOnly: true, secure: secureCookies, maxAge }),
-          serializeAuthCookie('vsh_csrf', session.csrf, { secure: secureCookies, maxAge })
+          serializeAuthCookie('vsh_csrf', session.csrf, { secure: secureCookies, maxAge }),
+          clearBinding
         ]
       });
       res.end();
