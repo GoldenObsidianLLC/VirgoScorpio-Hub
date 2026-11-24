@@ -178,7 +178,7 @@ test('container runner code manages active counter across all exit paths', () =>
 });
 
 
-test('container runner waits for bounded forced-removal retries before releasing capacity', async () => {
+test('container runner waits for bounded forced-removal retries before releasing capacity', async t => {
   const imageDigest = `registry.example/plugin@sha256:${'c'.repeat(64)}`;
   let removeAttempts = 0;
   let runAttempts = 0;
@@ -221,6 +221,10 @@ test('container runner waits for bounded forced-removal retries before releasing
     timeoutMs: 100,
     spawnProcess
   });
+  // The runner intentionally unrefs its execution timeout; keep the test loop
+  // alive until the timeout fires and the asynchronous cleanup promise settles.
+  const keepAlive = setInterval(() => {}, 1000);
+  t.after(() => clearInterval(keepAlive));
   const first = runner.invoke({ imageDigest, action: 'test.action', input: {}, requestId: 'timeout' }).catch(error => error);
 
   await removalStarted;
