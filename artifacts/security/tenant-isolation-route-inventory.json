@@ -8,7 +8,7 @@
   "generatedBy": "scripts/generate-tenant-isolation-route-inventory.js",
   "sourceTree": {
     "fileCount": 22,
-    "sha256": "2e267778353beef8ae14df11dfa625c8bd3da922e4bbe1625f6ee07e4ae9e6a4",
+    "sha256": "d46972c3923824b04c851b8c7fe307309f01b5c0b679c8359fe2d1ddc02ab320",
     "files": [
       "apps/api/src/ai-task-routes.js",
       "apps/api/src/auth-routes.js",
@@ -36,7 +36,7 @@
   },
   "testTree": {
     "fileCount": 61,
-    "sha256": "9326fa1809059428714930817d56280be9c742569cb66e6047ea864d0a0c68ed",
+    "sha256": "b35ef504ff3becf19f49b2d881986476517161f16eccd72b8c6faed727353e88",
     "files": [
       "test/ai-queue-worker.test.js",
       "test/ai-task-queue.test.js",
@@ -211,7 +211,7 @@
                 1779,
                 1807,
                 1886,
-                1912
+                1918
               ]
             }
           ]
@@ -460,7 +460,7 @@
             {
               "anchor": "const siteMembershipHandled = await handleSiteMembershipRoute({",
               "lines": [
-                1943
+                1948
               ]
             }
           ]
@@ -636,19 +636,19 @@
             {
               "anchor": "pathName === '/api/v1/content-types'",
               "lines": [
-                111
+                171
               ]
             },
             {
               "anchor": "const recordsMatch",
               "lines": [
-                179
+                239
               ]
             },
             {
               "anchor": "const recordMatch",
               "lines": [
-                253
+                315
               ]
             }
           ]
@@ -1583,19 +1583,19 @@
             {
               "anchor": "url.pathname === '/api/v1/plugins'",
               "lines": [
-                1960
+                1965
               ]
             },
             {
               "anchor": "url.pathname === '/api/v1/plugins/register'",
               "lines": [
-                1966
+                1971
               ]
             },
             {
               "anchor": "const pluginActionMatch",
               "lines": [
-                2003
+                2008
               ]
             }
           ]
@@ -1934,7 +1934,7 @@
             {
               "anchor": "upgradePath = url.pathname",
               "lines": [
-                2135
+                2140
               ]
             },
             {
