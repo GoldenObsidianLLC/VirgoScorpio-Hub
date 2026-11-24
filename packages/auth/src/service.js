@@ -6,6 +6,8 @@ const scryptAsync = promisify(require('node:crypto').scrypt);
 const PASSWORD_MIN = 12;
 const PASSWORD_MAX = 128;
 const SESSION_TTL_HOURS = 12;
+const MFA_ACCOUNT_FAILURE_LIMIT = 10;
+const MFA_ACCOUNT_FAILURE_WINDOW_MINUTES = 15;
 const { generateTotpSecret, verifyTotp, totpUri, encryptSecret, decryptSecret, generateRecoveryCodes } = require('./totp');
 const { createSessionService } = require('./session-service');
 const { withTransaction } = require('../../db/src/transaction');
@@ -37,20 +39,49 @@ async function hashPassword(password) {
   const key = await scryptAsync(password, salt, 64, { N: 32768, r: 8, p: 1, maxmem: 128 * 1024 * 1024 });
   return `scrypt$32768$8$1$${salt.toString('base64url')}$${Buffer.from(key).toString('base64url')}`;
 }
-async function verifyPassword(password, encoded) {
-  if (typeof password !== 'string' || typeof encoded !== 'string') return false;
+const DUMMY_PASSWORD_HASH = 'scrypt$32768$8$1$' + Buffer.alloc(16, 0x5a).toString('base64url') + '$' + Buffer.alloc(64, 0xa5).toString('base64url');
+
+function parseScryptHash(encoded) {
+  if (typeof encoded !== 'string' || encoded.length > 126) return null;
   const parts = encoded.split('$');
-  if (parts.length !== 6 || parts[0] !== 'scrypt') return false;
-  const N = Number(parts[1]); const r = Number(parts[2]); const p = Number(parts[3]);
-  if (N !== 32768 || r !== 8 || p !== 1) return false;
+  if (parts.length !== 6 || parts[0] !== 'scrypt') return null;
+  if (parts[1] !== '32768' || parts[2] !== '8' || parts[3] !== '1') return null;
+  const N = 32768; const r = 8; const p = 1;
   try {
-    const salt = Buffer.from(parts[4], 'base64url'); const expected = Buffer.from(parts[5], 'base64url');
-    if (salt.length !== 16 || expected.length !== 64) return false;
-    const actual = Buffer.from(await scryptAsync(password, salt, expected.length, { N, r, p, maxmem: 128 * 1024 * 1024 }));
-    return actual.length === expected.length && timingSafeEqual(actual, expected);
-  } catch { return false; }
+    const salt = Buffer.from(parts[4], 'base64url');
+    const expected = Buffer.from(parts[5], 'base64url');
+    if (salt.length !== 16 || expected.length !== 64) return null;
+    // Buffer's decoder is permissive. Require canonical base64url encodings so
+    // malformed stored hashes consistently use the same dummy verification path.
+    if (salt.toString('base64url') !== parts[4] || expected.toString('base64url') !== parts[5]) return null;
+    return { N, r, p, salt, expected };
+  } catch {
+    return null;
+  }
 }
 
+async function verifyPassword(password, encoded, deriveKey = scryptAsync) {
+  const parsed = parseScryptHash(encoded);
+  // Unknown accounts, legacy/malformed hashes, and valid hashes all perform the
+  // same scrypt work. The dummy record is structurally identical to a real hash.
+  const verification = parsed || parseScryptHash(DUMMY_PASSWORD_HASH);
+  if (!verification || typeof deriveKey !== 'function') return false;
+  const candidateEligible = typeof password === 'string' && password.length <= PASSWORD_MAX;
+  const candidatePassword = candidateEligible ? password : '';
+  try {
+    const actual = Buffer.from(await deriveKey(candidatePassword, verification.salt, verification.expected.length, {
+      N: verification.N,
+      r: verification.r,
+      p: verification.p,
+      maxmem: 128 * 1024 * 1024,
+    }));
+    const matches = actual.length === verification.expected.length && timingSafeEqual(actual, verification.expected);
+    return Boolean(parsed) && candidateEligible && matches;
+  } catch {
+    return false;
+  }
+}
+const MAX_ACTIVE_OIDC_STATES = 10_000;
 function authError(statusCode, code, message) { const error = new Error(message); error.statusCode = statusCode; error.code = code; return error; }
 function configuredPublicBase(env) {
   const raw = String(env.PUBLIC_BASE_URL || 'http://localhost:8787').replace(/\/$/, '');
@@ -74,6 +105,36 @@ async function insertAuditEvent(queryable, {
     'VALUES($1,$2,$3,$4,$5,$6,$7,$8::jsonb)',
     [siteId, actorId, action, targetType, targetId, result, requestId, JSON.stringify(details)],
   );
+}
+
+/**
+ * Re-establish, inside the caller's transaction, that the acting user still holds
+ * site:manage (or '*') on the site. The user, membership and role rows are locked
+ * with FOR SHARE so a concurrent revocation either commits first (and is observed
+ * here) or waits until this transaction completes. Callers that also write rows
+ * referencing the site must take lockSiteShared() first so the lock order matches
+ * removeMember(), which locks the site row before deleting memberships.
+ * A null actorId denotes the non-production developer principal, which the route
+ * guard already authorizes without a membership.
+ */
+async function lockSiteShared(queryable, siteId) {
+  await queryable.query('SELECT id FROM sites WHERE id=$1 FOR KEY SHARE', [siteId]);
+}
+async function requireCurrentSiteManager(queryable, siteId, actorId, environment = process.env) {
+  if (actorId === null || actorId === undefined) {
+    // The null-actor compatibility path is reserved for the non-production developer principal.
+    if (environment.NODE_ENV !== 'production') return;
+    throw authError(403, 'ERR_VIRGOSCORPIO_HUB_FORBIDDEN', 'An authenticated actor is required for site management.');
+  }
+  const result = await queryable.query(
+    `SELECT r.capabilities FROM site_memberships m JOIN roles r ON r.id=m.role_id
+     JOIN users u ON u.id=m.user_id WHERE m.user_id=$1 AND m.site_id=$2 AND u.status='active'
+     FOR SHARE OF m, r, u`, [actorId, siteId]
+  );
+  const allowed = result.rows.some(row => Array.isArray(row.capabilities) && (
+    row.capabilities.includes('site:manage') || row.capabilities.includes('*')
+  ));
+  if (!allowed) throw authError(403, 'ERR_VIRGOSCORPIO_HUB_FORBIDDEN', 'The site:manage capability is required for this site.');
 }
 
 function createIdentityService({ pool, env = process.env, clock = () => Date.now(), onAuthorizationChange = async () => {} } = {}) {
@@ -101,6 +162,38 @@ function createIdentityService({ pool, env = process.env, clock = () => Date.now
     if (!state || state.resetAt <= now) { loginBuckets.set(normalized, { count: 1, resetAt: now + 15 * 60_000 }); return; }
     if (state.count >= 10) { const error = new Error('Too many login attempts. Try again later.'); error.statusCode = 429; error.code = 'ERR_VIRGOSCORPIO_HUB_LOGIN_THROTTLED'; error.retryAfterSeconds = Math.ceil((state.resetAt - now) / 1000); throw error; }
     state.count += 1;
+  }
+
+  const MAX_LIVE_MFA_CHALLENGES_PER_USER = 5;
+
+  // Keep the newest five unattempted live challenges plus the bounded history of
+  // failed challenges needed by the account-wide 15-minute MFA retry budget.
+  // The budget caps failed challenge rows at ten (each retained row has >=1 failure);
+  // attempted rows age out after the throttle window, while unused live rows are capped at five.
+  async function createMfaChallenge(user) {
+    const challengeToken = randomBytes(32).toString('base64url');
+    const nowMs = clock();
+    const now = new Date(nowMs);
+    const expiresAt = new Date(nowMs + 5 * 60_000);
+    await pool.query(
+      `WITH purged AS (
+         DELETE FROM auth_mfa_challenges
+         WHERE user_id=$1 AND (
+           (attempts=0 AND (consumed_at IS NOT NULL OR expires_at<=$4))
+           OR (attempts>0 AND created_at <= ($4 - interval '15 minutes'))
+           OR (
+             attempts=0 AND id IN (
+               SELECT id FROM auth_mfa_challenges
+               WHERE user_id=$1 AND attempts=0 AND consumed_at IS NULL AND expires_at>$4
+               ORDER BY created_at DESC, id DESC OFFSET $5
+             )
+           )
+         )
+       )
+       INSERT INTO auth_mfa_challenges(user_id,token_hash,expires_at) VALUES($1,$2,$3)`,
+      [user.id, digest(challengeToken), expiresAt, now, MAX_LIVE_MFA_CHALLENGES_PER_USER - 1]
+    );
+    return { challengeToken, expiresAt };
   }
 
   function safeUser(user) {
@@ -160,6 +253,7 @@ function createIdentityService({ pool, env = process.env, clock = () => Date.now
       throttleLogin(`${ip || 'unknown'}:${email || 'invalid'}`);
       const result = email ? await pool.query('SELECT id,email,display_name,status,password_hash,mfa_enabled,email_verified_at FROM users WHERE lower(email)=$1 LIMIT 1', [email]) : { rows: [] };
       const user = result.rows[0];
+      // Always verify, including unknown accounts; verifyPassword performs dummy scrypt for absent/malformed hashes.
       const matches = await verifyPassword(password, user?.password_hash);
       if (!user || user.status !== 'active' || !matches) {
         const error = new Error('Invalid email or password.'); error.statusCode = 401; error.code = 'ERR_VIRGOSCORPIO_HUB_LOGIN_FAILED'; throw error;
@@ -167,12 +261,12 @@ function createIdentityService({ pool, env = process.env, clock = () => Date.now
       if (env.REQUIRE_VERIFIED_EMAIL === 'true' && !user.email_verified_at) {
         const error = new Error('Verify your email address before signing in.'); error.statusCode = 403; error.code = 'ERR_VIRGOSCORPIO_HUB_EMAIL_NOT_VERIFIED'; throw error;
       }
-      loginBuckets.delete(`${ip || 'unknown'}:${email}`);
       if (user.mfa_enabled) {
-        const challengeToken = randomBytes(32).toString('base64url');
-        await pool.query('INSERT INTO auth_mfa_challenges(user_id,token_hash,expires_at) VALUES($1,$2,$3)', [user.id, digest(challengeToken), new Date(clock() + 5 * 60_000)]);
-        return { mfaRequired: true, challengeToken, user: safeUser(user), expiresAt: new Date(clock() + 5 * 60_000) };
+        // Keep the throttle bucket for MFA-enabled accounts so repeated password-phase logins stay rate limited.
+        const { challengeToken, expiresAt } = await createMfaChallenge(user);
+        return { mfaRequired: true, challengeToken, user: safeUser(user), expiresAt };
       }
+      loginBuckets.delete(`${ip || 'unknown'}:${email}`);
       const created = await createSession(user, { ip, userAgent });
       return { ...created, mfaRequired: false };
     },
@@ -187,6 +281,18 @@ function createIdentityService({ pool, env = process.env, clock = () => Date.now
           WHERE c.token_hash=$1 AND c.consumed_at IS NULL AND c.expires_at>now() FOR UPDATE OF c`, [digest(challengeToken)]);
         const challenge = found.rows[0];
         if (!challenge || challenge.attempts >= 5 || challenge.status !== 'active' || !challenge.mfa_enabled) throw authError(401, 'ERR_VIRGOSCORPIO_HUB_MFA_CHALLENGE_INVALID', 'MFA challenge is invalid or expired.');
+        // Account-wide MFA retry budget: failures are aggregated across every challenge issued to the user
+        // within the window, so issuing a fresh challenge (password or federated first factor) cannot reset it.
+        // The advisory lock serialises concurrent verifications for the same account across challenges.
+        await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`virgoscorpio_hub-mfa-verify:${challenge.user_id}`]);
+        const failureResult = await client.query(
+          `SELECT COALESCE(SUM(attempts),0)::integer AS failures FROM auth_mfa_challenges WHERE user_id=$1 AND created_at > now() - ($2::integer * interval '1 minute')`,
+          [challenge.user_id, MFA_ACCOUNT_FAILURE_WINDOW_MINUTES]);
+        if (Number(failureResult.rows[0]?.failures || 0) >= MFA_ACCOUNT_FAILURE_LIMIT) {
+          const error = authError(429, 'ERR_VIRGOSCORPIO_HUB_MFA_THROTTLED', 'Too many failed MFA attempts. Try again later.');
+          error.retryAfterSeconds = MFA_ACCOUNT_FAILURE_WINDOW_MINUTES * 60;
+          throw error;
+        }
         const credentialResult = await client.query('SELECT secret_ciphertext,last_used_step,pending_secret FROM user_mfa_credentials WHERE user_id=$1 FOR UPDATE', [challenge.user_id]);
         const credential = credentialResult.rows[0];
         if (!credential || credential.pending_secret) throw authError(401, 'ERR_VIRGOSCORPIO_HUB_MFA_NOT_CONFIGURED', 'Multi-factor authentication is not configured.');
@@ -208,9 +314,13 @@ function createIdentityService({ pool, env = process.env, clock = () => Date.now
         }
         if (acceptedStep !== credential.last_used_step) await client.query('UPDATE user_mfa_credentials SET last_used_step=$2,updated_at=now() WHERE user_id=$1', [challenge.user_id, acceptedStep]);
         await client.query('UPDATE auth_mfa_challenges SET consumed_at=now() WHERE id=$1', [challenge.challenge_id]);
-        await client.query('COMMIT');
+        // The session is created inside the transaction that holds the challenge row lock. A concurrent
+        // password reset consumes the user's challenges first, so it either invalidates this challenge
+        // before it is accepted or waits for this commit and then revokes the session created here.
         const user = { id: challenge.user_id, email: challenge.email, display_name: challenge.display_name, status: challenge.status };
-        return { ...(await createSession(user, { ip, userAgent })), mfaRequired: false };
+        const created = await createSession(user, { ip, userAgent }, client);
+        await client.query('COMMIT');
+        return { ...created, mfaRequired: false };
       } catch (error) { await client.query('ROLLBACK').catch(() => {}); throw error; }
       finally { client.release(); }
     },
@@ -299,6 +409,9 @@ function createIdentityService({ pool, env = process.env, clock = () => Date.now
         await client.query('BEGIN');
         const result = await client.query("SELECT id,user_id FROM identity_action_tokens WHERE token_hash=$1 AND purpose='password-reset' AND consumed_at IS NULL AND expires_at>now() FOR UPDATE", [digest(token)]);
         const action = result.rows[0]; if (!action) throw authError(400, 'ERR_VIRGOSCORPIO_HUB_RESET_TOKEN_INVALID', 'Password reset token is invalid or expired.');
+        // Invalidate pending MFA challenges issued under the old password. This must precede the user
+        // update so lock ordering (challenge, then user) matches completeMfaLogin.
+        await client.query('UPDATE auth_mfa_challenges SET consumed_at=now() WHERE user_id=$1 AND consumed_at IS NULL', [action.user_id]);
         await client.query('UPDATE users SET password_hash=$2,updated_at=now() WHERE id=$1', [action.user_id, passwordHash]);
         await client.query('UPDATE identity_action_tokens SET consumed_at=now() WHERE id=$1', [action.id]);
         await client.query('UPDATE auth_sessions SET revoked_at=now() WHERE user_id=$1 AND revoked_at IS NULL', [action.user_id]);
@@ -351,7 +464,18 @@ function createIdentityService({ pool, env = process.env, clock = () => Date.now
 
     async createOidcState({ state, nonce, verifier, issuer }) {
       if (![state, nonce, verifier, issuer].every(value => typeof value === 'string' && value.length > 0)) throw authError(400, 'ERR_VIRGOSCORPIO_HUB_OIDC_STATE_INVALID', 'OIDC state data is incomplete.');
-      await pool.query('INSERT INTO auth_oidc_states(state_hash,nonce,code_verifier,issuer,expires_at) VALUES($1,$2,$3,$4,$5)', [digest(state), nonce, verifier, issuer, new Date(clock() + 10 * 60_000)]);
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        // Serialise allocation so the global cap below cannot be exceeded by concurrent unauthenticated starts.
+        await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', ['auth_oidc_states_allocation']);
+        // Reclaim expired and consumed rows before allocating, bounding table growth.
+        await client.query('DELETE FROM auth_oidc_states WHERE expires_at<=now() OR consumed_at IS NOT NULL');
+        const active = await client.query('SELECT count(*)::int AS total FROM auth_oidc_states');
+        if ((active.rows[0]?.total ?? 0) >= MAX_ACTIVE_OIDC_STATES) throw authError(429, 'ERR_VIRGOSCORPIO_HUB_RATE_LIMIT', 'Too many pending SSO attempts. Try again later.');
+        await client.query('INSERT INTO auth_oidc_states(state_hash,nonce,code_verifier,issuer,expires_at) VALUES($1,$2,$3,$4,$5)', [digest(state), nonce, verifier, issuer, new Date(clock() + 10 * 60_000)]);
+        await client.query('COMMIT');
+      } catch (error) { await client.query('ROLLBACK').catch(() => {}); throw error; } finally { client.release(); }
       return { expiresInSeconds: 600 };
     },
 
@@ -362,7 +486,7 @@ function createIdentityService({ pool, env = process.env, clock = () => Date.now
         await client.query('BEGIN');
         const result = await client.query('SELECT id,nonce,code_verifier,issuer FROM auth_oidc_states WHERE state_hash=$1 AND consumed_at IS NULL AND expires_at>now() FOR UPDATE', [digest(state)]);
         const row = result.rows[0]; if (!row) throw authError(400, 'ERR_VIRGOSCORPIO_HUB_OIDC_STATE_INVALID', 'OIDC state is invalid or expired.');
-        await client.query("UPDATE auth_oidc_states SET consumed_at=now(),code_verifier='' WHERE id=$1", [row.id]);
+        await client.query('DELETE FROM auth_oidc_states WHERE id=$1', [row.id]);
         await client.query('COMMIT'); return { nonce: row.nonce, verifier: row.code_verifier, issuer: row.issuer };
       } catch (error) { await client.query('ROLLBACK').catch(() => {}); throw error; } finally { client.release(); }
     },
@@ -389,9 +513,8 @@ function createIdentityService({ pool, env = process.env, clock = () => Date.now
         await client.query('COMMIT');
       } catch (error) { await client.query('ROLLBACK').catch(() => {}); throw error; } finally { client.release(); }
       if (user.mfa_enabled) {
-        const challengeToken = randomBytes(32).toString('base64url');
-        await pool.query('INSERT INTO auth_mfa_challenges(user_id,token_hash,expires_at) VALUES($1,$2,$3)', [user.id, digest(challengeToken), new Date(clock() + 5 * 60_000)]);
-        return { mfaRequired: true, challengeToken, user: safeUser(user), expiresAt: new Date(clock() + 5 * 60_000) };
+        const { challengeToken, expiresAt } = await createMfaChallenge(user);
+        return { mfaRequired: true, challengeToken, user: safeUser(user), expiresAt };
       }
       return { ...(await createSession(user, { ip, userAgent })), mfaRequired: false };
     },
@@ -457,10 +580,14 @@ function createIdentityService({ pool, env = process.env, clock = () => Date.now
       });
     },
 
-    async listMembers({ siteId }) {
-      const result = await pool.query(`SELECT u.id,u.email,u.display_name,u.status,r.slug AS role,m.created_at
-        FROM site_memberships m JOIN users u ON u.id=m.user_id JOIN roles r ON r.id=m.role_id
-        WHERE m.site_id=$1 ORDER BY r.slug,u.email`, [siteId]);
+    async listMembers({ siteId, actorId = null }) {
+      const result = await withTransaction(pool, async client => {
+        await lockSiteShared(client, siteId);
+        await requireCurrentSiteManager(client, siteId, actorId, env);
+        return client.query(`SELECT u.id,u.email,u.display_name,u.status,r.slug AS role,m.created_at
+          FROM site_memberships m JOIN users u ON u.id=m.user_id JOIN roles r ON r.id=m.role_id
+          WHERE m.site_id=$1 ORDER BY r.slug,u.email`, [siteId]);
+      });
       return result.rows.map(row => ({ id: row.id, email: row.email, displayName: row.display_name, status: row.status, role: row.role, joinedAt: row.created_at }));
     },
 
@@ -470,6 +597,8 @@ function createIdentityService({ pool, env = process.env, clock = () => Date.now
       if (!['editor','author','viewer'].includes(roleSlug)) { const error = new Error('Members may be assigned editor, author, or viewer roles using this endpoint.'); error.statusCode = 400; error.code = 'ERR_VIRGOSCORPIO_HUB_INVALID_ROLE'; throw error; }
 
       const { user, membership } = await withTransaction(pool, async client => {
+        await lockSiteShared(client, siteId);
+        await requireCurrentSiteManager(client, siteId, actorId, env);
         const userResult = await client.query("SELECT id,email,display_name,status FROM users WHERE lower(email)=$1 AND status='active'", [email]);
         if (!userResult.rows[0]) { const error = new Error('No active account exists for that email. Create an invitation instead.'); error.statusCode = 404; error.code = 'ERR_VIRGOSCORPIO_HUB_USER_NOT_FOUND'; throw error; }
         const role = await client.query('SELECT id FROM roles WHERE slug=$1', [roleSlug]);
@@ -498,6 +627,7 @@ function createIdentityService({ pool, env = process.env, clock = () => Date.now
         // Serialize membership removals per site. Without this row lock, two active
         // owners can concurrently observe a count of two and remove each other.
         await client.query('SELECT id FROM sites WHERE id=$1 FOR UPDATE', [siteId]);
+        await requireCurrentSiteManager(client, siteId, actorId, env);
         const isOwner = await client.query(`SELECT 1 FROM site_memberships m JOIN roles r ON r.id=m.role_id WHERE m.site_id=$1 AND m.user_id=$2 AND r.slug='site-owner'`, [siteId, userId]);
         if (isOwner.rows[0]) {
           const owners = await client.query(`SELECT count(*)::integer AS count FROM site_memberships m JOIN roles r ON r.id=m.role_id JOIN users u ON u.id=m.user_id WHERE m.site_id=$1 AND r.slug='site-owner' AND u.status='active'`, [siteId]);
@@ -530,9 +660,12 @@ function createIdentityService({ pool, env = process.env, clock = () => Date.now
       const role = await pool.query('SELECT id FROM roles WHERE slug=$1', [roleSlug]);
       const token = randomBytes(32).toString('base64url');
       const expiresAt = new Date(clock() + 7 * 24 * 60 * 60_000);
-      const site = await pool.query('SELECT slug,name FROM sites WHERE id=$1', [siteId]);
-      if (!site.rows[0]) throw authError(404, 'ERR_VIRGOSCORPIO_HUB_SITE_NOT_FOUND', 'Site not found.');
       await withTransaction(pool, async queryable => {
+        await lockSiteShared(queryable, siteId);
+        await requireCurrentSiteManager(queryable, siteId, invitedBy, env);
+        // Read site metadata only after the transaction has revalidated the manager.
+        const site = await queryable.query('SELECT slug,name FROM sites WHERE id=$1', [siteId]);
+        if (!site.rows[0]) throw authError(404, 'ERR_VIRGOSCORPIO_HUB_SITE_NOT_FOUND', 'Site not found.');
         const inserted = await queryable.query(`INSERT INTO site_invitations(site_id,email,role_id,token_hash,invited_by,expires_at)
           VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT (site_id, (lower(email))) WHERE accepted_at IS NULL DO UPDATE
           SET role_id=EXCLUDED.role_id,token_hash=EXCLUDED.token_hash,invited_by=EXCLUDED.invited_by,expires_at=EXCLUDED.expires_at,created_at=now()

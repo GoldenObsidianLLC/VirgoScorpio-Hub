@@ -297,6 +297,7 @@ test('unsupported optimization is recorded as skipped without invoking a media p
       async markOptimization(input) {
         statuses.push(input);
         events.push({ type: 'markOptimization', input });
+        return { id: assetId, version: input.expectedVersion || 1 };
       }
     }
   });
