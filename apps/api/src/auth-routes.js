@@ -19,8 +19,23 @@ function createAuthRouteHandlers(dependencies = {}) {
     fail,
     readJson,
     readForm,
-    sameSecret
+    sameSecret,
+    oidcServices = {}
   } = dependencies;
+
+  if (!oidcServices || typeof oidcServices !== 'object' || Array.isArray(oidcServices)) {
+    throw new TypeError('Authentication routes require an OIDC services object when provided.');
+  }
+  const createOidcAuthorizationRequest = oidcServices.createAuthorizationRequest || createAuthorizationRequest;
+  const exchangeOidcAuthorizationCode = oidcServices.exchangeAndVerify || exchangeAndVerify;
+  const getOidcConfiguration = oidcServices.configFromEnv || configFromEnv;
+  for (const [name, value] of Object.entries({
+    createAuthorizationRequest: createOidcAuthorizationRequest,
+    exchangeAndVerify: exchangeOidcAuthorizationCode,
+    configFromEnv: getOidcConfiguration
+  })) {
+    if (typeof value !== 'function') throw new TypeError('Authentication routes require OIDC service ' + name + '().');
+  }
 
   for (const [name, value] of Object.entries({
     env,
@@ -285,7 +300,7 @@ function createAuthRouteHandlers(dependencies = {}) {
         res.setHeader('retry-after', String(limit.retryAfterSeconds));
         return sendJson(res, 429, { error: 'Too many SSO attempts.', code: 'ERR_VIRGOSCORPIO_HUB_RATE_LIMIT', requestId });
       }
-      const request = await createAuthorizationRequest(env);
+      const request = await createOidcAuthorizationRequest(env);
       await identity.createOidcState(request);
       res.writeHead(302, {
         location: request.authorizationUrl,
@@ -306,9 +321,9 @@ function createAuthRouteHandlers(dependencies = {}) {
       }
       requireBrowserBinding(req, OIDC_BINDING_COOKIE, state);
       const savedState = await identity.consumeOidcState({ state });
-      const config = configFromEnv(env);
+      const config = getOidcConfiguration(env);
       if (!config || savedState.issuer !== config.issuer) throw fail(400, 'ERR_VIRGOSCORPIO_HUB_OIDC_STATE_INVALID', 'OIDC state does not match the configured issuer.');
-      const external = await exchangeAndVerify({ code, nonce: savedState.nonce, verifier: savedState.verifier, env });
+      const external = await exchangeOidcAuthorizationCode({ code, nonce: savedState.nonce, verifier: savedState.verifier, env });
       if (external.issuer !== savedState.issuer) throw fail(401, 'ERR_VIRGOSCORPIO_HUB_OIDC_ISSUER_MISMATCH', 'The external identity issuer did not match the sign-in request.');
       const session = await identity.loginFederated({
         issuer: external.issuer,

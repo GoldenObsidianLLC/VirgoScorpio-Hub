@@ -16,7 +16,7 @@ const { createAuthRouteHandlers } = require('../apps/api/src/auth-routes');
  * 1. Start their own federated login flow
  * 2. Capture the callback URL or SAML form
  * 3. Deliver it to a victim browser
- * 4. Cause the victim to be logged into the attacker's account
+ * 4. Cause the victim to be logged into the attacker's accoun
  *
  * The mitigation binds each transaction to the initiating browser via a
  * short-lived HttpOnly cookie set during the start flow and validated during
@@ -25,7 +25,7 @@ const { createAuthRouteHandlers } = require('../apps/api/src/auth-routes');
 
 test('OIDC start flow sets a browser binding cookie with the state value', async () => {
   const capturedState = [];
-  
+
   const identity = {
     async createOidcState({ state: s, nonce, verifier, issuer }) {
       assert.equal(typeof s, 'string');
@@ -35,74 +35,71 @@ test('OIDC start flow sets a browser binding cookie with the state value', async
     }
   };
 
-  // Mock the OIDC module to avoid real network calls
-  const oidcModule = require('../packages/auth/src/oidc');
-  const originalCreateAuthorizationRequest = oidcModule.createAuthorizationRequest;
-  oidcModule.createAuthorizationRequest = async (env) => {
-    const state = randomBytes(32).toString('base64url');
-    return {
-      state,
-      nonce: randomBytes(32).toString('base64url'),
-      verifier: randomBytes(32).toString('base64url'),
-      issuer: env.OIDC_ISSUER,
-      authorizationUrl: `https://idp.example.test/authorize?state=${state}`
-    };
+  // Inject the OIDC request builder so this test stays independent of the IdP.
+  const oidcServices = {
+    createAuthorizationRequest: async env => {
+      const state = randomBytes(32).toString('base64url');
+      return {
+        state,
+        nonce: randomBytes(32).toString('base64url'),
+        verifier: randomBytes(32).toString('base64url'),
+        issuer: env.OIDC_ISSUER,
+        authorizationUrl: `https://idp.example.test/authorize?state=${state}`
+      };
+    }
   };
 
-  try {
-    const env = {
-      OIDC_ISSUER: 'https://idp.example.test',
-      OIDC_CLIENT_ID: 'test-client',
-      OIDC_CLIENT_SECRET: 'test-secret',
-      OIDC_REDIRECT_URI: 'https://app.example.test/api/v1/auth/oidc/callback'
-    };
+  const env = {
+    OIDC_ISSUER: 'https://idp.example.test',
+    OIDC_CLIENT_ID: 'test-client',
+    OIDC_CLIENT_SECRET: 'test-secret',
+    OIDC_REDIRECT_URI: 'https://app.example.test/api/v1/auth/oidc/callback'
+  };
 
-    let responseHeaders = {};
-    const res = {
-      writeHead(status, headers) {
-        assert.equal(status, 302);
-        responseHeaders = headers;
-      },
-      end() {}
-    };
+  let responseHeaders = {};
+  const res = {
+    writeHead(status, headers) {
+      assert.equal(status, 302);
+      responseHeaders = headers;
+    },
+    end() {}
+  };
 
-    const authRoutes = createAuthRouteHandlers({
-      identity,
-      env,
-      secureCookies: true,
-      maxBody: 16384,
-      allowRequest: () => ({ allowed: true, remaining: 100 }),
-      sendJson: () => {},
-      fail: (status, code, message) => Object.assign(new Error(message), { statusCode: status, code }),
-      readJson: async () => ({}),
-      readForm: async () => ({}),
-      sameSecret: () => true
-    });
+  const authRoutes = createAuthRouteHandlers({
+  identity,
+  oidcServices,
+  env,
+  secureCookies: true,
+  maxBody: 16384,
+  allowRequest: () => ({ allowed: true, remaining: 100 }),
+  sendJson: () => {},
+  fail: (status, code, message) => Object.assign(new Error(message), { statusCode: status, code }),
+  readJson: async () => ({}),
+  readForm: async () => ({}),
+  sameSecret: () => true
+  });
 
-    const req = { method: 'GET', socket: { remoteAddress: '127.0.0.1' }, headers: {} };
-    const url = new URL('https://app.example.test/api/v1/auth/oidc/start');
+  const req = { method: 'GET', socket: { remoteAddress: '127.0.0.1' }, headers: {} };
+  const url = new URL('https://app.example.test/api/v1/auth/oidc/start');
 
-    await authRoutes.handlePublic({ req, res, url, requestId: 'test-oidc-start' });
+  await authRoutes.handlePublic({ req, res, url, requestId: 'test-oidc-start' });
 
-    assert.ok(responseHeaders.location, 'OIDC start must redirect to IdP');
-    assert.ok(responseHeaders.location.includes('idp.example.test'), 'redirect must target the configured IdP');
-    
-    const setCookie = responseHeaders['set-cookie'];
-    assert.ok(setCookie, 'OIDC start must set a binding cookie');
-    assert.match(setCookie, /^vsh_oidc_state=[A-Za-z0-9_-]{43};/, 'binding cookie must contain a base64url state value');
-    assert.match(setCookie, /Path=\/api\/v1\/auth/, 'binding cookie must be scoped to auth path');
-    assert.match(setCookie, /Max-Age=600/, 'binding cookie must expire in 10 minutes');
-    assert.match(setCookie, /HttpOnly/, 'binding cookie must be HttpOnly');
-    assert.match(setCookie, /Secure/, 'binding cookie must be Secure in production');
-    assert.match(setCookie, /SameSite=Lax/, 'OIDC binding cookie must use SameSite=Lax');
-    
-    // Verify the state in the cookie matches the state passed to createOidcState
-    const cookieState = setCookie.match(/vsh_oidc_state=([A-Za-z0-9_-]{43})/)[1];
-    assert.equal(capturedState.length, 1, 'createOidcState must be called once');
-    assert.equal(cookieState, capturedState[0], 'cookie state must match the state stored in the database');
-  } finally {
-    oidcModule.createAuthorizationRequest = originalCreateAuthorizationRequest;
-  }
+  assert.ok(responseHeaders.location, 'OIDC start must redirect to IdP');
+  assert.ok(responseHeaders.location.includes('idp.example.test'), 'redirect must target the configured IdP');
+
+  const setCookie = responseHeaders['set-cookie'];
+  assert.ok(setCookie, 'OIDC start must set a binding cookie');
+  assert.match(setCookie, /^vsh_oidc_state=[A-Za-z0-9_-]{43};/, 'binding cookie must contain a base64url state value');
+  assert.match(setCookie, /Path=\/api\/v1\/auth/, 'binding cookie must be scoped to auth path');
+  assert.match(setCookie, /Max-Age=600/, 'binding cookie must expire in 10 minutes');
+  assert.match(setCookie, /HttpOnly/, 'binding cookie must be HttpOnly');
+  assert.match(setCookie, /Secure/, 'binding cookie must be Secure in production');
+  assert.match(setCookie, /SameSite=Lax/, 'OIDC binding cookie must use SameSite=Lax');
+
+  // Verify the state in the cookie matches the state passed to createOidcState
+  const cookieState = setCookie.match(/vsh_oidc_state=([A-Za-z0-9_-]{43})/)[1];
+  assert.equal(capturedState.length, 1, 'createOidcState must be called once');
+  assert.equal(cookieState, capturedState[0], 'cookie state must match the state stored in the database');
 });
 
 test('OIDC callback rejects requests without the matching browser binding cookie', async () => {
@@ -235,9 +232,23 @@ test('OIDC callback succeeds when the browser binding cookie matches the state',
 
   let responseStatus = 0;
   let responseHeaders = {};
+  const oidcServices = {
+    configFromEnv: env => ({
+      issuer: env.OIDC_ISSUER,
+      clientId: env.OIDC_CLIENT_ID,
+      clientSecret: env.OIDC_CLIENT_SECRET,
+      redirectUri: env.OIDC_REDIRECT_URI
+    }),
+    exchangeAndVerify: async () => ({
+      issuer: 'https://idp.example.test',
+      subject: 'user-123',
+      email: 'user@example.test'
+    })
+  };
 
   const authRoutes = createAuthRouteHandlers({
     identity,
+    oidcServices,
     env,
     secureCookies: true,
     maxBody: 16384,
@@ -249,62 +260,39 @@ test('OIDC callback succeeds when the browser binding cookie matches the state',
     sameSecret: () => true
   });
 
-  // Mock the OIDC exchange - in real code this calls the IdP
-  const oidcModule = require('../packages/auth/src/oidc');
-  const originalExchange = oidcModule.exchangeAndVerify;
-  const originalConfig = oidcModule.configFromEnv;
-  
-  oidcModule.configFromEnv = (env) => ({
-    issuer: env.OIDC_ISSUER,
-    clientId: env.OIDC_CLIENT_ID,
-    clientSecret: env.OIDC_CLIENT_SECRET,
-    redirectUri: env.OIDC_REDIRECT_URI
-  });
-  
-  oidcModule.exchangeAndVerify = async () => ({
-    issuer: 'https://idp.example.test',
-    subject: 'user-123',
-    email: 'user@example.test'
-  });
+  const req = {
+    method: 'GET',
+    socket: { remoteAddress: '127.0.0.1' },
+    headers: {
+      cookie: `vsh_oidc_state=${state}`,
+      'user-agent': 'Test Browser'
+    }
+  };
+  const url = new URL(`https://app.example.test/api/v1/auth/oidc/callback?code=${code}&state=${state}`);
+  const res = {
+    writeHead(status, headers) {
+      responseStatus = status;
+      responseHeaders = headers;
+    },
+    end() {}
+  };
 
-  try {
-    const req = {
-      method: 'GET',
-      socket: { remoteAddress: '127.0.0.1' },
-      headers: {
-        cookie: `vsh_oidc_state=${state}`,
-        'user-agent': 'Test Browser'
-      }
-    };
-    const url = new URL(`https://app.example.test/api/v1/auth/oidc/callback?code=${code}&state=${state}`);
-    const res = {
-      writeHead(status, headers) {
-        responseStatus = status;
-        responseHeaders = headers;
-      },
-      end() {}
-    };
+  await authRoutes.handlePublic({ req, res, url, requestId: 'test-valid-binding' });
 
-    await authRoutes.handlePublic({ req, res, url, requestId: 'test-valid-binding' });
+  assert.equal(responseStatus, 303, 'successful OIDC callback must redirect');
+  assert.equal(responseHeaders.location, '/admin', 'successful callback must redirect to admin');
+  assert.ok(loginFederatedCalled, 'loginFederated must be called when binding is valid');
 
-    assert.equal(responseStatus, 303, 'successful OIDC callback must redirect');
-    assert.equal(responseHeaders.location, '/admin', 'successful callback must redirect to admin');
-    assert.ok(loginFederatedCalled, 'loginFederated must be called when binding is valid');
-
-    const cookies = responseHeaders['set-cookie'];
-    assert.ok(Array.isArray(cookies), 'response must set multiple cookies');
-    assert.ok(cookies.some(c => c.startsWith('vsh_session=')), 'response must set session cookie');
-    assert.ok(cookies.some(c => c.startsWith('vsh_csrf=')), 'response must set CSRF cookie');
-    assert.ok(cookies.some(c => c.startsWith('vsh_oidc_state=;') && c.includes('Max-Age=0')), 'response must clear the binding cookie');
-  } finally {
-    oidcModule.exchangeAndVerify = originalExchange;
-    oidcModule.configFromEnv = originalConfig;
-  }
+  const cookies = responseHeaders['set-cookie'];
+  assert.ok(Array.isArray(cookies), 'response must set multiple cookies');
+  assert.ok(cookies.some(c => c.startsWith('vsh_session=')), 'response must set session cookie');
+  assert.ok(cookies.some(c => c.startsWith('vsh_csrf=')), 'response must set CSRF cookie');
+  assert.ok(cookies.some(c => c.startsWith('vsh_oidc_state=;') && c.includes('Max-Age=0')), 'response must clear the binding cookie');
 });
 
 test('SAML start flow sets a browser binding cookie with SameSite=None for cross-site POST', async () => {
   const state = randomBytes(32).toString('base64url');
-  
+
   const identity = {
     async createOidcState({ state: s, nonce, verifier, issuer }) {
       assert.equal(nonce, 'saml');
@@ -582,12 +570,12 @@ test('SAML ACS succeeds when the browser binding cookie matches RelayState', asy
 });
 
 test('browser binding validation uses timing-safe comparison', async () => {
-  // This test verifies that the binding check uses timingSafeEqual to prevent
+  // This test verifies that the binding check uses timingSafeEqual to preven
   // timing attacks that could leak information about the expected state value.
-  
+
   const correctState = 'a'.repeat(43);
   const wrongState = 'b'.repeat(43);
-  
+
   const identity = {
     async consumeOidcState() {
       return {
@@ -625,7 +613,7 @@ test('browser binding validation uses timing-safe comparison', async () => {
     headers: { cookie: `vsh_oidc_state=${correctState}` }
   };
   const url1 = new URL(`https://app.example.test/api/v1/auth/oidc/callback?code=test&state=${correctState}`);
-  
+
   // This will fail at a later stage (OIDC exchange), but binding check passes
   await assert.rejects(
     authRoutes.handlePublic({ req: req1, res: { writeHead() {}, end() {} }, url: url1, requestId: 'test-1' }),
@@ -640,7 +628,7 @@ test('browser binding validation uses timing-safe comparison', async () => {
     headers: { cookie: `vsh_oidc_state=${wrongState}` }
   };
   const url2 = new URL(`https://app.example.test/api/v1/auth/oidc/callback?code=test&state=${correctState}`);
-  
+
   await assert.rejects(
     authRoutes.handlePublic({ req: req2, res: { writeHead() {}, end() {} }, url: url2, requestId: 'test-2' }),
     error => error.statusCode === 400 && error.code === 'ERR_VIRGOSCORPIO_HUB_SSO_BROWSER_BINDING',
@@ -651,9 +639,9 @@ test('browser binding validation uses timing-safe comparison', async () => {
 test('binding cookies are cleared after successful federated login', async () => {
   // This test verifies that binding cookies are properly cleared (Max-Age=0)
   // after successful authentication to prevent reuse and minimize cookie clutter.
-  
+
   const state = randomBytes(32).toString('base64url');
-  
+
   const identity = {
     async consumeOidcState() {
       return {
@@ -683,6 +671,17 @@ test('binding cookies are cleared after successful federated login', async () =>
 
   const authRoutes = createAuthRouteHandlers({
     identity,
+    oidcServices: {
+      configFromEnv: env => ({
+        issuer: env.OIDC_ISSUER,
+        clientId: env.OIDC_CLIENT_ID
+      }),
+      exchangeAndVerify: async () => ({
+        issuer: 'https://idp.example.test',
+        subject: 'user-123',
+        email: 'user@example.test'
+      })
+    },
     env,
     secureCookies: true,
     maxBody: 16384,
@@ -694,60 +693,39 @@ test('binding cookies are cleared after successful federated login', async () =>
     sameSecret: () => true
   });
 
-  // Mock OIDC exchange
-  const oidcModule = require('../packages/auth/src/oidc');
-  const originalExchange = oidcModule.exchangeAndVerify;
-  const originalConfig = oidcModule.configFromEnv;
-  
-  oidcModule.configFromEnv = (env) => ({
-    issuer: env.OIDC_ISSUER,
-    clientId: env.OIDC_CLIENT_ID
-  });
-  
-  oidcModule.exchangeAndVerify = async () => ({
-    issuer: 'https://idp.example.test',
-    subject: 'user-123',
-    email: 'user@example.test'
-  });
+  const req = {
+    method: 'GET',
+    socket: { remoteAddress: '127.0.0.1' },
+    headers: {
+      cookie: `vsh_oidc_state=${state}`,
+      'user-agent': 'Test Browser'
+    }
+  };
+  const url = new URL(`https://app.example.test/api/v1/auth/oidc/callback?code=test&state=${state}`);
+  const res = {
+    writeHead(status, headers) {
+      responseHeaders = headers;
+    },
+    end() {}
+  };
 
-  try {
-    const req = {
-      method: 'GET',
-      socket: { remoteAddress: '127.0.0.1' },
-      headers: {
-        cookie: `vsh_oidc_state=${state}`,
-        'user-agent': 'Test Browser'
-      }
-    };
-    const url = new URL(`https://app.example.test/api/v1/auth/oidc/callback?code=test&state=${state}`);
-    const res = {
-      writeHead(status, headers) {
-        responseHeaders = headers;
-      },
-      end() {}
-    };
+  await authRoutes.handlePublic({ req, res, url, requestId: 'test-clear-binding' });
 
-    await authRoutes.handlePublic({ req, res, url, requestId: 'test-clear-binding' });
+  const cookies = responseHeaders['set-cookie'];
+  const bindingClearCookie = cookies.find(c => c.startsWith('vsh_oidc_state=;'));
 
-    const cookies = responseHeaders['set-cookie'];
-    const bindingClearCookie = cookies.find(c => c.startsWith('vsh_oidc_state=;'));
-    
-    assert.ok(bindingClearCookie, 'binding cookie must be cleared after successful login');
-    assert.match(bindingClearCookie, /Max-Age=0/, 'cleared binding cookie must have Max-Age=0');
-    assert.match(bindingClearCookie, /Path=\/api\/v1\/auth/, 'cleared cookie must match the original path');
-  } finally {
-    oidcModule.exchangeAndVerify = originalExchange;
-    oidcModule.configFromEnv = originalConfig;
-  }
+  assert.ok(bindingClearCookie, 'binding cookie must be cleared after successful login');
+  assert.match(bindingClearCookie, /Max-Age=0/, 'cleared binding cookie must have Max-Age=0');
+  assert.match(bindingClearCookie, /Path=\/api\/v1\/auth/, 'cleared cookie must match the original path');
 });
 
 test('binding cookies are also cleared when MFA is required', async () => {
   // When MFA is required, the user is redirected to the MFA challenge page
   // instead of being immediately logged in. The binding cookie should still
   // be cleared to prevent reuse.
-  
+
   const state = randomBytes(32).toString('base64url');
-  
+
   const identity = {
     async consumeOidcState() {
       return {
@@ -779,6 +757,17 @@ test('binding cookies are also cleared when MFA is required', async () => {
 
   const authRoutes = createAuthRouteHandlers({
     identity,
+    oidcServices: {
+      configFromEnv: env => ({
+        issuer: env.OIDC_ISSUER,
+        clientId: env.OIDC_CLIENT_ID
+      }),
+      exchangeAndVerify: async () => ({
+        issuer: 'https://idp.example.test',
+        subject: 'user-123',
+        email: 'user@example.test'
+      })
+    },
     env,
     secureCookies: true,
     maxBody: 16384,
@@ -790,51 +779,30 @@ test('binding cookies are also cleared when MFA is required', async () => {
     sameSecret: () => true
   });
 
-  // Mock OIDC exchange
-  const oidcModule = require('../packages/auth/src/oidc');
-  const originalExchange = oidcModule.exchangeAndVerify;
-  const originalConfig = oidcModule.configFromEnv;
-  
-  oidcModule.configFromEnv = (env) => ({
-    issuer: env.OIDC_ISSUER,
-    clientId: env.OIDC_CLIENT_ID
-  });
-  
-  oidcModule.exchangeAndVerify = async () => ({
-    issuer: 'https://idp.example.test',
-    subject: 'user-123',
-    email: 'user@example.test'
-  });
+  const req = {
+    method: 'GET',
+    socket: { remoteAddress: '127.0.0.1' },
+    headers: {
+      cookie: `vsh_oidc_state=${state}`,
+      'user-agent': 'Test Browser'
+    }
+  };
+  const url = new URL(`https://app.example.test/api/v1/auth/oidc/callback?code=test&state=${state}`);
+  const res = {
+    writeHead(status, headers) {
+      responseHeaders = headers;
+    },
+    end() {}
+  };
 
-  try {
-    const req = {
-      method: 'GET',
-      socket: { remoteAddress: '127.0.0.1' },
-      headers: {
-        cookie: `vsh_oidc_state=${state}`,
-        'user-agent': 'Test Browser'
-      }
-    };
-    const url = new URL(`https://app.example.test/api/v1/auth/oidc/callback?code=test&state=${state}`);
-    const res = {
-      writeHead(status, headers) {
-        responseHeaders = headers;
-      },
-      end() {}
-    };
+  await authRoutes.handlePublic({ req, res, url, requestId: 'test-mfa-clear-binding' });
 
-    await authRoutes.handlePublic({ req, res, url, requestId: 'test-mfa-clear-binding' });
+  assert.equal(responseHeaders.location, '/admin?mfa=required', 'MFA required should redirect to MFA page');
 
-    assert.equal(responseHeaders.location, '/admin?mfa=required', 'MFA required should redirect to MFA page');
-    
-    const cookies = responseHeaders['set-cookie'];
-    assert.ok(cookies.some(c => c.startsWith('vsh_mfa_challenge=')), 'MFA challenge cookie must be set');
-    
-    const bindingClearCookie = cookies.find(c => c.startsWith('vsh_oidc_state=;'));
-    assert.ok(bindingClearCookie, 'binding cookie must be cleared even when MFA is required');
-    assert.match(bindingClearCookie, /Max-Age=0/, 'cleared binding cookie must have Max-Age=0');
-  } finally {
-    oidcModule.exchangeAndVerify = originalExchange;
-    oidcModule.configFromEnv = originalConfig;
-  }
+  const cookies = responseHeaders['set-cookie'];
+  assert.ok(cookies.some(c => c.startsWith('vsh_mfa_challenge=')), 'MFA challenge cookie must be set');
+
+  const bindingClearCookie = cookies.find(c => c.startsWith('vsh_oidc_state=;'));
+  assert.ok(bindingClearCookie, 'binding cookie must be cleared even when MFA is required');
+  assert.match(bindingClearCookie, /Max-Age=0/, 'cleared binding cookie must have Max-Age=0');
 });
