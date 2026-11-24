@@ -132,6 +132,9 @@ test('password reset rejects invalid tokens before expensive scrypt hashing', as
             if (sql.includes('SELECT id,user_id FROM identity_action_tokens') && sql.includes('FOR UPDATE')) {
               return { rowCount: 1, rows: [{ id: tokenId, user_id: userId }] };
             }
+            if (sql.includes('UPDATE auth_mfa_challenges SET consumed_at=now()')) {
+              return { rowCount: 1, rows: [] };
+            }
             if (sql.includes('UPDATE users SET password_hash')) {
               return { rowCount: 1, rows: [] };
             }
