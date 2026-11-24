@@ -187,6 +187,12 @@ function createAuthRouteHandlers(dependencies = {}) {
     }
 
     if (req.method === 'POST' && url.pathname === '/api/v1/auth/password-reset/complete') {
+      // This public route triggers a memory-hard KDF, so it is throttled per client before any body parsing or hashing.
+      const limit = allowRequest('password-reset-complete:' + (req.socket.remoteAddress || 'unknown'));
+      if (!limit.allowed) {
+        res.setHeader('retry-after', String(limit.retryAfterSeconds));
+        return sendJson(res, 429, { error: 'Too many password reset attempts.', code: 'ERR_VIRGOSCORPIO_HUB_RATE_LIMIT', requestId });
+      }
       if (!identity) return sendJson(res, 503, { error: 'Authentication requires PostgreSQL.', code: 'ERR_VIRGOSCORPIO_HUB_IDENTITY_DISABLED', requestId });
       const body = await readJson(req, Math.min(maxBody, MAX_AUTH_BODY_BYTES));
       const result = await identity.resetPassword({ token: body.token, password: body.password });
