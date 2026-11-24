@@ -1,9 +1,9 @@
-# VirgoScorpio Hub 0.6.2 - current release-readiness snapshot (22 November 2026 America/Chicago; F1.68 latest merged; main c4c5fb6; workflow #45099497274)
-## Current exact-main readiness - 22 November 2026 (America/Chicago; F1.68 / PR #296)
+# VirgoScorpio Hub 0.6.2 - current release-readiness snapshot (24 November 2026 America/Chicago; F1.68 latest merged; main 287508b; workflow #45103774547)
+## Current exact-main readiness - 24 November 2026 (America/Chicago; F1.68 / PR #296; documentation PR #297)
 
-Current main is c4c5fb6328d2747d1d9b9c43aab70fc93d4eb96e after F1.68 / [PR #296](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/296); [issue #295](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/295) is closed. F1.67 / PR #293 remains the previous merged runtime increment. Exact-main [workflow #45099497274](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45099497274) completed success at 2026-11-23T02:22:24Z with 7/7 jobs successful: Node 22.23.4, Node 24.22.1, PostgreSQL/Memgraph integration, browser smoke, CodeQL, signed lockfile/SBOM attestation and exact-source evidence consolidation.
+Current main is `287508b16d9c7d3156fab07f975413de2c659ae0` after documentation PR #297; F1.68 / [PR #296](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/296) remains the latest merged runtime increment, and issue #295 is closed. Exact-main [workflow #45103774547](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45103774547) completed successfully with 7/7 jobs: Node 22.23.4, Node 24.22.1, PostgreSQL/Memgraph integration, browser smoke, CodeQL, signed lockfile/SBOM attestation and exact-source evidence consolidation.
 
-Canonical [mainline readiness artifact #14784563967](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45099497274/artifacts/14784563967) is source-bound to c4c5fb6328d2747d1d9b9c43aab70fc93d4eb96e. ZIP SHA-256 f7c6471dca00ed81a7506cd696393b37ac7a1a5e7b0ff3c6a1391a6bb600c8cd; readiness JSON SHA-256 33853c0a8ea3ae91869f21f532f27a1119e91d677786da74c4207cab617ba166; readiness Markdown SHA-256 a2a982d19a9a33bdbc9519837d51af497095d3b99d7601dd2b22ebf5a1eeadb4. The formal classification remains 8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN; readyForProduction=false; NOT_PRODUCTION_CERTIFIED; NO-GO.
+Canonical [mainline readiness artifact #14787205420](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45103774547/artifacts/14787205420) is source-bound to `287508b16d9c7d3156fab07f975413de2c659ae0`. ZIP SHA-256 `82ea5854d9694ffbfff47028104e7a6da4b3e03099a16aa77368f8cbfb554ce8`; readiness JSON SHA-256 `e091d3720007ce45c4aa70422eb8f379b2cafbe09b3f8464b713f28a2cdc5242`; readiness Markdown SHA-256 `1a5dd5d66ce7b8034fdfcb0aa0a680b219db7a680f181db524aee82e4ab1d228`. The formal classification remains 8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN; `readyForProduction=false`; NOT_PRODUCTION_CERTIFIED; NO-GO.
 
 Node 22.23.4 and 24.22.1 each passed 810/810 Hub and 94/94 EnginEx tests. Live PostgreSQL/Memgraph integration passed 194/194 with zero failures/skips; 19/19 migrations applied fresh and 19/19 idempotent re-entry checks passed. Real Memgraph outage/outbox replay, canonical graph rebuild, browser smoke 9/9, CodeQL and exact-source evidence consolidation all passed.
 
@@ -13,6 +13,10 @@ The readiness artifact's embedded workflowRun status records in_progress at capt
 
 F1.68 is the latest merged runtime increment; no migration, dependency, lockfile, public API, package-version or SemVer change. Package 0.6.2 remains private/unreleased. The previous F1.67 and documentation-only PR #294 snapshots below are historical records.
 
+
+## Current candidate status — 24 November 2026
+
+F1.69 [PR #299](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/299) remains draft at head `95d38d1aed870ebf407bb963b17d3b693dd2b9f1`. Code-bearing runs #1327/#1328 and final documentation-head runs #1329/#1330 passed all applicable checks, including PostgreSQL/Memgraph 195/195 with zero failures/skips. The PR has no formal review submissions or inline threads. Independent tenant-isolation review #14 and the other production evidence gates remain open. See the [24 November release-gate and open-PR report](reports/2026-11-24-VirgoScorpio-Hub-0.6.2-Release-Gate-Report.md).
 
 ## Historical exact-main readiness - 22 November 2026 (America/Chicago; post-PR #294, before F1.68)
 

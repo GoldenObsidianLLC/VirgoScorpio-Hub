@@ -1,6 +1,10 @@
-## Current mainline baseline - 22 November 2026 (America/Chicago)
+## Current mainline baseline - 24 November 2026 (America/Chicago)
 
-main is c4c5fb6328d2747d1d9b9c43aab70fc93d4eb96e after F1.68 / PR #296; F1.67 / PR #293 remains the prior merged runtime increment. Exact-main workflow #45099497274 passed 7/7 jobs on c4c5fb6: Node 22/24, 194/194 live PostgreSQL/Memgraph integration tests, 19/19 fresh and 19/19 idempotent migrations, browser smoke, CodeQL, signed lockfile/SBOM attestation and exact-source evidence consolidation. Canonical readiness artifact #14784563967 remains 8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN, readyForProduction=false, NOT_PRODUCTION_CERTIFIED / NO-GO. Package 0.6.2 remains private/unreleased.
+main is `287508b16d9c7d3156fab07f975413de2c659ae0` after documentation PR #297; F1.68 / PR #296 remains the latest merged runtime increment. Exact-main workflow #45103774547 passed 7/7 jobs on current main. Node 22/24 each passed 810/810 Hub and 94/94 EnginEx tests; PostgreSQL/Memgraph passed 194/194 with zero failures/skips; 19/19 fresh and 19/19 idempotent migrations, browser smoke 9/9, CodeQL, signed lockfile/SBOM attestation and evidence consolidation passed. Readiness artifact #14787205420 records 8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN, `readyForProduction=false`, NOT_PRODUCTION_CERTIFIED / NO-GO. Package 0.6.2 remains private/unreleased.
+
+### Active candidate - F1.69 direct-conversation participant revalidation ([PR #299](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/299))
+
+PR #299 remains draft at head `95d38d1aed870ebf407bb963b17d3b693dd2b9f1`. Implementation and final documentation-head candidate checks passed, including PostgreSQL/Memgraph 195/195. No formal review submissions exist; independent tenant-isolation review #14 remains open. Review the adjacent session `last_seen_at` throttling change as part of the PR diff. Maintainer-authored tests do not satisfy the independent-review gate. See the [24 November release-gate report](reports/2026-11-24-VirgoScorpio-Hub-0.6.2-Release-Gate-Report.md).
 
 ### Merged - F1.68 password-login timing-oracle hardening ([issue #295](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/295); [PR #296](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/296))
 

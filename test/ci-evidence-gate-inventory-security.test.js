@@ -6,7 +6,9 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { PRODUCT_VERSION } = require('../packages/domain/src/version');
-const { REQUIRED_EVIDENCE_GATE_IDS } = require('../scripts/release-readiness-gates');
+const { REQUIRED_EVIDENCE_GATES, REQUIRED_EVIDENCE_GATE_IDS } = require('../scripts/release-readiness-gates');
+const CURRENT_MIGRATION_COUNT = fs.readdirSync(path.join(__dirname, '../database/migrations'))
+  .filter(file => /^[0-9]+_[a-z0-9_-]+[.]sql$/i.test(file)).length;
 const {
   EXPECTED_NPM_VERSION,
   JOBS,
@@ -118,9 +120,9 @@ function createMinimalFixtures(t, { gateIds = REQUIRED_EVIDENCE_GATE_IDS } = {})
     gate: 'fresh-migrations',
     status: 'PASS',
     environment: { node: 'v22.23.4' },
-    migrationCount: 18,
-    firstPass: '18/18 migrations applied',
-    secondPass: '18/18 migrations skipped as already applied',
+    migrationCount: CURRENT_MIGRATION_COUNT,
+    firstPass: CURRENT_MIGRATION_COUNT + '/' + CURRENT_MIGRATION_COUNT + ' migrations applied',
+    secondPass: CURRENT_MIGRATION_COUNT + '/' + CURRENT_MIGRATION_COUNT + ' migrations skipped as already applied',
     cleanup: 'disposable database dropped',
   };
   for (const file of JOBS[2].requiredFiles) {
@@ -185,7 +187,7 @@ test('requireReadinessSnapshot rejects reports missing required security gates',
   const directory = path.join(artifactRoot, config.artifactName);
   const apiJob = jobApi.find(job => job.name === config.jobName);
   const validation = validateJobEvidence(config, directory, expected, apiJob);
-  assert.equal(validation.status, 'PASS');
+  assert.equal(validation.status, 'PASS', JSON.stringify(validation.errors));
   
   writePostgresMemgraphReleaseEvidence({ root, directory, expected, apiJob, validation });
   const postgresEvidence = JSON.parse(fs.readFileSync(
@@ -217,7 +219,7 @@ test('requireReadinessSnapshot rejects reports missing independent-security-revi
   const directory = path.join(artifactRoot, config.artifactName);
   const apiJob = jobApi.find(job => job.name === config.jobName);
   const validation = validateJobEvidence(config, directory, expected, apiJob);
-  assert.equal(validation.status, 'PASS');
+  assert.equal(validation.status, 'PASS', JSON.stringify(validation.errors));
   
   writePostgresMemgraphReleaseEvidence({ root, directory, expected, apiJob, validation });
   const postgresEvidence = JSON.parse(fs.readFileSync(
@@ -257,7 +259,7 @@ test('requireReadinessSnapshot rejects reports missing operations-release-approv
   const directory = path.join(artifactRoot, config.artifactName);
   const apiJob = jobApi.find(job => job.name === config.jobName);
   const validation = validateJobEvidence(config, directory, expected, apiJob);
-  assert.equal(validation.status, 'PASS');
+  assert.equal(validation.status, 'PASS', JSON.stringify(validation.errors));
   
   writePostgresMemgraphReleaseEvidence({ root, directory, expected, apiJob, validation });
   const postgresEvidence = JSON.parse(fs.readFileSync(
@@ -299,7 +301,7 @@ test('requireReadinessSnapshot rejects reports missing multiple critical gates',
   const directory = path.join(artifactRoot, config.artifactName);
   const apiJob = jobApi.find(job => job.name === config.jobName);
   const validation = validateJobEvidence(config, directory, expected, apiJob);
-  assert.equal(validation.status, 'PASS');
+  assert.equal(validation.status, 'PASS', JSON.stringify(validation.errors));
   
   writePostgresMemgraphReleaseEvidence({ root, directory, expected, apiJob, validation });
   const postgresEvidence = JSON.parse(fs.readFileSync(
@@ -338,7 +340,7 @@ test('requireReadinessSnapshot accepts reports with all required gates present',
   const directory = path.join(artifactRoot, config.artifactName);
   const apiJob = jobApi.find(job => job.name === config.jobName);
   const validation = validateJobEvidence(config, directory, expected, apiJob);
-  assert.equal(validation.status, 'PASS');
+  assert.equal(validation.status, 'PASS', JSON.stringify(validation.errors));
   
   writePostgresMemgraphReleaseEvidence({ root, directory, expected, apiJob, validation });
   const postgresEvidence = JSON.parse(fs.readFileSync(
@@ -382,7 +384,7 @@ test('gate inventory validation enforces exact required set without allowing ext
   const directory = path.join(artifactRoot, config.artifactName);
   const apiJob = jobApi.find(job => job.name === config.jobName);
   const validation = validateJobEvidence(config, directory, expected, apiJob);
-  assert.equal(validation.status, 'PASS');
+  assert.equal(validation.status, 'PASS', JSON.stringify(validation.errors));
   
   writePostgresMemgraphReleaseEvidence({ root, directory, expected, apiJob, validation });
   const postgresEvidence = JSON.parse(fs.readFileSync(
@@ -422,7 +424,7 @@ test('gate inventory validation is enforced for both Node 22 and Node 24 reports
   const directory = path.join(artifactRoot, config.artifactName);
   const apiJob = jobApi.find(job => job.name === config.jobName);
   const validation = validateJobEvidence(config, directory, expected, apiJob);
-  assert.equal(validation.status, 'PASS');
+  assert.equal(validation.status, 'PASS', JSON.stringify(validation.errors));
   
   writePostgresMemgraphReleaseEvidence({ root, directory, expected, apiJob, validation });
   const postgresEvidence = JSON.parse(fs.readFileSync(
@@ -473,4 +475,18 @@ test('REQUIRED_EVIDENCE_GATE_IDS contains all critical security gates', () => {
   
   // Verify the list is frozen (immutable)
   assert.ok(Object.isFrozen(REQUIRED_EVIDENCE_GATE_IDS));
+});
+
+test('the release readiness generator and CI share one immutable evidence-gate registry', () => {
+  assert.equal(REQUIRED_EVIDENCE_GATES.length, 15);
+  assert.ok(Object.isFrozen(REQUIRED_EVIDENCE_GATES));
+  assert.ok(REQUIRED_EVIDENCE_GATES.every(gate => Object.isFrozen(gate)));
+  assert.deepEqual(REQUIRED_EVIDENCE_GATE_IDS, REQUIRED_EVIDENCE_GATES.map(gate => gate.id));
+  assert.equal(new Set(REQUIRED_EVIDENCE_GATE_IDS).size, REQUIRED_EVIDENCE_GATE_IDS.length);
+  for (const gate of REQUIRED_EVIDENCE_GATES) {
+    assert.match(gate.id, /^[a-z0-9]+(?:-[a-z0-9]+)*$/);
+    assert.equal(gate.evidenceFile, gate.id + '.json');
+    assert.equal(typeof gate.title, 'string');
+    assert.ok(gate.title.trim());
+  }
 });

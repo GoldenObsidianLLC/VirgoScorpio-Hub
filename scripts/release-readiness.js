@@ -19,6 +19,7 @@ const { assessSourceTreeStatus, assessPinnedSubmodule, hasSuccessfulPlaywrightSu
 const { validateObservabilityDeploymentManifest } = require('../packages/observability/src/deployment-contract');
 const { readRegularFile } = require('./configure-otel-dev');
 const { renderReleaseReadinessMarkdown } = require('./release-readiness-report');
+const { REQUIRED_EVIDENCE_GATES } = require('./release-readiness-gates');
 
 const root = path.resolve(__dirname, '..');
 loadEnvFile(path.join(root, '.env'));
@@ -279,29 +280,19 @@ const playwrightAvailable = (() => {
 addCheck('playwright-installed', 'Playwright dependency available', playwrightAvailable ? 'PASS' : 'BLOCKED',
   playwrightAvailable ? '@playwright/test resolves in this checkout; browser execution and results are separate gates.' : '@playwright/test is not installed/resolvable in this checkout.');
 
-const currentGates = [
-  ['postgres-memgraph-live', 'Fresh/upgrade migrations, PostgreSQL transactions and Memgraph outage/replay', 'postgres-memgraph-live.json'],
-  ['tenant-isolation-review', 'Independent tenant-isolation and authorization review', 'tenant-isolation-review.json'],
-  ['identity-provider-e2e', 'OIDC/SAML/email delivery/MFA recovery end-to-end evidence', 'identity-provider-e2e.json'],
-  ['clamav-corpus', 'Live ClamAV, malicious-file corpus and legacy-asset quarantine', 'clamav-corpus.json'],
-  ['cloud-live-providers', 'Live S3/GCS/Azure/S3-compatible credentials and least-privilege operations', 'cloud-live-providers.json'],
-  ['stripe-live-lifecycle', 'Stripe webhook replay, ambiguous-outcome recovery and inventory lifecycle', 'stripe-live-lifecycle.json'],
-  ['browser-accessibility', 'Playwright editor journeys and WCAG-focused accessibility acceptance', 'browser-accessibility.json'],
-  ['commerce-parity-acceptance', 'Tax/shipping/coupons/refunds/fulfilment/downloads/subscription acceptance', 'commerce-parity-acceptance.json'],
-  ['community-parity-acceptance', 'Group privacy, spam/abuse, search, export/deletion and forum acceptance', 'community-parity-acceptance.json'],
-  ['plugin-container-isolation', 'Signed plugin pipeline and adversarial container isolation', 'plugin-container-isolation.json'],
-  ['dependency-sbom-codeql', 'Reviewed dependency audit, SBOM/provenance and CodeQL evidence', 'dependency-sbom-codeql.json'],
-  ['load-backup-restore', 'Load/soak, fault injection, backup/restore and recovery drills', 'load-backup-restore.json'],
-  ['independent-security-review', 'Independent security assessment and severe-finding remediation', 'independent-security-review.json'],
-  ['operations-release-approval', 'Deployment runbooks, secrets/rollback plan, monitoring and release approval', 'operations-release-approval.json']
-];
-for (const gate of currentGates) evidenceFileStatus(...gate);
+for (const gate of REQUIRED_EVIDENCE_GATES) {
+  if (gate.id === 'observability-production') {
+    addObservabilityDeploymentGate(gate);
+  } else {
+    evidenceFileStatus(gate.id, gate.title, gate.evidenceFile);
+  }
+}
 
 // This deployment-specific manifest is ignored by Git because it contains
 // operational configuration and internal evidence references. It must identify
 // the exact release revision and remain structurally separate from source tests.
-function addObservabilityDeploymentGate() {
-  const filename = 'observability-production.json';
+function addObservabilityDeploymentGate({ id, title, evidenceFile }) {
+  const filename = evidenceFile;
   const absolute = path.join(evidenceDir, filename);
   const evidencePath = 'artifacts/evidence/' + filename;
   let status = 'MISSING_EVIDENCE';
@@ -343,15 +334,13 @@ function addObservabilityDeploymentGate() {
   }
 
   report.evidenceGates.push({
-    id: 'observability-production',
-    title: 'Production OTLP backend, security, governance, ownership and delivery evidence',
+    id,
+    title,
     status,
     evidencePath,
     details
   });
 }
-addObservabilityDeploymentGate();
-
 const supplemental = [];
 function supplementalFile(id, title, filename, validator, successDetails) {
   const absolute = path.join(evidenceDir, filename);
