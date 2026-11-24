@@ -513,3 +513,66 @@ test('PostgreSQL integration: metadata-only AI task state is durable and actor/s
   assert.equal(Object.hasOwn(persisted.rows[0], 'prompt'), false);
   assert.equal(Object.hasOwn(persisted.rows[0], 'response'), false);
 });
+
+test('PostgreSQL integration: outbox delivery rejects payload tenant identity before handler side effects', { skip: !enabled }, async t => {
+  const pool = createPostgresPool({ DATABASE_URL: process.env.DATABASE_URL, DATABASE_POOL_MAX: '4' });
+  const consumerGroup = `it.identity.${randomUUID().replaceAll('-', '')}`;
+  const siteA = (await pool.query(
+    'INSERT INTO sites(slug,name) VALUES($1,$2) RETURNING id',
+    [`identity-a-${randomUUID().slice(0, 8)}`, 'Outbox Identity Site A']
+  )).rows[0].id;
+  const siteB = (await pool.query(
+    'INSERT INTO sites(slug,name) VALUES($1,$2) RETURNING id',
+    [`identity-b-${randomUUID().slice(0, 8)}`, 'Outbox Identity Site B']
+  )).rows[0].id;
+  const eventId = randomUUID();
+  const aggregateId = randomUUID();
+
+  t.after(async () => {
+    await pool.query('DELETE FROM outbox_consumer_groups WHERE consumer_group=$1', [consumerGroup]).catch(() => {});
+    await pool.query('DELETE FROM outbox_events WHERE id=$1', [eventId]).catch(() => {});
+    await pool.query('DELETE FROM sites WHERE id=ANY($1::uuid[])', [[siteA, siteB]]).catch(() => {});
+    await pool.end();
+  });
+
+  // The row's canonical site_id is Site A, while the duplicated payload siteId
+  // falsely claims Site B. The durable worker must quarantine it before handler
+  // code can perform a tenant-scoped side effect.
+  await pool.query(
+    `INSERT INTO outbox_events(
+       id,aggregate_type,aggregate_id,aggregate_version,event_type,payload,
+       schema_version,site_id,classification
+     ) VALUES($1,'content',$2,1,'content.upsert',$3::jsonb,1,$4,'site-private')`,
+    [eventId, aggregateId, JSON.stringify({
+      id: aggregateId.toUpperCase(),
+      siteId: siteB.toUpperCase(),
+      title: 'Mismatched tenant identity'
+    }), siteA]
+  );
+
+  const { createOutboxDeliveryWorker } = require('../../packages/db/src/outbox-delivery');
+  let handlerCalls = 0;
+  const worker = createOutboxDeliveryWorker({
+    pool,
+    consumerGroup,
+    eventTypes: ['content.upsert'],
+    maxAttempts: 1,
+    handler: async () => { handlerCalls += 1; }
+  });
+
+  const result = await worker.runOnce();
+  assert.equal(result.claimed, 1);
+  assert.equal(result.results[0].ok, false);
+  assert.equal(result.results[0].dead, true);
+  assert.equal(handlerCalls, 0);
+
+  const delivery = await pool.query(
+    'SELECT status,last_error_code,attempts FROM outbox_deliveries WHERE event_id=$1 AND consumer_group=$2',
+    [eventId, consumerGroup]
+  );
+  assert.deepEqual(delivery.rows[0], {
+    status: 'dead',
+    last_error_code: 'ERR_VIRGOSCORPIO_HUB_EVENT_IDENTITY_SCOPE_MISMATCH',
+    attempts: 1
+  });
+});
