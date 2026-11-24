@@ -6,13 +6,13 @@ const { createApiServer } = require('../apps/api/src/server');
 
 /**
  * Tests for login CSRF mitigation (pentest finding: Password login permits cross-site login CSRF)
- * 
+ *
  * The vulnerability allowed cross-origin no-cors POST requests to log a victim into an attacker's
  * account by:
  * 1. Accepting JSON bodies without validating Content-Type (text/plain was accepted)
  * 2. Not checking Origin header for cross-origin requests
  * 3. Not checking Sec-Fetch-Site header
- * 
+ *
  * The mitigation adds three defenses:
  * 1. Origin header validation (when present, must match same-origin)
  * 2. Sec-Fetch-Site header validation (must be same-origin or none)
@@ -50,7 +50,7 @@ async function withLoginServer(fn, envExtra = {}) {
 
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const base = `http://127.0.0.1:${server.address().port}`;
-  
+
   try {
     await fn(base);
   } finally {
@@ -74,7 +74,7 @@ test('login succeeds with valid same-origin request (application/json Content-Ty
     const data = await response.json();
     assert.equal(data.authenticated, true);
     assert.equal(data.user.email, 'test@example.com');
-    
+
     const setCookie = response.headers.get('set-cookie');
     assert.ok(setCookie, 'login must set session cookies');
     assert.match(setCookie, /vsh_session=/);
