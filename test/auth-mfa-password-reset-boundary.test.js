@@ -26,8 +26,10 @@ test('password reset invalidates pending MFA challenges before updating password
   await t.test('consumes pending MFA challenges in the password reset transaction', async () => {
     const events = [];
     const pool = {
-      async query() {
-        throw new Error('Password reset must use a dedicated transaction client.');
+      async query(sql, values = []) {
+        assert.match(sql, /SELECT 1 FROM identity_action_tokens/);
+        assert.deepEqual(values, [resetTokenHash]);
+        return { rowCount: 1, rows: [{ '?column?': 1 }] };
       },
       async connect() {
         return {
@@ -328,12 +330,15 @@ test('MFA completion creates session within transaction holding challenge lock',
 test('concurrent password reset and MFA completion are serialized by lock ordering', async t => {
   const userId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
   const challengeId = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+  const resetToken = Buffer.alloc(32, 3).toString('base64url');
 
   await t.test('password reset acquires challenge lock before user update', async () => {
     const events = [];
     const pool = {
-      async query() {
-        throw new Error('Password reset must use transaction client.');
+      async query(sql, values = []) {
+        assert.match(sql, /SELECT 1 FROM identity_action_tokens/);
+        assert.deepEqual(values, [digest(resetToken)]);
+        return { rowCount: 1, rows: [{ '?column?': 1 }] };
       },
       async connect() {
         return {
@@ -375,7 +380,7 @@ test('concurrent password reset and MFA completion are serialized by lock orderi
 
     const identity = createIdentityService({ pool, env: {} });
     await identity.resetPassword({
-      token: Buffer.alloc(32, 3).toString('base64url'),
+      token: resetToken,
       password: 'NewSecure9Password',
     });
 
@@ -532,8 +537,10 @@ test('pre-reset MFA challenge cannot create post-reset session', async t => {
     const resetToken = Buffer.alloc(32, 8).toString('base64url');
 
     const pool = {
-      async query() {
-        throw new Error('Must use transaction client.');
+      async query(sql, values = []) {
+        assert.match(sql, /SELECT 1 FROM identity_action_tokens/);
+        assert.deepEqual(values, [digest(resetToken)]);
+        return { rowCount: 1, rows: [{ '?column?': 1 }] };
       },
       async connect() {
         return {

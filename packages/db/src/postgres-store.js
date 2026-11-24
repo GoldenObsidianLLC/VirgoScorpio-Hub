@@ -101,13 +101,13 @@ function createPostgresStore({ pool }) {
     await client.query('DELETE FROM content_collaboration_operation_keys WHERE content_id=$1', [contentId]);
   }
 
-  async function transition({ siteId, id, actorId, correlationId = null, action, fromStatuses, toStatus, expectedVersion, note, scheduledAt, publish = false, clearPublished = false, onTransition }) {
+  async function transition({ siteId, id, actorId, correlationId = null, action, fromStatuses, toStatus, expectedVersion, expectedContentType = null, note, scheduledAt, publish = false, clearPublished = false, onTransition }) {
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
       const selected = await client.query(
         `SELECT id,site_id,title,slug,locale,content_type,status,body,version,published_snapshot FROM content_items
-         WHERE id=$1 AND site_id=$2 AND deleted_at IS NULL FOR UPDATE`, [id, siteId]
+         WHERE id=$1 AND site_id=$2 AND deleted_at IS NULL AND ($3::text IS NULL OR content_type=$3) FOR UPDATE`, [id, siteId, expectedContentType]
       );
       const row = selected.rows[0];
       if (!row) { const error = new Error('Content not found.'); error.statusCode = 404; error.code = 'ERR_VIRGOSCORPIO_HUB_CONTENT_NOT_FOUND'; throw error; }
@@ -151,11 +151,11 @@ function createPostgresStore({ pool }) {
   }
 
   const store = {
-    async saveDraft({ siteId, id, title, slug, locale = 'en', contentType = 'page', document, authorId = null, expectedVersion, note = null, correlationId = null, onDraftSaved }) {
+    async saveDraft({ siteId, id, title, slug, locale = 'en', contentType = 'page', document, authorId = null, expectedVersion, expectedContentType = null, note = null, correlationId = null, onDraftSaved }) {
       const client = await pool.connect();
       try {
         await client.query('BEGIN');
-        const existing = id ? await client.query('SELECT id,version,status FROM content_items WHERE id=$1 AND site_id=$2 AND deleted_at IS NULL FOR UPDATE', [id, siteId]) : { rows: [] };
+        const existing = id ? await client.query('SELECT id,version,status,content_type FROM content_items WHERE id=$1 AND site_id=$2 AND deleted_at IS NULL AND ($3::text IS NULL OR content_type=$3) FOR UPDATE', [id, siteId, expectedContentType]) : { rows: [] };
         const old = existing.rows[0];
         if (id && !old) { const error = new Error('Content not found.'); error.statusCode = 404; error.code = 'ERR_VIRGOSCORPIO_HUB_CONTENT_NOT_FOUND'; throw error; }
         if (old && expectedVersion !== undefined && Number(expectedVersion) !== old.version) throw conflict('Content changed since it was loaded. Reload before retrying.', 'ERR_VIRGOSCORPIO_HUB_VERSION_CONFLICT');
@@ -232,7 +232,7 @@ function createPostgresStore({ pool }) {
         const selected = await client.query(
           `SELECT id,site_id,title,slug,locale,content_type,status,body,version,lock_version,published_snapshot
              FROM content_items
-            WHERE id=$1 AND site_id=$2 AND deleted_at IS NULL
+            WHERE id=$1 AND site_id=$2 AND deleted_at IS NULL AND content_type='page'
             FOR UPDATE`,
           [contentId, siteId]
         );
@@ -469,7 +469,7 @@ function createPostgresStore({ pool }) {
                 ), '[]'::jsonb) AS operations
            FROM content_items c
            LEFT JOIN content_collaboration_documents d ON d.content_id=c.id
-          WHERE c.id=$1 AND c.site_id=$2 AND c.deleted_at IS NULL`,
+          WHERE c.id=$1 AND c.site_id=$2 AND c.content_type='page' AND c.deleted_at IS NULL`,
         [contentId, siteId, afterSequence]
       );
       const row = selected.rows[0];
@@ -584,48 +584,48 @@ function createPostgresStore({ pool }) {
       return result.rows;
     },
 
-    async listRevisions({ siteId, contentId, limit = 50 }) {
+    async listRevisions({ siteId, contentId, limit = 50, contentType = null }) {
       const result = await pool.query(
         `SELECT r.id,r.version,r.author_id,r.change_summary,r.created_at
          FROM content_revisions r JOIN content_items c ON c.id=r.content_id
-         WHERE c.site_id=$1 AND c.id=$2 ORDER BY r.version DESC LIMIT $3`, [siteId, contentId, Math.min(100, Math.max(1, Number(limit) || 50))]
+         WHERE c.site_id=$1 AND c.id=$2 AND ($4::text IS NULL OR c.content_type=$4) ORDER BY r.version DESC LIMIT $3`, [siteId, contentId, Math.min(100, Math.max(1, Number(limit) || 50)), contentType]
       );
       return result.rows;
     },
 
-    async getRevision({ siteId, contentId, version }) {
+    async getRevision({ siteId, contentId, version, contentType = null }) {
       const result = await pool.query(
         `SELECT r.id,r.version,r.snapshot,r.author_id,r.change_summary,r.created_at
          FROM content_revisions r JOIN content_items c ON c.id=r.content_id
-         WHERE c.site_id=$1 AND c.id=$2 AND r.version=$3 LIMIT 1`, [siteId, contentId, version]
+         WHERE c.site_id=$1 AND c.id=$2 AND r.version=$3 AND ($4::text IS NULL OR c.content_type=$4) LIMIT 1`, [siteId, contentId, version, contentType]
       );
       return result.rows[0] || null;
     },
 
-    async submitForReview({ siteId, id, actorId, expectedVersion, note, correlationId = null, onTransition }) {
-      return transition({ siteId, id, actorId, correlationId, action: 'submitted_for_review', fromStatuses: ['draft'], toStatus: 'in_review', expectedVersion, note, onTransition });
+    async submitForReview({ siteId, id, actorId, expectedVersion, expectedContentType = null, note, correlationId = null, onTransition }) {
+      return transition({ siteId, id, actorId, correlationId, action: 'submitted_for_review', fromStatuses: ['draft'], toStatus: 'in_review', expectedVersion, expectedContentType, note, onTransition });
     },
-    async approve({ siteId, id, actorId, expectedVersion, note, correlationId = null, onTransition }) {
-      return transition({ siteId, id, actorId, correlationId, action: 'approved', fromStatuses: ['in_review'], toStatus: 'approved', expectedVersion, note, onTransition });
+    async approve({ siteId, id, actorId, expectedVersion, expectedContentType = null, note, correlationId = null, onTransition }) {
+      return transition({ siteId, id, actorId, correlationId, action: 'approved', fromStatuses: ['in_review'], toStatus: 'approved', expectedVersion, expectedContentType, note, onTransition });
     },
-    async rejectReview({ siteId, id, actorId, expectedVersion, note, correlationId = null, onTransition }) {
-      return transition({ siteId, id, actorId, correlationId, action: 'rejected', fromStatuses: ['in_review'], toStatus: 'draft', expectedVersion, note, onTransition });
+    async rejectReview({ siteId, id, actorId, expectedVersion, expectedContentType = null, note, correlationId = null, onTransition }) {
+      return transition({ siteId, id, actorId, correlationId, action: 'rejected', fromStatuses: ['in_review'], toStatus: 'draft', expectedVersion, expectedContentType, note, onTransition });
     },
-    async publishContent({ siteId, id, actorId, expectedVersion, note, correlationId = null, onTransition }) {
-      return transition({ siteId, id, actorId, correlationId, action: 'published', fromStatuses: ['approved'], toStatus: 'published', expectedVersion, note, publish: true, onTransition });
+    async publishContent({ siteId, id, actorId, expectedVersion, expectedContentType = null, note, correlationId = null, onTransition }) {
+      return transition({ siteId, id, actorId, correlationId, action: 'published', fromStatuses: ['approved'], toStatus: 'published', expectedVersion, expectedContentType, note, publish: true, onTransition });
     },
-    async scheduleContent({ siteId, id, actorId, scheduledAt, expectedVersion, note, correlationId = null, onTransition }) {
+    async scheduleContent({ siteId, id, actorId, scheduledAt, expectedVersion, expectedContentType = null, note, correlationId = null, onTransition }) {
       const when = new Date(scheduledAt);
       if (!Number.isFinite(when.getTime()) || when.getTime() < Date.now() + 60_000 || when.getTime() > Date.now() + 366 * 24 * 60 * 60_000) {
         const error = new Error('scheduledAt must be between one minute and one year in the future.'); error.statusCode = 400; error.code = 'ERR_VIRGOSCORPIO_HUB_INVALID_SCHEDULE'; throw error;
       }
-      return transition({ siteId, id, actorId, correlationId, action: 'scheduled', fromStatuses: ['approved'], toStatus: 'scheduled', expectedVersion, note, scheduledAt: when, onTransition });
+      return transition({ siteId, id, actorId, correlationId, action: 'scheduled', fromStatuses: ['approved'], toStatus: 'scheduled', expectedVersion, expectedContentType, note, scheduledAt: when, onTransition });
     },
-    async archiveContent({ siteId, id, actorId, expectedVersion, note, correlationId = null, onTransition }) {
-      return transition({ siteId, id, actorId, correlationId, action: 'archived', fromStatuses: ['draft','in_review','approved','scheduled','published'], toStatus: 'archived', expectedVersion, note, clearPublished: true, onTransition });
+    async archiveContent({ siteId, id, actorId, expectedVersion, expectedContentType = null, note, correlationId = null, onTransition }) {
+      return transition({ siteId, id, actorId, correlationId, action: 'archived', fromStatuses: ['draft','in_review','approved','scheduled','published'], toStatus: 'archived', expectedVersion, expectedContentType, note, clearPublished: true, onTransition });
     },
-    async unpublishContent({ siteId, id, actorId, expectedVersion, note, correlationId = null, onTransition }) {
-      return transition({ siteId, id, actorId, correlationId, action: 'unpublished', fromStatuses: ['published'], toStatus: 'draft', expectedVersion, note, clearPublished: true, onTransition });
+    async unpublishContent({ siteId, id, actorId, expectedVersion, expectedContentType = null, note, correlationId = null, onTransition }) {
+      return transition({ siteId, id, actorId, correlationId, action: 'unpublished', fromStatuses: ['published'], toStatus: 'draft', expectedVersion, expectedContentType, note, clearPublished: true, onTransition });
     },
 
     async publishDue({ limit = 20 } = {}) {
