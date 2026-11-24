@@ -51,6 +51,7 @@
 - `.tgz` archive inspection rejects unsafe paths, oversized archives and install lifecycle scripts, but this inspection is not a complete malware analysis and is not a substitute for isolated build/review.
 - Do not run untrusted plugin code in the main API process. The runner must be private, independently deployed, and tested against a hostile-plugin suite.
 - The container runner bounds concurrent invocations (default 8), names each container with a 128-bit random identifier, and awaits bounded forced-removal retries after timeout/output-limit termination before releasing its local execution slot. If removal cannot be confirmed it reports `ERR_VIRGOSCORPIO_HUB_PLUGIN_CLEANUP_FAILED`; host-level orphan reconciliation and daemon-failure testing remain deployment requirements.
+- The plugin runner applies process-local global concurrency (default 4) and per-pinned-image concurrency (default half the global cap, rounded up), returning HTTP 429 with `Retry-After` when full. The image key is not tenant identity: these limits bound one process and provide per-image isolation only; they do not guarantee per-tenant fairness or coordinate across runner replicas. Deployments that horizontally scale the runner must size host/container capacity accordingly and add a shared admission/quota layer if cross-replica tenant fairness is required.
 
 ### AI
 - Mock AI is the default; external provider content submission requires `AI_ALLOW_EXTERNAL_CONTENT=true`.
@@ -72,7 +73,7 @@
 | XSS/unsafe HTML | Escaped rendering, restricted styles, script-disabled CSP | Browser-level tests, HTML fuzzing, review every new widget/renderer helper |
 | Malicious archive | Safe path checks, metadata validation, Ed25519 provenance tooling and signed artifact/SBOM digest fields | Complete quarantine build pipeline, registry/image attestation, malware/vulnerability scanning and adversarial testing |
 | Malicious plugin | Isolated OCI runtime controls and allowlist | Host-level sandbox validation, gVisor/Kata assessment, per-capability enforcement and independent audit |
-| Resource exhaustion | Request/render/media/plugin bounds, queue backpressure, container-runner concurrency cap and awaited timeout/output-limit cleanup retries | Load/soak tests, per-tenant quotas, distributed rate limiting and host-level orphan recovery |
+| Resource exhaustion | Request/render/media/plugin bounds, queue backpressure, container-runner concurrency cap with awaited timeout/output-limit cleanup retries, and plugin-runner process-local global/per-image caps | Load/soak tests, per-tenant quotas, distributed rate limiting, cross-replica plugin-runner admission and host-level orphan recovery; per-image limits are not tenant identity or a distributed quota |
 | AI prompt injection | Allowlisted task and tool design; model output validation | Adversarial prompt-injection evaluation; tenant/model/provider policies |
 | AI data disclosure | External processing opt-in, site provider policy, classification field, request/input-character budgets and selected audit events | Verify enforcement for every data path, provider contracts/regions/retention, cost accounting and policy/audit UI |
 | Secret leakage | `.env.example` uses placeholders; status avoids keys | Secret scanner, rotation procedures, production secret manager and repository scan |
