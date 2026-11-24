@@ -8,8 +8,8 @@ Maintainer-prepared route, capability, data-access, and regression-test navigati
 
 - Status: MAINTAINER_PREPARED_NOT_INDEPENDENTLY_REVIEWED.
 - Generated from the current working-tree implementation anchors and the catalog at docs/security/tenant-isolation-route-inventory.catalog.json.
-- Implementation-source digest: 644820c5fdaf9f6132c559afe29975bf3d386d0dc8b6224df4e4653c32dd1f7a across 22 files.
-- Referenced-test digest: b8cfc2cede2f508ec85899c166bb22e268f6e46ab40e7eb3c08539225db89f23 across 61 files.
+- Implementation-source digest: 837a20f867e1815c9f3f2f95305fd58a2f97b36fb68e62f40fa510c0d2da18a9 across 22 files.
+- Referenced-test digest: 9326fa1809059428714930817d56280be9c742569cb66e6047ea864d0a0c68ed across 61 files.
 - Inventory size: 28 route/flow families, 80 declared route patterns, 22 source files, and 61 test files.
 - Regenerate with npm run security:tenant-inventory; CI checks freshness with node scripts/generate-tenant-isolation-route-inventory.js --check.
 
@@ -85,7 +85,7 @@ Tests: test/content-type-routes.test.js, test/collaboration-api.test.js, test/re
 - Capabilities/controls: Account/session lifecycle policy, Site association for invitation acceptance
 - Data-access boundary: users; auth_sessions; MFA challenges/secrets; invitations; OIDC/SAML state; email/outbox delivery records
 - Side effects: Session creation/revocation; Cookie and CSRF state changes; One-time invitation and federation state consumption; Email/outbox delivery
-- Source: apps/api/src/auth-routes.js (lines 50, 204, 263)
+- Source: apps/api/src/auth-routes.js (lines 91, 250, 320)
 - Test references: test/auth-security.test.js, test/auth-cookies.test.js, test/api.test.js
 - Coverage characterization: **targeted**. Unit and HTTP tests cover important token/session controls. Exhaustive cross-site invitation, SAML/OIDC provider, recovery-token and stale-session adversarial review remains external.
 
