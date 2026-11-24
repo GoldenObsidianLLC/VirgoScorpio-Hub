@@ -2,6 +2,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createContainerPluginRunner } = require('../packages/plugins/src/container-runner');
+const { EventEmitter } = require('node:events');
+const { PassThrough, Writable } = require('node:stream');
 
 test('container runner enforces maxConcurrent limit to prevent resource exhaustion', async () => {
   const imageDigest = `registry.example/plugin@sha256:${'a'.repeat(64)}`;
@@ -10,43 +12,43 @@ test('container runner enforces maxConcurrent limit to prevent resource exhausti
     maxConcurrent: 2,
     timeoutMs: 100 // Short timeout so tests don't hang
   });
-  
+
   // Start two concurrent invocations (at the limit)
   // These will fail because docker isn't available, but that's OK - we're testing the limit
   const promise1 = runner.invoke({ imageDigest, action: 'test.action', input: {}, requestId: 'req1' }).catch(e => e);
   const promise2 = runner.invoke({ imageDigest, action: 'test.action', input: {}, requestId: 'req2' }).catch(e => e);
-  
+
   // Third invocation should be rejected immediately with BUSY error before even trying to spawn
   await assert.rejects(
     () => runner.invoke({ imageDigest, action: 'test.action', input: {}, requestId: 'req3' }),
     { code: 'ERR_VIRGOSCORPIO_HUB_PLUGIN_BUSY' }
   );
-  
+
   // Wait for the first two to complete (they'll error but that's fine)
   await Promise.all([promise1, promise2]);
 });
 
 test('container runner validates maxConcurrent parameter to prevent misconfiguration', () => {
   const imageDigest = `registry.example/plugin@sha256:${'f'.repeat(64)}`;
-  
+
   // Should reject non-integer
   assert.throws(
     () => createContainerPluginRunner({ allowedImages: [imageDigest], maxConcurrent: 1.5 }),
     /maxConcurrent must be a positive integer/
   );
-  
+
   // Should reject zero
   assert.throws(
     () => createContainerPluginRunner({ allowedImages: [imageDigest], maxConcurrent: 0 }),
     /maxConcurrent must be a positive integer/
   );
-  
+
   // Should reject negative
   assert.throws(
     () => createContainerPluginRunner({ allowedImages: [imageDigest], maxConcurrent: -1 }),
     /maxConcurrent must be a positive integer/
   );
-  
+
   // Should accept valid positive integer
   assert.doesNotThrow(
     () => createContainerPluginRunner({ allowedImages: [imageDigest], maxConcurrent: 8 })
@@ -60,20 +62,20 @@ test('container runner decrements active counter after timeout to allow new invo
     maxConcurrent: 1,
     timeoutMs: 100 // Very short timeout
   });
-  
+
   // First invocation that will timeout or fail
   const promise1 = runner.invoke({ imageDigest, action: 'test.action', input: {}, requestId: 'req1' }).catch(e => e);
-  
+
   // Wait for it to complete
   await promise1;
-  
+
   // Second invocation should succeed in starting (proving counter was decremented)
   // If the counter wasn't decremented, this would throw BUSY error
   const promise2 = runner.invoke({ imageDigest, action: 'test.action', input: {}, requestId: 'req2' }).catch(e => e);
-  
+
   // Should not throw BUSY - if it does, the test will fail
   await promise2;
-  
+
   // If we got here without BUSY error, the counter management is working
   assert.ok(true, 'Counter was properly decremented after first invocation');
 });
@@ -83,14 +85,14 @@ test('container runner prevents rapid concurrent invocations from exceeding maxC
   const fs = require('node:fs');
   const path = require('node:path');
   const source = fs.readFileSync(path.join(__dirname, '../packages/plugins/src/container-runner.js'), 'utf8');
-  
+
   // Verify the maxConcurrent check happens before spawn
   assert.ok(source.includes('if (active >= maxConcurrent)'), 'Should check active >= maxConcurrent');
   assert.ok(source.includes('ERR_VIRGOSCORPIO_HUB_PLUGIN_BUSY'), 'Should throw BUSY error when limit reached');
-  
+
   // Verify the check happens before spawn (by checking order in source)
   const busyCheckIndex = source.indexOf('if (active >= maxConcurrent)');
-  const spawnIndex = source.indexOf('spawn(runtime, args');
+  const spawnIndex = source.indexOf('spawnProcess(runtime, args');
   assert.ok(busyCheckIndex < spawnIndex, 'maxConcurrent check should happen before spawn');
 });
 
@@ -99,18 +101,18 @@ test('container runner code includes removeContainer function for cleanup on tim
   const fs = require('node:fs');
   const path = require('node:path');
   const source = fs.readFileSync(path.join(__dirname, '../packages/plugins/src/container-runner.js'), 'utf8');
-  
+
   // Verify removeContainer function exists
   assert.ok(source.includes('removeContainer'), 'Source should include removeContainer function');
-  
+
   // Verify it's called on timeout
-  assert.ok(source.includes('removeContainer()') && source.includes('ERR_VIRGOSCORPIO_HUB_PLUGIN_TIMEOUT'), 
+  assert.ok(source.includes('removeContainer()') && source.includes('ERR_VIRGOSCORPIO_HUB_PLUGIN_TIMEOUT'),
     'removeContainer should be called on timeout');
-  
+
   // Verify it's called on output limit
   assert.ok(source.includes('removeContainer()') && source.includes('ERR_VIRGOSCORPIO_HUB_PLUGIN_OUTPUT_LIMIT'),
     'removeContainer should be called on output limit');
-  
+
   // Verify it uses docker rm --force
   assert.ok(source.includes("'rm'") && source.includes("'--force'"),
     'removeContainer should use docker rm --force');
@@ -121,15 +123,15 @@ test('container runner code assigns unique container names for tracking', () => 
   const fs = require('node:fs');
   const path = require('node:path');
   const source = fs.readFileSync(path.join(__dirname, '../packages/plugins/src/container-runner.js'), 'utf8');
-  
+
   // Verify container name generation
   assert.ok(source.includes('containerName') && source.includes('vh-plugin-'),
     'Source should generate unique container names with vh-plugin- prefix');
-  
+
   // Verify --name argument is added
   assert.ok(source.includes("'--name'") && source.includes('containerName'),
     'Source should add --name argument with containerName');
-  
+
   // Verify randomBytes is used for uniqueness
   assert.ok(source.includes('randomBytes'),
     'Source should use randomBytes for unique container names');
@@ -140,14 +142,16 @@ test('container runner code implements retry logic for removeContainer', () => {
   const fs = require('node:fs');
   const path = require('node:path');
   const source = fs.readFileSync(path.join(__dirname, '../packages/plugins/src/container-runner.js'), 'utf8');
-  
-  // Verify retry mechanism exists
-  assert.ok(source.includes('attemptsLeft') && source.includes('retry'),
-    'removeContainer should implement retry logic with attemptsLeft');
-  
-  // Verify it retries on non-zero exit code
-  assert.ok(source.includes('code !== 0') && source.includes('retry'),
-    'removeContainer should retry on non-zero exit code');
+
+  // Verify retry mechanism exists and is bounded.
+  assert.ok(source.includes('attemptsLeft') && source.includes('return removeContainer(attemptsLeft - 1)'),
+    'removeContainer should implement bounded retries');
+
+  // Removal succeeds only on exit code zero and retries a bounded number of times.
+  assert.ok(source.includes('code === 0') && source.includes('attemptsLeft'),
+    'removeContainer should require successful exit and use a bounded retry count');
+  assert.ok(source.includes('return removeContainer(attemptsLeft - 1)'),
+    'removeContainer should await and retry failed removals');
 });
 
 test('container runner code manages active counter across all exit paths', () => {
@@ -155,20 +159,80 @@ test('container runner code manages active counter across all exit paths', () =>
   const fs = require('node:fs');
   const path = require('node:path');
   const source = fs.readFileSync(path.join(__dirname, '../packages/plugins/src/container-runner.js'), 'utf8');
-  
+
   // Verify active counter exists
   assert.ok(source.includes('let active = 0'),
     'Source should declare active counter');
-  
+
   // Verify active is incremented before spawn
   assert.ok(source.includes('active += 1'),
     'Source should increment active counter');
-  
+
   // Verify active is decremented in finish function
   assert.ok(source.includes('active -= 1') && source.includes('finish'),
     'Source should decrement active counter in finish function');
-  
+
   // Verify active is checked against maxConcurrent
   assert.ok(source.includes('active >= maxConcurrent') && source.includes('ERR_VIRGOSCORPIO_HUB_PLUGIN_BUSY'),
     'Source should check active against maxConcurrent and reject with BUSY');
+});
+
+
+test('container runner waits for bounded forced-removal retries before releasing capacity', async () => {
+  const imageDigest = `registry.example/plugin@sha256:${'c'.repeat(64)}`;
+  let removeAttempts = 0;
+  let runAttempts = 0;
+  let markRemovalStarted;
+  const removalStarted = new Promise(resolve => { markRemovalStarted = resolve; });
+
+  const spawnProcess = (_runtime, args) => {
+    const child = new EventEmitter();
+    child.kill = () => {
+      setImmediate(() => child.emit('close', null, 'SIGKILL'));
+      return true;
+    };
+
+    if (args[0] === 'rm') {
+      removeAttempts += 1;
+      markRemovalStarted();
+      setTimeout(() => child.emit('close', removeAttempts === 1 ? 1 : 0), 10);
+      return child;
+    }
+
+    runAttempts += 1;
+    child.stdout = new PassThrough();
+    child.stderr = new PassThrough();
+    child.stdin = new Writable({
+      write(_chunk, _encoding, callback) { callback(); }
+    });
+    if (runAttempts > 1) {
+      setImmediate(() => {
+        child.stdout.once('end', () => child.emit('close', 0));
+        child.stdout.end(JSON.stringify({ protocol: 1, ok: true, result: { executed: true } }));
+      });
+    }
+    return child;
+  };
+
+  const runner = createContainerPluginRunner({
+    runtime: 'fake-runtime',
+    allowedImages: [imageDigest],
+    maxConcurrent: 1,
+    timeoutMs: 100,
+    spawnProcess
+  });
+  const first = runner.invoke({ imageDigest, action: 'test.action', input: {}, requestId: 'timeout' }).catch(error => error);
+
+  await removalStarted;
+  await assert.rejects(
+    () => runner.invoke({ imageDigest, action: 'test.action', input: {}, requestId: 'during-cleanup' }),
+    { code: 'ERR_VIRGOSCORPIO_HUB_PLUGIN_BUSY' }
+  );
+
+  const timeoutError = await first;
+  assert.equal(timeoutError.code, 'ERR_VIRGOSCORPIO_HUB_PLUGIN_TIMEOUT');
+  assert.equal(removeAttempts, 2, 'failed forced removal should be retried and awaited');
+
+  const result = await runner.invoke({ imageDigest, action: 'test.action', input: {}, requestId: 'after-cleanup' });
+  assert.deepEqual(result, { executed: true });
 });

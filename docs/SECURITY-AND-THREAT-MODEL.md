@@ -50,6 +50,7 @@
 - Third-party activation requires approval and an immutable OCI digest. The runner verifies the digest against an explicit allowlist.
 - `.tgz` archive inspection rejects unsafe paths, oversized archives and install lifecycle scripts, but this inspection is not a complete malware analysis and is not a substitute for isolated build/review.
 - Do not run untrusted plugin code in the main API process. The runner must be private, independently deployed, and tested against a hostile-plugin suite.
+- The container runner bounds concurrent invocations (default 8), names each container with a 128-bit random identifier, and awaits bounded forced-removal retries after timeout/output-limit termination before releasing its local execution slot. If removal cannot be confirmed it reports `ERR_VIRGOSCORPIO_HUB_PLUGIN_CLEANUP_FAILED`; host-level orphan reconciliation and daemon-failure testing remain deployment requirements.
 
 ### AI
 - Mock AI is the default; external provider content submission requires `AI_ALLOW_EXTERNAL_CONTENT=true`.
@@ -71,7 +72,7 @@
 | XSS/unsafe HTML | Escaped rendering, restricted styles, script-disabled CSP | Browser-level tests, HTML fuzzing, review every new widget/renderer helper |
 | Malicious archive | Safe path checks, metadata validation, Ed25519 provenance tooling and signed artifact/SBOM digest fields | Complete quarantine build pipeline, registry/image attestation, malware/vulnerability scanning and adversarial testing |
 | Malicious plugin | Isolated OCI runtime controls and allowlist | Host-level sandbox validation, gVisor/Kata assessment, per-capability enforcement and independent audit |
-| Resource exhaustion | Request/render/media/plugin bounds; queue backpressure | Load/soak tests, per-tenant quotas and distributed rate limiting |
+| Resource exhaustion | Request/render/media/plugin bounds, queue backpressure, container-runner concurrency cap and awaited timeout/output-limit cleanup retries | Load/soak tests, per-tenant quotas, distributed rate limiting and host-level orphan recovery |
 | AI prompt injection | Allowlisted task and tool design; model output validation | Adversarial prompt-injection evaluation; tenant/model/provider policies |
 | AI data disclosure | External processing opt-in, site provider policy, classification field, request/input-character budgets and selected audit events | Verify enforcement for every data path, provider contracts/regions/retention, cost accounting and policy/audit UI |
 | Secret leakage | `.env.example` uses placeholders; status avoids keys | Secret scanner, rotation procedures, production secret manager and repository scan |
