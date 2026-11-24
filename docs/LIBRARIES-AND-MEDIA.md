@@ -2,7 +2,7 @@
 
 ## Data model
 
-`library_assets` is the current asset record; `library_asset_versions` stores snapshots and storage references for optimistic history; `media_variants` stores derived assets such as WebP or WebM. The database identifies the owning site and tracks content type, SHA-256, byte count, public/private visibility, status, and metadata. Binary data is stored in local storage or a configured object store.
+`library_assets` is the current asset record; `library_asset_versions` stores snapshots and storage references for optimistic history; `media_variants` stores derived assets such as WebP or WebM and binds each current derivative to `source_version`. The database identifies the owning site and tracks content type, SHA-256, byte count, public/private visibility, status, and metadata. Binary data is stored in local storage or a configured object store.
 
 ## Upload restrictions
 
@@ -21,6 +21,14 @@
 - Migration caveat: this change cannot purge CDN objects or revoke direct URLs issued by an older deployment. Before rollout where MEDIA_CDN_PUBLIC was enabled, purge every previously exposed media key/prefix at the provider, block public access to the origin bucket, and verify denial from both the edge and origin. Until that evidence exists, previously issued URLs remain a separate deployment risk.
 
 The selected production deployment must also satisfy the [Public Asset Delivery Deployment Contract](security/PUBLIC-ASSET-DELIVERY-DEPLOYMENT-CONTRACT.md): private object origin, an approved application read identity, cache bypass and origin-header preservation for both public API route families, zero positive/negative TTLs, post-revocation origin/edge denial, and an explicit legacy direct-CDN URL disposition. The validator is structural only; it does not change runtime behavior or prove provider state.
+
+## Variant/source version binding
+
+- Every newly created row in `media_variants` records the exact `library_assets.version` from which its bytes were derived in `source_version`. Public variant reads require `source_version = library_assets.version` as well as the current public/active asset checks.
+- Migration `0019_library_variant_source_version.sql` leaves historical derivative rows with `source_version IS NULL`. They are not assumed to match the current asset and are deliberately unavailable through public variant reads until regenerated. Regeneration should use the current asset version.
+- Variant creation uploads the derivative object first, then holds a shared lock on the matching active parent version while inserting the row. A stale version returns the existing 409 version-conflict contract and the unreferenced uploaded object is compensated.
+- Replacing source bytes deletes all derivative rows in the same transaction as the asset version update; old objects are deleted only after commit. A failed replacement rolls back both the row deletion and replacement, preserving the old derivative references. A metadata-only version change retains the same source bytes and advances only already-bound variant rows to the new version in that transaction; legacy unbound rows remain unbound.
+- The optimizer route pins both derivative insertion and optimization-status updates to the version it read before optimization. A stale optimization cannot publish output for a later source revision or overwrite that revision's status.
 
 ## API outline
 

@@ -489,6 +489,57 @@ test('Redis document envelope validation enforces channel scope and the F1.9 ope
   assert.equal(validateDocumentEnvelope('{not-json', SITE_A, DOCUMENT_A, 16_384), null);
 });
 
+test('Redis document publisher rejects malformed operation keys before local or remote delivery', async t => {
+  const broker = new FakeRedisBroker();
+  const bridge = await createRedisRealtimeBridge({
+    url: REDIS_URL,
+    createClient: () => broker.createClient()
+  });
+  const hub = createRealtimeHub({ authorizeSubscribe: async () => true });
+  await bridge.attach(hub);
+  const subscription = await hub.subscribe({
+    principal: { id: USER_A },
+    siteId: SITE_A,
+    topic: 'document:' + DOCUMENT_A
+  });
+  const events = subscription.events[Symbol.asyncIterator]();
+  t.after(async () => {
+    subscription.close();
+    hub.close();
+    await bridge.close();
+  });
+
+  const remotePublishCalls = broker.publishCalls;
+  const valid = collaborationOperation();
+  const missingEnvelopeKey = { ...valid };
+  delete missingEnvelopeKey.baseSequence;
+  const invalidOperations = [
+    { label: 'extra envelope key', operation: { ...valid, unexpected: true } },
+    { label: 'missing envelope key', operation: missingEnvelopeKey },
+    { label: 'missing operation payload key', operation: { ...valid, payload: {} } }
+  ];
+
+  for (const { label, operation } of invalidOperations) {
+    await assert.rejects(bridge.publishDocumentOperation({
+      siteId: SITE_A,
+      contentId: DOCUMENT_A,
+      sequence: 1,
+      originConnectionId: ORIGIN_CONNECTION,
+      operation
+    }), error =>
+      error.code === 'ERR_VIRGOSCORPIO_HUB_INVALID_COLLABORATION_OPERATION' && error.statusCode === 400,
+      label
+    );
+  }
+
+  assert.equal(broker.publishCalls, remotePublishCalls, 'invalid operations must not be relayed through Redis');
+  const localDelivery = await Promise.race([
+    events.next().then(() => 'delivered'),
+    new Promise(resolve => setTimeout(() => resolve('quiet'), 25))
+  ]);
+  assert.equal(localDelivery, 'quiet', 'invalid operations must not enter local realtime fan-out');
+});
+
 test('Redis document channel fans out only to the matching site and document across independent hubs', async t => {
   const broker = new FakeRedisBroker();
   const bridgeA = await createRedisRealtimeBridge({
