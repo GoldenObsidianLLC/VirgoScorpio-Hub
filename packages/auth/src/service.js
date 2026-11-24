@@ -107,6 +107,36 @@ async function insertAuditEvent(queryable, {
   );
 }
 
+/**
+ * Re-establish, inside the caller's transaction, that the acting user still holds
+ * site:manage (or '*') on the site. The user, membership and role rows are locked
+ * with FOR SHARE so a concurrent revocation either commits first (and is observed
+ * here) or waits until this transaction completes. Callers that also write rows
+ * referencing the site must take lockSiteShared() first so the lock order matches
+ * removeMember(), which locks the site row before deleting memberships.
+ * A null actorId denotes the non-production developer principal, which the route
+ * guard already authorizes without a membership.
+ */
+async function lockSiteShared(queryable, siteId) {
+  await queryable.query('SELECT id FROM sites WHERE id=$1 FOR KEY SHARE', [siteId]);
+}
+async function requireCurrentSiteManager(queryable, siteId, actorId, environment = process.env) {
+  if (actorId === null || actorId === undefined) {
+    // The null-actor compatibility path is reserved for the non-production developer principal.
+    if (environment.NODE_ENV !== 'production') return;
+    throw authError(403, 'ERR_VIRGOSCORPIO_HUB_FORBIDDEN', 'An authenticated actor is required for site management.');
+  }
+  const result = await queryable.query(
+    `SELECT r.capabilities FROM site_memberships m JOIN roles r ON r.id=m.role_id
+     JOIN users u ON u.id=m.user_id WHERE m.user_id=$1 AND m.site_id=$2 AND u.status='active'
+     FOR SHARE OF m, r, u`, [actorId, siteId]
+  );
+  const allowed = result.rows.some(row => Array.isArray(row.capabilities) && (
+    row.capabilities.includes('site:manage') || row.capabilities.includes('*')
+  ));
+  if (!allowed) throw authError(403, 'ERR_VIRGOSCORPIO_HUB_FORBIDDEN', 'The site:manage capability is required for this site.');
+}
+
 function createIdentityService({ pool, env = process.env, clock = () => Date.now(), onAuthorizationChange = async () => {} } = {}) {
   if (!pool) throw new TypeError('Identity service requires a PostgreSQL pool.');
   if (typeof onAuthorizationChange !== 'function') throw new TypeError('onAuthorizationChange must be a function.');
@@ -540,10 +570,14 @@ function createIdentityService({ pool, env = process.env, clock = () => Date.now
       });
     },
 
-    async listMembers({ siteId }) {
-      const result = await pool.query(`SELECT u.id,u.email,u.display_name,u.status,r.slug AS role,m.created_at
-        FROM site_memberships m JOIN users u ON u.id=m.user_id JOIN roles r ON r.id=m.role_id
-        WHERE m.site_id=$1 ORDER BY r.slug,u.email`, [siteId]);
+    async listMembers({ siteId, actorId = null }) {
+      const result = await withTransaction(pool, async client => {
+        await lockSiteShared(client, siteId);
+        await requireCurrentSiteManager(client, siteId, actorId, env);
+        return client.query(`SELECT u.id,u.email,u.display_name,u.status,r.slug AS role,m.created_at
+          FROM site_memberships m JOIN users u ON u.id=m.user_id JOIN roles r ON r.id=m.role_id
+          WHERE m.site_id=$1 ORDER BY r.slug,u.email`, [siteId]);
+      });
       return result.rows.map(row => ({ id: row.id, email: row.email, displayName: row.display_name, status: row.status, role: row.role, joinedAt: row.created_at }));
     },
 
@@ -553,6 +587,8 @@ function createIdentityService({ pool, env = process.env, clock = () => Date.now
       if (!['editor','author','viewer'].includes(roleSlug)) { const error = new Error('Members may be assigned editor, author, or viewer roles using this endpoint.'); error.statusCode = 400; error.code = 'ERR_VIRGOSCORPIO_HUB_INVALID_ROLE'; throw error; }
 
       const { user, membership } = await withTransaction(pool, async client => {
+        await lockSiteShared(client, siteId);
+        await requireCurrentSiteManager(client, siteId, actorId, env);
         const userResult = await client.query("SELECT id,email,display_name,status FROM users WHERE lower(email)=$1 AND status='active'", [email]);
         if (!userResult.rows[0]) { const error = new Error('No active account exists for that email. Create an invitation instead.'); error.statusCode = 404; error.code = 'ERR_VIRGOSCORPIO_HUB_USER_NOT_FOUND'; throw error; }
         const role = await client.query('SELECT id FROM roles WHERE slug=$1', [roleSlug]);
@@ -581,6 +617,7 @@ function createIdentityService({ pool, env = process.env, clock = () => Date.now
         // Serialize membership removals per site. Without this row lock, two active
         // owners can concurrently observe a count of two and remove each other.
         await client.query('SELECT id FROM sites WHERE id=$1 FOR UPDATE', [siteId]);
+        await requireCurrentSiteManager(client, siteId, actorId, env);
         const isOwner = await client.query(`SELECT 1 FROM site_memberships m JOIN roles r ON r.id=m.role_id WHERE m.site_id=$1 AND m.user_id=$2 AND r.slug='site-owner'`, [siteId, userId]);
         if (isOwner.rows[0]) {
           const owners = await client.query(`SELECT count(*)::integer AS count FROM site_memberships m JOIN roles r ON r.id=m.role_id JOIN users u ON u.id=m.user_id WHERE m.site_id=$1 AND r.slug='site-owner' AND u.status='active'`, [siteId]);
@@ -613,9 +650,12 @@ function createIdentityService({ pool, env = process.env, clock = () => Date.now
       const role = await pool.query('SELECT id FROM roles WHERE slug=$1', [roleSlug]);
       const token = randomBytes(32).toString('base64url');
       const expiresAt = new Date(clock() + 7 * 24 * 60 * 60_000);
-      const site = await pool.query('SELECT slug,name FROM sites WHERE id=$1', [siteId]);
-      if (!site.rows[0]) throw authError(404, 'ERR_VIRGOSCORPIO_HUB_SITE_NOT_FOUND', 'Site not found.');
       await withTransaction(pool, async queryable => {
+        await lockSiteShared(queryable, siteId);
+        await requireCurrentSiteManager(queryable, siteId, invitedBy, env);
+        // Read site metadata only after the transaction has revalidated the manager.
+        const site = await queryable.query('SELECT slug,name FROM sites WHERE id=$1', [siteId]);
+        if (!site.rows[0]) throw authError(404, 'ERR_VIRGOSCORPIO_HUB_SITE_NOT_FOUND', 'Site not found.');
         const inserted = await queryable.query(`INSERT INTO site_invitations(site_id,email,role_id,token_hash,invited_by,expires_at)
           VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT (site_id, (lower(email))) WHERE accepted_at IS NULL DO UPDATE
           SET role_id=EXCLUDED.role_id,token_hash=EXCLUDED.token_hash,invited_by=EXCLUDED.invited_by,expires_at=EXCLUDED.expires_at,created_at=now()
