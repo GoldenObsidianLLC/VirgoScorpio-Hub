@@ -9,12 +9,12 @@ const userId = '22222222-2222-4222-8222-222222222222';
 
 /**
  * Security test suite for AI classification bypass mitigation.
- *
+ * 
  * Pentest finding: Caller-controlled AI classification bypasses the external-processing data policy
- *
+ * 
  * Root cause: reserveAIUsage accepted caller-supplied dataClassification without server-side
  * verification, allowing members to label confidential input as "public" and bypass policy gates.
- *
+ * 
  * Mitigation: When provider !== 'mock', classification is forced to 'confidential' regardless
  * of the caller-declared value, ensuring external providers are subject to the strictest policy.
  */

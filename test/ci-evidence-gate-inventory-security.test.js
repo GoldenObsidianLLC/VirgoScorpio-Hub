@@ -180,15 +180,15 @@ test('requireReadinessSnapshot rejects reports missing required security gates',
     'tenant-isolation-review',
     'observability-production',
   ];
-
+  
   const { root, artifactRoot, jobApi } = createMinimalFixtures(t, { gateIds: omittedGates });
-
+  
   const config = JOBS.find(job => job.key === 'postgres-memgraph-integration');
   const directory = path.join(artifactRoot, config.artifactName);
   const apiJob = jobApi.find(job => job.name === config.jobName);
   const validation = validateJobEvidence(config, directory, expected, apiJob);
   assert.equal(validation.status, 'PASS', JSON.stringify(validation.errors));
-
+  
   writePostgresMemgraphReleaseEvidence({ root, directory, expected, apiJob, validation });
   const postgresEvidence = JSON.parse(fs.readFileSync(
     path.join(root, 'artifacts/evidence/postgres-memgraph-live.json'), 'utf8'
@@ -212,15 +212,15 @@ test('requireReadinessSnapshot rejects reports missing independent-security-revi
   const gatesWithoutSecurityReview = REQUIRED_EVIDENCE_GATE_IDS.filter(
     id => id !== 'independent-security-review'
   );
-
+  
   const { root, artifactRoot, jobApi } = createMinimalFixtures(t, { gateIds: gatesWithoutSecurityReview });
-
+  
   const config = JOBS.find(job => job.key === 'postgres-memgraph-integration');
   const directory = path.join(artifactRoot, config.artifactName);
   const apiJob = jobApi.find(job => job.name === config.jobName);
   const validation = validateJobEvidence(config, directory, expected, apiJob);
   assert.equal(validation.status, 'PASS', JSON.stringify(validation.errors));
-
+  
   writePostgresMemgraphReleaseEvidence({ root, directory, expected, apiJob, validation });
   const postgresEvidence = JSON.parse(fs.readFileSync(
     path.join(root, 'artifacts/evidence/postgres-memgraph-live.json'), 'utf8'
@@ -242,7 +242,7 @@ test('requireReadinessSnapshot rejects reports missing independent-security-revi
   } catch (err) {
     error = err;
   }
-
+  
   assert.match(error.message, /omits required evidence gates/i);
   assert.match(error.message, /independent-security-review/);
 });
@@ -252,15 +252,15 @@ test('requireReadinessSnapshot rejects reports missing operations-release-approv
   const gatesWithoutOpsApproval = REQUIRED_EVIDENCE_GATE_IDS.filter(
     id => id !== 'operations-release-approval'
   );
-
+  
   const { root, artifactRoot, jobApi } = createMinimalFixtures(t, { gateIds: gatesWithoutOpsApproval });
-
+  
   const config = JOBS.find(job => job.key === 'postgres-memgraph-integration');
   const directory = path.join(artifactRoot, config.artifactName);
   const apiJob = jobApi.find(job => job.name === config.jobName);
   const validation = validateJobEvidence(config, directory, expected, apiJob);
   assert.equal(validation.status, 'PASS', JSON.stringify(validation.errors));
-
+  
   writePostgresMemgraphReleaseEvidence({ root, directory, expected, apiJob, validation });
   const postgresEvidence = JSON.parse(fs.readFileSync(
     path.join(root, 'artifacts/evidence/postgres-memgraph-live.json'), 'utf8'
@@ -282,7 +282,7 @@ test('requireReadinessSnapshot rejects reports missing operations-release-approv
   } catch (err) {
     error = err;
   }
-
+  
   assert.match(error.message, /omits required evidence gates/i);
   assert.match(error.message, /operations-release-approval/);
 });
@@ -294,15 +294,15 @@ test('requireReadinessSnapshot rejects reports missing multiple critical gates',
     'tenant-isolation-review',
     'observability-production',
   ];
-
+  
   const { root, artifactRoot, jobApi } = createMinimalFixtures(t, { gateIds: minimalGates });
-
+  
   const config = JOBS.find(job => job.key === 'postgres-memgraph-integration');
   const directory = path.join(artifactRoot, config.artifactName);
   const apiJob = jobApi.find(job => job.name === config.jobName);
   const validation = validateJobEvidence(config, directory, expected, apiJob);
   assert.equal(validation.status, 'PASS', JSON.stringify(validation.errors));
-
+  
   writePostgresMemgraphReleaseEvidence({ root, directory, expected, apiJob, validation });
   const postgresEvidence = JSON.parse(fs.readFileSync(
     path.join(root, 'artifacts/evidence/postgres-memgraph-live.json'), 'utf8'
@@ -324,7 +324,7 @@ test('requireReadinessSnapshot rejects reports missing multiple critical gates',
   } catch (err) {
     error = err;
   }
-
+  
   assert.match(error.message, /omits required evidence gates/i);
   // Should list multiple missing gates
   assert.match(error.message, /identity-provider-e2e/);
@@ -335,13 +335,13 @@ test('requireReadinessSnapshot rejects reports missing multiple critical gates',
 test('requireReadinessSnapshot accepts reports with all required gates present', t => {
   // Positive test: all required gates present should succeed
   const { root, artifactRoot, jobApi } = createMinimalFixtures(t, { gateIds: REQUIRED_EVIDENCE_GATE_IDS });
-
+  
   const config = JOBS.find(job => job.key === 'postgres-memgraph-integration');
   const directory = path.join(artifactRoot, config.artifactName);
   const apiJob = jobApi.find(job => job.name === config.jobName);
   const validation = validateJobEvidence(config, directory, expected, apiJob);
   assert.equal(validation.status, 'PASS', JSON.stringify(validation.errors));
-
+  
   writePostgresMemgraphReleaseEvidence({ root, directory, expected, apiJob, validation });
   const postgresEvidence = JSON.parse(fs.readFileSync(
     path.join(root, 'artifacts/evidence/postgres-memgraph-live.json'), 'utf8'
@@ -358,11 +358,11 @@ test('requireReadinessSnapshot accepts reports with all required gates present',
     requireAttestation: false,
     finalizedAt: '2026-11-13T01:00:00.000Z',
   });
-
+  
   assert.ok(finalized);
   assert.ok(finalized.report);
   assert.equal(finalized.report.sourceRevision, expected.mergeSha);
-
+  
   // Verify all required gates are present in the finalized report
   const finalizedGateIds = finalized.report.evidenceGates.map(gate => gate.id);
   for (const requiredId of REQUIRED_EVIDENCE_GATE_IDS) {
@@ -377,15 +377,15 @@ test('gate inventory validation enforces exact required set without allowing ext
     'fake-extra-gate-1',
     'fake-extra-gate-2',
   ];
-
+  
   const { root, artifactRoot, jobApi } = createMinimalFixtures(t, { gateIds: gatesWithExtra });
-
+  
   const config = JOBS.find(job => job.key === 'postgres-memgraph-integration');
   const directory = path.join(artifactRoot, config.artifactName);
   const apiJob = jobApi.find(job => job.name === config.jobName);
   const validation = validateJobEvidence(config, directory, expected, apiJob);
   assert.equal(validation.status, 'PASS', JSON.stringify(validation.errors));
-
+  
   writePostgresMemgraphReleaseEvidence({ root, directory, expected, apiJob, validation });
   const postgresEvidence = JSON.parse(fs.readFileSync(
     path.join(root, 'artifacts/evidence/postgres-memgraph-live.json'), 'utf8'
@@ -408,7 +408,7 @@ test('gate inventory validation enforces exact required set without allowing ext
   } catch (err) {
     error = err;
   }
-
+  
   assert.match(error.message, /omits required evidence gates/i);
 });
 
@@ -417,15 +417,15 @@ test('gate inventory validation is enforced for both Node 22 and Node 24 reports
   const gatesWithoutDependencyGate = REQUIRED_EVIDENCE_GATE_IDS.filter(
     id => id !== 'dependency-sbom-codeql'
   );
-
+  
   const { root, artifactRoot, jobApi } = createMinimalFixtures(t, { gateIds: gatesWithoutDependencyGate });
-
+  
   const config = JOBS.find(job => job.key === 'postgres-memgraph-integration');
   const directory = path.join(artifactRoot, config.artifactName);
   const apiJob = jobApi.find(job => job.name === config.jobName);
   const validation = validateJobEvidence(config, directory, expected, apiJob);
   assert.equal(validation.status, 'PASS', JSON.stringify(validation.errors));
-
+  
   writePostgresMemgraphReleaseEvidence({ root, directory, expected, apiJob, validation });
   const postgresEvidence = JSON.parse(fs.readFileSync(
     path.join(root, 'artifacts/evidence/postgres-memgraph-live.json'), 'utf8'
@@ -448,7 +448,7 @@ test('gate inventory validation is enforced for both Node 22 and Node 24 reports
   } catch (err) {
     error = err;
   }
-
+  
   assert.match(error.message, /omits required evidence gates/i);
   assert.match(error.message, /dependency-sbom-codeql/);
 });
@@ -465,14 +465,14 @@ test('REQUIRED_EVIDENCE_GATE_IDS contains all critical security gates', () => {
     'independent-security-review',
     'operations-release-approval',
   ];
-
+  
   for (const gate of criticalGates) {
     assert.ok(
       REQUIRED_EVIDENCE_GATE_IDS.includes(gate),
       `Critical gate ${gate} must be in REQUIRED_EVIDENCE_GATE_IDS`
     );
   }
-
+  
   // Verify the list is frozen (immutable)
   assert.ok(Object.isFrozen(REQUIRED_EVIDENCE_GATE_IDS));
 });
