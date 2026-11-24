@@ -49,7 +49,7 @@ async function waitForDatabaseWriteLock(client, queryFragment, timeoutMs = 5000,
          SELECT 1 FROM pg_locks relation_lock
           WHERE relation_lock.pid=a.pid
             AND relation_lock.locktype='relation'
-            AND relation_lock.relation=to_regclass($3)
+            AND relation_lock.relation=to_regclass($2)
             AND relation_lock.mode='RowShareLock'
             AND relation_lock.granted
        )
@@ -57,7 +57,7 @@ async function waitForDatabaseWriteLock(client, queryFragment, timeoutMs = 5000,
          SELECT 1 FROM pg_locks tuple_lock
           WHERE tuple_lock.pid=a.pid
             AND tuple_lock.locktype='tuple'
-            AND tuple_lock.relation=to_regclass($3)
+            AND tuple_lock.relation=to_regclass($2)
        )
        AND EXISTS (
          SELECT 1 FROM pg_locks transaction_wait
@@ -66,8 +66,9 @@ async function waitForDatabaseWriteLock(client, queryFragment, timeoutMs = 5000,
             AND transaction_wait.mode='ShareLock'
             AND NOT transaction_wait.granted
        )`;
-  const values = [blockerPid, `%${queryFragment.toLowerCase()}%`];
-  if (relationName !== null) values.push(relationName);
+  const values = relationName === null
+    ? [blockerPid, `%${queryFragment.toLowerCase()}%`]
+    : [blockerPid, relationName];
 
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {

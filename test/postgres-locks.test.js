@@ -34,11 +34,11 @@ test('waitForDatabaseWriteLock can identify a blocked row lock by relation evide
 
   assert.equal(await waitForDatabaseWriteLock(client, 'FOR KEY SHARE', 5000, { relationName: 'sites' }), true);
   assert.equal(queries.length, 2);
-  assert.match(queries[1].sql, /relation_lock\.relation=to_regclass\(\$3\)/);
+  assert.match(queries[1].sql, /relation_lock\.relation=to_regclass\(\$2\)/);
   assert.match(queries[1].sql, /relation_lock\.mode='RowShareLock'/);
   assert.match(queries[1].sql, /tuple_lock\.locktype='tuple'/);
   assert.match(queries[1].sql, /transaction_wait\.mode='ShareLock'/);
-  assert.deepEqual(queries[1].values, [4321, '%for key share%', 'sites']);
+  assert.deepEqual(queries[1].values, [4321, 'sites']);
 });
 
 test('waitForDatabaseWriteLock ignores lock waits caused by another backend', async () => {
