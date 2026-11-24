@@ -89,6 +89,26 @@ function createAuthRouteHandlers(dependencies = {}) {
    */
   async function handlePublic({ req, res, url, requestId }) {
     if (req.method === 'POST' && url.pathname === '/api/v1/auth/login') {
+      // Login CSRF defence: the login response replaces the session and CSRF
+      // cookies, so a cross-site request must never reach credential processing.
+      // Browsers always attach Origin to cross-origin POSTs; non-browser clients
+      // that omit it are not subject to ambient-cookie CSRF.
+      if (req.headers.origin !== undefined) {
+        const expectedOrigin = `${secureCookies ? 'https' : (req.socket.encrypted ? 'https' : 'http')}://${req.headers.host}`;
+        if (typeof req.headers.origin !== 'string' || req.headers.origin !== expectedOrigin) {
+          throw fail(403, 'ERR_VIRGOSCORPIO_HUB_CSRF', 'A matching same-origin Origin header is required.');
+        }
+      }
+      const fetchSite = req.headers['sec-fetch-site'];
+      if (typeof fetchSite === 'string' && fetchSite !== 'same-origin' && fetchSite !== 'none') {
+        throw fail(403, 'ERR_VIRGOSCORPIO_HUB_CSRF', 'Cross-site login requests are not permitted.');
+      }
+      // A JSON content type cannot be sent cross-origin without a CORS preflight,
+      // which this API does not grant; text/plain "simple" requests are refused.
+      const contentType = String(req.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
+      if (contentType !== 'application/json') {
+        throw fail(415, 'ERR_VIRGOSCORPIO_HUB_UNSUPPORTED_MEDIA_TYPE', 'Content-Type must be application/json.');
+      }
       const limit = allowRequest('login:' + (req.socket.remoteAddress || 'unknown'));
       if (!limit.allowed) {
         res.setHeader('retry-after', String(limit.retryAfterSeconds));

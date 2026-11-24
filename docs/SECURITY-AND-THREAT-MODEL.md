@@ -26,7 +26,7 @@
 - Passwords are hashed with Node.js `scrypt`, per-password 16-byte salts, a fixed N/r/p configuration, and 64-byte output; plaintext passwords are not persisted.
 - Session tokens are random opaque values; only their SHA-256 digest is stored. Sessions expire, are revocable, and are not returned by the `/me` response.
 - Browser session cookie is HttpOnly. The CSRF token is supplied by a separate non-HttpOnly cookie and must be mirrored in `x-csrf-token` for unsafe cookie-authenticated calls.
-- Origin is checked when supplied. Deployments must set secure cookies and enforce HTTPS.
+- Cookie-authenticated unsafe methods require the CSRF cookie/header pair and a matching same-origin Origin. The login endpoint rejects a mismatched Origin (when supplied), cross-site/cross-origin `Sec-Fetch-Site`, and any Content-Type other than `application/json` before credential processing, rate-limit work, or session-cookie issuance. An absent Origin remains supported for non-browser JSON clients; browser cross-origin JSON requests require a CORS preflight that this API does not grant. Deployments must set `SESSION_COOKIE_SECURE=true`, enforce HTTPS, and preserve the externally visible scheme/host at the trusted proxy boundary.
 - Login endpoint and internal login bucket counts are bounded; authorization is capability-based.
 - Bootstrap is controlled by a configured secret and closes after an active account exists.
 - Site owner removal checks for a remaining active owner.
@@ -63,7 +63,7 @@
 |---|---|---|
 | Credential brute force | Request throttling, strong password policy, scrypt, optional TOTP MFA | Distributed/global rate limiter and operational alerting |
 | Session theft | Opaque tokens, HttpOnly cookie, expiry, revocation | Rotate sessions after privilege changes, device/session management, reauthentication for critical operations |
-| CSRF | CSRF cookie/header and Origin check for cookie writes | Enforce Origin on all same-site mutations in production and test proxy edge cases |
+| CSRF | Cookie-write CSRF cookie/header plus same-origin Origin; login additionally checks Origin, Fetch Metadata and JSON Content-Type before credentials/rate limiting/cookie issuance | Continue proxy scheme/host edge-case testing; preserve explicit non-browser compatibility for login without Origin |
 | Cross-tenant data access | Site-scoped data access, shared site-selector reconciliation, capability checks, site-private content/relationship/taxonomy outbox envelopes, and envelope-bound identity validation before durable handler dispatch | Independent route-by-route tenant isolation/authorization review remains mandatory; maintainer route maps and targeted regressions are preparation only and do not close issue #14 |
 | Outbox payload identity drift | One explicit event-definition registry binds registered top-level payload site/resource IDs to the validated v1 envelope; mismatches fail before handler effects and the graph projector retains its direct-call guard | New domain event families must be explicitly registered; live PostgreSQL regression and hosted checks remain required for each candidate; Redis realtime hints are a separate transient protocol |
 | Stale graph authorization | Graph projections do not grant access | Rebuild/reconciliation and outage tests |
