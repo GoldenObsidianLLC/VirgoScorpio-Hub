@@ -1198,11 +1198,22 @@ test(
 
       const results = await removalResultsPromise;
       assert.equal(lockWaiterCount, 2, 'both requests must serialize on the same site row');
-      assert.equal(results.filter(result => result.status === 200).length, 1);
-      assert.equal(results.filter(result => result.status === 409).length, 1);
+      assert.equal(
+        results.filter(result => result.status === 200).length,
+        1,
+        'exactly one owner removal must commit; results: ' + JSON.stringify(results)
+      );
+      // The winning transaction revokes the losing actor's membership. The
+      // losing request must fail its in-transaction manager check rather than
+      // making a last-owner decision with authorization that is no longer valid.
+      assert.equal(
+        results.filter(result => result.status === 403).length,
+        1,
+        'the request whose actor was revoked must be denied; results: ' + JSON.stringify(results)
+      );
       const successfulRemoval = results.find(result => result.status === 200);
-      const rejectedRemoval = results.find(result => result.status === 409);
-      assert.equal(rejectedRemoval.payload.code, 'ERR_VIRGOSCORPIO_HUB_LAST_OWNER');
+      const rejectedRemoval = results.find(result => result.status === 403);
+      assert.equal(rejectedRemoval.payload.code, 'ERR_VIRGOSCORPIO_HUB_FORBIDDEN');
 
       const owners = await pool.query(
         `SELECT m.user_id

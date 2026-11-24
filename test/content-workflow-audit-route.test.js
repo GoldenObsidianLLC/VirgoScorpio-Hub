@@ -47,7 +47,7 @@ test('all editorial workflow routes hand audit persistence to their store transa
   const contentStore = {
     async getById({ siteId, id }) {
       if (siteId !== SITE_ID || id !== CONTENT_ID) return null;
-      return { id: CONTENT_ID, site_id: SITE_ID, created_by: ACTOR_ID, status: 'draft', version: 1 };
+      return { id: CONTENT_ID, site_id: SITE_ID, created_by: ACTOR_ID, content_type: 'page', status: 'draft', version: 1 };
     },
     submitForReview: createTransitionMethod('submitForReview', 'in_review'),
     approve: createTransitionMethod('approve', 'approved'),
