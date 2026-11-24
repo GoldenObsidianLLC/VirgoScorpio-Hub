@@ -383,6 +383,16 @@ function createIdentityService({ pool, env = process.env, clock = () => Date.now
       const client = await pool.connect();
       try {
         await client.query('BEGIN');
+        // Serialize reset requests without taking the users row lock. Reset acceptance locks
+        // the action-token row before updating the user; using the same row lock here
+        // would invert order (user -> token versus token -> user) and permit deadlocks.
+        // The transaction-scoped advisory lock still serializes requests per account.
+        await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', ['virgoscorpio_hub-password-reset:' + user.id]);
+        const recent = await client.query("SELECT 1 FROM identity_action_tokens WHERE user_id=$1 AND purpose='password-reset' AND created_at > now() - interval '120 seconds' LIMIT 1", [user.id]);
+        if (recent.rows && recent.rows.length > 0) {
+          await client.query('ROLLBACK');
+          return { accepted: true };
+        }
         await client.query("UPDATE identity_action_tokens SET consumed_at=now() WHERE user_id=$1 AND purpose='password-reset' AND consumed_at IS NULL", [user.id]);
         await client.query("INSERT INTO identity_action_tokens(user_id,purpose,token_hash,expires_at) VALUES($1,'password-reset',$2,$3)", [user.id, digest(token), expiresAt]);
         await client.query("INSERT INTO mail_outbox(recipient,template,payload) VALUES($1,'password-reset',$2::jsonb)", [user.email, JSON.stringify({ resetUrl: `${base}/reset-password?token=${encodeURIComponent(token)}`, expiresAt: expiresAt.toISOString() })]);

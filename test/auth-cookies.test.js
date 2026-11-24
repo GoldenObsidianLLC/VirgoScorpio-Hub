@@ -105,7 +105,7 @@ test('authentication cookie serializer omits SameSite when null for non-TLS deve
     }),
     'vsh_saml_state=' + 's'.repeat(43) + '; Path=/api/v1/auth; Max-Age=600; HttpOnly'
   );
-  
+
   // Verify that the serialized cookie does not contain 'SameSite'
   const cookie = serializeAuthCookie('test', 'value', { sameSite: null, maxAge: 100 });
   assert.equal(cookie.includes('SameSite'), false, 'SameSite attribute must be omitted when sameSite is null');
