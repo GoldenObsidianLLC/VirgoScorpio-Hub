@@ -778,21 +778,48 @@ test('authorizeWorkflowAction skips checks for records without content_type', as
   });
 });
 
-test('authorizeWorkflowAction skips checks when definition not found', async () => {
+test('authorizeWorkflowAction fails closed when an active custom content-type definition is missing', async () => {
   const { handler } = createHandler([]);
   const record = { id: RECORD_ID, content_type: 'unknown' };
-  const { pool } = createPool({ rows: [] }); // no definition found
+  const { pool } = createPool({ rows: [] });
 
-  // Should not throw
+  await assert.rejects(
+    handler.authorizeWorkflowAction({
+      actor: { user: { id: ACTOR_ID }, isDeveloper: false },
+      siteId: SITE_ID,
+      action: 'publish',
+      record,
+      localPool: pool,
+      hasSiteCapability: async () => true,
+      fail: (statusCode, code, message) => Object.assign(new Error(message), { statusCode, code }),
+    }),
+    error => error.statusCode === 403 &&
+      error.code === 'ERR_VIRGOSCORPIO_HUB_FORBIDDEN' &&
+      error.message === 'The content type does not permit this operation.'
+  );
+});
+
+test('authorizeWorkflowAction leaves built-in pages outside the custom content-type registry', async () => {
+  const { handler } = createHandler([]);
+  let definitionQueries = 0;
+  const localPool = {
+    async query() {
+      definitionQueries += 1;
+      throw new Error('built-in pages must not query custom content-type definitions');
+    }
+  };
+
   await handler.authorizeWorkflowAction({
     actor: { user: { id: ACTOR_ID }, isDeveloper: false },
     siteId: SITE_ID,
     action: 'publish',
-    record,
-    localPool: pool,
+    record: { id: RECORD_ID, content_type: 'page', created_by: ACTOR_ID },
+    localPool,
     hasSiteCapability: async () => true,
     fail: (statusCode, code, message) => Object.assign(new Error(message), { statusCode, code }),
   });
+
+  assert.equal(definitionQueries, 0);
 });
 
 test('authorizeWorkflowAction maps all workflow actions to correct definition capabilities', async () => {

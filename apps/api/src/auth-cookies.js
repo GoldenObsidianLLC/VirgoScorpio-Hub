@@ -54,8 +54,10 @@ function serializeAuthCookie(name, value, {
   if (!Number.isSafeInteger(maxAge) || maxAge < 0 || maxAge > 31_536_000) {
     throw new RangeError('Authentication cookie maxAge must be an integer from 0 to 31536000.');
   }
-  if (!SAME_SITE_VALUES.has(sameSite)) {
-    throw new TypeError('Authentication cookie SameSite must be Strict, Lax, or None.');
+  // null omits the attribute; it is used only for non-TLS development cookies
+  // that must accompany the IdP's cross-site SAML POST.
+  if (sameSite !== null && !SAME_SITE_VALUES.has(sameSite)) {
+    throw new TypeError('Authentication cookie SameSite must be Strict, Lax, None, or null.');
   }
   if (sameSite === 'None' && !secure) {
     throw new TypeError('SameSite=None authentication cookies must also be Secure.');
@@ -63,7 +65,7 @@ function serializeAuthCookie(name, value, {
   if (typeof path !== 'string' || !path.startsWith('/') || path.includes(';') || path.includes(',') || path.split('').some(character => character.charCodeAt(0) <= 0x20 || character.charCodeAt(0) === 0x7f)) {
     throw new TypeError('Authentication cookie path must be an absolute, safe cookie path.');
   }
-  return `${name}=${value}; Path=${path}; SameSite=${sameSite}; Max-Age=${maxAge}${httpOnly ? '; HttpOnly' : ''}${secure ? '; Secure' : ''}`;
+  return `${name}=${value}; Path=${path}${sameSite === null ? '' : `; SameSite=${sameSite}`}; Max-Age=${maxAge}${httpOnly ? '; HttpOnly' : ''}${secure ? '; Secure' : ''}`;
 }
 
 function safeCsrfCookie(cookieValue, headerValue) {

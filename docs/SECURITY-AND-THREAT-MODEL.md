@@ -26,7 +26,7 @@
 - Passwords are hashed with Node.js `scrypt`, per-password 16-byte salts, a fixed N/r/p configuration, and 64-byte output; plaintext passwords are not persisted.
 - Session tokens are random opaque values; only their SHA-256 digest is stored. Sessions expire, are revocable, and are not returned by the `/me` response.
 - Browser session cookie is HttpOnly. The CSRF token is supplied by a separate non-HttpOnly cookie and must be mirrored in `x-csrf-token` for unsafe cookie-authenticated calls.
-- Origin is checked when supplied. Deployments must set secure cookies and enforce HTTPS.
+- Cookie-authenticated unsafe methods require the CSRF cookie/header pair and a matching same-origin Origin. The login endpoint rejects a mismatched Origin (when supplied), cross-site/cross-origin `Sec-Fetch-Site`, and any Content-Type other than `application/json` before credential processing, rate-limit work, or session-cookie issuance. An absent Origin remains supported for non-browser JSON clients; browser cross-origin JSON requests require a CORS preflight that this API does not grant. Deployments must set `SESSION_COOKIE_SECURE=true`, enforce HTTPS, and preserve the externally visible scheme/host at the trusted proxy boundary.
 - Login endpoint and internal login bucket counts are bounded; authorization is capability-based.
 - Bootstrap is controlled by a configured secret and closes after an active account exists.
 - Site owner removal checks for a remaining active owner.
@@ -40,7 +40,8 @@
 - Expected-version checks prevent silent lost updates.
 
 ### SSO, AI governance, and media
-- SAML request correlation and replay checks use PostgreSQL-backed shared cache state; cache entries are periodically purged. Optional SP request signing requires a matching RSA private key and X.509 certificate. This path still requires live IdP interoperability and key-rotation tests.
+- OIDC and SAML callbacks now bind one-time server-side request state to a short-lived browser cookie scoped to `/api/v1/auth`; the cookie is HttpOnly and expires after ten minutes. OIDC uses SameSite=Lax for its top-level GET callback. SAML uses SameSite=None with Secure when secure cookies are enabled so the cross-site POST can carry the correlation cookie; the non-TLS development profile omits SameSite because a Secure-less SameSite=None cookie would be rejected by browsers. The callback compares cookie state with the returned state using a timing-safe byte comparison before consuming server-side state or accepting the identity response. Browser binding supplements, and does not replace, server-side expiry, issuer/nonce/RelayState validation and one-time replay protection.
+- SAML request correlation and replay checks use PostgreSQL-backed shared cache state; cache entries are periodically purged. Optional SP request signing requires a matching RSA private key and X.509 certificate. OIDC/SAML live IdP interoperability, proxy/TLS behavior and signing-key rotation still require release-gate validation.
 - Site AI policies can constrain allowed providers, external-content processing, data classification, and daily request/input-character budgets. These controls need concurrency and bypass testing against live PostgreSQL.
 - S3-compatible media storage is available behind the media adapter; bucket policy, object lifecycle, public/private delivery, and CDN behavior must be tested with the target provider.
 
@@ -49,6 +50,7 @@
 - Third-party activation requires approval and an immutable OCI digest. The runner verifies the digest against an explicit allowlist.
 - `.tgz` archive inspection rejects unsafe paths, oversized archives and install lifecycle scripts, but this inspection is not a complete malware analysis and is not a substitute for isolated build/review.
 - Do not run untrusted plugin code in the main API process. The runner must be private, independently deployed, and tested against a hostile-plugin suite.
+- The plugin runner applies process-local global concurrency (default 4) and per-pinned-image concurrency (default half the global cap, rounded up), returning HTTP 429 with `Retry-After` when full. The image key is not tenant identity: these limits bound one process and provide per-image isolation only; they do not guarantee per-tenant fairness or coordinate across runner replicas. Deployments that horizontally scale the runner must size host/container capacity accordingly and add a shared admission/quota layer if cross-replica tenant fairness is required.
 
 ### AI
 - Mock AI is the default; external provider content submission requires `AI_ALLOW_EXTERNAL_CONTENT=true`.
@@ -62,14 +64,15 @@
 |---|---|---|
 | Credential brute force | Request throttling, strong password policy, scrypt, optional TOTP MFA | Distributed/global rate limiter and operational alerting |
 | Session theft | Opaque tokens, HttpOnly cookie, expiry, revocation | Rotate sessions after privilege changes, device/session management, reauthentication for critical operations |
-| CSRF | CSRF cookie/header and Origin check for cookie writes | Enforce Origin on all same-site mutations in production and test proxy edge cases |
-| Cross-tenant data access | Site-scoped data access, shared site-selector reconciliation, capability checks, and site-private content/relationship/taxonomy outbox event envelopes | Independent route-by-route tenant isolation/authorization review remains mandatory; the 7 and 10 November maintainer route maps and targeted two-site regression (hosted PR run #42775446603) are review preparation only and do not close issue #14 |
+| CSRF | Cookie-write CSRF cookie/header plus same-origin Origin; login additionally checks Origin, Fetch Metadata and JSON Content-Type before credentials/rate limiting/cookie issuance | Continue proxy scheme/host edge-case testing; preserve explicit non-browser compatibility for login without Origin |
+| Cross-tenant data access | Site-scoped data access, shared site-selector reconciliation, capability checks, site-private content/relationship/taxonomy outbox envelopes, and envelope-bound identity validation before durable handler dispatch | Independent route-by-route tenant isolation/authorization review remains mandatory; maintainer route maps and targeted regressions are preparation only and do not close issue #14 |
+| Outbox payload identity drift | One explicit event-definition registry binds registered top-level payload site/resource IDs to the validated v1 envelope; mismatches fail before handler effects and the graph projector retains its direct-call guard | New domain event families must be explicitly registered; live PostgreSQL regression and hosted checks remain required for each candidate; Redis realtime hints are a separate transient protocol |
 | Stale graph authorization | Graph projections do not grant access | Rebuild/reconciliation and outage tests |
 | SQL injection | Parameterized application queries; allowlisted interpolated graph relationship types | SQL fuzz/property tests, least-privileged DB role and review every query |
 | XSS/unsafe HTML | Escaped rendering, restricted styles, script-disabled CSP | Browser-level tests, HTML fuzzing, review every new widget/renderer helper |
 | Malicious archive | Safe path checks, metadata validation, Ed25519 provenance tooling and signed artifact/SBOM digest fields | Complete quarantine build pipeline, registry/image attestation, malware/vulnerability scanning and adversarial testing |
 | Malicious plugin | Isolated OCI runtime controls and allowlist | Host-level sandbox validation, gVisor/Kata assessment, per-capability enforcement and independent audit |
-| Resource exhaustion | Request/render/media/plugin bounds; queue backpressure | Load/soak tests, per-tenant quotas and distributed rate limiting |
+| Resource exhaustion | Request/render/media bounds, queue backpressure, and plugin-runner process-local global/per-image concurrency caps | Load/soak tests, per-tenant quotas, distributed rate limiting and cross-replica plugin-runner admission; per-image limits are not tenant identity or a distributed quota |
 | AI prompt injection | Allowlisted task and tool design; model output validation | Adversarial prompt-injection evaluation; tenant/model/provider policies |
 | AI data disclosure | External processing opt-in, site provider policy, classification field, request/input-character budgets and selected audit events | Verify enforcement for every data path, provider contracts/regions/retention, cost accounting and policy/audit UI |
 | Secret leakage | `.env.example` uses placeholders; status avoids keys | Secret scanner, rotation procedures, production secret manager and repository scan |

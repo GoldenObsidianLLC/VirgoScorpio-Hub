@@ -453,6 +453,12 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
     if (content?.created_by === actor.user.id && await identity.authorizeSite(actor.user.id, siteId, 'content:edit:own')) return;
     throw fail(403, 'ERR_VIRGOSCORPIO_HUB_FORBIDDEN', 'You cannot edit this content.');
   }
+  function assertPageContent(content) {
+    if (!content || content.content_type !== 'page') {
+      throw fail(404, 'ERR_VIRGOSCORPIO_HUB_CONTENT_NOT_FOUND', 'Page not found.');
+    }
+    return content;
+  }
   async function ensureSiteCapabilityForAI(actor, url, body, capability = 'ai:use') {
     const siteId = await siteIdFor({ req: { headers: {}, }, url, body, actor, required: false });
     if (siteId) await requireCapability(actor, siteId, capability);
@@ -548,8 +554,13 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
     const siteAllow = Array.isArray(policy.allowed_providers) ? policy.allowed_providers : [];
     if (!AI_PROVIDERS.has(provider) || !globalAllow.has(provider) || !siteAllow.includes(provider)) throw fail(403, 'ERR_VIRGOSCORPIO_HUB_AI_PROVIDER_NOT_ALLOWED', 'The configured AI provider is not allowed by both the global and site-level policies.');
     if (provider !== 'mock' && (env.AI_ALLOW_EXTERNAL_CONTENT !== 'true' || !policy.allow_external_content)) throw fail(403, 'ERR_VIRGOSCORPIO_HUB_AI_EXTERNAL_CONTENT_DISABLED', 'External AI content processing requires explicit global and site-level approval.');
-    const classification = body.dataClassification || 'public';
-    if (!Object.hasOwn(DATA_CLASSIFICATION_RANK, classification)) throw fail(400, 'ERR_VIRGOSCORPIO_HUB_AI_CLASSIFICATION_INVALID', 'dataClassification must be public, internal, or confidential.');
+    const declaredClassification = body.dataClassification || 'public';
+    if (!Object.hasOwn(DATA_CLASSIFICATION_RANK, declaredClassification)) throw fail(400, 'ERR_VIRGOSCORPIO_HUB_AI_CLASSIFICATION_INVALID', 'dataClassification must be public, internal, or confidential.');
+    // The sensitivity of caller-supplied free-form input cannot be verified server-side, so a
+    // caller-declared label must never lower the classification used for the policy decision.
+    // Whenever input would leave the deployment for an external provider, treat it as
+    // confidential (the same server-enforced level used for saved-page context).
+    const classification = provider !== 'mock' ? 'confidential' : declaredClassification;
     if (DATA_CLASSIFICATION_RANK[classification] > DATA_CLASSIFICATION_RANK[policy.max_data_classification]) throw fail(403, 'ERR_VIRGOSCORPIO_HUB_AI_CLASSIFICATION_BLOCKED', `The site policy does not permit sending ${classification} data to the configured AI provider.`);
     const chars = Math.max(0, Math.min(100_000_000, Number(inputChars) || 0));
     const reserved = await localPool.query(
@@ -1763,15 +1774,18 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
       if (req.method === 'POST' && url.pathname === '/api/v1/pages/drafts') {
         if (!store) return sendJson(res, 503, { error: 'PostgreSQL is not configured; draft persistence is disabled.', code: 'ERR_VIRGOSCORPIO_HUB_DATABASE_DISABLED', requestId });
         const body = await readJson(req, maxBody); const safe = validateSaveDraftBody(body); const siteId = await siteIdFor({ req, url, body: safe, actor });
-        if (safe.id) { const current = await store.getById({ siteId, id: safe.id }); await canEditContent(actor, siteId, current); }
-        else await requireCapability(actor, siteId, 'content:create');
+        if (safe.id) {
+          const current = await store.getById({ siteId, id: safe.id });
+          await canEditContent(actor, siteId, current);
+          assertPageContent(current);
+        } else await requireCapability(actor, siteId, 'content:create');
         const onDraftSaved = identity && actor.user.id
           ? async ({ queryable, result }) => identity.audit(
             { siteId, actorId: actor.user.id, action: 'content.draft_saved', targetType: 'content', targetId: result.id, requestId, details: { version: result.version } },
             { queryable },
           )
           : undefined;
-        const saved = await store.saveDraft({ siteId, id: safe.id, title: safe.document.title, slug: safe.slug, locale: safe.locale, contentType: 'page', document: safe.document, authorId: actor.user.id, expectedVersion: safe.expectedVersion, note: safe.note, correlationId: requestId, onDraftSaved });
+        const saved = await store.saveDraft({ siteId, id: safe.id, title: safe.document.title, slug: safe.slug, locale: safe.locale, contentType: 'page', document: safe.document, authorId: actor.user.id, expectedVersion: safe.expectedVersion, expectedContentType: 'page', note: safe.note, correlationId: requestId, onDraftSaved });
         return sendJson(res, 201, { status: 'draft', persisted: true, published: Boolean(saved.published_version), content: saved, requestId });
       }
 
@@ -1848,10 +1862,10 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
         if (!(await identity?.authorizeSite(actor.user.id, siteId, 'content:read')) && !actor.isDeveloper) {
           const current = await store.getById({ siteId, id: pageIdMatch[1] });
           if (!current || current.created_by !== actor.user.id || !(await identity.authorizeSite(actor.user.id, siteId, 'content:read:own'))) throw fail(403, 'ERR_VIRGOSCORPIO_HUB_FORBIDDEN', 'Content read permission is required.');
+          assertPageContent(current);
           return sendJson(res, 200, { content: current, requestId });
         }
-        const content = await store.getById({ siteId, id: pageIdMatch[1] });
-        if (!content) return sendJson(res, 404, { error: 'Content not found.', code: 'ERR_VIRGOSCORPIO_HUB_CONTENT_NOT_FOUND', requestId });
+        const content = assertPageContent(await store.getById({ siteId, id: pageIdMatch[1] }));
         return sendJson(res, 200, { content, requestId });
       }
 
@@ -1859,18 +1873,19 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
       if (req.method === 'GET' && revisionsMatch) {
         const siteId = await siteIdFor({ req, url, actor });
         if (!(await hasContentRead(actor, siteId))) throw fail(403, 'ERR_VIRGOSCORPIO_HUB_FORBIDDEN', 'Content read permission is required.');
-        const current = await store.getById({ siteId, id: revisionsMatch[1] });
-        if (!current) return sendJson(res, 404, { error: 'Content not found.', code: 'ERR_VIRGOSCORPIO_HUB_CONTENT_NOT_FOUND', requestId });
+        const current = assertPageContent(await store.getById({ siteId, id: revisionsMatch[1] }));
         if (!actor.isDeveloper && !(await identity.authorizeSite(actor.user.id, siteId, 'content:read')) && current.created_by !== actor.user.id) {
           throw fail(403, 'ERR_VIRGOSCORPIO_HUB_FORBIDDEN', 'You cannot read revisions for this content.');
         }
-        return sendJson(res, 200, { revisions: await store.listRevisions({ siteId, contentId: revisionsMatch[1] }), requestId });
+        return sendJson(res, 200, { revisions: await store.listRevisions({ siteId, contentId: revisionsMatch[1], contentType: 'page' }), requestId });
       }
       const restoreMatch = url.pathname.match(/^\/api\/v1\/pages\/([0-9a-f-]{36})\/restore\/(\d+)$/i);
       if (req.method === 'POST' && restoreMatch) {
         const body = await readJson(req, maxBody); const siteId = await siteIdFor({ req, url, body, actor });
-        const current = await store.getById({ siteId, id: restoreMatch[1] }); await canEditContent(actor, siteId, current);
-        const revision = await store.getRevision({ siteId, contentId: restoreMatch[1], version: Number(restoreMatch[2]) });
+        const current = await store.getById({ siteId, id: restoreMatch[1] });
+        await canEditContent(actor, siteId, current);
+        assertPageContent(current);
+        const revision = await store.getRevision({ siteId, contentId: restoreMatch[1], version: Number(restoreMatch[2]), contentType: 'page' });
         if (!revision) return sendJson(res, 404, { error: 'Revision not found.', code: 'ERR_VIRGOSCORPIO_HUB_REVISION_NOT_FOUND', requestId });
         const snap = revision.snapshot;
         const onDraftSaved = identity && actor.user.id
@@ -1879,7 +1894,7 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
             { queryable },
           )
           : undefined;
-        const saved = await store.saveDraft({ siteId, id: restoreMatch[1], title: snap.title, slug: snap.slug, locale: snap.locale, contentType: snap.contentType || 'page', document: snap.document, authorId: actor.user.id, expectedVersion: body.expectedVersion, note: `Restored revision ${revision.version}`, correlationId: requestId, onDraftSaved });
+        const saved = await store.saveDraft({ siteId, id: restoreMatch[1], title: snap.title, slug: snap.slug, locale: snap.locale, contentType: 'page', document: snap.document, authorId: actor.user.id, expectedVersion: body.expectedVersion, expectedContentType: 'page', note: `Restored revision ${revision.version}`, correlationId: requestId, onDraftSaved });
         return sendJson(res, 200, { status: 'draft', restoredFromVersion: revision.version, content: saved, requestId });
       }
 
@@ -1890,17 +1905,17 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
         const [, id, action] = workflowMatch; const expectedVersion = body.expectedVersion === undefined ? undefined : Number(body.expectedVersion); const note = body.note;
         const caps = { 'submit-review': 'content:submit-review', approve: 'content:approve', reject: 'content:approve', publish: 'content:publish', schedule: 'content:publish', archive: 'content:archive', unpublish: 'content:publish' };
         await requireCapability(actor, siteId, caps[action]);
-        // Enforce the content type's own capability list and publication policy
-        // before any workflow side effect; the site capability above is only the broad gate.
-        const targetRecord = await store.getById({ siteId, id });
+        const pageScopedWorkflow = /^\/api\/v1\/pages\//i.test(url.pathname);
+        // Load the site-scoped record before evaluating its type policy. Reuse
+        // this exact row for the author check and constrain the later locked
+        // transition to its content_type to prevent a type-change TOCTOU bypass.
+        const current = await store.getById({ siteId, id });
+        if (pageScopedWorkflow) assertPageContent(current);
         await contentTypeRouteHandler.authorizeWorkflowAction({
-          actor, siteId, action, record: targetRecord, localPool, fail,
+          actor, siteId, action, record: current, localPool, fail,
           hasSiteCapability: async capability => Boolean(await identity?.authorizeSite(actor.user.id, siteId, capability)),
         });
-        if (action === 'submit-review') {
-          const current = await store.getById({ siteId, id });
-          await canEditContent(actor, siteId, current);
-        }
+        if (action === 'submit-review') await canEditContent(actor, siteId, current);
         const onTransition = identity && actor.user.id
           ? async ({ queryable, result }) => identity.audit(
             { siteId, actorId: actor.user.id, action: `content.${action}`, targetType: 'content', targetId: id, requestId, details: { version: result.version, status: result.status } },
@@ -1913,6 +1928,7 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
           actorId: actor.user.id,
           correlationId: requestId,
           expectedVersion,
+          expectedContentType: current?.content_type || (pageScopedWorkflow ? 'page' : null),
           note,
           onTransition,
         };

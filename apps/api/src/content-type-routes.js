@@ -110,9 +110,17 @@ function createContentTypeRouteHandler({
   async function authorizeWorkflowAction({ actor, siteId, action, record, localPool, hasSiteCapability, fail }) {
     if (!record || actor.isDeveloper) return;
     const slug = record.content_type;
-    if (typeof slug !== 'string' || !CONTENT_TYPE_NAME_RE.test(slug)) return;
+    // Built-in pages intentionally have no custom content-type definition.
+    // Every other stored type must resolve to an active definition; a deleted,
+    // disabled or malformed definition must not silently disable policy checks.
+    if (slug === 'page' || slug === undefined || slug === null) return;
+    if (typeof slug !== 'string' || !CONTENT_TYPE_NAME_RE.test(slug)) {
+      throw fail(403, 'ERR_VIRGOSCORPIO_HUB_FORBIDDEN', 'The content type does not permit this operation.');
+    }
     const definition = await getContentTypeDefinition({ siteId, slug, localPool, fail });
-    if (!definition) return;
+    if (!definition) {
+      throw fail(403, 'ERR_VIRGOSCORPIO_HUB_FORBIDDEN', 'The content type does not permit this operation.');
+    }
 
     const capability = WORKFLOW_DEFINITION_CAPABILITY[action];
     if (!capability) throw fail(403, 'ERR_VIRGOSCORPIO_HUB_FORBIDDEN', 'The content type does not permit this operation.');

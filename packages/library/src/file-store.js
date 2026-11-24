@@ -170,6 +170,9 @@ function createLibraryStore({ pool, root = path.resolve(process.env.LIBRARY_ROOT
         const updated = await client.query(`UPDATE library_assets SET display_name=$3,alt_text=$4,caption=$5,description=$6,is_public=$7,metadata=$8::jsonb,version=version+1,updated_by=$9,updated_at=now() WHERE site_id=$1 AND id=$2 AND version=$10 RETURNING id,site_id,asset_kind,display_name,original_name,mime_type,byte_size,sha256,alt_text,caption,description,is_public,version,status,optimization_status,metadata,created_by,updated_by,created_at,updated_at`, [siteId,id,next.displayName,next.altText,next.caption,next.description,next.isPublic,JSON.stringify(next.metadata),actorId || null,row.version]);
         if (!updated.rows[0]) throw libraryError('Asset version is stale.', 'ERR_VIRGOSCORPIO_HUB_VERSION_CONFLICT', 409);
         const updatedRow = updated.rows[0];
+        // Metadata-only versions retain the same source bytes, so carry forward
+        // only variants already bound to the prior version. Legacy NULL rows stay unbound.
+        await client.query('UPDATE media_variants SET source_version=$3 WHERE asset_id=$1 AND source_version=$2', [id, row.version, updatedRow.version]);
         await client.query('INSERT INTO library_asset_versions(asset_id,version,snapshot,storage_key,sha256,created_by) VALUES($1,$2,$3::jsonb,$4,$5,$6) ON CONFLICT(asset_id,version) DO NOTHING', [id, updatedRow.version, JSON.stringify({ displayName: updatedRow.display_name, originalName: updatedRow.original_name, altText: updatedRow.alt_text, caption: updatedRow.caption, description: updatedRow.description, isPublic: updatedRow.is_public, metadata: updatedRow.metadata }), row.storage_key, row.sha256, actorId || null]);
         await client.query('COMMIT'); return updatedRow;
       } catch (e) { await client.query('ROLLBACK').catch(()=>{}); throw e; } finally { client.release(); }
@@ -189,7 +192,8 @@ function createLibraryStore({ pool, root = path.resolve(process.env.LIBRARY_ROOT
       const nextScanMetadata = { status: scan.status, engine: scan.engine, scannedAt: scan.clean ? new Date().toISOString() : null };
       const client = await pool.connect();
       let storageKey = null;
-      let committed = false;
+      let staleVariantKeys = [];
+      let commitAttempted = false;
       try {
         await client.query('BEGIN');
         const selected = await client.query("SELECT * FROM library_assets WHERE site_id=$1 AND id=$2 AND deleted_at IS NULL AND status='active' FOR UPDATE", [siteId, id]);
@@ -208,16 +212,26 @@ function createLibraryStore({ pool, root = path.resolve(process.env.LIBRARY_ROOT
         const result = await client.query(`UPDATE library_assets SET original_name=$3,storage_key=$4,mime_type=$5,byte_size=$6,sha256=$7,version=$8,optimization_status='pending',updated_by=$9,updated_at=now(),status=$11,malware_scan_status=$12,malware_scan_engine=$13,malware_scanned_at=CASE WHEN $12='clean' THEN now() ELSE NULL END,is_public=CASE WHEN $12='clean' THEN is_public ELSE false END,metadata=metadata || $14::jsonb
           WHERE site_id=$1 AND id=$2 AND version=$10 RETURNING id,site_id,asset_kind,display_name,original_name,mime_type,byte_size,sha256,alt_text,caption,description,is_public,version,status,optimization_status,malware_scan_status,malware_scan_engine,metadata,updated_at`, [siteId, id, safeFileName || old.original_name, storageKey, detected, data.length, digest, nextVersion, actorId || null, old.version, nextStatus, scan.status, scan.engine, JSON.stringify({securityScan:nextScanMetadata})]);
         if (!result.rows[0]) throw libraryError('Asset version is stale.', 'ERR_VIRGOSCORPIO_HUB_VERSION_CONFLICT', 409);
+        // Variant bytes are derivatives of the prior source version. Remove their rows
+        // in the same transaction as the asset replacement so no later public read
+        // can resolve a derivative from content that has since become private.
+        const staleVariants = await client.query('DELETE FROM media_variants WHERE asset_id=$1 RETURNING storage_key', [id]);
+        staleVariantKeys = (staleVariants.rows || []).map(row => row.storage_key).filter(Boolean);
         await client.query('INSERT INTO library_asset_versions(asset_id,version,snapshot,storage_key,sha256,created_by) VALUES($1,$2,$3::jsonb,$4,$5,$6) ON CONFLICT(asset_id,version) DO NOTHING', [id, nextVersion, JSON.stringify({ displayName: old.display_name, originalName: sanitizeDisplayName(fileName || old.original_name), mimeType: detected, byteSize: data.length }), storageKey, digest, actorId || null]);
         if (typeof onVersionReplaced === 'function') {
           await onVersionReplaced({ queryable: client, result: result.rows[0] });
         }
+        commitAttempted = true;
         await client.query('COMMIT');
-        committed = true;
+        // Database references are gone after commit; clean up derivative objects best-effort.
+        for (const staleKey of staleVariantKeys) await remove(staleKey).catch(() => {});
         return result.rows[0];
       } catch (error) {
         await client.query('ROLLBACK').catch(() => {});
-        if (storageKey && !committed) await remove(storageKey).catch(() => {});
+        // COMMIT may have succeeded even when its acknowledgement is lost.
+        // Preserve the object after a COMMIT attempt; reconciliation can remove an orphan safely,
+        // but deleting an object referenced by a committed row would corrupt the asset.
+        if (storageKey && !commitAttempted) await remove(storageKey).catch(() => {});
         throw error;
       } finally {
         client.release();
@@ -226,7 +240,7 @@ function createLibraryStore({ pool, root = path.resolve(process.env.LIBRARY_ROOT
     async readPublicVariant({ assetId, variantKey }) {
       if (!/^[a-z0-9][a-z0-9_-]{0,60}$/.test(String(variantKey))) return null;
       const result = await pool.query(
-        "SELECT v.id,v.storage_key,v.mime_type,v.byte_size,v.sha256,a.asset_kind FROM media_variants v JOIN library_assets a ON a.id=v.asset_id WHERE a.id=$1 AND a.is_public=true AND a.status='active' AND a.deleted_at IS NULL AND v.variant_key=$2",
+        "SELECT v.id,v.storage_key,v.mime_type,v.byte_size,v.sha256,v.source_version,a.asset_kind FROM media_variants v JOIN library_assets a ON a.id=v.asset_id WHERE a.id=$1 AND a.is_public=true AND a.status='active' AND a.deleted_at IS NULL AND v.variant_key=$2 AND v.source_version=a.version",
         [assetId, variantKey]
       );
       const row = result.rows[0];
@@ -237,7 +251,7 @@ function createLibraryStore({ pool, root = path.resolve(process.env.LIBRARY_ROOT
       if (sniffMime(data) !== row.mime_type || !KIND_MIMES[row.asset_kind]?.has(row.mime_type)) return null;
       return { ...row, data };
     },
-    async createVariant({ siteId, id, variantKey, data, mimeType, width = null, height = null }) {
+    async createVariant({ siteId, id, variantKey, data, mimeType, width = null, height = null, expectedVersion = null }) {
       if (!/^[a-z0-9][a-z0-9_-]{0,60}$/.test(String(variantKey)) || !Buffer.isBuffer(data) || data.length < 1 || data.length > maxFileBytes || typeof mimeType !== 'string') {
         throw libraryError('Variant metadata or bytes are invalid.');
       }
@@ -251,18 +265,56 @@ function createLibraryStore({ pool, root = path.resolve(process.env.LIBRARY_ROOT
       if (!KIND_MIMES[asset.asset_kind]?.has(detected)) {
         throw libraryError('Variant MIME type does not match the parent library category.', 'ERR_VIRGOSCORPIO_HUB_LIBRARY_TYPE');
       }
+      // Bind the derivative to the source version read by the caller. When omitted,
+      // retain compatibility by binding to the version observed by this invocation.
+      const sourceVersion = expectedVersion === null || expectedVersion === undefined
+        ? Number(asset.version)
+        : Number(expectedVersion);
+      if (!Number.isSafeInteger(sourceVersion) || sourceVersion !== Number(asset.version)) {
+        throw libraryError('Asset version is stale.', 'ERR_VIRGOSCORPIO_HUB_VERSION_CONFLICT', 409);
+      }
       const ext = EXTENSIONS[detected];
       if (!ext) throw libraryError('Variant MIME type is not allowed.');
-      const storageKey = `${siteId}/${id}/variants/${variantKey}-${randomUUID()}.${ext}`; const digest = createHash('sha256').update(data).digest('hex');
-      await put(storageKey,data,mimeType);
+      const storageKey = `${siteId}/${id}/variants/${variantKey}-${randomUUID()}.${ext}`;
+      const digest = createHash('sha256').update(data).digest('hex');
+      await put(storageKey, data, mimeType);
+
+      let client = null;
+      let commitAttempted = false;
       try {
-        const result = await pool.query(`INSERT INTO media_variants(asset_id,variant_key,storage_key,mime_type,byte_size,width,height,sha256) VALUES($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT(asset_id,variant_key) DO UPDATE SET storage_key=EXCLUDED.storage_key,mime_type=EXCLUDED.mime_type,byte_size=EXCLUDED.byte_size,width=EXCLUDED.width,height=EXCLUDED.height,sha256=EXCLUDED.sha256,created_at=now() RETURNING id,asset_id,variant_key,mime_type,byte_size,width,height,sha256`,[id,variantKey,storageKey,mimeType,data.length,width,height,digest]);
+        client = await pool.connect();
+        await client.query('BEGIN');
+        // Lock the parent row through the variant insert. replaceVersion takes FOR UPDATE
+        // on the same row before deleting derivatives, so these operations serialize.
+        const locked = await client.query(
+          "SELECT id,asset_kind,version FROM library_assets WHERE site_id=$1 AND id=$2 AND version=$3 AND deleted_at IS NULL AND status='active' FOR SHARE",
+          [siteId, id, sourceVersion]
+        );
+        const lockedAsset = locked.rows[0];
+        if (!lockedAsset) throw libraryError('Asset version is stale.', 'ERR_VIRGOSCORPIO_HUB_VERSION_CONFLICT', 409);
+        if (!KIND_MIMES[lockedAsset.asset_kind]?.has(detected)) {
+          throw libraryError('Variant MIME type does not match the parent library category.', 'ERR_VIRGOSCORPIO_HUB_LIBRARY_TYPE');
+        }
+        const result = await client.query(
+          'INSERT INTO media_variants(asset_id,variant_key,storage_key,mime_type,byte_size,width,height,sha256,source_version) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT(asset_id,variant_key) DO UPDATE SET storage_key=EXCLUDED.storage_key,mime_type=EXCLUDED.mime_type,byte_size=EXCLUDED.byte_size,width=EXCLUDED.width,height=EXCLUDED.height,sha256=EXCLUDED.sha256,source_version=EXCLUDED.source_version,created_at=now() RETURNING id,asset_id,variant_key,storage_key,mime_type,byte_size,width,height,sha256,source_version',
+          [id, variantKey, storageKey, mimeType, data.length, width, height, digest, sourceVersion]
+        );
+        commitAttempted = true;
+        await client.query('COMMIT');
         return result.rows[0];
-      } catch (error) { await remove(storageKey); throw error; }
+      } catch (error) {
+        if (client) await client.query('ROLLBACK').catch(() => {});
+        // If COMMIT was attempted, its outcome may be ambiguous after a connection failure.
+        // Leave the object for reconciliation rather than risk deleting a committed variant.
+        if (!commitAttempted) await remove(storageKey).catch(() => {});
+        throw error;
+      } finally {
+        client?.release();
+      }
     },
-    async markOptimization({ siteId,id,status,details }) {
+    async markOptimization({ siteId,id,status,details,expectedVersion = null }) {
       if (!['pending','processing','optimized','skipped','failed'].includes(status)) throw libraryError('Invalid optimization status.');
-      const result = await pool.query('UPDATE library_assets SET optimization_status=$3,metadata=metadata || $4::jsonb,updated_at=now() WHERE site_id=$1 AND id=$2 AND deleted_at IS NULL RETURNING id,optimization_status,metadata', [siteId,id,status,JSON.stringify(details || {})]); return result.rows[0] || null;
+      const result = await pool.query('UPDATE library_assets SET optimization_status=$3,metadata=metadata || $4::jsonb,updated_at=now() WHERE site_id=$1 AND id=$2 AND deleted_at IS NULL AND ($5::integer IS NULL OR version=$5) RETURNING id,version,optimization_status,metadata', [siteId,id,status,JSON.stringify(details || {}),expectedVersion]); return result.rows[0] || null;
     },
     async delete({ siteId,id,expectedVersion }) {
       const result = await pool.query("UPDATE library_assets SET status='deleted',deleted_at=now(),version=version+1,updated_at=now() WHERE site_id=$1 AND id=$2 AND version=$3 AND deleted_at IS NULL RETURNING id,version", [siteId,id,Number(expectedVersion)]);
