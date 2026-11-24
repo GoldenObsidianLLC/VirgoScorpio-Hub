@@ -75,3 +75,38 @@ test('CSRF double-submit equality is byte-safe and rejects invalid or mismatched
   assert.equal(safeCsrfCookie(undefined, 'token'), false);
   assert.equal(safeCsrfCookie('token', null), false);
 });
+
+test('authentication cookie serializer supports SameSite=None for cross-site SAML POST', () => {
+  // SAML ACS receives a cross-site POST from the IdP, so the binding cookie
+  // needs SameSite=None (which requires Secure) to be sent with the request.
+  assert.equal(
+    serializeAuthCookie('vsh_saml_state', 's'.repeat(43), {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'None',
+      path: '/api/v1/auth',
+      maxAge: 600
+    }),
+    'vsh_saml_state=' + 's'.repeat(43) + '; Path=/api/v1/auth; SameSite=None; Max-Age=600; HttpOnly; Secure'
+  );
+});
+
+test('authentication cookie serializer omits SameSite when null for non-TLS development', () => {
+  // In development without TLS, SameSite=None cannot be used (requires Secure).
+  // The serializer accepts null to omit the SameSite attribute entirely, allowing
+  // the cookie to be sent with cross-site SAML POST in local development.
+  assert.equal(
+    serializeAuthCookie('vsh_saml_state', 's'.repeat(43), {
+      httpOnly: true,
+      secure: false,
+      sameSite: null,
+      path: '/api/v1/auth',
+      maxAge: 600
+    }),
+    'vsh_saml_state=' + 's'.repeat(43) + '; Path=/api/v1/auth; Max-Age=600; HttpOnly'
+  );
+
+  // Verify that the serialized cookie does not contain 'SameSite'
+  const cookie = serializeAuthCookie('test', 'value', { sameSite: null, maxAge: 100 });
+  assert.equal(cookie.includes('SameSite'), false, 'SameSite attribute must be omitted when sameSite is null');
+});
