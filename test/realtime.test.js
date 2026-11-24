@@ -9,6 +9,39 @@ const { createApiServer } = require('../apps/api/src/server');
 const SITE_A = '11111111-1111-4111-8111-111111111111';
 const SITE_B = '22222222-2222-4222-8222-222222222222';
 
+// Node's Fetch implementation enforces the browser forbidden-port list. A
+// kernel-selected ephemeral port can occasionally fall in that list on Windows,
+// causing an otherwise healthy loopback server to fail before any request is sent.
+// Bind test servers in the IANA dynamic/private range and retry collisions/exclusions.
+const FETCH_SAFE_TEST_PORT_START = 49_152;
+const FETCH_SAFE_TEST_PORT_COUNT = 256;
+
+async function listenOnFetchSafePort(server) {
+  const startOffset = process.pid % FETCH_SAFE_TEST_PORT_COUNT;
+  for (let attempt = 0; attempt < FETCH_SAFE_TEST_PORT_COUNT; attempt += 1) {
+    const port = FETCH_SAFE_TEST_PORT_START + ((startOffset + attempt) % FETCH_SAFE_TEST_PORT_COUNT);
+    try {
+      await new Promise((resolve, reject) => {
+        const onListening = () => {
+          server.off('error', onError);
+          resolve();
+        };
+        const onError = error => {
+          server.off('listening', onListening);
+          reject(error);
+        };
+        server.once('listening', onListening);
+        server.once('error', onError);
+        server.listen(port, '127.0.0.1');
+      });
+      return server.address().port;
+    } catch (error) {
+      if (!['EADDRINUSE', 'EACCES'].includes(error.code)) throw error;
+    }
+  }
+  throw new Error('Unable to allocate a Fetch-compatible loopback test port.');
+}
+
 test('real-time hub isolates site topics and emits bounded, versionable envelopes', async () => {
   const hub = createRealtimeHub({ authorizeSubscribe: async () => true });
   const subscription = await hub.subscribe({ principal: { id: 'user-a' }, siteId: SITE_A, topic: 'presence' });
@@ -177,7 +210,7 @@ async function withRealtimeServer(fn) {
     },
     logger: { error() {} }
   });
-  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  await listenOnFetchSafePort(server);
   try {
     await fn('http://127.0.0.1:' + server.address().port);
   } finally {
@@ -262,7 +295,7 @@ test('API enforces site capability checks for authenticated non-developer presen
     identityService,
     logger: { error() {} }
   });
-  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  await listenOnFetchSafePort(server);
   try {
     const response = await fetch('http://127.0.0.1:' + server.address().port + '/api/v1/sites/' + SITE_A + '/presence', {
       headers: { authorization: 'Bearer session-token' }
@@ -293,7 +326,7 @@ test('API refuses long-lived real-time streams when the backing session is no lo
     identityService,
     logger: { error() {} }
   });
-  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  await listenOnFetchSafePort(server);
   try {
     const response = await fetch('http://127.0.0.1:' + server.address().port + '/api/v1/sites/' + SITE_A + '/realtime/events', {
       headers: { authorization: 'Bearer session-token' }
@@ -311,7 +344,7 @@ test('API does not enable presence implicitly when the preview adapter is disabl
     env: { NODE_ENV: 'test', VIRGOSCORPIO_HUB_API_TOKEN: 'test-secret-token', AI_PROVIDER: 'mock' },
     logger: { error() {} }
   });
-  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  await listenOnFetchSafePort(server);
   try {
     const response = await fetch('http://127.0.0.1:' + server.address().port + '/api/v1/sites/' + SITE_A + '/presence', {
       headers: { authorization: 'Bearer test-secret-token' }

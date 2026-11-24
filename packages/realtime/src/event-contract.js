@@ -7,24 +7,35 @@ const EVENT_TYPE_RE = /^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$/;
 const AGGREGATE_TYPE_RE = /^[a-z][a-z0-9_-]{0,63}$/;
 const CLASSIFICATIONS = new Set(['internal', 'site-private', 'public']);
 
-// Domain event types are explicitly classified. Unknown event types are permitted
-// only as internal worker/test messages until a classification is reviewed here.
-const DOMAIN_EVENT_CLASSIFICATIONS = Object.freeze({
-  'content.upsert': 'site-private',
-  'content.publish': 'site-private',
-  'content.unpublish': 'site-private',
-  'content.delete': 'site-private',
-  'content.submitted_for_review': 'site-private',
-  'content.approved': 'site-private',
-  'content.rejected': 'site-private',
-  'content.scheduled': 'site-private',
-  'content.archived': 'site-private',
-  'content.unpublished': 'site-private',
-  'relationship.upsert': 'site-private',
-  'relationship.delete': 'site-private',
-  'taxonomy.upsert': 'site-private',
-  'taxonomy.delete': 'site-private'
+// Domain event definitions are explicitly classified and bind duplicated
+// top-level payload identity fields to the canonical outbox envelope.
+const DOMAIN_EVENT_DEFINITIONS = Object.freeze({
+  'content.upsert': Object.freeze({ classification: 'site-private', resourceType: 'content', resourceIdKey: 'id' }),
+  'content.publish': Object.freeze({ classification: 'site-private', resourceType: 'content', resourceIdKey: 'id' }),
+  'content.unpublish': Object.freeze({ classification: 'site-private', resourceType: 'content', resourceIdKey: 'id' }),
+  'content.delete': Object.freeze({ classification: 'site-private', resourceType: 'content', resourceIdKey: 'id' }),
+  'content.submitted_for_review': Object.freeze({ classification: 'site-private', resourceType: 'content', resourceIdKey: 'id' }),
+  'content.approved': Object.freeze({ classification: 'site-private', resourceType: 'content', resourceIdKey: 'id' }),
+  'content.rejected': Object.freeze({ classification: 'site-private', resourceType: 'content', resourceIdKey: 'id' }),
+  'content.scheduled': Object.freeze({ classification: 'site-private', resourceType: 'content', resourceIdKey: 'id' }),
+  'content.archived': Object.freeze({ classification: 'site-private', resourceType: 'content', resourceIdKey: 'id' }),
+  'content.unpublished': Object.freeze({ classification: 'site-private', resourceType: 'content', resourceIdKey: 'id' }),
+  'relationship.upsert': Object.freeze({ classification: 'site-private', resourceType: 'relationship', resourceIdKey: 'relationshipId' }),
+  'relationship.delete': Object.freeze({ classification: 'site-private', resourceType: 'relationship', resourceIdKey: 'relationshipId' }),
+  'taxonomy.upsert': Object.freeze({ classification: 'site-private', resourceType: 'taxonomy-term', resourceIdKey: 'id' }),
+  'taxonomy.delete': Object.freeze({ classification: 'site-private', resourceType: 'taxonomy-term', resourceIdKey: 'id' })
 });
+
+const DOMAIN_EVENT_CLASSIFICATIONS = Object.freeze(Object.fromEntries(
+  Object.entries(DOMAIN_EVENT_DEFINITIONS).map(([eventType, definition]) => [eventType, definition.classification])
+));
+
+const EVENT_PAYLOAD_IDENTITY_BINDINGS = Object.freeze(Object.fromEntries(
+  Object.entries(DOMAIN_EVENT_DEFINITIONS).map(([eventType, definition]) => [
+    eventType,
+    Object.freeze({ resourceType: definition.resourceType, resourceIdKey: definition.resourceIdKey })
+  ])
+));
 
 function eventError(code, message) {
   const error = new Error(message);
@@ -172,6 +183,71 @@ function validateEventEnvelope(input) {
 }
 
 /**
+ * Bind duplicated, top-level domain identity fields to the validated v1
+ * envelope. The returned payload is a shallow immutable copy; domain fields
+ * and nested metadata remain opaque and are never recursively interpreted.
+ *
+ * Graph projection may pass a separate payload for defense-in-depth checks.
+ * When that happens both the envelope payload and supplied payload must agree
+ * with the canonical envelope identity.
+ */
+function bindEventPayloadIdentity(input, payloadInput = input?.payload, options = {}) {
+  const envelope = validateEventEnvelope(input);
+  const binding = EVENT_PAYLOAD_IDENTITY_BINDINGS[envelope.eventType];
+  const suppliedPayloadIsSeparate = payloadInput !== input?.payload && payloadInput !== envelope.payload;
+  const payloadSource = suppliedPayloadIsSeparate ? payloadInput : envelope.payload;
+
+  if (!binding) {
+    return { envelope, payload: payloadSource };
+  }
+
+  const errorCodes = options?.errorCodes || {};
+  const code = (key, fallback) => errorCodes[key] || fallback;
+
+  if (envelope.resource.type !== binding.resourceType) {
+    throw eventError(
+      code('resourceType', 'ERR_VIRGOSCORPIO_HUB_EVENT_IDENTITY_RESOURCE_TYPE_MISMATCH'),
+      'The event resource type does not match its registered event family.'
+    );
+  }
+
+  function normalizePayload(payload) {
+    if (!isPlainObject(payload)) {
+      throw eventError(
+        code('payload', 'ERR_VIRGOSCORPIO_HUB_EVENT_IDENTITY_PAYLOAD_INVALID'),
+        'A registered domain event requires a plain JSON payload object.'
+      );
+    }
+    if (typeof payload.siteId !== 'string' || payload.siteId.toLowerCase() !== envelope.siteId) {
+      throw eventError(
+        code('scope', 'ERR_VIRGOSCORPIO_HUB_EVENT_IDENTITY_SCOPE_MISMATCH'),
+        'The payload site identity does not match the canonical event envelope.'
+      );
+    }
+    const payloadResourceId = payload[binding.resourceIdKey];
+    if (typeof payloadResourceId !== 'string' || payloadResourceId.toLowerCase() !== envelope.resource.id) {
+      throw eventError(
+        code('resource', 'ERR_VIRGOSCORPIO_HUB_EVENT_IDENTITY_RESOURCE_MISMATCH'),
+        'The payload aggregate identity does not match the canonical event envelope.'
+      );
+    }
+    return Object.freeze({
+      ...payload,
+      siteId: envelope.siteId,
+      [binding.resourceIdKey]: envelope.resource.id
+    });
+  }
+
+  const envelopePayload = normalizePayload(envelope.payload);
+  const payload = suppliedPayloadIsSeparate
+    ? normalizePayload(payloadSource)
+    : envelopePayload;
+  const boundEnvelope = Object.freeze({ ...envelope, payload: envelopePayload });
+
+  return { envelope: boundEnvelope, payload };
+}
+
+/**
  * Convert a claimed PostgreSQL outbox row to the v1 event contract.
  * outbox_events.id is the stable eventId; the aggregate uniqueness constraint
  * remains the producer idempotency key. Legacy/non-domain worker messages may
@@ -202,13 +278,16 @@ function eventEnvelopeFromOutboxRow(row) {
     payload: row.payload
   };
 
-  return validateEventEnvelope(envelope);
+  return bindEventPayloadIdentity(envelope).envelope;
 }
 
 module.exports = {
   EVENT_SCHEMA_VERSION,
   MAX_EVENT_PAYLOAD_BYTES,
+  DOMAIN_EVENT_DEFINITIONS,
   DOMAIN_EVENT_CLASSIFICATIONS,
+  EVENT_PAYLOAD_IDENTITY_BINDINGS,
+  bindEventPayloadIdentity,
   validateEventEnvelope,
   eventEnvelopeFromOutboxRow,
   eventError,

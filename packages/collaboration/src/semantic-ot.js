@@ -47,9 +47,14 @@ function isJsonValue(value, stack = new Set()) {
   return valid;
 }
 
-function ownKeysMatch(value, allowed) {
-  return Object.keys(value).every(key => allowed.includes(key));
+// Requires the object to own exactly the expected set of keys: no unknown keys
+// and no missing keys. This mirrors the strict schema enforced by Studio clients.
+function ownKeysMatch(value, expected) {
+  const keys = Object.keys(value);
+  return keys.length === expected.length && expected.every(key => keys.includes(key));
 }
+
+const ENVELOPE_KEYS = ['schemaVersion', 'opId', 'clientId', 'baseSequence', 'type', 'payload'];
 
 function invalid(message) {
   const error = new Error(message);
@@ -69,6 +74,7 @@ function validateCollaborationOperation(operation) {
   const errors = [];
   if (!isPlainObject(operation)) return { valid: false, errors: ['operation must be an object'] };
 
+  if (!ownKeysMatch(operation, ENVELOPE_KEYS)) errors.push('operation must contain exactly the supported envelope keys');
   if (operation.schemaVersion !== 1) errors.push('schemaVersion must be 1');
   if (typeof operation.opId !== 'string' || !UUID_PATTERN.test(operation.opId)) errors.push('opId must be a UUID');
   if (typeof operation.clientId !== 'string' || !CLIENT_ID_PATTERN.test(operation.clientId)) errors.push('clientId must be 1–80 safe characters');

@@ -22,7 +22,7 @@ test('graph projection worker binds the durable graph consumer group and preserv
           aggregate_id: '44444444-4444-4444-8444-444444444444',
           aggregate_version: 5,
           event_type: 'content.upsert',
-          payload: { id: '44444444-4444-4444-8444-444444444444' },
+          payload: { id: '44444444-4444-4444-8444-444444444444', siteId: '11111111-1111-4111-8111-111111111111' },
           schema_version: 1,
           site_id: '11111111-1111-4111-8111-111111111111',
           actor_id: null,
