@@ -32,9 +32,10 @@ function createPluginRunnerServer({ env = process.env, runner, logger = console,
     environment: env.NODE_ENV || 'development'
   });
 
-  // Runner-wide admission control. Per-child limits do not bound the number of
-  // simultaneous children, so cap active executions globally and per image
-  // (a proxy for the plugin/tenant) and shed excess load immediately.
+  // Process-local admission control. Per-child limits do not bound the number
+  // of simultaneous children, so cap active executions globally and per pinned
+  // image. Image identity is not tenant identity: this is not per-tenant fairness
+  // and does not coordinate limits across multiple runner processes or replicas.
   const parseLimit = (value, fallback) => {
     const n = Number(value);
     return Number.isInteger(n) && n >= 1 && n <= 1024 ? n : fallback;

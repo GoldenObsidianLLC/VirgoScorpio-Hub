@@ -15,7 +15,7 @@ function createMockRunner({ delay = 0, shouldFail = false } = {}) {
       activeCount++;
       peakConcurrency = Math.max(peakConcurrency, activeCount);
       invocations.push({ imageDigest, action, input, requestId, timestamp: Date.now() });
-      
+
       try {
         if (delay > 0) {
           await new Promise(resolve => setTimeout(resolve, delay));
@@ -78,7 +78,7 @@ async function makeRequest(server, { method = 'POST', path = '/v1/invoke', heade
     });
 
     req.on('error', reject);
-    
+
     if (body) {
       const bodyStr = typeof body === 'string' ? body : JSON.stringify(body);
       req.write(bodyStr);
@@ -101,7 +101,7 @@ test('plugin runner enforces global concurrency limit and returns 429 when at ca
   const mockRunner = createMockRunner({ delay: 100 });
   const testToken = 'test-token-with-at-least-32-chars-here';
   const allowedImage = 'example.com/plugin@sha256:' + 'a'.repeat(64);
-  
+
   const server = createPluginRunnerServer({
     env: {
       VIRGOSCORPIO_HUB_PLUGIN_RUNNER_TOKEN: testToken,
@@ -148,7 +148,7 @@ test('plugin runner enforces global concurrency limit and returns 429 when at ca
   // At least some should be rejected due to capacity limit
   assert.ok(rejected.length > 0, 'Expected at least one request to be rejected with 429');
   assert.ok(successful.length > 0, 'Expected at least one request to succeed');
-  
+
   // All rejected requests should have the correct error code and retry-after header
   for (const response of rejected) {
     assert.equal(response.json.code, 'ERR_VIRGOSCORPIO_HUB_PLUGIN_RUNNER_BUSY');
@@ -165,7 +165,7 @@ test('plugin runner enforces per-image concurrency limit', async t => {
   const testToken = 'test-token-with-at-least-32-chars-here';
   const imageA = 'example.com/plugin-a@sha256:' + 'a'.repeat(64);
   const imageB = 'example.com/plugin-b@sha256:' + 'b'.repeat(64);
-  
+
   const server = createPluginRunnerServer({
     env: {
       VIRGOSCORPIO_HUB_PLUGIN_RUNNER_TOKEN: testToken,
@@ -204,7 +204,7 @@ test('plugin runner enforces per-image concurrency limit', async t => {
   // At least some should be rejected due to per-image limit
   assert.ok(rejected.length > 0, 'Expected at least one request to be rejected with 429 due to per-image limit');
   assert.ok(successful.length > 0, 'Expected at least one request to succeed');
-  
+
   // Verify error details
   for (const response of rejected) {
     assert.equal(response.json.code, 'ERR_VIRGOSCORPIO_HUB_PLUGIN_RUNNER_BUSY');
@@ -217,7 +217,7 @@ test('plugin runner allows different images to execute concurrently within globa
   const testToken = 'test-token-with-at-least-32-chars-here';
   const imageA = 'example.com/plugin-a@sha256:' + 'a'.repeat(64);
   const imageB = 'example.com/plugin-b@sha256:' + 'b'.repeat(64);
-  
+
   const server = createPluginRunnerServer({
     env: {
       VIRGOSCORPIO_HUB_PLUGIN_RUNNER_TOKEN: testToken,
@@ -260,7 +260,7 @@ test('plugin runner properly releases slots after execution completes', async t 
   const mockRunner = createMockRunner({ delay: 50 });
   const testToken = 'test-token-with-at-least-32-chars-here';
   const allowedImage = 'example.com/plugin@sha256:' + 'a'.repeat(64);
-  
+
   const server = createPluginRunnerServer({
     env: {
       VIRGOSCORPIO_HUB_PLUGIN_RUNNER_TOKEN: testToken,
@@ -308,7 +308,7 @@ test('plugin runner releases slots even when execution fails', async t => {
   const mockRunner = createMockRunner({ delay: 20, shouldFail: true });
   const testToken = 'test-token-with-at-least-32-chars-here';
   const allowedImage = 'example.com/plugin@sha256:' + 'a'.repeat(64);
-  
+
   const server = createPluginRunnerServer({
     env: {
       VIRGOSCORPIO_HUB_PLUGIN_RUNNER_TOKEN: testToken,
@@ -355,7 +355,7 @@ test('plugin runner rejects requests before allowlist check when at global capac
   const testToken = 'test-token-with-at-least-32-chars-here';
   const allowedImage = 'example.com/plugin@sha256:' + 'a'.repeat(64);
   const notAllowedImage = 'example.com/evil@sha256:' + 'e'.repeat(64);
-  
+
   const server = createPluginRunnerServer({
     env: {
       VIRGOSCORPIO_HUB_PLUGIN_RUNNER_TOKEN: testToken,
@@ -406,7 +406,7 @@ test('plugin runner enforces allowlist after global capacity check but before pe
   const testToken = 'test-token-with-at-least-32-chars-here';
   const allowedImage = 'example.com/plugin@sha256:' + 'a'.repeat(64);
   const notAllowedImage = 'example.com/evil@sha256:' + 'e'.repeat(64);
-  
+
   const server = createPluginRunnerServer({
     env: {
       VIRGOSCORPIO_HUB_PLUGIN_RUNNER_TOKEN: testToken,
@@ -444,7 +444,7 @@ test('plugin runner enforces allowlist after global capacity check but before pe
 test('plugin runner parses concurrency limits with bounds checking', async t => {
   const testToken = 'test-token-with-at-least-32-chars-here';
   const allowedImage = 'example.com/plugin@sha256:' + 'a'.repeat(64);
-  
+
   // Test default values
   const server1 = createPluginRunnerServer({
     env: {
@@ -508,7 +508,7 @@ test('plugin runner prevents cross-tenant resource exhaustion via per-image limi
   const testToken = 'test-token-with-at-least-32-chars-here';
   const tenantAImage = 'example.com/tenant-a-plugin@sha256:' + 'a'.repeat(64);
   const tenantBImage = 'example.com/tenant-b-plugin@sha256:' + 'b'.repeat(64);
-  
+
   const server = createPluginRunnerServer({
     env: {
       VIRGOSCORPIO_HUB_PLUGIN_RUNNER_TOKEN: testToken,
