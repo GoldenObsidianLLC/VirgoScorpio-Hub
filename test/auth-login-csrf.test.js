@@ -386,10 +386,10 @@ test('login with secure cookies enabled validates Origin against https scheme', 
 
   const server = createApiServer({
     env: {
-      NODE_ENV: 'production',
+      NODE_ENV: 'test',
       AI_PROVIDER: 'mock',
       RATE_LIMIT_MAX_REQUESTS: '100',
-      VIRGOSCORPIO_HUB_SECURE_COOKIES: 'true'
+      SESSION_COOKIE_SECURE: 'true'
     },
     identityService: fakeIdentity,
     logger: { error() {} }
