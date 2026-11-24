@@ -693,7 +693,9 @@
       "tests": [
         "test/library-routes.test.js",
         "test/release-hardening.test.js",
-        "test/integration/tenant-library-media-isolation.integration.test.js"
+        "test/integration/tenant-library-media-isolation.integration.test.js",
+        "test/integration/public-library-variant-version-binding.integration.test.js",
+        "test/library-variant-route-version.test.js"
       ],
       "coverage": {
         "level": "targeted-two-site-and-unit",
@@ -800,7 +802,9 @@
       "tests": [
         "test/release-hardening.test.js",
         "test/integration/tenant-library-media-isolation.integration.test.js",
-        "test/security-boundaries.test.js"
+        "test/security-boundaries.test.js",
+        "test/integration/public-library-variant-version-binding.integration.test.js",
+        "test/library-variant-route-version.test.js"
       ],
       "coverage": {
         "level": "targeted-two-site-revocation-and-no-store",

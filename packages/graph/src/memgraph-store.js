@@ -1,7 +1,7 @@
 'use strict';
 
 const { withClientSpan } = require('../../observability/src/tracing');
-const { validateEventEnvelope } = require('../../realtime/src/event-contract');
+const { EVENT_PAYLOAD_IDENTITY_BINDINGS, bindEventPayloadIdentity, validateEventEnvelope } = require('../../realtime/src/event-contract');
 
 const ALLOWED_RELATIONSHIPS = new Set(['HAS_TERM', 'PARENT_OF', 'RELATED_TO', 'LOCALIZED_AS', 'NAVIGATES_TO']);
 const NODE_LABELS = new Set(['content', 'term']);
@@ -17,16 +17,7 @@ const CONTENT_STATUS_EVENT_TYPES = new Set([
 ]);
 
 function projectionInput({ type, payload, envelope }) {
-  let family = null;
-  if (type === 'content.upsert' || type === 'content.delete' || CONTENT_STATUS_EVENT_TYPES.has(type)) {
-    family = { resourceType: 'content', resourceKey: 'id' };
-  } else if (type === 'taxonomy.upsert' || type === 'taxonomy.delete') {
-    family = { resourceType: 'taxonomy-term', resourceKey: 'id' };
-  } else if (type === 'relationship.upsert' || type === 'relationship.delete') {
-    family = { resourceType: 'relationship', resourceKey: 'relationshipId' };
-  }
-
-  if (!family) {
+  if (!EVENT_PAYLOAD_IDENTITY_BINDINGS[type]) {
     throw Object.assign(new Error('Unsupported outbox projection event: ' + String(type)), {
       code: 'ERR_GRAPH_EVENT_UNSUPPORTED'
     });
@@ -38,36 +29,15 @@ function projectionInput({ type, payload, envelope }) {
       code: 'ERR_GRAPH_PROJECTION_EVENT_MISMATCH'
     });
   }
-  if (validatedEnvelope.resource.type !== family.resourceType) {
-    throw Object.assign(new Error('The graph projection resource type does not match its event family.'), {
-      code: 'ERR_GRAPH_PROJECTION_RESOURCE_TYPE_MISMATCH'
-    });
-  }
-  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
-    throw Object.assign(new TypeError('A graph projection payload object is required.'), {
-      code: 'ERR_GRAPH_PROJECTION_PAYLOAD_INVALID'
-    });
-  }
-  if (typeof payload.siteId !== 'string' || payload.siteId.toLowerCase() !== validatedEnvelope.siteId) {
-    throw Object.assign(new Error('The graph projection payload site does not match its validated event envelope.'), {
-      code: 'ERR_GRAPH_PROJECTION_SCOPE_MISMATCH'
-    });
-  }
-  const payloadResourceId = payload[family.resourceKey];
-  if (typeof payloadResourceId !== 'string' || payloadResourceId.toLowerCase() !== validatedEnvelope.resource.id) {
-    throw Object.assign(new Error('The graph projection payload resource does not match its validated event envelope.'), {
-      code: 'ERR_GRAPH_PROJECTION_RESOURCE_MISMATCH'
-    });
-  }
 
-  return {
-    envelope: validatedEnvelope,
-    payload: {
-      ...payload,
-      siteId: validatedEnvelope.siteId,
-      [family.resourceKey]: validatedEnvelope.resource.id
+  return bindEventPayloadIdentity(validatedEnvelope, payload, {
+    errorCodes: {
+      resourceType: 'ERR_GRAPH_PROJECTION_RESOURCE_TYPE_MISMATCH',
+      payload: 'ERR_GRAPH_PROJECTION_PAYLOAD_INVALID',
+      scope: 'ERR_GRAPH_PROJECTION_SCOPE_MISMATCH',
+      resource: 'ERR_GRAPH_PROJECTION_RESOURCE_MISMATCH'
     }
-  };
+  });
 }
 
 function nodeLabel(value) {
