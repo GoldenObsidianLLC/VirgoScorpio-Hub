@@ -4,6 +4,14 @@ All notable project-level changes should be recorded here. This changelog does n
 
 ## 0.6.2 (unreleased patch candidate)
 
+### Merged maintainer hardening after F1.68 (24 November 2026)
+
+- [PR #239](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/239) adds bounded plugin-runner admission control; [PR #240](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/240) bounds container concurrency and makes orphan cleanup observable/awaited.
+- [PR #242](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/242) enforces content-type capabilities and publication policy on record/workflow routes and pins the selected type through the locked transition.
+- [PR #248](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/248) consolidates the release-gate identifiers, titles and evidence filenames into one immutable 15-record registry shared by report generation and CI validation, with cross-check tests.
+- [PR #250](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/250) adds login CSRF defenses and Origin/content-type validation; [PR #251](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/251) revalidates site-management authority within the membership mutation transaction.
+- Exact-main workflow [#45518406995](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45518406995) passed 7/7 on main SHA `425162a9c9a297301a1aecb61fc96fbbd4ce8cf9`, including both supported Node matrices, live PostgreSQL/Memgraph, migrations, browser smoke, CodeQL, signed supply-chain attestations and exact-source evidence consolidation. Readiness remains NO-GO / NOT_PRODUCTION_CERTIFIED; no package version or SemVer change is implied.
+
 ### F1.68 - equalize password verification work for unknown and malformed accounts ([issue #295](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/295); [PR #296](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/296), merged at main SHA c4c5fb6328d2747d1d9b9c43aab70fc93d4eb96e)
 
 - The shared password verifier now performs one production-parameter scrypt operation for known accounts and unknown/missing/malformed/unsupported stored hashes, using a fixed dummy record that cannot authenticate.
