@@ -36,7 +36,7 @@
   },
   "testTree": {
     "fileCount": 61,
-    "sha256": "19765de93861fa441aeea12ad84f6887f6c7cab183b4cc8b603c8b61425b79df",
+    "sha256": "1933ce3ee9f1acaeb326f35a4d6b03dd2f2e357c076d2ebc2944827882b8dec5",
     "files": [
       "test/ai-queue-worker.test.js",
       "test/ai-task-queue.test.js",

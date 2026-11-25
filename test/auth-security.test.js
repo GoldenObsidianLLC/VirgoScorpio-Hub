@@ -2,6 +2,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createIdentityService, normalizeEmail, validatePassword, hashPassword, verifyPassword, digest, safeEqualText } = require('../packages/auth/src/service');
+const { createAuthRouteHandlers } = require('../apps/api/src/auth-routes');
 
 test('identity helpers normalize email consistently and reject invalid addresses', () => {
   assert.equal(normalizeEmail('  Admin@Example.COM '), 'admin@example.com');
@@ -964,4 +965,85 @@ test('MFA login rejects pending credentials but accepts recovery codes during ab
     assert.ok(events.includes('CONSUME_CHALLENGE'));
     assert.ok(events.includes('COMMIT'));
   });
+});
+
+test('MFA enrollment route reads a bounded body and forwards step-up credentials', async () => {
+  const events = [];
+  const userId = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+  const body = { password: 'CorrectHorse9Battery', code: 'ABCDEF123456' };
+  const identity = {
+    async beginMfaEnrollment(input) {
+      events.push({ type: 'beginMfaEnrollment', input });
+      return { secret: 'pending-secret', otpauthUrl: 'otpauth://totp/test' };
+    },
+  };
+  const routes = createAuthRouteHandlers({
+    identity,
+    env: {},
+    secureCookies: false,
+    maxBody: 128_000,
+    allowRequest: async () => true,
+    sendJson: (_res, status, payload) => ({ status, payload }),
+    fail: (statusCode, code, message) => Object.assign(new Error(message), { statusCode, code }),
+    readJson: async (_req, maxBytes) => {
+      events.push({ type: 'readJson', maxBytes });
+      return body;
+    },
+    readForm: async () => ({}),
+    sameSecret: () => true,
+  });
+
+  const result = await routes.handleAuthenticated({
+    req: { method: 'POST' },
+    res: {},
+    url: new URL('https://hub.example.test/api/v1/auth/mfa/enroll'),
+    actor: { isDeveloper: false, user: { id: userId } },
+    requestId: 'mfa-enroll-test',
+  });
+
+  assert.deepEqual(events, [
+    { type: 'readJson', maxBytes: 16_384 },
+    { type: 'beginMfaEnrollment', input: { userId, password: body.password, code: body.code } },
+  ]);
+  assert.equal(result.status, 200);
+  assert.deepEqual(result.payload, {
+    enrollment: { secret: 'pending-secret', otpauthUrl: 'otpauth://totp/test' },
+    requestId: 'mfa-enroll-test',
+  });
+});
+
+test('developer MFA enrollment is rejected before reading request credentials', async () => {
+  const events = [];
+  const routes = createAuthRouteHandlers({
+    identity: {
+      async beginMfaEnrollment() {
+        events.push('beginMfaEnrollment');
+        throw new Error('developer actor must not reach the identity service');
+      },
+    },
+    env: {},
+    secureCookies: false,
+    maxBody: 128_000,
+    allowRequest: async () => true,
+    sendJson: (_res, status, payload) => ({ status, payload }),
+    fail: (statusCode, code, message) => Object.assign(new Error(message), { statusCode, code }),
+    readJson: async () => {
+      events.push('readJson');
+      return { password: 'CorrectHorse9Battery', code: '' };
+    },
+    readForm: async () => ({}),
+    sameSecret: () => true,
+  });
+
+  await assert.rejects(
+    routes.handleAuthenticated({
+      req: { method: 'POST' },
+      res: {},
+      url: new URL('https://hub.example.test/api/v1/auth/mfa/enroll'),
+      actor: { isDeveloper: true, user: { id: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee' } },
+      requestId: 'mfa-developer-test',
+    }),
+    error => error.statusCode === 403 && error.code === 'ERR_VIRGOSCORPIO_HUB_FORBIDDEN'
+  );
+  assert.deepEqual(events, []);
 });
