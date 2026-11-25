@@ -10,7 +10,7 @@ Enrollment requires the current password and, when MFA is already active, the cu
 
 Public delivery groups duplicate query-loop content types and caps each request at five site/locale/page-exclusion-scoped published-content queries, at most 12 rows per group. New documents retain the five-loop validator cap. A narrow legacy published-page renderer option relaxes only that count check after the database query budget is applied; other validation bounds remain active.
 
-Local Node.js 26.12.1 npm run check passed 975 tests (972 pass, zero failures, three conditional Windows skips); artifact verification passed 241 required paths / 294 JavaScript files; tenant inventory is fresh at 28 families / 80 routes / 22 source files / 61 test references. The route regression asserts query count, type grouping, tenant scope, prefix slicing and no query for a sixth distinct type. Exact-head hosted PR CI remains required before merge.
+Exact-head PR workflow [#1398 / run 45695665362](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45695665362) passed Node 22/24 (975/975 each, zero failures/skips), PostgreSQL/Memgraph (195/195, zero failures/skips), 19/19 fresh and idempotent migrations, browser/accessibility (9/9), CodeQL and candidate evidence consolidation (CI EVIDENCE: PASS). PR-context lockfile/SBOM attestation is skipped by design and remains required after merge on main. Mainline signed provenance/readiness validation remains a post-merge gate. The aggregate Aikido report does not provide a candidate fingerprint; no scanner finding is marked resolved.
 
 
 ### Merged - F1.70 library write authorization before body parsing ([PR #252](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/252); redundant PR #302 closed without merge)
