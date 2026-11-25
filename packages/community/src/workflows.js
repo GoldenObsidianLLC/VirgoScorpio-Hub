@@ -91,6 +91,48 @@ async function createDirectConversation(ctx, siteId, body) {
   const { conversation, created } = await withTransaction(localPool, async client => {
     const pair = [actor.user.id, recipientId].sort();
     await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`virgoscorpio_hub:direct:${siteId}:${pair.join(':')}`]);
+
+    // Serialize against site membership removal before revalidating either
+    // participant. Membership administration takes this site row FOR UPDATE.
+    const site = await client.query(
+      'SELECT id FROM sites WHERE id=$1 FOR KEY SHARE',
+      [siteId],
+    );
+    if (!site.rows[0]) {
+      routeError(ctx, 404, 'ERR_VIRGOSCORPIO_HUB_SITE_NOT_FOUND', 'Site not found.');
+    }
+
+    const participantIds = [actor.user.id, recipientId];
+    const participants = await client.query(
+      'SELECT id,status FROM users WHERE id=ANY($1::uuid[]) ORDER BY id FOR UPDATE',
+      [participantIds],
+    );
+    const memberships = await client.query(
+      `SELECT user_id
+         FROM site_memberships
+        WHERE site_id=$1 AND user_id=ANY($2::uuid[])
+        ORDER BY user_id,role_id
+        FOR UPDATE`,
+      [siteId, participantIds],
+    );
+    const activeParticipantIds = new Set(
+      participants.rows
+        .filter(participant => participant.status === 'active')
+        .map(participant => participant.id),
+    );
+    const siteMemberIds = new Set(memberships.rows.map(membership => membership.user_id));
+    if (participantIds.some(userId => (
+      !activeParticipantIds.has(userId) || !siteMemberIds.has(userId)
+    ))) {
+      // Keep the same generic contract for actor and recipient revocation.
+      routeError(
+        ctx,
+        404,
+        'ERR_VIRGOSCORPIO_HUB_COMMUNITY_USER_NOT_FOUND',
+        'User is not an active member of this site.',
+      );
+    }
+
     if (await hasBlockBetween(client, siteId, actor.user.id, recipientId)) {
       routeError(ctx, 403, 'ERR_VIRGOSCORPIO_HUB_COMMUNITY_BLOCKED', 'A conversation cannot be created between these users.');
     }
