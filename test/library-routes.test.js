@@ -6,6 +6,7 @@ const { handleLibraryRoute } = require('../apps/api/src/library-routes');
 const { handlePlatformRoute } = require('../apps/api/src/platform-routes');
 
 const siteId = '11111111-1111-4111-8111-111111111111';
+const otherSiteId = '44444444-4444-4444-8444-444444444444';
 const assetId = '22222222-2222-4222-8222-222222222222';
 const actorId = '33333333-3333-4333-8333-333333333333';
 const requestId = 'req-library-test-01';
@@ -337,7 +338,7 @@ test('unauthorized library upload is rejected before reading the request body', 
   const events = [];
   const body = {
     category: 'image',
-    dataBase64: 'x'.repeat(70 * 1024 * 1024), // 70 MiB payload
+    dataBase64: 'oversized-upload-sentinel', // Parser invocation is observed; avoid allocating a synthetic 70 MiB body.
     mimeType: 'image/png',
     fileName: 'large.png'
   };
@@ -373,7 +374,7 @@ test('unauthorized asset version replacement is rejected before reading the requ
   const events = [];
   const body = {
     expectedVersion: 1,
-    dataBase64: 'y'.repeat(75 * 1024 * 1024), // 75 MiB payload
+    dataBase64: 'oversized-version-sentinel', // Parser invocation is observed; avoid allocating a synthetic 75 MiB body.
     mimeType: 'video/mp4',
     fileName: 'large.mp4'
   };
@@ -409,7 +410,7 @@ test('unauthorized asset metadata update is rejected before reading the request 
   const events = [];
   const body = {
     expectedVersion: 1,
-    patch: { displayName: 'Updated', metadata: { key: 'z'.repeat(50 * 1024 * 1024) } } // 50 MiB in metadata
+    patch: { displayName: 'Updated', metadata: { key: 'oversized-metadata-sentinel' } } // Parser invocation is observed without allocating a synthetic 50 MiB value.
   };
   const ctx = createContext({
     path: `/api/v1/sites/${siteId}/library/items/${assetId}`,
@@ -443,7 +444,7 @@ test('unauthorized asset deletion is rejected before reading the request body', 
   const events = [];
   const body = {
     expectedVersion: 1,
-    reason: 'a'.repeat(60 * 1024 * 1024) // 60 MiB in reason field
+    reason: 'oversized-delete-sentinel' // Parser invocation is observed without allocating a synthetic 60 MiB value.
   };
   const ctx = createContext({
     path: `/api/v1/sites/${siteId}/library/items/${assetId}`,
@@ -473,6 +474,41 @@ test('unauthorized asset deletion is rejected before reading the request body', 
   assert.equal(events.some(event => event.type === 'delete'), false, 'storage must not be accessed');
 });
 
+test('body site selector is revalidated after authorization and parsing', async () => {
+  const events = [];
+  const body = { siteId: otherSiteId, category: 'image', dataBase64: 'cG5n', mimeType: 'image/png', fileName: 'cross-site.png' };
+  const ctx = createContext({
+    path: '/api/v1/sites/' + siteId + '/library/items',
+    method: 'POST',
+    body,
+    events,
+    libraryStore: {
+      async upload() {
+        events.push({ type: 'upload' });
+        throw new Error('site selector mismatch must not reach storage');
+      }
+    }
+  });
+  let siteChecks = 0;
+  ctx.siteIdFor = async input => {
+    siteChecks += 1;
+    events.push({ type: siteChecks === 1 ? 'site-preflight' : 'site-body', bodySiteId: input.body?.siteId });
+    if (input.body?.siteId !== undefined && input.body.siteId !== siteId) {
+      throw fail(403, 'ERR_VIRGOSCORPIO_HUB_SITE_SCOPE_MISMATCH', 'Site scope mismatch.');
+    }
+    return input.routeSiteId;
+  };
+
+  await assert.rejects(
+    handleLibraryRoute(ctx),
+    error => error.statusCode === 403 && error.code === 'ERR_VIRGOSCORPIO_HUB_SITE_SCOPE_MISMATCH'
+  );
+  assert.equal(siteChecks, 2, 'route site is checked before parsing and the body selector is checked after parsing');
+  assert.deepEqual(events.map(event => event.type), ['site-preflight', 'capability', 'readJson', 'site-body']);
+  assert.equal(events[0].bodySiteId, undefined, 'the authorization preflight must not consume body fields');
+  assert.equal(events[3].bodySiteId, otherSiteId, 'the post-parse check must receive the parsed site selector');
+  assert.equal(events.some(event => event.type === 'upload'), false, 'a conflicting body selector must not reach storage');
+});
 test('authorized library upload reads body after authorization checks pass', async () => {
   const events = [];
   const body = {

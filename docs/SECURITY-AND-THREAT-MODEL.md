@@ -36,6 +36,7 @@
 - Rendered text/attributes use escaping; style declarations come from a CSS property/value allowlist. Arbitrary HTML, SVG and script execution are not accepted by the standard widget contract.
 - Preview iframe is sandboxed. Preview/public render responses use CSP with scripts disabled.
 - Body sizes, image size, render output, worker queues, plugin input/output and execution time are bounded.
+- Library write routes authorize the route site and `library:manage` capability before body buffering/JSON parsing; an optional body `siteId` is checked after parsing and before persistence. Read/download routes do not parse a JSON body.
 - Public page delivery reads a published snapshot, not the mutable draft document.
 - Expected-version checks prevent silent lost updates.
 
@@ -73,7 +74,8 @@
 | XSS/unsafe HTML | Escaped rendering, restricted styles, script-disabled CSP | Browser-level tests, HTML fuzzing, review every new widget/renderer helper |
 | Malicious archive | Safe path checks, metadata validation, Ed25519 provenance tooling and signed artifact/SBOM digest fields | Complete quarantine build pipeline, registry/image attestation, malware/vulnerability scanning and adversarial testing |
 | Malicious plugin | Isolated OCI runtime controls and allowlist | Host-level sandbox validation, gVisor/Kata assessment, per-capability enforcement and independent audit |
-| Resource exhaustion | Request/render/media/plugin bounds, queue backpressure, container-runner concurrency cap with awaited timeout/output-limit cleanup retries, and plugin-runner process-local global/per-image caps | Load/soak tests, per-tenant quotas, distributed rate limiting, cross-replica plugin-runner admission and host-level orphan recovery; per-image limits are not tenant identity or a distributed quota |
+| Resource exhaustion | Request/render/media/plugin bounds, queue backpressure, container-runner concurrency cap with awaited timeout/output-limit cleanup retries, and plugin-runner process-local global/per-image caps |
+| Library route body-buffer exhaustion | Site membership and `library:manage` are checked before request-body parsing; a body-supplied `siteId` is rechecked before storage and unauthorized requests never reach the body parser | No change to shared middleware ordering without preserving route-level preflight and body-selector reconciliation tests | Load/soak tests, per-tenant quotas, distributed rate limiting, cross-replica plugin-runner admission and host-level orphan recovery; per-image limits are not tenant identity or a distributed quota |
 | AI prompt injection | Allowlisted task and tool design; model output validation | Adversarial prompt-injection evaluation; tenant/model/provider policies |
 | AI data disclosure | External processing opt-in, site provider policy, classification field, request/input-character budgets and selected audit events | Verify enforcement for every data path, provider contracts/regions/retention, cost accounting and policy/audit UI |
 | Secret leakage | `.env.example` uses placeholders; status avoids keys | Secret scanner, rotation procedures, production secret manager and repository scan |
