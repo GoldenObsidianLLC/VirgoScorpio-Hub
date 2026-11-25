@@ -8,7 +8,7 @@
   "generatedBy": "scripts/generate-tenant-isolation-route-inventory.js",
   "sourceTree": {
     "fileCount": 22,
-    "sha256": "da2d666c1da4beac29b980813be113e41f710beee5ee0386d30a40cda7a4f2e6",
+    "sha256": "8e44793877034b8fe3473351ee524624dbfac4365145b5dfb7d1830c4d0c64ff",
     "files": [
       "apps/api/src/ai-task-routes.js",
       "apps/api/src/auth-routes.js",
@@ -325,13 +325,13 @@
             {
               "anchor": "url.pathname === '/api/v1/auth/saml/acs'",
               "lines": [
-                276
+                282
               ]
             },
             {
               "anchor": "url.pathname === '/api/v1/auth/oidc/callback'",
               "lines": [
-                346
+                352
               ]
             }
           ]
