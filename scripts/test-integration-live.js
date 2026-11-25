@@ -36,7 +36,9 @@ function run(label, args, env, evidenceFile) {
     cwd: root,
     env,
     encoding: 'utf8',
-    timeout: 240_000,
+    // The serial PostgreSQL/Memgraph suite grows as live integration coverage is added.
+    // Six minutes avoids timing out healthy runs while retaining a firm hang guard.
+    timeout: 360_000,
     maxBuffer: 32 * 1024 * 1024,
     windowsHide: true
   });
