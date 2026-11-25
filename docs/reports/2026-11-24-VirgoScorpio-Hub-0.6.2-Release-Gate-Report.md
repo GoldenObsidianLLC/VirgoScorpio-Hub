@@ -1,10 +1,10 @@
 # VirgoScorpio Hub 0.6.2 — Release Gate and Open PR Review
 
-**Report date:** 24 November 2026 (America/Chicago)
+**Report date:** 25 November 2026 (America/Chicago)
 
-**Latest verified mainline evidence:** 2026-11-24 18:32:05 CST
+**Latest verified mainline evidence:** Exact-main workflow #1372 completed successfully on 25 November 2026.
 
-**Source baseline:** `main` at `425162a9c9a297301a1aecb61fc96fbbd4ce8cf9`
+**Source baseline:** `main` at `9d60df85a3c160f54c27b822d72053fe3dd38d4f`
 
 **Package:** `0.6.2` (private, unreleased)
 
@@ -22,15 +22,15 @@ The source, supported-runtime test matrices, hosted PostgreSQL/Memgraph integrat
 
 | Evidence | Verified result |
 |---|---|
-| Main source | `425162a9c9a297301a1aecb61fc96fbbd4ce8cf9` |
-| Exact-main workflow | [Run #45518406995](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45518406995), 7/7 jobs successful |
-| Canonical readiness artifact | [Artifact #14979645776](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45518406995/artifacts/14979645776), SHA-256 `23d1532ee8c0783848d8ba232f0d9c666c01f41766057b0b0db5685bd50c51f4` |
+| Main source | `9d60df85a3c160f54c27b822d72053fe3dd38d4f` |
+| Exact-main workflow | [Run #45643744686](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45643744686), 7/7 jobs successful |
+| Canonical readiness artifact | [Artifact #15036303131](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45643744686/artifacts/15036303131); source 9d60df85a3c160f54c27b822d72053fe3dd38d4f; 8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN |
 | Readiness JSON | SHA-256 `05351a05118092679be2fc57bcfb9d9e74dcaf377a2287aab70f9abdea32c1da` |
 | Readiness Markdown | SHA-256 `8786620244c7a4979010d5938d803e44f6559a7d554c9b58cf70ef161fc3ce9e` |
-| Node.js 22.23.4 | 934/934 Hub tests and 94/94 EnginEx tests; zero failures/skips |
-| Node.js 24.22.1 | 934/934 Hub tests and 94/94 EnginEx tests; zero failures/skips |
+| Node.js 22.23.4 | 938/938 Hub tests and 94/94 EnginEx tests; zero failures/skips |
+| Node.js 24.22.1 | 938/938 Hub tests and 94/94 EnginEx tests; zero failures/skips |
 | npm audit | Both supported-runtime jobs reported 0 vulnerabilities at the high-severity threshold |
-| PostgreSQL/Memgraph | 194/194 hosted integration tests; zero failures/skips |
+| PostgreSQL/Memgraph | 195/195 hosted integration tests; zero failures/skips, including F1.69 participant-revocation races |
 | Database migrations | 19/19 applied to a fresh database; second pass skipped all 19 as already applied; disposable database removed |
 | Memgraph recovery | Real outage left the event pending and released the lease; replay succeeded after restart without duplicate delivery |
 | Graph rebuild | Canonical content/relationships rebuilt; tombstones preserved, stale nodes removed, safety limit respected, and second rebuild deterministic |
@@ -109,25 +109,21 @@ The previous report used main SHA `287508b16d9c7d3156fab07f975413de2c659ae0`. Th
 
 These changes supersede the previous report's pending work on PRs #239, #240, #242, #248 and #251. The merged code is included in the current exact-main tests; none of these changes independently closes the external evidence gates above.
 
-## F1.69 candidate — PR #299
+## F1.69 merged — PR #299
 
-[PR #299](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/299) remains **open and draft** at head `95d38d1aed870ebf407bb963b17d3b693dd2b9f1`. Its code-bearing implementation commit is `1df0ae2a87f08a48b5a40ef5750e69d48346cd83`.
+F1.69 PR [#299](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/299) merged to main at `9d60df85a3c160f54c27b822d72053fe3dd38d4f` on 25 November 2026; issue [#298](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/298) is CLOSED. The transaction revalidates both participants’ active-account status and selected-site memberships after the direct-pair advisory lock, under deterministic site → user → membership lock ordering, before block checks or conversation/member/notification side effects. Existing generic non-disclosing 404 behavior and API/wire contract remain unchanged.
 
-The implementation revalidates the actor and recipient's active-account and same-site membership state after acquiring the direct-pair transaction locks. It preserves the non-disclosing 404 contract and covers participant membership removal, account deactivation and actor-membership revocation races. The same PR also changes session `last_seen_at` write throttling; that adjacent behavior remains part of the review scope.
+Exact-head push/PR runs [#45637000522](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45637000522) / [#45637014263](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45637014263) passed, including the recipient-membership, recipient-account and actor-membership revocation races. Post-merge exact-main [workflow #1372](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45643744686) passed 7/7, including Node 22/24 (938/938 Hub and 94/94 EnginEx), PostgreSQL/Memgraph (195/195), 19/19 fresh/idempotent migrations, browser 9/9, CodeQL, signed lockfile/SBOM attestation and exact-source readiness consolidation. Canonical readiness remains 8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN, readyForProduction=false, NOT_PRODUCTION_CERTIFIED / NO-GO.
 
-The candidate's historical run set (#1327/#1328 on the code-bearing commit and #1329/#1330 on the documentation head) passed its applicable checks, including 195/195 PostgreSQL/Memgraph tests. Those results predate the current mainline source and are **not** evidence for the current candidate merge result.
-
-A compare against current main shows the PR branch and main have diverged from merge base `287508b16d9c7d3156fab07f975413de2c659ae0`: main contains 19 commits not on the PR branch, while the PR branch contains 24 commits not on main. The PR changes several files that have since changed on main, including authentication routes, content-type routes, server setup and plugin-runner code. There are **zero formal review submissions and zero review threads** recorded for #299.
-
-**Decision:** retain draft status. First synchronize the candidate with current main using a normal merge, resolve and review overlapping security changes (do not overwrite either side), then regenerate source-anchored inventories and run focused regressions plus the complete Node 22/24, live integration, browser, CodeQL and evidence-consolidation matrices on the new exact head. Review the full diff, including session throttling, before requesting approval. Maintainer tests do not satisfy independent tenant review #14.
+The PR also updates session last_seen_at throttling to skip redundant fresh-session writes while preserving guarded best-effort stale-session touches. Its PostgreSQL lock observer has a relation-aware mode that confirms blocker PID plus relation/tuple/transaction-ID wait evidence when query text is stale; the default query-fragment mode remains. Local Node.js 26.12.1 npm run check passed 938 tests (935 pass, 0 fail, three conditional Windows skips); artifact verification passed 241 required paths / 292 JavaScript files; tenant inventory regenerated at 28 families / 80 route patterns / 22 source files / 61 test references. Maintainer technical self-review is recorded in PR #299; this does not replace independent tenant/site review #14, platform security assessment #25 or dependency/license review #23. No schema, migration, dependency, lockfile, API or SemVer change; package 0.6.2 remains private/unreleased.
 
 ## Open pull-request inventory
 
-GitHub currently reports **14 open pull requests**. The workflow results in this table are not represented as current-head passes; each candidate must be rebased/merged with current main and revalidated on its final head before merge.
+GitHub currently reports **13 open pull requests**. The workflow results in this table are not represented as current-head passes; each candidate must be rebased/merged with current main and revalidated on its final head before merge.
 
 | PR | Area | Next review / engineering action |
 |---:|---|---|
-| [#299](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/299) | Direct-conversation participant revalidation | Highest immediate candidate; synchronize with main, review lock order and session throttling, rerun full hosted matrix; keep draft pending review. |
+
 | [#257](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/257) | Tenant-scoped firewall, quotas and cache safety | Review policy generation/cache invalidation, tenant context, fail-closed refresh and multi-replica behavior as one consolidated change. |
 | [#246](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/246) | Per-site storage quotas | Validate cumulative legacy/versioned object accounting across every storage adapter and transactional replace/delete behavior. |
 | [#252](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/252) | Library-route request body limits | Confirm limits apply before buffering and do not bypass site/tenant authorization or legitimate large-upload workflows. |
@@ -144,7 +140,7 @@ GitHub currently reports **14 open pull requests**. The workflow results in this
 
 ## Recommended development sequence
 
-1. **Synchronize and review PR #299.** This is the most concrete next runtime candidate, but the branch has meaningful divergence from current main and has no formal reviews. Resolve the overlapping security changes deliberately; do not fast-forward or merge without reviewing the merged diff.
+1. **Review the remaining runtime security candidates.** F1.69 / PR #299 is merged. Start with PR #252 (library-route authorization before body parsing), then review the auth/resource bounds and storage quotas against current main. Resolve #246 and #257 merge conflicts manually; never discard either side of tenant/security changes.
 2. **Continue the resource-exhaustion/security backlog by threat surface.** Review #257, #246 and #252 first for tenant policy and unbounded request/storage surfaces; then webhook/checkout/media PRs (#264, #265, #267, #266), mail/auth (#269, #274, #258, #256), query-loop (#253), and plugin registry (#270). Revalidate each on current main, regenerate source-anchored inventories only after integration, and fix behavioral failures rather than refreshing generated inventory alone.
 3. **Keep independent assurance separate from implementation.** Arrange qualified reviewers for #14, #23 and #25; run load/restore drills for #24; obtain explicit operations and release-owner approvals for #26/#13; complete governance controls tracked by #32; and obtain the deployment-controlled OTLP/observability evidence.
 4. **Re-run the exact-main release workflow after every merge.** The current readiness snapshot is bound to `425162a9c9a297301a1aecb61fc96fbbd4ce8cf9`; any new source SHA requires fresh evidence. Never copy old evidence or edit a SHA into an old record.
