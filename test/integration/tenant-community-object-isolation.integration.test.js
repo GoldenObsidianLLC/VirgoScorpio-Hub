@@ -1311,6 +1311,270 @@ test(
       await assertSiteBUnchanged();
     });
 
+    await t.test('direct conversation creation rejects participants revoked after request preflight', async () => {
+      // Session last-seen touches are intentionally fire-and-forget. A prior
+      // authenticated request in this integration test may still have one in
+      // flight when the next deterministic lock race starts. Drain those writes
+      // before acquiring the blocker so the observed waiter is the post-preflight
+      // site-row lock, not an unrelated auth_sessions update.
+      async function waitForSessionTouchesToSettle(timeoutMs = 5000) {
+        const deadline = Date.now() + timeoutMs;
+        let idleSince = null;
+
+        while (Date.now() < deadline) {
+          const pending = await pool.query(
+            `SELECT pid
+               FROM pg_stat_activity
+              WHERE datname=current_database()
+                AND pid<>pg_backend_pid()
+                AND query ILIKE 'UPDATE auth_sessions SET last_seen_at%'
+                AND (state='active' OR wait_event_type='Lock')
+              LIMIT 1`,
+          );
+
+          // pg.Pool exposes waitingCount for queries queued before they have a backend.
+          if (pending.rows.length || pool.waitingCount > 0) {
+            idleSince = null;
+          } else if (idleSince === null) {
+            idleSince = Date.now();
+          } else if (Date.now() - idleSince >= 100) {
+            return;
+          }
+
+          await new Promise(resolve => setTimeout(resolve, 20));
+        }
+
+        throw new Error('prior auth_sessions last-seen touches did not settle before the direct-conversation lock race');
+      }
+
+      async function lockSiteForParticipantRevalidation(client, siteId) {
+        // The API acquires the direct-pair advisory lock after recipient preflight,
+        // then takes this compatible site row lock before revalidating users and
+        // memberships. Holding FOR UPDATE here pauses the request at that exact
+        // post-preflight transaction boundary without intercepting authentication.
+        return client.query(
+          'SELECT id FROM sites WHERE id=$1 FOR UPDATE',
+          [siteId],
+        );
+      }
+
+      async function assertRevocationRace({
+        description,
+        blockerLock,
+        blockingQueryFragment,
+        blockingRelationName,
+        mutate,
+        restore,
+      }) {
+        // Give each race fresh participants. The recipient is intentionally never
+        // authenticated, so no earlier request can leave a throttled session touch
+        // queued ahead of the site-row barrier used to reproduce this race.
+        const raceActor = await createUser('Site B Direct Conversation Race Actor', true);
+        const raceRecipient = await createUser('Site B Direct Conversation Race Recipient');
+        await pool.query(
+          'INSERT INTO site_memberships(site_id,user_id,role_id) VALUES($1,$2,$3),($1,$4,$3)',
+          [siteB, raceActor.id, roleId, raceRecipient.id],
+        );
+        const recipientId = raceRecipient.id;
+        const siteAStateBefore = await snapshotCommunitySite(pool, siteA);
+        const siteBStateBefore = await snapshotCommunitySite(pool, siteB);
+
+        // Use a fresh actor session for each race so its throttled last-seen
+        // touch cannot obscure the post-preflight site-row wait under test.
+        const raceSession = await identity.login({
+          email: raceActor.email,
+          password: 'Isolation-Password-2026',
+          ip: '127.0.0.1',
+          userAgent: 'f1-69-direct-conversation-race',
+        });
+        const raceSessionState = await pool.query(
+          `SELECT last_seen_at > now() - interval '1 minute' AS fresh
+             FROM auth_sessions WHERE user_id=$1 AND revoked_at IS NULL`,
+          [raceActor.id],
+        );
+        assert.equal(raceSessionState.rows.length, 1);
+        assert.equal(raceSessionState.rows[0].fresh, true, 'race actor session must start within the touch throttle window');
+        assert.equal(raceSession.mfaRequired, false);
+        const raceHeaders = {
+          ...headers,
+          authorization: `Bearer ${raceSession.token}`,
+        };
+
+        // Keep the race actor session fresh before blocker acquisition.
+        // Authentication now uses a DB-computed should_touch flag and skips
+        // no-op last_seen_at writes for sessions touched within the last minute.
+        const refreshedSession = await pool.query(
+          'UPDATE auth_sessions SET last_seen_at=now() WHERE user_id=$1 AND revoked_at IS NULL RETURNING id',
+          [raceActor.id],
+        );
+        assert.equal(refreshedSession.rows.length, 1, 'the race actor must have one active session before blocker acquisition');
+
+        await waitForSessionTouchesToSettle();
+
+        const blocker = await pool.connect();
+        let requestPromise = null;
+        let lockReleased = false;
+        let mutationApplied = false;
+
+        try {
+          await blocker.query('BEGIN');
+          await blockerLock(blocker, raceActor, raceRecipient);
+
+          requestPromise = fetch(`${base}/api/v1/sites/${siteB}/community/conversations`, {
+            method: 'POST',
+            headers: { ...raceHeaders, 'content-type': 'application/json' },
+            body: JSON.stringify({ recipientId }),
+          });
+
+          // The route's preflight and pair advisory lock both precede its site
+          // FOR KEY SHARE row lock. The shared observer verifies the blocked
+          // relation/tuple lock and blocker PID, not a potentially stale query string.
+          const waitingOnSiteLock = await waitForDatabaseWriteLock(
+            blocker,
+            blockingQueryFragment,
+            5000,
+            { relationName: blockingRelationName },
+          );
+          if (!waitingOnSiteLock) {
+            const blockerIdentity = await blocker.query('SELECT pg_backend_pid() AS pid');
+            const [activity, earlyResponse] = await Promise.all([
+              blocker.query(
+                `SELECT a.pid,a.application_name,a.state,a.wait_event_type,a.wait_event,
+                        a.backend_xid,a.xact_start,a.query_start,a.query,
+                        pg_blocking_pids(a.pid) AS blocking_pids,
+                        (SELECT json_agg(json_build_object(
+                          'locktype',l.locktype,
+                          'mode',l.mode,
+                          'granted',l.granted,
+                          'relation',l.relation::regclass::text,
+                          'page',l.page,
+                          'tuple',l.tuple,
+                          'transactionid',l.transactionid::text,
+                          'virtualxid',l.virtualxid,
+                          'classid',l.classid,
+                          'objid',l.objid,
+                          'objsubid',l.objsubid
+                        ) ORDER BY l.granted,l.locktype)
+                           FROM pg_locks l WHERE l.pid=a.pid) AS locks
+                   FROM pg_stat_activity a
+                  WHERE a.datname=current_database()
+                  ORDER BY a.query_start DESC LIMIT 30`,
+              ),
+              Promise.race([
+                requestPromise.then(async response => ({
+                  status: response.status,
+                  body: await response.clone().text(),
+                })),
+                new Promise(resolve => setTimeout(() => resolve(null), 100)),
+              ]),
+            ]);
+            assert.equal(
+              waitingOnSiteLock,
+              true,
+              `${description}: post-preflight site-lock wait not observed; blockerPid=${blockerIdentity.rows[0]?.pid}; fragment=${blockingQueryFragment}; activity=${JSON.stringify(activity.rows)}; earlyResponse=${JSON.stringify(earlyResponse)}`,
+            );
+          }
+
+          await mutate(blocker, raceActor, raceRecipient);
+          mutationApplied = true;
+          await blocker.query('COMMIT');
+          lockReleased = true;
+
+          const response = await requestPromise;
+          const payload = await response.json();
+          assert.equal(response.status, 404, description);
+          assert.equal(payload.code, 'ERR_VIRGOSCORPIO_HUB_COMMUNITY_USER_NOT_FOUND');
+          assert.doesNotMatch(JSON.stringify(payload), new RegExp(recipientId));
+
+          assert.deepEqual(await snapshotCommunitySite(pool, siteA), siteAStateBefore);
+          assert.deepEqual(await snapshotCommunitySite(pool, siteB), siteBStateBefore);
+
+          const conversation = await pool.query(
+            `SELECT c.id
+               FROM social_conversations c
+               JOIN social_conversation_members actor_member
+                 ON actor_member.site_id=c.site_id AND actor_member.conversation_id=c.id
+                AND actor_member.user_id=$2 AND actor_member.left_at IS NULL
+               JOIN social_conversation_members recipient_member
+                 ON recipient_member.site_id=c.site_id AND recipient_member.conversation_id=c.id
+                AND recipient_member.user_id=$3 AND recipient_member.left_at IS NULL
+              WHERE c.site_id=$1 AND c.conversation_type='direct'`,
+            [siteB, raceActor.id, recipientId],
+          );
+          assert.deepEqual(conversation.rows, [], 'revoked participants must not gain a direct conversation');
+
+          const createdNotifications = await pool.query(
+            `SELECT id FROM social_notifications
+              WHERE site_id=$1 AND user_id=$2
+                AND notification_type='community.message.conversation_created'
+                AND payload->>'fromUserId'=$3`,
+            [siteB, recipientId, raceActor.id],
+          );
+          assert.deepEqual(createdNotifications.rows, [], 'denied creation must not emit recipient notifications');
+        } finally {
+          if (!lockReleased) {
+            // On an assertion failure, deny the waiting request before releasing
+            // the site row lock so a failed test cannot leak a successful write
+            // into later scenarios or snapshots.
+            if (requestPromise && !mutationApplied) {
+              await mutate(blocker, raceActor, raceRecipient).then(() => {
+                mutationApplied = true;
+              }).catch(() => {});
+            }
+            await blocker.query(mutationApplied ? 'COMMIT' : 'ROLLBACK').catch(() => {});
+          }
+          if (requestPromise) await requestPromise.catch(() => {});
+          blocker.release();
+          await restore(raceActor, raceRecipient);
+        }
+      }
+
+      await assertRevocationRace({
+        description: 'recipient site-membership removal after preflight',
+        blockerLock: client => lockSiteForParticipantRevalidation(client, siteB),
+        blockingQueryFragment: 'FOR KEY SHARE',
+        blockingRelationName: 'sites',
+        mutate: (client, raceActor, raceRecipient) => client.query(
+          'DELETE FROM site_memberships WHERE site_id=$1 AND user_id=$2',
+          [siteB, raceRecipient.id],
+        ),
+        restore: (raceActor, raceRecipient) => pool.query(
+          'INSERT INTO site_memberships(site_id,user_id,role_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING',
+          [siteB, raceRecipient.id, roleId],
+        ),
+      });
+
+      await assertRevocationRace({
+        description: 'recipient account deactivation after preflight',
+        blockerLock: client => lockSiteForParticipantRevalidation(client, siteB),
+        blockingQueryFragment: 'FOR KEY SHARE',
+        blockingRelationName: 'sites',
+        mutate: (client, raceActor, raceRecipient) => client.query(
+          "UPDATE users SET status='disabled' WHERE id=$1",
+          [raceRecipient.id],
+        ),
+        restore: (raceActor, raceRecipient) => pool.query(
+          "UPDATE users SET status='active' WHERE id=$1",
+          [raceRecipient.id],
+        ),
+      });
+
+      await assertRevocationRace({
+        description: 'actor site-membership removal after preflight',
+        blockerLock: client => lockSiteForParticipantRevalidation(client, siteB),
+        blockingQueryFragment: 'FOR KEY SHARE',
+        blockingRelationName: 'sites',
+        mutate: (client, raceActor) => client.query(
+          'DELETE FROM site_memberships WHERE site_id=$1 AND user_id=$2',
+          [siteB, raceActor.id],
+        ),
+        restore: raceActor => pool.query(
+          'INSERT INTO site_memberships(site_id,user_id,role_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING',
+          [siteB, raceActor.id, roleId],
+        ),
+      });
+    });
+
     await t.test('friendship requests reject foreign, invited, and disabled recipients without side effects', async () => {
       const blocks = await fetch(`${base}/api/v1/sites/${siteB}/community/blocks`, { headers });
       assert.equal(blocks.status, 200);
