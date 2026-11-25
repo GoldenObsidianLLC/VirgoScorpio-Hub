@@ -122,9 +122,9 @@ Hosted F1.73 CI status at report capture (25 November 2026):
 - Replacement push run #45711333570 and PR run #45711343166 both passed Node.js 22, Node.js 24, CodeQL and browser/accessibility jobs. Their live PostgreSQL/Memgraph jobs were still in progress at report capture. Mainline-only signed lockfile/SBOM attestation was skipped by design on PR branch/push events and remains a post-merge mainline check.
 
 **Do not promote draft PR #304 or claim full hosted acceptance until both replacement PostgreSQL/Memgraph jobs complete successfully and the PR has received review.** Candidate CI is not mainline release evidence and does not change the canonical main readiness result.
-## Current open pull-request inventory
+## Current open implementation/security pull-request inventory
 
-GitHub reported ten open pull requests at the time of this review. The inventory is a triage queue, not a recommendation to merge bot proposals in bulk.
+GitHub reported ten open implementation/security pull requests at the time of this review. The inventory is a triage queue, not a recommendation to merge bot proposals in bulk. A subsequent documentation-only draft PR #305 carries this report and the aligned status-document refresh; it is intentionally excluded from this implementation/security triage inventory.
 
 | PR | Area | Recommended next review |
 |---:|---|---|
