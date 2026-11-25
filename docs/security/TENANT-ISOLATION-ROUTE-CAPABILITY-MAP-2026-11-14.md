@@ -8,8 +8,8 @@ Maintainer-prepared route, capability, data-access, and regression-test navigati
 
 - Status: MAINTAINER_PREPARED_NOT_INDEPENDENTLY_REVIEWED.
 - Generated from the current working-tree implementation anchors and the catalog at docs/security/tenant-isolation-route-inventory.catalog.json.
-- Implementation-source digest: 736992d07281e4aa6197d1170fdd9cad372b6204a39d79a66cee6f09e99e4698 across 22 files.
-- Referenced-test digest: 1933ce3ee9f1acaeb326f35a4d6b03dd2f2e357c076d2ebc2944827882b8dec5 across 61 files.
+- Implementation-source digest: ff1489f050a79554ac4dbfa1e2ee9970909118350773f1ad7cc1452123db22a6 across 22 files.
+- Referenced-test digest: ccdea3b86d064f3623cbee2248ff99effd9e5de51cdf85fa0a72797beba2df57 across 61 files.
 - Inventory size: 28 route/flow families, 80 declared route patterns, 22 source files, and 61 test files.
 - Regenerate with npm run security:tenant-inventory; CI checks freshness with node scripts/generate-tenant-isolation-route-inventory.js --check.
 
@@ -55,7 +55,7 @@ Tests: test/tenant-route-capabilities.test.js
 
 Content read/edit scope and collaboration-document authorization include ownership, document type, site and active-session checks where applicable.
 
-Source: apps/api/src/server.js (lines 351, 439, 450, 1779, 1807, 1886, 1918)
+Source: apps/api/src/server.js (lines 351, 439, 450, 1797, 1825, 1904, 1936)
 
 Tests: test/content-type-routes.test.js, test/collaboration-api.test.js, test/realtime-websocket.test.js
 
@@ -99,7 +99,7 @@ Tests: test/content-type-routes.test.js, test/collaboration-api.test.js, test/re
 - Capabilities/controls: Site membership/ownership policy, Developer-token restriction for site creation
 - Data-access boundary: sites; site_memberships; identity/audit records
 - Side effects: Site and owner-membership creation
-- Source: apps/api/src/server.js (lines 1340, 1344)
+- Source: apps/api/src/server.js (lines 1358, 1362)
 - Test references: test/api.test.js, test/auth-security.test.js
 - Coverage characterization: **targeted**. F1.29 merged through PR #142 at main debd9890b94b55dd3b9496d80f49a9a7c00615fb. Site creation now commits the site row, initial site-owner membership and correlated site.created audit event atomically using shared transaction/audit helpers. The route passes requestId into the service and no longer inserts a duplicate route-level event. Exact-main workflow #609 passed 95/95 live PostgreSQL/Memgraph tests with zero skips, including audit-trigger rollback/retry. This is targeted maintainer/automation evidence; no formal PR review submission was recorded. Owner handoff, concurrent ownership changes, creation abuse and independent assessment remain open.
 
@@ -113,7 +113,7 @@ Tests: test/content-type-routes.test.js, test/collaboration-api.test.js, test/re
 - Capabilities/controls: site:manage
 - Data-access boundary: site_memberships; users; invitations; mail/outbox; audit events; authorization invalidation; transactional invitation-acceptance audit
 - Side effects: Add/remove membership; Create invitation; Mail delivery intent; Audit and session/realtime authorization invalidation; Consume invitation and create membership in one PostgreSQL transaction; Site-scoped invitation-acceptance audit; Post-commit authorization invalidation
-- Source: apps/api/src/site-membership-routes.js (lines 34, 62, 80); apps/api/src/server.js (lines 1948)
+- Source: apps/api/src/site-membership-routes.js (lines 34, 62, 80); apps/api/src/server.js (lines 1966)
 - Test references: test/site-membership-routes.test.js, test/integration/tenant-membership-administration-isolation.integration.test.js, test/auth-security.test.js, test/site-invitation-audit-atomicity.test.js, test/integration/site-invitation-audit-atomicity.integration.test.js
 - Coverage characterization: **targeted-selector-reconciliation-two-site-membership-and-invitation-lifecycle-with-atomic-audit**. Unit tests assert site-selector resolution before capability authorization. Live A/B integration rejects path/header/query/body conflicts for membership and invitation operations, compares membership/invitation/mail-outbox/audit snapshots, and preserves foreign-user non-disclosure. F1.29 site creation/initial-owner membership/site.created and F1.43 invitation upsert/mail-outbox/site.invitation_created now use existing transaction callbacks so local writes and correlated metadata-only audit events commit or roll back together. F1.43 merged through PR #182 at main 82ace7f0413842a9d92156f6d4be3692e3913ce5; issue #181 is CLOSED. The one-time invitation token is excluded from audit details. Exact-main workflow #715 passed all seven jobs. PR #182 has no formal review submission or inline thread; maintainer/automation evidence only. Independent reviews #14/#25 and broader role combinations, last-owner concurrency, active-stream revocation and abuse cases remain separate review work.
 
@@ -127,7 +127,7 @@ Tests: test/content-type-routes.test.js, test/collaboration-api.test.js, test/re
 - Capabilities/controls: content:read, content:edit, site:manage
 - Data-access boundary: site_design_systems; reusable_components; site_templates; taxonomy_terms; content_relationships; navigation_menus; site_ai_policies; outbox; audit
 - Side effects: Versioned metadata/configuration writes; Relationship/taxonomy domain events; Graph projection work; Audit events
-- Source: apps/api/src/server.js (lines 1247, 1351, 1377, 1382, 1431, 1458, 1523, 1581, 1657)
+- Source: apps/api/src/server.js (lines 1265, 1369, 1395, 1400, 1449, 1476, 1541, 1599, 1675)
 - Test references: test/tenant-route-capabilities.test.js, test/integration/tenant-isolation.integration.test.js, test/integration/postgres.integration.test.js, test/outbox-contract.test.js, test/identity-audit-queryable.test.js, test/integration/tenant-membership-administration-isolation.integration.test.js, test/reusable-component-audit-atomicity.test.js, test/integration/reusable-component-audit-atomicity.integration.test.js
 - Coverage characterization: **path-header-query-and-write-body-selector-reconciliation-transactional-mutation-audit-atomicity-and-two-site-identifier-boundaries-f1-30-to-f1-40-merged**. Live PostgreSQL tenant-isolation tests exercise header/query conflicts for each configuration family, body conflicts for design-system/reusable-components/templates/menus/AI-policy writes, path-addressed delete selector checks and tenant snapshot comparisons. F1.30 merged through PR #144 at main 67e9440b9c543e69a46bba8cbb25a9d2329f3502; exact-main workflow #612 passed 96/96 PostgreSQL/Memgraph tests with zero skips, Node 22/24 matrices, migrations 18/18 plus 18/18 idempotent re-entry, Playwright 9/9, CodeQL, signed mainline attestation and evidence consolidation. F1.31 merged through PR #147 at main 63e4db46426c606b73fea6d03bc4ea6a54219f16; exact-main workflow #622 passed 97/97 PostgreSQL/Memgraph tests with zero skips, Node 22/24 matrices, 18 fresh and 18 idempotent migrations, Playwright 9/9, CodeQL, signed mainline attestation and evidence consolidation. F1.32 relationship.created/deleted audit inserts use the existing transaction client before COMMIT, so an audit failure rolls back the relationship row and durable outbox event. The two-site regression covers create/delete rollback and safe retry, actor/request/site/outbox correlation, cross-site endpoint, invalid endpoint type/metadata, duplicate conflict and an unchanged Site A control. The initial exact-head PR run #625 hit three unrelated fixture HTTP 429 assertions after the new regression passed; RATE_LIMIT_MAX_REQUESTS=1000 is set only for that test server. Corrected exact-head PR workflow #627 passed Node 22/24, PostgreSQL/Memgraph 98/98 with zero skips, migrations, Playwright 9/9, CodeQL and evidence consolidation. Documentation-only head e4df53785c51f7ab4b81532421f278ed4cb4c658 passed exact-head push #628 and PR #629 with the same functional jobs and 98/98 live database tests. PR #149 merged on 15 November 2026 at main 9230177d3155d9ff9134180a67ed69203d618c0f. Exact-main workflow #630 passed all seven jobs: Node 22/24 each 608 Hub and 94 EnginEx; PostgreSQL/Memgraph 98/98 zero skips; 18 fresh/18 idempotent migrations; Playwright 9/9; CodeQL; signed mainline attestation; evidence consolidation. GitHub records no formal human review; this is maintainer/automation evidence. F1.33 is a maintainer candidate tracked by issue #150 on main 9230177d3155d9ff9134180a67ed69203d618c0f. The site AI-policy PUT upsert and correlated ai.policy_updated event now execute on the same withTransaction client; the existing pool-backed audit default is unchanged. The two-site regression injects a site/action-scoped audit failure, proves Site B policy rollback and no audit row, retries once and verifies policy plus actor/site/request/details correlation, checks Site A remains unchanged, and asserts selector, capability, quota, provider allowlist and external-content denials have no side effects. Trigger/function names are unique and cleaned in finally. Local npm run check passed 608 tests (605 pass, zero failures, three Windows-specific platform skips); artifact verifier passed 235 required paths / 246 JavaScript files; both npm audit modes found zero vulnerabilities; inventory generation and --check pass at 27 families / 78 routes / 21 source files / 43 test references. Local live PostgreSQL/Memgraph was NOT RUN because DATABASE_URL and VIRGOSCORPIO_HUB_RUN_POSTGRES_INTEGRATION are absent. Corrected exact-current-head push workflow #633 (run 43664467084) and PR workflow #634 (run 43664470029) both passed all functional jobs on 3228f66fc9cdeb8fc69367bc1c8a457d722b9b15. Node.js 22.23.4 and 24.22.1 each passed 608/608 Hub and 94/94 EnginEx tests with zero skips; PostgreSQL/Memgraph passed 99/99 with zero skips, including the ai.policy_updated audit-trigger rollback/retry regression; 18/18 fresh migrations and 18/18 idempotent re-entry checks passed; Playwright 9/9; CodeQL; and candidate evidence consolidation passed. Branch-only dependency/SBOM attestation skipped as designed for non-mainline workflows. Initial runs #631/#632 failed because generated inventory outputs were stale after source/catalog changes; docs-only commit 3228f66 regenerated them and current-head validation is green. F1.40 reusable-component POST/PUT/DELETE audit atomicity is merged through PR #172; exact-main workflow #693 passed 111/111 live PostgreSQL/Memgraph tests with zero skips, including the two-site boundary and create/update/delete audit-failure rollback/retry regression. This is maintainer/automation evidence, not independent security acceptance; remaining presentation, cache invalidation and role combinations require assessor review.
 
@@ -155,7 +155,7 @@ Tests: test/content-type-routes.test.js, test/collaboration-api.test.js, test/re
 - Capabilities/controls: content:read, content:read:own, content:edit, content:edit:own, content:submit, content:approve, content:publish, content:archive
 - Data-access boundary: content records; content revisions; published snapshots; workflow state; outbox/audit
 - Side effects: Content/revision writes; Restore and workflow transitions; Publication and outbox events
-- Source: apps/api/src/server.js (lines 1769, 1774, 1858, 1872, 1882, 1901); packages/db/src/postgres-store.js (lines 154)
+- Source: apps/api/src/server.js (lines 1787, 1792, 1876, 1890, 1900, 1919); packages/db/src/postgres-store.js (lines 154)
 - Test references: test/integration/tenant-content-object-isolation.integration.test.js, test/api.test.js, test/content-owner-store.test.js, test/content-draft-audit.test.js, test/content-draft-audit-route.test.js, test/integration/content-draft-audit.integration.test.js, test/integration/content-restore-audit-atomicity.integration.test.js
 - Coverage characterization: **targeted-two-site-plus-authenticated-revision-restore-audit-rollback-retry**. The A/B suite reuses foreign page IDs against selected read/revision/collaboration/restore/publish paths and snapshots relevant state. F1.44 runtime PR #184 passes the existing onDraftSaved callback from authenticated revision restore into store.saveDraft(), keeping the metadata-only content.draft_saved event on the content/revision/workflow/outbox transaction queryable. Test/documentation PR #186 adds the live authenticated restore-route PostgreSQL trigger-failure rollback/retry regression and a database URL safety guard; it passed 2/2 focused tests with zero skips against disposable PostgreSQL 18 after all 18 migrations applied. PR #186 merged at current main 68cfd2f0e05e5c43ccb617770124a39c9226db9c; exact-main workflow #721 passed 120/120 live PostgreSQL/Memgraph/Redis tests with zero skips, including the new regression. This is maintainer/automation evidence, not independent security approval. Other workflow actions, own-content exceptions, authorization combinations and concurrency still require independent coverage.
 
@@ -169,7 +169,7 @@ Tests: test/content-type-routes.test.js, test/collaboration-api.test.js, test/re
 - Capabilities/controls: content:edit, content:edit:own
 - Data-access boundary: content documents; collaboration operations/cursors; document publisher/realtime topics
 - Side effects: Durable operation append; Sequence and cursor updates; Site/document-scoped publication
-- Source: apps/api/src/server.js (lines 351, 439, 1792)
+- Source: apps/api/src/server.js (lines 351, 439, 1810)
 - Test references: test/collaboration-api.test.js, test/realtime-websocket.test.js, test/integration/tenant-content-object-isolation.integration.test.js
 - Coverage characterization: **targeted-two-site-and-unit**. Selected foreign document IDs and stale/invalid collaboration cases are covered; replay, reconnect, membership revocation during active collaboration and all cross-instance paths remain reviewer work.
 
@@ -183,7 +183,7 @@ Tests: test/content-type-routes.test.js, test/collaboration-api.test.js, test/re
 - Capabilities/controls: ai:use, site:manage (AI policy management)
 - Data-access boundary: site_ai_policies; AI task metadata and encrypted payloads; usage/quota reservations; provider adapters
 - Side effects: Task enqueue/claim/complete; Provider invocation; Usage/audit records; Cancellation and lease transitions
-- Source: apps/api/src/server.js (lines 462, 1693); apps/api/src/ai-task-routes.js (lines 8, 9, 104)
+- Source: apps/api/src/server.js (lines 462, 1711); apps/api/src/ai-task-routes.js (lines 8, 9, 104)
 - Test references: test/ai-task-routes.test.js, test/ai-task-queue.test.js, test/ai-queue-worker.test.js, test/api.test.js
 - Coverage characterization: **targeted**. Tenant-bound task cursors, payload AAD, policy and provider guards have focused tests; every selected-page/context/provider path and concurrent quota isolation require broader review.
 
@@ -197,7 +197,7 @@ Tests: test/content-type-routes.test.js, test/collaboration-api.test.js, test/re
 - Capabilities/controls: media:manage
 - Data-access boundary: media metadata; local/S3 object storage
 - Side effects: Object write followed by metadata write; Compensating object cleanup on metadata failure
-- Source: apps/api/src/server.js (lines 1742, 1747); packages/media/src/local-store.js (lines 102)
+- Source: apps/api/src/server.js (lines 1760, 1765); packages/media/src/local-store.js (lines 102)
 - Test references: test/api.test.js, test/security-boundaries.test.js, test/integration/tenant-library-media-isolation.integration.test.js
 - Coverage characterization: **targeted**. File signature and storage safety tests exist; remote provider IAM, object key collisions, deletion/reconciliation and media-specific two-site byte access require independent/provider testing.
 
@@ -225,7 +225,7 @@ Tests: test/content-type-routes.test.js, test/collaboration-api.test.js, test/re
 - Capabilities/controls: Public publication/visibility policy
 - Data-access boundary: sites; published content snapshots; search index/query data; commerce_products; membership_plans
 - Side effects: Read-only responses; caches/public query paths must preserve site and visibility scope.
-- Source: apps/api/src/server.js (lines 857, 882, 890, 1218, 1233)
+- Source: apps/api/src/server.js (lines 875, 900, 908, 1236, 1251)
 - Test references: test/api.test.js, test/integration/tenant-commerce-isolation.integration.test.js, test/integration/tenant-public-catalog-isolation.integration.test.js, test/integration/tenant-public-query-loop-isolation.integration.test.js
 - Coverage characterization: **targeted-public-catalog-search-query-loop**. Live PostgreSQL A/B coverage verifies public search, slug- and UUID-based product and membership catalogs, foreign-site product detail hiding, and rendered public-page query loops scoped to each site?s published posts. Query-loop output excludes foreign-site, draft, and soft-deleted posts. Shared-cache invalidation/revocation and independent adversarial review remain separate gates.
 
@@ -239,7 +239,7 @@ Tests: test/content-type-routes.test.js, test/collaboration-api.test.js, test/re
 - Capabilities/controls: Public asset publication flag and active/quarantine state
 - Data-access boundary: media assets and object storage; library_assets; media_variants
 - Side effects: Read-only byte delivery; successful responses use private, no-store and recheck database visibility on each request. Shared-cache/CDN overrides remain deployment-review items.
-- Source: apps/api/src/server.js (lines 849, 865, 873); packages/library/src/file-store.js (lines 150, 240)
+- Source: apps/api/src/server.js (lines 867, 883, 891); packages/library/src/file-store.js (lines 150, 240)
 - Test references: test/release-hardening.test.js, test/integration/tenant-library-media-isolation.integration.test.js, test/security-boundaries.test.js, test/integration/public-library-variant-version-binding.integration.test.js, test/library-variant-route-version.test.js
 - Coverage characterization: **targeted-two-site-revocation-and-no-store**. The live two-site integration suite reads a public library asset and variant, revokes visibility through the authorized metadata route, and confirms the next origin request returns 404; it also verifies public media revocation and private, no-store success headers. S3 tests prove direct public CDN mode fails closed and objects are stored private/no-store. The tests do not validate reverse-proxy/CDN overrides, provider IAM/bucket policy, purging legacy direct-CDN URLs already issued before this change, or every asset/variant type; those remain deployment and independent-review work.
 
@@ -267,7 +267,7 @@ Tests: test/content-type-routes.test.js, test/collaboration-api.test.js, test/re
 - Capabilities/controls: memberships:manage
 - Data-access boundary: membership_plans; paid_memberships; provider subscription metadata; billing webhook receipts
 - Side effects: Provider checkout/session creation; Membership/subscription state reconciliation; Webhook receipt/idempotency updates
-- Source: apps/api/src/commerce-routes.js (lines 455, 462, 464); apps/api/src/server.js (lines 897)
+- Source: apps/api/src/commerce-routes.js (lines 455, 462, 464); apps/api/src/server.js (lines 915)
 - Test references: test/billing-webhook-tenant.test.js, test/commerce-routes.test.js, test/billing-webhook-tenant.test.js
 - Coverage characterization: **targeted**. Provider metadata binding and selected state reconciliation are tested with doubles. Live provider-generated events and two-site database behavior remain open.
 
@@ -309,7 +309,7 @@ Tests: test/content-type-routes.test.js, test/collaboration-api.test.js, test/re
 - Capabilities/controls: plugins:read, plugins:manage
 - Data-access boundary: plugin_installs; approval and security-review metadata; artifact/SBOM/provenance/signature metadata; plugin runner boundary
 - Side effects: Registration/update; Capability approval; Security review state; Activation/disable/invocation
-- Source: apps/api/src/server.js (lines 1965, 1971, 2008)
+- Source: apps/api/src/server.js (lines 1983, 1989, 2026)
 - Test references: test/security-boundaries.test.js, test/security-boundaries.test.js, test/integration/tenant-isolation.integration.test.js, test/integration/tenant-plugin-registry-isolation.integration.test.js
 - Coverage characterization: **targeted-two-site-lifecycle**. Live PostgreSQL A/B coverage verifies site-scoped plugin listing, non-disclosing foreign plugin IDs across approve/security-review/activate/disable/invoke, and no mutation or invocation records after denied cross-site actions. Conflicting registration site selectors are rejected before writes. The positive control approves a Site B plugin, requires a different Site B administrator for security review, and confirms activation/invocation remain fail-closed while execution is disabled. Actual isolated runner sandbox behavior and independent review remain external release gates.
 
@@ -365,7 +365,7 @@ Tests: test/content-type-routes.test.js, test/collaboration-api.test.js, test/re
 - Capabilities/controls: content:read, site:manage
 - Data-access boundary: navigation_menus
 - Side effects: Create/update/delete versioned site navigation-menu configuration; Metadata-only navigation.menu_created, navigation.menu_updated and navigation.menu_deleted identity audit events commit on the same transaction queryable as the menu mutation.
-- Source: apps/api/src/server.js (lines 1581, 1588, 1624)
+- Source: apps/api/src/server.js (lines 1599, 1606, 1642)
 - Test references: test/tenant-route-capabilities.test.js, test/integration/navigation-menu-audit-atomicity.integration.test.js, test/integration/tenant-navigation-menu-isolation.integration.test.js
 - Coverage characterization: **targeted-two-site-same-slug-crud-plus-audit-no-side-effects**. The route-capability suite verifies site:manage authorization before tenant data access. The F1.46 dedicated PostgreSQL integration injects audit_events trigger failures for create, update and delete, verifies the menu mutation and audit row roll back together, then verifies safe retry commits exactly one metadata-only correlated event; stale updates preserve 409 without audit and missing deletes preserve 404 without audit. The F1.47 two-site PostgreSQL regression uses identical slugs in Site A and Site B, an A-only actor, non-disclosing cross-site list/update/delete denials, menu and navigation-audit snapshots proving denied requests have no side effects, and positive Site A CRUD while preserving Site B state. Selector conflicts remain covered by tenant-isolation.integration.test.js. Cache/rendering behavior, broader role combinations and independent adversarial review remain separate gates.
 
@@ -379,7 +379,7 @@ Tests: test/content-type-routes.test.js, test/collaboration-api.test.js, test/re
 - Capabilities/controls: Valid timestamped Stripe signature, Event ID idempotency, Order or membership metadata binding
 - Data-access boundary: billing_webhook_events; orders; stock reservations; paid_memberships
 - Side effects: Payment/order transitions; Reservation commit/release; Subscription reconciliation
-- Source: apps/api/src/server.js (lines 897, 900)
+- Source: apps/api/src/server.js (lines 915, 918)
 - Test references: test/billing-webhook-tenant.test.js, test/billing-webhook-tenant.test.js, test/billing-webhook-tenant.test.js
 - Coverage characterization: **targeted-provider-double**. Signed event and metadata-binding regressions use test doubles. Provider-generated payloads and two-site PostgreSQL callback execution remain external acceptance.
 
@@ -393,7 +393,7 @@ Tests: test/content-type-routes.test.js, test/collaboration-api.test.js, test/re
 - Capabilities/controls: Realtime capability policy, content:edit/content:edit:own for document collaboration
 - Data-access boundary: presence leases; SSE/WebSocket subscriptions; Redis channels/keys; connection quotas; document operations
 - Side effects: Presence lease create/renew/release; Stream fan-out; Authorization invalidation; Quota lease acquire/release
-- Source: apps/api/src/server.js (lines 1247, 1251, 1253, 2140); packages/realtime/src/redis-presence.js (lines 64, 65, 66, 68, 78, 81, 111, 113, 124, 128, 138, 141, 146, 183, 185, 201, 212, 216, 217)
+- Source: apps/api/src/server.js (lines 1265, 1269, 1271, 2158); packages/realtime/src/redis-presence.js (lines 64, 65, 66, 68, 78, 81, 111, 113, 124, 128, 138, 141, 146, 183, 185, 201, 212, 216, 217)
 - Test references: test/realtime-tenant-isolation.test.js, test/realtime-websocket.test.js, test/redis-realtime.test.js, test/integration/redis-presence.integration.test.js, test/e2e/collaboration-postgres-multinode.spec.js
 - Coverage characterization: **targeted-tenant-selector-and-cross-node-redis-pubsub-resubscription-hosted-validated**. Realtime tenant-isolation tests exercise conflicting header/query selectors for presence, SSE and WebSocket upgrades plus heartbeat body mismatch. Tests assert rejected upgrades create no subscriptions and rejected heartbeat mismatch leaves the existing presence lease unchanged. F1.26 merged in PR #131 at main 0748f56e01421d13121ec08f7bc036579e5406835. Exact PR-head #580/#581 and exact-main #582 all executed the real Redis 7.4 stop/restore scenario: both API bridges re-subscribed, a newly published site-scoped authorization invalidation reached the remote API node exactly once, only the revoked Site A socket closed before the test-only heartbeat, and Site B remained usable. Each hosted live DB/graph suite passed 92/92 with zero failures/skips; collaboration Playwright passed 4/4. The test proves a new event after reconnection, not replay/durable delivery of messages missed during outage. PostgreSQL remains authoritative and command/heartbeat reauthorization fallbacks remain required. PR #131 has no formal review submission; evidence is maintainer/automation only. Production Redis ACL/failover, independent deployment review and production distributed quota assessment remain open.
 
