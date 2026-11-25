@@ -337,7 +337,7 @@ test('unauthorized library upload is rejected before reading the request body', 
   const events = [];
   const body = {
     category: 'image',
-    dataBase64: 'x'.repeat(70 * 1024 * 1024), // 70 MiB payload
+    dataBase64: 'oversized-payload-sentinel', // readJson call is the observable buffering boundary
     mimeType: 'image/png',
     fileName: 'large.png'
   };
@@ -373,7 +373,7 @@ test('unauthorized asset version replacement is rejected before reading the requ
   const events = [];
   const body = {
     expectedVersion: 1,
-    dataBase64: 'y'.repeat(75 * 1024 * 1024), // 75 MiB payload
+    dataBase64: 'oversized-payload-sentinel', // readJson call is the observable buffering boundary
     mimeType: 'video/mp4',
     fileName: 'large.mp4'
   };
@@ -409,7 +409,7 @@ test('unauthorized asset metadata update is rejected before reading the request 
   const events = [];
   const body = {
     expectedVersion: 1,
-    patch: { displayName: 'Updated', metadata: { key: 'z'.repeat(50 * 1024 * 1024) } } // 50 MiB in metadata
+    patch: { displayName: 'Updated', metadata: { key: 'oversized-payload-sentinel' } } // readJson call is the observable buffering boundary
   };
   const ctx = createContext({
     path: `/api/v1/sites/${siteId}/library/items/${assetId}`,
@@ -443,7 +443,7 @@ test('unauthorized asset deletion is rejected before reading the request body', 
   const events = [];
   const body = {
     expectedVersion: 1,
-    reason: 'a'.repeat(60 * 1024 * 1024) // 60 MiB in reason field
+    reason: 'oversized-payload-sentinel' // readJson call is the observable buffering boundary
   };
   const ctx = createContext({
     path: `/api/v1/sites/${siteId}/library/items/${assetId}`,
@@ -457,7 +457,7 @@ test('unauthorized asset deletion is rejected before reading the request body', 
       }
     }
   });
-  // Simulate both site and capability checks passing, but simulate early rejection
+  // Simulate site-membership rejection before capability checks or body parsing.
   ctx.siteIdFor = async (input) => {
     events.push({ type: 'site-reject', siteId: input.routeSiteId });
     throw fail(403, 'ERR_VIRGOSCORPIO_HUB_SITE_SCOPE_MISMATCH', 'Site scope mismatch.');
@@ -471,6 +471,43 @@ test('unauthorized asset deletion is rejected before reading the request body', 
   assert.deepEqual(events.map(event => event.type), ['site-reject']);
   assert.equal(events.some(event => event.type === 'readJson'), false, 'readJson must not be called before authorization');
   assert.equal(events.some(event => event.type === 'delete'), false, 'storage must not be accessed');
+});
+
+test('body site selector is revalidated after parsing without repeating membership authorization', async () => {
+  const events = [];
+  const otherSiteId = '44444444-4444-4444-8444-444444444444';
+  const body = { siteId: otherSiteId, category: 'image', dataBase64: 'cG5n', mimeType: 'image/png', fileName: 'wrong-site.png' };
+  const ctx = createContext({
+    path: '/api/v1/sites/' + siteId + '/library/items',
+    method: 'POST',
+    body,
+    events,
+    libraryStore: {
+      async upload() {
+        events.push({ type: 'upload' });
+        throw new Error('mismatched body site must not reach storage');
+      }
+    }
+  });
+  ctx.siteIdFor = async input => {
+    const selectedBodySiteId = input.body?.siteId;
+    events.push({ type: 'site', bodySiteId: selectedBodySiteId || null, requireMembership: input.requireMembership });
+    if (selectedBodySiteId && selectedBodySiteId !== input.routeSiteId) {
+      throw fail(400, 'ERR_VIRGOSCORPIO_HUB_SITE_CONTEXT_MISMATCH', 'All site selectors in the request must identify the same site.');
+    }
+    return input.routeSiteId;
+  };
+
+  await assert.rejects(
+    handleLibraryRoute(ctx),
+    error => error.statusCode === 400 && error.code === 'ERR_VIRGOSCORPIO_HUB_SITE_CONTEXT_MISMATCH'
+  );
+  assert.deepEqual(events, [
+    { type: 'site', bodySiteId: null, requireMembership: undefined },
+    { type: 'capability', siteId, capability: 'library:manage' },
+    { type: 'readJson', maxBytes: 750_000 },
+    { type: 'site', bodySiteId: otherSiteId, requireMembership: false }
+  ]);
 });
 
 test('authorized library upload reads body after authorization checks pass', async () => {
