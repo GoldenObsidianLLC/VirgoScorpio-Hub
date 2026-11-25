@@ -155,9 +155,9 @@ test('library upload uses the library body limit and records a metadata-only aud
   assert.deepEqual(ctx.res.payload.item, asset);
   assert.equal(ctx.res.payload.url, null);
   assert.deepEqual(events.map(event => event.type), [
-    'readJson', 'site', 'capability', 'upload', 'audit', 'sendJson'
+    'site', 'capability', 'readJson', 'upload', 'audit', 'sendJson'
   ]);
-  assert.equal(events[0].maxBytes, 750_000);
+  assert.equal(events[2].maxBytes, 750_000);
   assert.equal(events[3].input.siteId, siteId);
   assert.equal(events[3].input.actorId, actorId);
   assert.equal(events[4].entry.action, 'library.asset_uploaded');
@@ -246,9 +246,9 @@ test('asset version replacement persists its audit inside the versioned store tr
   assert.equal(ctx.res.statusCode, 200);
   assert.deepEqual(ctx.res.payload.item, item);
   assert.deepEqual(events.map(event => event.type), [
-    'readJson', 'site', 'capability', 'replaceVersion', 'audit', 'sendJson'
+    'site', 'capability', 'readJson', 'replaceVersion', 'audit', 'sendJson'
   ]);
-  assert.equal(events[0].maxBytes, 750_000);
+  assert.equal(events[2].maxBytes, 750_000);
   assert.equal(events[3].input.expectedVersion, 2);
   assert.equal(events[4].entry.action, 'library.asset_version_replaced');
   assert.equal(events[4].options.queryable, transactionClient, 'audit must use the version transaction client');
@@ -331,4 +331,270 @@ test('platform composition delegates library requests to the dedicated route fam
   assert.equal(ctx.res.statusCode, 200);
   assert.deepEqual(ctx.res.payload.items, items);
   assert.deepEqual(events.map(event => event.type), ['site', 'capability', 'list', 'sendJson']);
+});
+
+test('unauthorized library upload is rejected before reading the request body', async () => {
+  const events = [];
+  const body = {
+    category: 'image',
+    dataBase64: 'oversized-payload-sentinel', // readJson call is the observable buffering boundary
+    mimeType: 'image/png',
+    fileName: 'large.png'
+  };
+  const ctx = createContext({
+    path: `/api/v1/sites/${siteId}/library/items`,
+    method: 'POST',
+    body,
+    events,
+    libraryStore: {
+      async upload() {
+        events.push({ type: 'upload' });
+        throw new Error('unauthorized request must not reach storage');
+      }
+    }
+  });
+  // Simulate authorization failure (e.g., user lacks library:manage capability)
+  ctx.requireCapability = async (_actor, targetSiteId, capability) => {
+    events.push({ type: 'capability-reject', siteId: targetSiteId, capability });
+    throw fail(403, 'ERR_VIRGOSCORPIO_HUB_CAPABILITY_REQUIRED', 'Capability library:manage is required.');
+  };
+
+  await assert.rejects(
+    handleLibraryRoute(ctx),
+    error => error.statusCode === 403 && error.code === 'ERR_VIRGOSCORPIO_HUB_CAPABILITY_REQUIRED'
+  );
+  // Verify that readJson was never called - body was not consumed
+  assert.deepEqual(events.map(event => event.type), ['site', 'capability-reject']);
+  assert.equal(events.some(event => event.type === 'readJson'), false, 'readJson must not be called before authorization');
+  assert.equal(events.some(event => event.type === 'upload'), false, 'storage must not be accessed');
+});
+
+test('unauthorized asset version replacement is rejected before reading the request body', async () => {
+  const events = [];
+  const body = {
+    expectedVersion: 1,
+    dataBase64: 'oversized-payload-sentinel', // readJson call is the observable buffering boundary
+    mimeType: 'video/mp4',
+    fileName: 'large.mp4'
+  };
+  const ctx = createContext({
+    path: `/api/v1/sites/${siteId}/library/items/${assetId}`,
+    method: 'PUT',
+    body,
+    events,
+    libraryStore: {
+      async replaceVersion() {
+        events.push({ type: 'replaceVersion' });
+        throw new Error('unauthorized request must not reach storage');
+      }
+    }
+  });
+  // Simulate site membership failure (e.g., user not a member of the site)
+  ctx.siteIdFor = async (input) => {
+    events.push({ type: 'site-reject', siteId: input.routeSiteId });
+    throw fail(403, 'ERR_VIRGOSCORPIO_HUB_SITE_SCOPE_MISMATCH', 'Site scope mismatch.');
+  };
+
+  await assert.rejects(
+    handleLibraryRoute(ctx),
+    error => error.statusCode === 403 && error.code === 'ERR_VIRGOSCORPIO_HUB_SITE_SCOPE_MISMATCH'
+  );
+  // Verify that readJson was never called - body was not consumed
+  assert.deepEqual(events.map(event => event.type), ['site-reject']);
+  assert.equal(events.some(event => event.type === 'readJson'), false, 'readJson must not be called before authorization');
+  assert.equal(events.some(event => event.type === 'replaceVersion'), false, 'storage must not be accessed');
+});
+
+test('unauthorized asset metadata update is rejected before reading the request body', async () => {
+  const events = [];
+  const body = {
+    expectedVersion: 1,
+    patch: { displayName: 'Updated', metadata: { key: 'oversized-payload-sentinel' } } // readJson call is the observable buffering boundary
+  };
+  const ctx = createContext({
+    path: `/api/v1/sites/${siteId}/library/items/${assetId}`,
+    method: 'PATCH',
+    body,
+    events,
+    libraryStore: {
+      async updateMetadata() {
+        events.push({ type: 'updateMetadata' });
+        throw new Error('unauthorized request must not reach storage');
+      }
+    }
+  });
+  // Simulate capability failure
+  ctx.requireCapability = async (_actor, targetSiteId, capability) => {
+    events.push({ type: 'capability-reject', siteId: targetSiteId, capability });
+    throw fail(403, 'ERR_VIRGOSCORPIO_HUB_CAPABILITY_REQUIRED', 'Capability library:manage is required.');
+  };
+
+  await assert.rejects(
+    handleLibraryRoute(ctx),
+    error => error.statusCode === 403 && error.code === 'ERR_VIRGOSCORPIO_HUB_CAPABILITY_REQUIRED'
+  );
+  // Verify that readJson was never called - body was not consumed
+  assert.deepEqual(events.map(event => event.type), ['site', 'capability-reject']);
+  assert.equal(events.some(event => event.type === 'readJson'), false, 'readJson must not be called before authorization');
+  assert.equal(events.some(event => event.type === 'updateMetadata'), false, 'storage must not be accessed');
+});
+
+test('unauthorized asset deletion is rejected before reading the request body', async () => {
+  const events = [];
+  const body = {
+    expectedVersion: 1,
+    reason: 'oversized-payload-sentinel' // readJson call is the observable buffering boundary
+  };
+  const ctx = createContext({
+    path: `/api/v1/sites/${siteId}/library/items/${assetId}`,
+    method: 'DELETE',
+    body,
+    events,
+    libraryStore: {
+      async delete() {
+        events.push({ type: 'delete' });
+        throw new Error('unauthorized request must not reach storage');
+      }
+    }
+  });
+  // Simulate site-membership rejection before capability checks or body parsing.
+  ctx.siteIdFor = async (input) => {
+    events.push({ type: 'site-reject', siteId: input.routeSiteId });
+    throw fail(403, 'ERR_VIRGOSCORPIO_HUB_SITE_SCOPE_MISMATCH', 'Site scope mismatch.');
+  };
+
+  await assert.rejects(
+    handleLibraryRoute(ctx),
+    error => error.statusCode === 403 && error.code === 'ERR_VIRGOSCORPIO_HUB_SITE_SCOPE_MISMATCH'
+  );
+  // Verify that readJson was never called - body was not consumed
+  assert.deepEqual(events.map(event => event.type), ['site-reject']);
+  assert.equal(events.some(event => event.type === 'readJson'), false, 'readJson must not be called before authorization');
+  assert.equal(events.some(event => event.type === 'delete'), false, 'storage must not be accessed');
+});
+
+test('body site selector is revalidated after parsing without repeating membership authorization', async () => {
+  const events = [];
+  const otherSiteId = '44444444-4444-4444-8444-444444444444';
+  const body = { siteId: otherSiteId, category: 'image', dataBase64: 'cG5n', mimeType: 'image/png', fileName: 'wrong-site.png' };
+  const ctx = createContext({
+    path: '/api/v1/sites/' + siteId + '/library/items',
+    method: 'POST',
+    body,
+    events,
+    libraryStore: {
+      async upload() {
+        events.push({ type: 'upload' });
+        throw new Error('mismatched body site must not reach storage');
+      }
+    }
+  });
+  ctx.siteIdFor = async input => {
+    const selectedBodySiteId = input.body?.siteId;
+    events.push({ type: 'site', bodySiteId: selectedBodySiteId || null, requireMembership: input.requireMembership });
+    if (selectedBodySiteId && selectedBodySiteId !== input.routeSiteId) {
+      throw fail(400, 'ERR_VIRGOSCORPIO_HUB_SITE_CONTEXT_MISMATCH', 'All site selectors in the request must identify the same site.');
+    }
+    return input.routeSiteId;
+  };
+
+  await assert.rejects(
+    handleLibraryRoute(ctx),
+    error => error.statusCode === 400 && error.code === 'ERR_VIRGOSCORPIO_HUB_SITE_CONTEXT_MISMATCH'
+  );
+  assert.deepEqual(events, [
+    { type: 'site', bodySiteId: null, requireMembership: undefined },
+    { type: 'capability', siteId, capability: 'library:manage' },
+    { type: 'readJson', maxBytes: 750_000 },
+    { type: 'site', bodySiteId: otherSiteId, requireMembership: false }
+  ]);
+});
+
+test('authorized library upload reads body after authorization checks pass', async () => {
+  const events = [];
+  const body = {
+    category: 'image',
+    dataBase64: 'cG5n',
+    mimeType: 'image/png',
+    fileName: 'authorized.png'
+  };
+  const asset = {
+    id: assetId,
+    asset_kind: 'image',
+    mime_type: 'image/png',
+    byte_size: 3,
+    sha256: 'c'.repeat(64),
+    is_public: false
+  };
+  const ctx = createContext({
+    path: `/api/v1/sites/${siteId}/library/items`,
+    method: 'POST',
+    body,
+    events,
+    libraryStore: {
+      async upload(input) {
+        events.push({ type: 'upload', input });
+        return asset;
+      }
+    }
+  });
+
+  assert.equal(await handleLibraryRoute(ctx), true);
+  assert.equal(ctx.res.statusCode, 201);
+  // Verify authorization happens before body read
+  assert.deepEqual(events.map(event => event.type), [
+    'site', 'capability', 'readJson', 'upload', 'sendJson'
+  ]);
+  const siteIndex = events.findIndex(e => e.type === 'site');
+  const capabilityIndex = events.findIndex(e => e.type === 'capability');
+  const readJsonIndex = events.findIndex(e => e.type === 'readJson');
+  assert.ok(siteIndex < readJsonIndex, 'site check must happen before readJson');
+  assert.ok(capabilityIndex < readJsonIndex, 'capability check must happen before readJson');
+});
+
+test('library GET requests do not consume request body even when authorized', async () => {
+  const events = [];
+  const items = [{ id: assetId, site_id: siteId, asset_kind: 'image' }];
+  const ctx = createContext({
+    path: `/api/v1/sites/${siteId}/library/items`,
+    method: 'GET',
+    events,
+    libraryStore: {
+      async list(input) {
+        events.push({ type: 'list', input });
+        return items;
+      }
+    }
+  });
+
+  assert.equal(await handleLibraryRoute(ctx), true);
+  assert.equal(ctx.res.statusCode, 200);
+  // Verify readJson is never called for GET requests
+  assert.deepEqual(events.map(event => event.type), ['site', 'capability', 'list', 'sendJson']);
+  assert.equal(events.some(event => event.type === 'readJson'), false, 'GET requests must not read body');
+});
+
+test('library download requests do not consume request body even when authorized', async () => {
+  const events = [];
+  const data = Buffer.from('asset data');
+  const ctx = createContext({
+    path: `/api/v1/sites/${siteId}/library/items/${assetId}/download`,
+    method: 'GET',
+    events,
+    libraryStore: {
+      async getBufferById(input) {
+        events.push({ type: 'getBufferById', input });
+        return {
+          asset: { original_name: 'file.pdf', mime_type: 'application/pdf' },
+          data
+        };
+      }
+    }
+  });
+
+  assert.equal(await handleLibraryRoute(ctx), true);
+  assert.equal(ctx.res.statusCode, 200);
+  // Verify readJson is never called for download requests
+  assert.deepEqual(events.map(event => event.type), ['site', 'capability', 'getBufferById', 'writeHead', 'end']);
+  assert.equal(events.some(event => event.type === 'readJson'), false, 'download requests must not read body');
 });
