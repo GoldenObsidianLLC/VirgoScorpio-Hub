@@ -1,0 +1,144 @@
+'use strict';
+
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const { randomUUID } = require('node:crypto');
+const { createPostgresPool } = require('../../packages/db/src/postgres-store');
+const { createLibraryStore } = require('../../packages/library/src/file-store');
+
+const enabled = Boolean(
+  process.env.DATABASE_URL &&
+  process.env.VIRGOSCORPIO_HUB_RUN_POSTGRES_INTEGRATION === 'true'
+);
+const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00]);
+
+async function createFixture(t, { maxSiteBytes, maxSiteObjects }) {
+  const pool = createPostgresPool({
+    DATABASE_URL: process.env.DATABASE_URL,
+    DATABASE_POOL_MAX: '8',
+  });
+  const objects = new Map();
+  let siteId = null;
+  t.after(async () => {
+    if (siteId) await pool.query('DELETE FROM sites WHERE id=$1', [siteId]).catch(() => {});
+    await pool.end();
+    objects.clear();
+  });
+
+  const site = await pool.query(
+    'INSERT INTO sites(slug,name) VALUES($1,$2) RETURNING id',
+    ['library-quota-' + randomUUID().slice(0, 12), 'Library Quota Integration']
+  );
+  siteId = site.rows[0].id;
+
+  const storageAdapter = {
+    async putObject({ key, body }) {
+      if (objects.has(key)) throw new Error('Storage key already exists: ' + key);
+      objects.set(key, Buffer.from(body));
+    },
+    async getObject({ key }) {
+      const value = objects.get(key);
+      return value ? Buffer.from(value) : null;
+    },
+    async deleteObject({ key }) {
+      objects.delete(key);
+    },
+  };
+  const malwareScanner = {
+    engine: 'quota-integration-fixture',
+    async scan() { return { clean: true, status: 'clean', engine: 'quota-integration-fixture' }; },
+  };
+  const store = createLibraryStore({
+    pool,
+    maxFileBytes: 1024,
+    maxSiteBytes,
+    maxSiteObjects,
+    storageAdapter,
+    malwareScanner,
+    requireMalwareScan: true,
+  });
+  return { pool, siteId, store, objects };
+}
+
+function uploadArgs(siteId, fileName) {
+  return {
+    siteId,
+    category: 'image',
+    dataBase64: png.toString('base64'),
+    mimeType: 'image/png',
+    fileName,
+    isPublic: true,
+  };
+}
+
+test(
+  'library quota serializes simultaneous uploads and rejects the losing allocation before storage write',
+  { skip: !enabled },
+  async t => {
+    const { siteId, store, objects } = await createFixture(t, { maxSiteBytes: 1024, maxSiteObjects: 1 });
+    const outcomes = await Promise.allSettled([
+      store.upload(uploadArgs(siteId, 'concurrent-a.png')),
+      store.upload(uploadArgs(siteId, 'concurrent-b.png')),
+    ]);
+    const succeeded = outcomes.filter(result => result.status === 'fulfilled');
+    const rejected = outcomes.filter(result => result.status === 'rejected');
+    assert.equal(succeeded.length, 1, 'one concurrent upload must acquire the final object slot');
+    assert.equal(rejected.length, 1, 'the competing upload must observe the committed quota usage');
+    assert.equal(rejected[0].reason.code, 'ERR_VIRGOSCORPIO_HUB_LIBRARY_QUOTA_EXCEEDED');
+    assert.equal(rejected[0].reason.statusCode, 413);
+    assert.equal(objects.size, 1, 'rejected allocation must not create a storage object');
+  }
+);
+
+test(
+  'library quota counts history and derivatives, carries valid variants across metadata versions, and releases replaced derivatives',
+  { skip: !enabled },
+  async t => {
+    const { pool, siteId, store, objects } = await createFixture(t, { maxSiteBytes: png.length * 2, maxSiteObjects: 2 });
+    const asset = await store.upload(uploadArgs(siteId, 'source.png'));
+    const variant = await store.createVariant({
+      siteId,
+      id: asset.id,
+      variantKey: 'preview',
+      data: png,
+      mimeType: 'image/png',
+      expectedVersion: 1,
+    });
+    assert.ok(objects.has(variant.storage_key), 'derivative bytes must be persisted');
+
+    const updated = await store.updateMetadata({
+      siteId,
+      id: asset.id,
+      expectedVersion: 1,
+      patch: { caption: 'Metadata-only version update' },
+    });
+    assert.equal(updated.version, 2);
+    const readableVariant = await store.readPublicVariant({ assetId: asset.id, variantKey: 'preview' });
+    assert.ok(readableVariant, 'a still-current derivative should remain readable after metadata-only versioning');
+    assert.equal(Number(readableVariant.source_version), 2, 'metadata-only update must carry the variant binding forward');
+    assert.deepEqual(readableVariant.data, png);
+
+    await assert.rejects(
+      store.createVariant({ siteId, id: asset.id, variantKey: 'second-preview', data: png, mimeType: 'image/png', expectedVersion: 2 }),
+      error => error.code === 'ERR_VIRGOSCORPIO_HUB_LIBRARY_QUOTA_EXCEEDED' && error.statusCode === 413,
+      'the current asset plus its retained derivative must consume both configured object slots'
+    );
+
+    const replacement = await store.replaceVersion({
+      siteId,
+      id: asset.id,
+      expectedVersion: 2,
+      dataBase64: png.toString('base64'),
+      mimeType: 'image/png',
+      fileName: 'replacement.png',
+    });
+    assert.equal(replacement.version, 3);
+    assert.equal(objects.has(variant.storage_key), false, 'stale derivative bytes must be removed after the replacement commits');
+    assert.equal(await store.readPublicVariant({ assetId: asset.id, variantKey: 'preview' }), null);
+    const variants = await pool.query('SELECT id FROM media_variants WHERE asset_id=$1', [asset.id]);
+    assert.equal(variants.rowCount, 0, 'source replacement must remove stale derivative references transactionally');
+    const history = await store.history({ siteId, id: asset.id });
+    assert.equal(history.length, 3);
+    assert.deepEqual(history.map(row => Number(row.snapshot.byteSize)), [png.length, png.length, png.length]);
+  }
+);

@@ -19,6 +19,7 @@ function poolForInsert(capture = {}) {
       return {
         async query(sql, args) {
           capture.calls ||= []; capture.calls.push({ sql, args });
+          if (sql.includes('COALESCE(SUM(size),0)::text AS bytes')) return { rows: [{ bytes: '0', objects: '0' }] };
           if (/INSERT INTO library_assets/.test(sql)) return { rows: [{ id: args[0], site_id: args[1], storage_key: args[6], is_public: args[13], status: args[16], malware_scan_status: args[17], malware_scan_engine: args[18], metadata: JSON.parse(args[14]) }] };
           return { rows: [], rowCount: 1 };
         },
@@ -93,6 +94,7 @@ test('library upload persists its audit callback on the store transaction before
       client = {
         async query(sql, args) {
           calls.push({ sql, args });
+          if (sql.includes('COALESCE(SUM(size),0)::text AS bytes')) return { rows: [{ bytes: '0', objects: '0' }] };
           if (/INSERT INTO library_assets/.test(sql)) {
             return { rows: [{
               id: args[0], site_id: args[1], asset_kind: args[2], storage_key: args[6],
@@ -138,6 +140,9 @@ test('library upload rolls back and removes its object when the in-transaction a
       return {
         async query(sql, args) {
           calls.push({ sql, args });
+          if (/pg_advisory_xact_lock/.test(sql)) return { rows: [] };
+          if (sql.includes('COALESCE(SUM(size),0)::text AS bytes')) return { rows: [{ bytes: '0', objects: '0' }] };
+          if (sql.includes('DELETE FROM media_variants WHERE asset_id=$1 RETURNING storage_key')) return { rows: [] };
           if (/INSERT INTO library_assets/.test(sql)) {
             return { rows: [{ id: args[0], site_id: args[1], storage_key: args[6] }] };
           }
@@ -207,6 +212,9 @@ test('library version replacement rolls back and removes the new object when aud
       client = {
         async query(sql, args) {
           calls.push({ sql, args });
+          if (/pg_advisory_xact_lock/.test(sql)) return { rows: [] };
+          if (sql.includes('COALESCE(SUM(size),0)::text AS bytes')) return { rows: [{ bytes: '0', objects: '0' }] };
+          if (sql.includes('DELETE FROM media_variants WHERE asset_id=$1 RETURNING storage_key')) return { rows: [] };
           if (/SELECT \* FROM library_assets/.test(sql)) {
             return { rows: [{
               id: assetId, site_id: siteId, version: 1, status: 'active',
@@ -273,6 +281,9 @@ test('library version replacement preserves the new object when COMMIT acknowled
       return {
         async query(sql, args) {
           calls.push({ sql, args });
+          if (/pg_advisory_xact_lock/.test(sql)) return { rows: [] };
+          if (sql.includes('COALESCE(SUM(size),0)::text AS bytes')) return { rows: [{ bytes: '0', objects: '0' }] };
+          if (sql.includes('DELETE FROM media_variants WHERE asset_id=$1 RETURNING storage_key')) return { rows: [] };
           if (/SELECT \* FROM library_assets/.test(sql)) {
             return { rows: [{
               id: assetId, site_id: siteId, version: 1, status: 'active',
@@ -328,6 +339,10 @@ test('library media variants validate file signatures and parent asset categorie
   const pool = {
     async query(sql, args) {
       calls.push({ sql, args });
+          if (/pg_advisory_xact_lock/.test(sql)) return { rows: [] };
+          if (sql.includes('COALESCE(SUM(size),0)::text AS bytes')) return { rows: [{ bytes: '0', objects: '0' }] };
+          if (sql.includes('DELETE FROM media_variants WHERE asset_id=$1 RETURNING storage_key')) return { rows: [] };
+          if (sql.includes('SELECT storage_key FROM media_variants WHERE asset_id=')) return { rows: [] };
       if (/SELECT id,asset_kind,version FROM library_assets/.test(sql)) return { rows: [{ id: 'asset-one', asset_kind: 'image', version: 1 }] };
       if (/INSERT INTO media_variants/.test(sql)) {
         insertCount += 1;

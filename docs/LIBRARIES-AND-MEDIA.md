@@ -13,6 +13,18 @@
 - Download responses use content-disposition, `nosniff`, private/no-store headers, and a restrictive CSP.
 - Public assets must be explicitly marked public. Public access must never be used for confidential documents.
 
+## Per-site retained-storage quotas
+
+F1.73 applies a per-site quota to every new library storage allocation. The default ceilings are **5 GiB of retained object bytes** and **10,000 distinct retained storage objects** per site. Operators may override them with `VIRGOSCORPIO_HUB_LIBRARY_MAX_SITE_BYTES` and `VIRGOSCORPIO_HUB_LIBRARY_MAX_SITE_OBJECTS`; individual uploads remain subject to the existing 50 MiB default `VIRGOSCORPIO_HUB_LIBRARY_MAX_FILE_BYTES` limit.
+
+Quota usage counts distinct storage keys referenced by current library assets, retained `library_asset_versions` snapshots, and `media_variants`. Soft-deleted/quarantined assets and historical source versions continue to consume quota while their objects remain retained. Multiple database references to one storage key count once. Legacy version snapshots without a recorded `byteSize` are conservatively charged at the configured per-file maximum instead of being treated as zero bytes.
+
+Uploads, source-version replacements, and derivative creation acquire the same site-scoped PostgreSQL transaction advisory lock before reading usage and allocating a new object. This serializes competing allocations for one site while keeping different sites independent. Quota checks fail closed when the database cannot provide trustworthy usage; capacity failures return HTTP 413 with `ERR_VIRGOSCORPIO_HUB_LIBRARY_QUOTA_EXCEEDED`, while an unverifiable quota returns HTTP 503 with `ERR_VIRGOSCORPIO_HUB_LIBRARY_QUOTA_CHECK_FAILED`.
+
+Replacing source bytes retires derivative rows in the same database transaction as the new version, then deletes stale derivative objects after commit. Metadata-only versions retain their source bytes and carry forward only derivative rows already bound to the prior source version. Object writes and PostgreSQL still do not form a distributed transaction: pre-commit failures use best-effort compensation, ambiguous COMMIT acknowledgements preserve potentially referenced objects, and the existing orphan reconciler remains necessary.
+
+Quota is based on retained references, not merely active UI items. Soft deletion does not immediately release storage. A future retention/garbage-collection operation must remove expired history and underlying objects safely before that capacity becomes available; it must remain site-scoped, auditable, version-aware, and dry-run capable.
+
 ## Public asset delivery and revocation
 
 - Public media, library-asset, and variant byte routes are revocable reads. Every request rechecks the current database visibility and lifecycle state before returning bytes.
@@ -27,7 +39,7 @@ The selected production deployment must also satisfy the [Public Asset Delivery 
 
 - Every newly created row in `media_variants` records the exact `library_assets.version` from which its bytes were derived in `source_version`. Public variant reads require `source_version = library_assets.version` as well as the current public/active asset checks.
 - Migration `0019_library_variant_source_version.sql` leaves historical derivative rows with `source_version IS NULL`. They are not assumed to match the current asset and are deliberately unavailable through public variant reads until regenerated. Regeneration should use the current asset version.
-- Variant creation uploads the derivative object first, then holds a shared lock on the matching active parent version while inserting the row. A stale version returns the existing 409 version-conflict contract and the unreferenced uploaded object is compensated.
+- Variant creation starts a transaction, acquires the site quota advisory lock, and then holds a shared lock on the matching active parent version before quota measurement and object allocation. A stale version returns the existing 409 version-conflict contract and the unreferenced uploaded object is compensated.
 - Replacing source bytes deletes all derivative rows in the same transaction as the asset version update; old objects are deleted only after commit. A failed replacement rolls back both the row deletion and replacement, preserving the old derivative references. A metadata-only version change retains the same source bytes and advances only already-bound variant rows to the new version in that transaction; legacy unbound rows remain unbound.
 - The optimizer route pins both derivative insertion and optimization-status updates to the version it read before optimization. A stale optimization cannot publish output for a later source revision or overwrite that revision's status.
 
