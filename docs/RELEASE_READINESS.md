@@ -1,16 +1,27 @@
-# VirgoScorpio Hub 0.6.2 - current release-readiness snapshot (25 November 2026 America/Chicago; main de16a4275828fa6411800bbaf20c16b51186dc05; workflow #1396)
+# VirgoScorpio Hub 0.6.2 — current release-readiness snapshot (25 November 2026 America/Chicago; main bc80a3389fd6d61ef951dd15b019a5d235539d42; run #45700172560)
 
-## Current exact-main readiness - 25 November 2026 (America/Chicago; main de16a4275828fa6411800bbaf20c16b51186dc05; workflow #1396)
+## Current exact-main readiness — 25 November 2026 (America/Chicago)
+
+Current main is bc80a3389fd6d61ef951dd15b019a5d235539d42 after merged F1.72 / PR #253. Exact-main [workflow run #45700172560](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45700172560) passed 7/7 jobs. Node 22/24 unit/security/dependency checks, hosted PostgreSQL/Memgraph 195/195, 19/19 fresh and 19/19 idempotent migrations, browser smoke 9/9, CodeQL, mainline signed lockfile/SBOM provenance and exact-source evidence aggregation passed. Node 22/24 audits reported zero vulnerabilities. CodeQL scanned 294 JavaScript and 2 HTML files. CycloneDX 1.5 SBOM records 200 components and 201 dependency records.
+
+Canonical readiness [artifact #15062831822](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45700172560/artifacts/15062831822) is bound to that exact main source and records **8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN**, readyForProduction=false, NOT_PRODUCTION_CERTIFIED / NO-GO. The two partials remain qualified human dependency/license/SBOM review (#23) and the separate service-less diagnostic (1 pass / 49 skips); the hosted live integration result is independently 195/195 with zero skips.
+
+F1.69 / PR #299, F1.70 / PR #252, F1.71 / PR #256 and F1.72 / PR #253 are merged mainline increments. F1.73 / draft PR #304 is a not-yet-merged per-site retained-library quota candidate. Its local Node.js 26.12.1 npm run check passed 991 tests (988 passed, zero failed, three conditional skips), and its tenant-isolation inventory was regenerated. The first F1.73 live-integration attempts, push #45709778051 and PR #45709943564, reached and passed both new quota scenarios but the overall integration subprocess exceeded the previous 240-second runner timeout (ETIMEDOUT). Commit d33f565059a54b25ff52d0e61e8715ec0bde6669 raises the bounded timeout to 360 seconds without removing the hang guard. Replacement push #45711333570 and PR #45711343166 passed Node 22/24, CodeQL and browser/accessibility; both PostgreSQL/Memgraph jobs were still in progress at capture. Candidate checks do not count as mainline release evidence.
+
+The full current gate and PR inventory are maintained in [the 25 November release-gate report](reports/2026-11-25-VirgoScorpio-Hub-0.6.2-Release-Gate-Report.md). The fourteen missing production evidence items and their owner references remain unchanged. Package 0.6.2 remains private/unreleased. No tag, publication, SemVer increment, deployment or production promotion is authorized.
+
+
+## Historical exact-main readiness — 25 November 2026 (F1.71 baseline; superseded by the current snapshot above)
 
 F1.71 / PR #256 merged at main `de16a4275828fa6411800bbaf20c16b51186dc05`. Exact-main [workflow #1396 / run 45693182743](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45693182743) passed all seven jobs. Node 22/24 unit/security/dependency jobs passed; Node 22 logged 965/965 Hub tests with zero skips, and both dependency audits reported zero vulnerabilities. Hosted PostgreSQL/Memgraph passed 195/195 with zero failures/skips; all 19 migrations passed fresh application and idempotent second pass; browser/accessibility smoke passed 9/9; CodeQL, signed lockfile/SBOM attestation and exact-source evidence consolidation passed.
 
 Canonical readiness [artifact #15060181017](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45693182743/artifacts/15060181017) is source-bound to `de16a4275828fa6411800bbaf20c16b51186dc05` and records **8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN**, `readyForProduction=false`, `NOT_PRODUCTION_CERTIFIED`, decision **NO-GO**. Mainline signed supply-chain [artifact #15060225901](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45693182743/artifacts/15060225901) passed provenance/signature verification; cryptographic attestation is not qualified human dependency/license approval.
 
-## F1.71 merged - MFA enrollment step-up reauthentication
+## Historical merged increment — F1.71 MFA enrollment step-up reauthentication
 
 PR [#256](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/256) merged at `de16a4275828fa6411800bbaf20c16b51186dc05`. Enrollment requires current-password proof; when MFA is active, replacement also requires the current TOTP factor or an unused recovery code. The service validates proof under the active-user lock and consumes recovery proof transactionally. Pending secrets do not authenticate. The route reads a bounded 16 KiB JSON body and rejects developer actors before parsing; browser prompts were replaced with masked, resettable input fields. PR-head workflow #1395 and post-merge workflow #1396 passed; no schema, migration, response shape, dependency, lockfile or SemVer change.
 
-## F1.72 active candidate - public query-loop amplification containment (PR #253)
+## Historical pre-merge candidate — F1.72 public query-loop amplification containment (PR #253; now merged)
 
 PR [#253](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/253) is synchronized with current main. Public page delivery groups repeated query-loop content types and executes at most five site/locale/excluded-page-scoped published-content queries per request, max 12 rows per group. New page documents retain the five-loop validator cap. A narrowly scoped legacy published-page renderer option relaxes only that count check after the public route applies the same database query ceiling; ordinary validators/renderers retain the default, and node/depth/output limits remain enforced.
 

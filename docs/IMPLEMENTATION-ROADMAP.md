@@ -1,4 +1,23 @@
 > **Current mainline release baseline (25 November 2026 America/Chicago):** `main` is de16a4275828fa6411800bbaf20c16b51186dc05; F1.71 / PR #256 is merged. Exact-main [workflow #1396 / run 45693182743](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45693182743) passed 7/7: Node 22/24, PostgreSQL/Memgraph 195/195, 19/19 fresh/idempotent migrations, browser/accessibility 9/9, CodeQL, signed lockfile/SBOM attestation and exact-source evidence consolidation. Node 22 passed 965/965 with zero skips; both dependency audits reported zero vulnerabilities. Canonical readiness [artifact #15060181017](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45693182743/artifacts/15060181017) remains 8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN, `readyForProduction=false`, NOT_PRODUCTION_CERTIFIED / NO-GO. Package 0.6.2 remains private/unreleased; no SemVer bump, tag, publication or deployment is authorized.
+
+## Current implementation baseline — 25 November 2026
+
+**Mainline baseline:** bc80a3389fd6d61ef951dd15b019a5d235539d42; exact-main workflow #45700172560 passed 7/7. Canonical readiness remains 8 PASS / 2 PARTIAL / 14 MISSING_EVIDENCE, NOT_PRODUCTION_CERTIFIED / NO-GO.
+
+**Merged:** F1.69 #299 direct-conversation participant revalidation; F1.70 #252 library-route authorization before body parsing; F1.71 #256 MFA step-up reauthentication; F1.72 #253 bounded public query-loop delivery.
+
+**Current implementation:** F1.73 / draft PR #304 adds site-level retained-byte/object quotas. The implementation uses shared defaults (5 GiB / 10,000 distinct retained objects), deduplicated storage-key accounting across assets/history/derivatives, conservative legacy snapshot accounting, a common transaction-scoped advisory lock for allocation paths, fail-closed quota checks, transactionally retired derivative rows, post-commit stale-object deletion, and conservative ambiguous-COMMIT handling. It does not add a migration, dependency, public API shape or package-version change. Local npm run check passed 991 tests (988 passed, zero failures, three conditional skips). Initial hosted live integration passed both new quota scenarios before the aggregate subprocess hit the former 240-second timeout; follow-up commit d33f565059a54b25ff52d0e61e8715ec0bde6669 raises the bounded timeout to 360 seconds. Replacement runs #45711333570 and #45711343166 passed Node 22/24, CodeQL and browser/accessibility, while PostgreSQL/Memgraph was still in progress at capture.
+
+### Next implementation steps
+
+1. Complete hosted PostgreSQL/Memgraph validation for #304. Inspect the actual race test, asset/history/variant accounting, source-version carry-forward and replace cleanup against a real database. Resolve any hosted failure before promotion.
+2. Obtain review of the per-site advisory-lock/transaction duration tradeoff. Measure same-site write contention during load/soak before replacing the straightforward serialized allocation path with a reservation ledger or other optimization.
+3. After #304 merges, close the stale #246 proposal as superseded. Do not combine its old-base patch with the new implementation.
+4. Review #257, #264, #265, #266, #267, #269, #270 and #274 independently, preserving shared authorization, bounded parsing, transaction lock ordering, idempotency, safe retries and fail-closed fallbacks.
+5. Continue the independent production evidence backlog (#14, #23, #25, #24, #26, #13), provider-specific integration and recovery drills. CI acceptance must remain distinct from external security sign-off.
+
+The older implementation-plan material below is retained as historical context; the current baseline and execution order above are authoritative. The package remains private/unreleased at 0.6.2. No SemVer bump or deployment is authorized.
+
 >
 > **F1.71 merged — MFA enrollment step-up reauthentication ([PR #256](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/256); main SHA de16a4275828fa6411800bbaf20c16b51186dc05):** Enrollment requires current-password proof and, when MFA is already active, current TOTP or an unused recovery code before factor replacement. Proof is checked and recovery consumed inside the active-user transaction. Pending secrets cannot authenticate. The route reads a bounded 16 KiB body and rejects developer actors before parsing; UI inputs are masked and cleared. Exact PR workflow #1395 and post-merge workflow #1396 passed, including mainline signed supply-chain evidence.
 >

@@ -1,4 +1,22 @@
-## Current mainline baseline - 25 November 2026 (America/Chicago; F1.71 merged; F1.72 candidate)
+## Historical mainline baseline before F1.72 merge — 25 November 2026 (America/Chicago)
+
+## Current authoritative status — 25 November 2026
+
+- Main: bc80a3389fd6d61ef951dd15b019a5d235539d42. Exact-main run #45700172560 passed 7/7 jobs; canonical readiness remains 8 PASS / 2 PARTIAL / 14 MISSING_EVIDENCE, readyForProduction=false, NOT_PRODUCTION_CERTIFIED / NO-GO.
+- Merged increments: F1.69 / PR #299, F1.70 / PR #252, F1.71 / PR #256, and F1.72 / PR #253.
+- Active implementation candidate: F1.73 / draft PR #304 — per-site retained library quotas and source-version-safe derivative lifecycle. Local npm run check passed 991 tests (988 pass, 0 fail, 3 conditional skips). Initial hosted live integration passed both new quota scenarios but exceeded the old 240-second test-runner timeout; follow-up commit d33f565059a54b25ff52d0e61e8715ec0bde6669 raises the bounded timeout to 360 seconds. Replacement runs #45711333570 and #45711343166 passed Node 22/24, CodeQL and browser/accessibility; PostgreSQL/Memgraph remained in progress at capture. The full status is in [the 25 November release-gate report](reports/2026-11-25-VirgoScorpio-Hub-0.6.2-Release-Gate-Report.md).
+- Open PR inventory at this snapshot: #304, #246, #257, #264, #265, #266, #267, #269, #270 and #274. PR #246 is stale and should be closed as superseded only after #304 passes and merges. Review every other security proposal individually; do not bulk-merge bot PRs.
+
+### Execution order
+
+1. Complete F1.73 hosted PostgreSQL/Memgraph and Node 22/24 checks; review the transaction, quota accounting, object-retention and ambiguous-commit paths; then promote/merge #304 only when required checks and review are complete.
+2. Close #246 as superseded without merge after #304 is merged. Retain the merged F1.67 / PR #293 source-version guarantee; PR #247 remains closed without merge.
+3. Rebase and independently review #257 and the Stripe, inventory, public-media, plugin and password-reset proposals (#264, #265, #266, #267, #269, #270, #274) against current main.
+4. Drive external production evidence: independent tenant review #14, qualified dependency/SBOM review #23, independent platform assessment #25, then live provider, browser/accessibility, load/soak, recovery, production OTLP and deployment/runbook evidence.
+5. Regenerate source-bound readiness/provenance only from the final stable candidate and obtain explicit release-owner approval.
+
+Older roadmap entries below are historical planning context; this snapshot is authoritative for current main and open-PR status. Package 0.6.2 remains private/unreleased. Do not tag, publish, deploy or promote while readiness is NO-GO.
+
 
 Current main is de16a4275828fa6411800bbaf20c16b51186dc05 after F1.71 / PR #256 merged. Exact-main [workflow #1396 / run 45693182743](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45693182743) passed all seven jobs: Node 22/24, PostgreSQL/Memgraph 195/195, 19/19 fresh/idempotent migrations, browser/accessibility 9/9, CodeQL, signed lockfile/SBOM attestation and exact-source evidence consolidation. Node 22 logged 965/965 Hub tests with zero skips; both dependency audits reported zero vulnerabilities. Canonical readiness [artifact #15060181017](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45693182743/artifacts/15060181017) remains 8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN, `readyForProduction=false`, NOT_PRODUCTION_CERTIFIED / NO-GO. Package 0.6.2 remains private/unreleased.
 
