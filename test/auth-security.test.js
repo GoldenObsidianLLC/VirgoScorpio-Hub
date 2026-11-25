@@ -2,6 +2,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createIdentityService, normalizeEmail, validatePassword, hashPassword, verifyPassword, digest, safeEqualText } = require('../packages/auth/src/service');
+const { createAuthRouteHandlers } = require('../apps/api/src/auth-routes');
 
 test('identity helpers normalize email consistently and reject invalid addresses', () => {
   assert.equal(normalizeEmail('  Admin@Example.COM '), 'admin@example.com');
@@ -525,4 +526,524 @@ test('token digests and equality checks avoid direct token storage assumptions',
   assert.equal(safeEqualText('abc', 'abc'), true);
   assert.equal(safeEqualText('abc', 'abd'), false);
   assert.equal(safeEqualText('abc', 'abcd'), false);
+});
+
+test('MFA enrollment requires password step-up authentication', async t => {
+  const userId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const correctPasswordHash = await hashPassword('CorrectHorse9Battery');
+  const { randomBytes } = require('node:crypto');
+  const mfaKey = randomBytes(32).toString('base64url');
+  const user = {
+    id: userId,
+    email: 'user@example.test',
+    display_name: 'Test User',
+    status: 'active',
+    password_hash: correctPasswordHash,
+    mfa_enabled: false,
+  };
+
+  await t.test('rejects enrollment with empty password', async () => {
+    const events = [];
+    const pool = {
+      async query() { throw new Error('Must not use pool-level query.'); },
+      async connect() {
+        return {
+          async query(sql, values = []) {
+            if (sql === 'BEGIN' || sql === 'ROLLBACK') {
+              events.push(sql);
+              return { rowCount: 0, rows: [] };
+            }
+            if (sql.includes('SELECT id,email,status,password_hash,mfa_enabled FROM users')) {
+              events.push('SELECT_USER');
+              return { rowCount: 1, rows: [user] };
+            }
+            throw new Error('Unexpected query: ' + sql);
+          },
+          release() { events.push('RELEASE'); },
+        };
+      },
+    };
+    const identity = createIdentityService({ pool, env: { VIRGOSCORPIO_HUB_MFA_ENCRYPTION_KEY: mfaKey } });
+    await assert.rejects(
+      identity.beginMfaEnrollment({ userId, password: '', code: '' }),
+      error => error.statusCode === 403 && error.code === 'ERR_VIRGOSCORPIO_HUB_MFA_REAUTH_FAILED'
+    );
+    assert.deepEqual(events, ['BEGIN', 'SELECT_USER', 'ROLLBACK', 'RELEASE']);
+  });
+
+  await t.test('rejects enrollment with wrong password', async () => {
+    const events = [];
+    const pool = {
+      async query() { throw new Error('Must not use pool-level query.'); },
+      async connect() {
+        return {
+          async query(sql, values = []) {
+            if (sql === 'BEGIN' || sql === 'ROLLBACK') {
+              events.push(sql);
+              return { rowCount: 0, rows: [] };
+            }
+            if (sql.includes('SELECT id,email,status,password_hash,mfa_enabled FROM users')) {
+              events.push('SELECT_USER');
+              return { rowCount: 1, rows: [user] };
+            }
+            throw new Error('Unexpected query: ' + sql);
+          },
+          release() { events.push('RELEASE'); },
+        };
+      },
+    };
+    const identity = createIdentityService({ pool, env: { VIRGOSCORPIO_HUB_MFA_ENCRYPTION_KEY: mfaKey } });
+    await assert.rejects(
+      identity.beginMfaEnrollment({ userId, password: 'WrongPassword123', code: '' }),
+      error => error.statusCode === 403 && error.code === 'ERR_VIRGOSCORPIO_HUB_MFA_REAUTH_FAILED'
+    );
+    assert.deepEqual(events, ['BEGIN', 'SELECT_USER', 'ROLLBACK', 'RELEASE']);
+  });
+
+  await t.test('allows enrollment with correct password when MFA is not enabled', async () => {
+    const events = [];
+    const pool = {
+      async query() { throw new Error('Must not use pool-level query.'); },
+      async connect() {
+        return {
+          async query(sql, values = []) {
+            if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') {
+              events.push(sql);
+              return { rowCount: 0, rows: [] };
+            }
+            if (sql.includes('SELECT id,email,status,password_hash,mfa_enabled FROM users')) {
+              events.push('SELECT_USER');
+              return { rowCount: 1, rows: [user] };
+            }
+            if (sql.includes('INSERT INTO user_mfa_credentials')) {
+              events.push('INSERT_CREDENTIAL');
+              return { rowCount: 1, rows: [] };
+            }
+            throw new Error('Unexpected query: ' + sql);
+          },
+          release() { events.push('RELEASE'); },
+        };
+      },
+    };
+    const identity = createIdentityService({ pool, env: { VIRGOSCORPIO_HUB_MFA_ENCRYPTION_KEY: mfaKey } });
+    const enrollment = await identity.beginMfaEnrollment({ userId, password: 'CorrectHorse9Battery', code: '' });
+    assert.ok(enrollment.secret);
+    assert.ok(enrollment.otpauthUrl);
+    assert.equal(enrollment.issuer, 'VirgoScorpio Hub');
+    assert.deepEqual(events, ['BEGIN', 'SELECT_USER', 'INSERT_CREDENTIAL', 'COMMIT', 'RELEASE']);
+  });
+});
+
+test('MFA re-enrollment requires current factor verification when MFA is already enabled', async t => {
+  const userId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+  const correctPasswordHash = await hashPassword('CorrectHorse9Battery');
+  const { randomBytes } = require('node:crypto');
+  const mfaKey = randomBytes(32).toString('base64url');
+  const { generateTotpSecret, verifyTotp, encryptSecret } = require('../packages/auth/src/totp');
+  const env = { VIRGOSCORPIO_HUB_MFA_ENCRYPTION_KEY: mfaKey };
+  const existingSecret = generateTotpSecret();
+  const encryptedSecret = encryptSecret(existingSecret, env);
+
+  const user = {
+    id: userId,
+    email: 'mfa-user@example.test',
+    display_name: 'MFA User',
+    status: 'active',
+    password_hash: correctPasswordHash,
+    mfa_enabled: true,
+  };
+
+  const credential = {
+    secret_ciphertext: encryptedSecret,
+    last_used_step: -1,
+    pending_secret: false,
+  };
+
+  await t.test('rejects re-enrollment with password but no MFA code', async () => {
+    const events = [];
+    const pool = {
+      async query() { throw new Error('Must not use pool-level query.'); },
+      async connect() {
+        return {
+          async query(sql, values = []) {
+            if (sql === 'BEGIN' || sql === 'ROLLBACK') {
+              events.push(sql);
+              return { rowCount: 0, rows: [] };
+            }
+            if (sql.includes('SELECT id,email,status,password_hash,mfa_enabled FROM users')) {
+              events.push('SELECT_USER');
+              return { rowCount: 1, rows: [user] };
+            }
+            if (sql.includes('SELECT secret_ciphertext,last_used_step,pending_secret FROM user_mfa_credentials')) {
+              events.push('SELECT_CREDENTIAL');
+              return { rowCount: 1, rows: [credential] };
+            }
+            throw new Error('Unexpected query: ' + sql);
+          },
+          release() { events.push('RELEASE'); },
+        };
+      },
+    };
+    const identity = createIdentityService({ pool, env, clock: () => Date.now() });
+    await assert.rejects(
+      identity.beginMfaEnrollment({ userId, password: 'CorrectHorse9Battery', code: '' }),
+      error => error.statusCode === 403 && error.code === 'ERR_VIRGOSCORPIO_HUB_MFA_REAUTH_FAILED'
+    );
+    assert.deepEqual(events, ['BEGIN', 'SELECT_USER', 'SELECT_CREDENTIAL', 'ROLLBACK', 'RELEASE']);
+  });
+
+  await t.test('rejects re-enrollment with password and invalid MFA code', async () => {
+    const events = [];
+    const pool = {
+      async query() { throw new Error('Must not use pool-level query.'); },
+      async connect() {
+        return {
+          async query(sql, values = []) {
+            if (sql === 'BEGIN' || sql === 'ROLLBACK') {
+              events.push(sql);
+              return { rowCount: 0, rows: [] };
+            }
+            if (sql.includes('SELECT id,email,status,password_hash,mfa_enabled FROM users')) {
+              events.push('SELECT_USER');
+              return { rowCount: 1, rows: [user] };
+            }
+            if (sql.includes('SELECT secret_ciphertext,last_used_step,pending_secret FROM user_mfa_credentials')) {
+              events.push('SELECT_CREDENTIAL');
+              return { rowCount: 1, rows: [credential] };
+            }
+            if (sql.includes('UPDATE user_mfa_recovery_codes SET consumed_at=now()')) {
+              events.push('CHECK_RECOVERY');
+              return { rowCount: 0, rows: [] };
+            }
+            throw new Error('Unexpected query: ' + sql);
+          },
+          release() { events.push('RELEASE'); },
+        };
+      },
+    };
+    const identity = createIdentityService({ pool, env, clock: () => Date.now() });
+    await assert.rejects(
+      identity.beginMfaEnrollment({ userId, password: 'CorrectHorse9Battery', code: '000000' }),
+      error => error.statusCode === 403 && error.code === 'ERR_VIRGOSCORPIO_HUB_MFA_REAUTH_FAILED'
+    );
+    assert.ok(events.includes('SELECT_USER'));
+    assert.ok(events.includes('SELECT_CREDENTIAL'));
+    assert.ok(events.includes('ROLLBACK'));
+  });
+
+  await t.test('allows re-enrollment with password and valid TOTP code', async () => {
+    const events = [];
+    const now = Date.now();
+    const { totpAt } = require('../packages/auth/src/totp');
+    const currentStep = Math.floor(now / 30_000);
+    const validCode = totpAt(existingSecret, currentStep);
+
+    const pool = {
+      async query() { throw new Error('Must not use pool-level query.'); },
+      async connect() {
+        return {
+          async query(sql, values = []) {
+            if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') {
+              events.push(sql);
+              return { rowCount: 0, rows: [] };
+            }
+            if (sql.includes('SELECT id,email,status,password_hash,mfa_enabled FROM users')) {
+              events.push('SELECT_USER');
+              return { rowCount: 1, rows: [user] };
+            }
+            if (sql.includes('SELECT secret_ciphertext,last_used_step,pending_secret FROM user_mfa_credentials')) {
+              events.push('SELECT_CREDENTIAL');
+              return { rowCount: 1, rows: [credential] };
+            }
+            if (sql.includes('INSERT INTO user_mfa_credentials')) {
+              events.push('INSERT_NEW_CREDENTIAL');
+              return { rowCount: 1, rows: [] };
+            }
+            throw new Error('Unexpected query: ' + sql);
+          },
+          release() { events.push('RELEASE'); },
+        };
+      },
+    };
+    const identity = createIdentityService({ pool, env, clock: () => now });
+    const enrollment = await identity.beginMfaEnrollment({ userId, password: 'CorrectHorse9Battery', code: validCode });
+    assert.ok(enrollment.secret);
+    assert.ok(enrollment.otpauthUrl);
+    assert.deepEqual(events, ['BEGIN', 'SELECT_USER', 'SELECT_CREDENTIAL', 'INSERT_NEW_CREDENTIAL', 'COMMIT', 'RELEASE']);
+  });
+
+  await t.test('allows re-enrollment with password and valid recovery code', async () => {
+    const events = [];
+    const recoveryCode = 'VALID-RECOVERY-CODE-123';
+
+    const pool = {
+      async query() { throw new Error('Must not use pool-level query.'); },
+      async connect() {
+        return {
+          async query(sql, values = []) {
+            if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') {
+              events.push(sql);
+              return { rowCount: 0, rows: [] };
+            }
+            if (sql.includes('SELECT id,email,status,password_hash,mfa_enabled FROM users')) {
+              events.push('SELECT_USER');
+              return { rowCount: 1, rows: [user] };
+            }
+            if (sql.includes('SELECT secret_ciphertext,last_used_step,pending_secret FROM user_mfa_credentials')) {
+              events.push('SELECT_CREDENTIAL');
+              return { rowCount: 1, rows: [credential] };
+            }
+            if (sql.includes('UPDATE user_mfa_recovery_codes SET consumed_at=now()')) {
+              events.push('CONSUME_RECOVERY');
+              return { rowCount: 1, rows: [{ id: 'recovery-id' }] };
+            }
+            if (sql.includes('INSERT INTO user_mfa_credentials')) {
+              events.push('INSERT_NEW_CREDENTIAL');
+              return { rowCount: 1, rows: [] };
+            }
+            throw new Error('Unexpected query: ' + sql);
+          },
+          release() { events.push('RELEASE'); },
+        };
+      },
+    };
+    const identity = createIdentityService({ pool, env, clock: () => Date.now() });
+    const enrollment = await identity.beginMfaEnrollment({ userId, password: 'CorrectHorse9Battery', code: recoveryCode });
+    assert.ok(enrollment.secret);
+    assert.ok(enrollment.otpauthUrl);
+    assert.deepEqual(events, ['BEGIN', 'SELECT_USER', 'SELECT_CREDENTIAL', 'CONSUME_RECOVERY', 'INSERT_NEW_CREDENTIAL', 'COMMIT', 'RELEASE']);
+  });
+});
+
+test('MFA login rejects pending credentials but accepts recovery codes during abandoned enrollment', async t => {
+  const userId = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+  const challengeToken = Buffer.alloc(32, 5).toString('base64url');
+  const { randomBytes } = require('node:crypto');
+  const mfaKey = randomBytes(32).toString('base64url');
+  const { generateTotpSecret, encryptSecret, totpAt } = require('../packages/auth/src/totp');
+  const env = { VIRGOSCORPIO_HUB_MFA_ENCRYPTION_KEY: mfaKey };
+  const pendingSecret = generateTotpSecret();
+  const encryptedPendingSecret = encryptSecret(pendingSecret, env);
+  const now = Date.now();
+  const currentStep = Math.floor(now / 30_000);
+  const validCodeForPendingSecret = totpAt(pendingSecret, currentStep);
+
+  const challenge = {
+    challenge_id: 'challenge-id',
+    user_id: userId,
+    attempts: 0,
+    id: userId,
+    email: 'mfa-user@example.test',
+    display_name: 'MFA User',
+    status: 'active',
+    mfa_enabled: true,
+  };
+
+  const pendingCredential = {
+    secret_ciphertext: encryptedPendingSecret,
+    last_used_step: -1,
+    pending_secret: true,
+  };
+
+  await t.test('rejects TOTP code from pending (unconfirmed) secret during login', async () => {
+    const events = [];
+    const pool = {
+      async query() { throw new Error('Must not use pool-level query.'); },
+      async connect() {
+        return {
+          async query(sql, values = []) {
+            if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') {
+              events.push(sql);
+              return { rowCount: 0, rows: [] };
+            }
+            if (sql.includes('SELECT pg_advisory_xact_lock(hashtext($1))')) {
+              events.push('LOCK_MFA_VERIFY');
+              return { rowCount: 0, rows: [] };
+            }
+            if (sql.includes('SELECT COALESCE(SUM(attempts),0)::integer AS failures FROM auth_mfa_challenges')) {
+              events.push('COUNT_MFA_FAILURES');
+              return { rowCount: 1, rows: [{ failures: 0 }] };
+            }
+            if (sql.includes('FROM auth_mfa_challenges c JOIN users u')) {
+              events.push('SELECT_CHALLENGE');
+              return { rowCount: 1, rows: [challenge] };
+            }
+            if (sql.includes('SELECT secret_ciphertext,last_used_step,pending_secret FROM user_mfa_credentials')) {
+              events.push('SELECT_CREDENTIAL');
+              return { rowCount: 1, rows: [pendingCredential] };
+            }
+            if (sql.includes('UPDATE user_mfa_recovery_codes SET consumed_at=now()')) {
+              events.push('CHECK_RECOVERY');
+              return { rowCount: 0, rows: [] };
+            }
+            if (sql.includes('UPDATE auth_mfa_challenges SET attempts=attempts+1')) {
+              events.push('INCREMENT_ATTEMPTS');
+              return { rowCount: 1, rows: [] };
+            }
+            throw new Error('Unexpected query: ' + sql);
+          },
+          release() { events.push('RELEASE'); },
+        };
+      },
+    };
+    const identity = createIdentityService({ pool, env, clock: () => now });
+    await assert.rejects(
+      identity.completeMfaLogin({ challengeToken, code: validCodeForPendingSecret, ip: '192.0.2.1', userAgent: 'test' }),
+      error => error.statusCode === 401 && error.code === 'ERR_VIRGOSCORPIO_HUB_MFA_INVALID'
+    );
+    assert.ok(events.includes('SELECT_CHALLENGE'));
+    assert.ok(events.includes('LOCK_MFA_VERIFY'), 'concurrent MFA verification attempts must serialize per account');
+    assert.ok(events.includes('COUNT_MFA_FAILURES'), 'account-wide retry budget must be checked');
+    assert.ok(events.includes('SELECT_CREDENTIAL'));
+    assert.ok(events.includes('INCREMENT_ATTEMPTS'), 'failed login attempt must be recorded');
+    assert.ok(events.includes('COMMIT'), 'attempt increment must be committed');
+  });
+
+  await t.test('accepts valid recovery code during abandoned enrollment', async () => {
+    const events = [];
+    const recoveryCode = 'VALID-RECOVERY-CODE-456';
+    const sessionId = 'session-id';
+
+    const pool = {
+      async query(sql, values = []) {
+        if (sql.includes('INSERT INTO auth_sessions')) {
+          events.push('CREATE_SESSION');
+          return { rowCount: 1, rows: [{ id: sessionId }] };
+        }
+        throw new Error('Unexpected pool query: ' + sql);
+      },
+      async connect() {
+        return {
+          async query(sql, values = []) {
+            if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') {
+              events.push(sql);
+              return { rowCount: 0, rows: [] };
+            }
+            if (sql.includes('SELECT pg_advisory_xact_lock(hashtext($1))')) {
+              events.push('LOCK_MFA_VERIFY');
+              return { rowCount: 0, rows: [] };
+            }
+            if (sql.includes('SELECT COALESCE(SUM(attempts),0)::integer AS failures FROM auth_mfa_challenges')) {
+              events.push('COUNT_MFA_FAILURES');
+              return { rowCount: 1, rows: [{ failures: 0 }] };
+            }
+            if (sql.includes('FROM auth_mfa_challenges c JOIN users u')) {
+              events.push('SELECT_CHALLENGE');
+              return { rowCount: 1, rows: [challenge] };
+            }
+            if (sql.includes('SELECT secret_ciphertext,last_used_step,pending_secret FROM user_mfa_credentials')) {
+              events.push('SELECT_CREDENTIAL');
+              return { rowCount: 1, rows: [pendingCredential] };
+            }
+            if (sql.includes('UPDATE user_mfa_recovery_codes SET consumed_at=now()')) {
+              events.push('CONSUME_RECOVERY');
+              return { rowCount: 1, rows: [{ id: 'recovery-id' }] };
+            }
+            if (sql.includes('UPDATE auth_mfa_challenges SET consumed_at')) {
+              events.push('CONSUME_CHALLENGE');
+              return { rowCount: 1, rows: [] };
+            }
+            if (sql.includes('INSERT INTO auth_sessions')) {
+              events.push('CREATE_SESSION');
+              return { rowCount: 1, rows: [{ id: sessionId }] };
+            }
+            throw new Error('Unexpected query: ' + sql);
+          },
+          release() { events.push('RELEASE'); },
+        };
+      },
+    };
+    const identity = createIdentityService({ pool, env, clock: () => now });
+    const session = await identity.completeMfaLogin({ challengeToken, code: recoveryCode, ip: '192.0.2.1', userAgent: 'test' });
+    assert.equal(session.mfaRequired, false);
+    assert.ok(session.token);
+    assert.ok(events.includes('SELECT_CHALLENGE'));
+    assert.ok(events.includes('LOCK_MFA_VERIFY'), 'concurrent MFA verification attempts must serialize per account');
+    assert.ok(events.includes('COUNT_MFA_FAILURES'), 'account-wide retry budget must be checked');
+    assert.ok(events.includes('SELECT_CREDENTIAL'));
+    assert.ok(events.includes('CONSUME_RECOVERY'), 'recovery code must be accepted during pending state');
+    assert.ok(events.includes('CONSUME_CHALLENGE'));
+    assert.ok(events.includes('COMMIT'));
+  });
+});
+
+test('MFA enrollment route reads a bounded body and forwards step-up credentials', async () => {
+  const events = [];
+  const userId = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+  const body = { password: 'CorrectHorse9Battery', code: 'ABCDEF123456' };
+  const identity = {
+    async beginMfaEnrollment(input) {
+      events.push({ type: 'beginMfaEnrollment', input });
+      return { secret: 'pending-secret', otpauthUrl: 'otpauth://totp/test' };
+    },
+  };
+  const routes = createAuthRouteHandlers({
+    identity,
+    env: {},
+    secureCookies: false,
+    maxBody: 128_000,
+    allowRequest: async () => true,
+    sendJson: (_res, status, payload) => ({ status, payload }),
+    fail: (statusCode, code, message) => Object.assign(new Error(message), { statusCode, code }),
+    readJson: async (_req, maxBytes) => {
+      events.push({ type: 'readJson', maxBytes });
+      return body;
+    },
+    readForm: async () => ({}),
+    sameSecret: () => true,
+  });
+
+  const result = await routes.handleAuthenticated({
+    req: { method: 'POST' },
+    res: {},
+    url: new URL('https://hub.example.test/api/v1/auth/mfa/enroll'),
+    actor: { isDeveloper: false, user: { id: userId } },
+    requestId: 'mfa-enroll-test',
+  });
+
+  assert.deepEqual(events, [
+    { type: 'readJson', maxBytes: 16_384 },
+    { type: 'beginMfaEnrollment', input: { userId, password: body.password, code: body.code } },
+  ]);
+  assert.equal(result.status, 200);
+  assert.deepEqual(result.payload, {
+    enrollment: { secret: 'pending-secret', otpauthUrl: 'otpauth://totp/test' },
+    requestId: 'mfa-enroll-test',
+  });
+});
+
+test('developer MFA enrollment is rejected before reading request credentials', async () => {
+  const events = [];
+  const routes = createAuthRouteHandlers({
+    identity: {
+      async beginMfaEnrollment() {
+        events.push('beginMfaEnrollment');
+        throw new Error('developer actor must not reach the identity service');
+      },
+    },
+    env: {},
+    secureCookies: false,
+    maxBody: 128_000,
+    allowRequest: async () => true,
+    sendJson: (_res, status, payload) => ({ status, payload }),
+    fail: (statusCode, code, message) => Object.assign(new Error(message), { statusCode, code }),
+    readJson: async () => {
+      events.push('readJson');
+      return { password: 'CorrectHorse9Battery', code: '' };
+    },
+    readForm: async () => ({}),
+    sameSecret: () => true,
+  });
+
+  await assert.rejects(
+    routes.handleAuthenticated({
+      req: { method: 'POST' },
+      res: {},
+      url: new URL('https://hub.example.test/api/v1/auth/mfa/enroll'),
+      actor: { isDeveloper: true, user: { id: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee' } },
+      requestId: 'mfa-developer-test',
+    }),
+    error => error.statusCode === 403 && error.code === 'ERR_VIRGOSCORPIO_HUB_FORBIDDEN'
+  );
+  assert.deepEqual(events, []);
 });
