@@ -445,6 +445,72 @@ test('public commerce catalog paths are reachable without API credentials and fa
 });
 
 
+test('public page query loops batch duplicate content types and cap legacy pages at five queries', async () => {
+  const siteId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const pageId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+  const calls = [];
+  const loops = [
+    ['loop-alpha-small', 'alpha', 2],
+    ['loop-beta', 'beta', 4],
+    ['loop-alpha-large', 'alpha', 5],
+    ['loop-gamma', 'gamma', 1],
+    ['loop-delta', 'delta', 8],
+    ['loop-epsilon', 'epsilon', 12],
+    ['loop-zeta-over-budget', 'zeta', 3],
+    ['loop-beta-repeat', 'beta', 1],
+  ].map(([id, contentType, limit]) => ({
+    id,
+    type: 'widget.query-loop',
+    props: { source: 'latest-published', contentType, limit, columns: 1, emptyText: 'No content.' },
+    children: [],
+  }));
+  const contentStore = {
+    async getSiteBySlug(slug) {
+      assert.equal(slug, 'query-loop-site');
+      return { id: siteId, slug, default_locale: 'en' };
+    },
+    async getPublishedBySlug(input) {
+      assert.deepEqual(input, { siteId, slug: 'legacy-page', locale: 'en' });
+      return {
+        id: pageId,
+        body: { schemaVersion: 1, documentId: 'legacy-page', type: 'page', title: 'Legacy published page', children: loops },
+      };
+    },
+    async listPublished(input) {
+      calls.push(input);
+      return Array.from({ length: input.limit }, (_, index) => ({
+        title: input.contentType.toUpperCase() + '_ROW_' + (index + 1),
+        excerpt: 'Published excerpt',
+        slug: input.contentType + '-row-' + (index + 1),
+      }));
+    },
+  };
+
+  await withServer(async base => {
+    const response = await fetch(base + '/public/query-loop-site/pages/legacy-page');
+    const html = await response.text();
+    assert.equal(response.status, 200, html);
+    assert.equal(calls.length, 5, 'legacy page delivery must not execute more than five content queries');
+    assert.deepEqual(calls.map(call => [call.contentType, call.limit]), [
+      ['alpha', 5],
+      ['beta', 4],
+      ['gamma', 1],
+      ['delta', 8],
+      ['epsilon', 12],
+    ], 'duplicate content types share one query at their maximum loop limit and later distinct types are skipped');
+    for (const call of calls) {
+      assert.equal(call.siteId, siteId, 'every grouped query stays within the selected site');
+      assert.equal(call.locale, 'en');
+      assert.equal(call.excludeId, pageId);
+    }
+    assert.match(html, /ALPHA_ROW_1/);
+    assert.match(html, /ALPHA_ROW_5/, 'the widest alpha loop receives its full requested prefix');
+    assert.match(html, /BETA_ROW_4/);
+    assert.match(html, /EPSILON_ROW_12/);
+    assert.doesNotMatch(html, /ZETA_ROW_/, 'the sixth distinct content type does not issue a database query or render data');
+  }, {}, { contentStore });
+});
+
 test('governed AI generation returns a tenant-scoped task ID and status endpoint hides other sites', async () => {
   const siteA = '11111111-1111-4111-8111-111111111111';
   const siteB = '22222222-2222-4222-8222-222222222222';
