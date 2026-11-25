@@ -12,7 +12,7 @@ const enabled = Boolean(
 );
 const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00]);
 
-async function createFixture(t, { maxSiteBytes, maxSiteObjects }) {
+async function createFixture(t, { maxSiteBytes, maxSiteObjects, onPutObject = null }) {
   const pool = createPostgresPool({
     DATABASE_URL: process.env.DATABASE_URL,
     DATABASE_POOL_MAX: '8',
@@ -33,6 +33,7 @@ async function createFixture(t, { maxSiteBytes, maxSiteObjects }) {
 
   const storageAdapter = {
     async putObject({ key, body }) {
+      if (typeof onPutObject === 'function') await onPutObject({ key, body });
       if (objects.has(key)) throw new Error('Storage key already exists: ' + key);
       objects.set(key, Buffer.from(body));
     },
@@ -90,6 +91,78 @@ test(
   }
 );
 
+test(
+  'a slow derivative write does not hold the site quota lock or block a source replacement',
+  { skip: !enabled },
+  async t => {
+    let releaseVariantPut;
+    let notifyVariantPutStarted;
+    const variantPutGate = new Promise(resolve => { releaseVariantPut = resolve; });
+    const variantPutStarted = new Promise(resolve => { notifyVariantPutStarted = resolve; });
+    const { pool, siteId, store, objects } = await createFixture(t, {
+      maxSiteBytes: png.length * 4,
+      maxSiteObjects: 4,
+      onPutObject: async ({ key }) => {
+        if (key.includes('/variants/')) {
+          notifyVariantPutStarted();
+          await variantPutGate;
+        }
+      },
+    });
+    const asset = await store.upload(uploadArgs(siteId, 'race-source.png'));
+    const variant = store.createVariant({
+      siteId,
+      id: asset.id,
+      variantKey: 'slow-preview',
+      data: png,
+      mimeType: 'image/png',
+      expectedVersion: 1,
+    });
+    const variantOutcome = variant.then(
+      value => ({ value }),
+      error => ({ error }),
+    );
+    let replacement;
+    let startedTimeout;
+    let timeout;
+    try {
+      await Promise.race([
+        variantPutStarted,
+        new Promise((_, reject) => {
+          startedTimeout = setTimeout(() => reject(new Error('Derivative storage write did not start.')), 5000);
+        }),
+      ]);
+      clearTimeout(startedTimeout);
+      replacement = await Promise.race([
+        store.replaceVersion({
+          siteId,
+          id: asset.id,
+          expectedVersion: 1,
+          dataBase64: png.toString('base64'),
+          mimeType: 'image/png',
+          fileName: 'race-replacement.png',
+        }),
+        new Promise((_, reject) => {
+          timeout = setTimeout(() => reject(new Error('Source replacement blocked behind derivative storage I/O.')), 5000);
+        }),
+      ]);
+    } finally {
+      clearTimeout(startedTimeout);
+      clearTimeout(timeout);
+      releaseVariantPut();
+    }
+    assert.equal(replacement.version, 2, 'source replacement must complete while derivative storage is paused');
+    const outcome = await variantOutcome;
+    assert.ok(outcome.error, 'the derivative must not publish after its source version changes');
+    assert.equal(outcome.error.code, 'ERR_VIRGOSCORPIO_HUB_VERSION_CONFLICT');
+    assert.equal(outcome.error.statusCode, 409);
+    assert.equal(objects.size, 2, 'only the retained source history and current replacement should remain');
+    const variants = await pool.query('SELECT id FROM media_variants WHERE asset_id=$1', [asset.id]);
+    assert.equal(variants.rowCount, 0, 'the losing derivative must not leave a database reference');
+    const reservations = await pool.query('SELECT id FROM library_storage_reservations WHERE site_id=$1', [siteId]);
+    assert.equal(reservations.rowCount, 0, 'completed and rejected operations must consume or release their quota leases');
+  }
+);
 test(
   'library quota counts history and derivatives, carries valid variants across metadata versions, and releases replaced derivatives',
   { skip: !enabled },

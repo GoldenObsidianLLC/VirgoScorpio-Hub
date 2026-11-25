@@ -56,6 +56,9 @@ function createMockPoolForQuota({
 
           if (/DELETE FROM media_variants WHERE asset_id=\$1 RETURNING storage_key/.test(sql)) return { rows: [] };
 
+          if (/INSERT INTO library_storage_reservations/.test(sql)) return { rows: [{ id: args[0] }], rowCount: 1 };
+          if (/DELETE FROM library_storage_reservations/.test(sql)) return { rows: [{ id: args[0] }], rowCount: 1 };
+
           // Track asset inserts
           if (/INSERT INTO library_assets/.test(sql)) {
             const [id, site, kind, displayName, originalName, provider, storageKey, mimeType, byteSize] = args;
@@ -278,9 +281,9 @@ test('library store allows upload within quota limits', async t => {
   assert.equal(asset.site_id, 'test-site-id', 'Asset must belong to the site');
 
   // Verify the advisory lock was acquired
-  assert.equal(lockCalls.length, 1, 'Advisory lock must be acquired');
+  assert.equal(lockCalls.length, 2, 'Advisory lock is acquired for reservation and finalization');
 
-  // Verify quota was checked
+  // Quota is checked once at reservation time; the reservation remains counted through finalization.
   assert.equal(quotaCalls.length, 1, 'Quota usage must be queried');
 
   // Verify asset and version were inserted
@@ -501,7 +504,7 @@ test('library store uses the same site-scoped advisory lock for each upload tran
   });
 
   // Verify advisory lock was acquired for each upload
-  assert.equal(lockCalls.length, 2, 'Advisory lock must be acquired for each upload');
+  assert.equal(lockCalls.length, 4, 'Each upload reserves quota and finalizes under the site lock');
 
   // Verify all locks use the same site-specific key
   const lockKeys = lockCalls.map(c => c.args[0]);
