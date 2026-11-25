@@ -78,6 +78,100 @@ test('delivery worker dispatches and acknowledges a canonical event envelope', a
   assert.ok(queries.some(query => query.sql.includes('prior_delivery.status')));
 });
 
+test('delivery handler receives canonical envelope-bound domain identity', async () => {
+  const siteId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const resourceId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+  const row = {
+    ...EVENT_ROW,
+    id: randomUUID(),
+    aggregate_type: 'content',
+    aggregate_id: resourceId,
+    aggregate_version: 5,
+    event_type: 'content.upsert',
+    payload: {
+      id: resourceId.toUpperCase(),
+      siteId: siteId.toUpperCase(),
+      title: 'Draft',
+      metadata: { id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc' }
+    },
+    site_id: siteId,
+    classification: 'site-private'
+  };
+  let applied;
+  const pool = {
+    async query(sql) {
+      if (sql.includes('SELECT event_types FROM outbox_consumer_groups')) return { rowCount: 1, rows: [{ event_types: ['content.upsert'] }] };
+      if (sql.includes('INSERT INTO outbox_deliveries')) return { rowCount: 1, rows: [{ event_id: row.id }] };
+      if (sql.includes('WITH candidates AS')) return { rowCount: 1, rows: [row] };
+      if (sql.includes("SET status = 'processed'")) return { rowCount: 1, rows: [] };
+      return { rowCount: 1, rows: [] };
+    }
+  };
+  const worker = createOutboxDeliveryWorker({
+    pool,
+    consumerGroup: 'test.content-identity',
+    eventTypes: ['content.upsert'],
+    handler: async input => { applied = input; }
+  });
+
+  const result = await worker.runOnce();
+  assert.equal(result.results[0].ok, true);
+  assert.equal(applied.payload.id, resourceId);
+  assert.equal(applied.payload.siteId, siteId);
+  assert.equal(applied.envelope.payload.id, resourceId);
+  assert.equal(applied.envelope.payload.siteId, siteId);
+  assert.notStrictEqual(applied.payload, row.payload);
+  assert.equal(row.payload.id, resourceId.toUpperCase(), 'the claimed row payload remains untouched');
+  assert.equal(row.payload.siteId, siteId.toUpperCase(), 'the claimed row site ID remains untouched');
+  assert.equal(applied.type, 'content.upsert');
+});
+
+test('delivery rejects mismatched aggregate identity before handler side effects', async () => {
+  const siteId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const resourceId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+  const row = {
+    ...EVENT_ROW,
+    id: randomUUID(),
+    aggregate_type: 'content',
+    aggregate_id: resourceId,
+    aggregate_version: 5,
+    event_type: 'content.upsert',
+    payload: {
+      id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+      siteId,
+      title: 'Mismatched draft'
+    },
+    site_id: siteId,
+    classification: 'site-private'
+  };
+  let handlerCalls = 0;
+  let failureUpdate;
+  const pool = {
+    async query(sql, params) {
+      if (sql.includes('SELECT event_types FROM outbox_consumer_groups')) return { rowCount: 1, rows: [{ event_types: ['content.upsert'] }] };
+      if (sql.includes('INSERT INTO outbox_deliveries')) return { rowCount: 1, rows: [{ event_id: row.id }] };
+      if (sql.includes('WITH candidates AS')) return { rowCount: 1, rows: [row] };
+      if (sql.includes('SET status = $4')) { failureUpdate = { sql, params }; return { rowCount: 1, rows: [] }; }
+      return { rowCount: 1, rows: [] };
+    }
+  };
+  const worker = createOutboxDeliveryWorker({
+    pool,
+    consumerGroup: 'test.content-identity-rejected',
+    eventTypes: ['content.upsert'],
+    maxAttempts: 1,
+    handler: async () => { handlerCalls += 1; }
+  });
+
+  const result = await worker.runOnce();
+  assert.equal(handlerCalls, 0);
+  assert.equal(result.results[0].ok, false);
+  assert.equal(result.results[0].dead, true);
+  assert.equal(result.results[0].errorCode, 'ERR_VIRGOSCORPIO_HUB_EVENT_IDENTITY_RESOURCE_MISMATCH');
+  assert.equal(failureUpdate.params[3], 'dead');
+  assert.equal(failureUpdate.params[5], 'ERR_VIRGOSCORPIO_HUB_EVENT_IDENTITY_RESOURCE_MISMATCH');
+});
+
 test('failed delivery is marked dead after the configured attempt limit', async () => {
   let failureUpdate;
   const pool = {

@@ -23,8 +23,17 @@ async function handleLibraryRoute(ctx) {
   const libraryItem=pathName.match(/^\/api\/v1\/sites\/([0-9a-f-]{36})\/library\/items\/([0-9a-f-]{36})(?:\/(versions|optimize|download))?$/i);
   if ((libraryCollection&&['GET','POST'].includes(method))||(libraryItem&&['GET','PATCH','DELETE','POST','PUT'].includes(method))) {
     if(!libraryStore||!localPool) throw fail(503,'ERR_VIRGOSCORPIO_HUB_LIBRARY_DISABLED','File and document libraries require PostgreSQL and configured storage.');
-    const siteId=libraryCollection?.[1]||libraryItem[1]; const body=['POST','PATCH','PUT','DELETE'].includes(method)&&libraryItem?.[3]!=='download'?await readJson(req,maxLibraryBody||maxBody):{};
-    await siteIdFor({ req, url, body, actor, routeSiteId: siteId }); await requireCapability(actor,siteId,method==='GET'?'library:manage':'library:manage');
+    const siteId=libraryCollection?.[1]||libraryItem[1];
+    // Authorize site membership and capability before consuming the request body so
+    // that unauthorized callers cannot force large buffering or JSON parsing.
+    await siteIdFor({ req, url, body: {}, actor, routeSiteId: siteId }); await requireCapability(actor,siteId,'library:manage');
+    const readsBody=['POST','PATCH','PUT','DELETE'].includes(method)&&libraryItem?.[3]!=='download';
+    const body=readsBody?await readJson(req,maxLibraryBody||maxBody):{};
+    // Re-validate only when the body carries its own site selector, preserving the mismatch check.
+    if (readsBody && body?.siteId != null && body.siteId !== '') {
+      // The route site is already authorized; this pass only preserves selector consistency.
+      await siteIdFor({ req, url, body, actor, routeSiteId: siteId, requireMembership: false });
+    }
     if(libraryCollection){
       if(method==='GET') return sendJson(res,200,{items:await libraryStore.list({siteId,category:url.searchParams.get('category')||'all',query:url.searchParams.get('q')||'',limit:url.searchParams.get('limit')||50,offset:url.searchParams.get('offset')||0}),libraryKinds:['image','video','audio','document','file','font'],requestId});
       const category=body.category;
@@ -40,17 +49,30 @@ async function handleLibraryRoute(ctx) {
     if(method==='GET'&&action==='versions'){const history=await libraryStore.history({siteId,id});if(!history)throw fail(404,'ERR_VIRGOSCORPIO_HUB_LIBRARY_NOT_FOUND','Library asset not found.');return sendJson(res,200,{versions:history,requestId});}
     if(method==='POST'&&action==='optimize'){
       const value=await libraryStore.getBufferById({siteId,id});if(!value)throw fail(404,'ERR_VIRGOSCORPIO_HUB_LIBRARY_NOT_FOUND','Library asset not found.');
-      await libraryStore.markOptimization({siteId,id,status:'processing',details:{requestedAt:new Date().toISOString()}});
+      const expectedVersion = value.asset.version;
+      const markForSourceVersion = async (status, details) => {
+        const updated = await libraryStore.markOptimization({ siteId, id, status, details, expectedVersion });
+        if (!updated) throw fail(409, 'ERR_VIRGOSCORPIO_HUB_VERSION_CONFLICT', 'Asset version is stale.');
+        return updated;
+      };
+      await markForSourceVersion('processing',{requestedAt:new Date().toISOString()});
       try {
         let result;
         if(value.asset.asset_kind==='image') result=await optimizeImage(value.data);
         else if(value.asset.asset_kind==='video'&&value.asset.mime_type==='video/mp4') result=await optimizeVideoToWebm(value.data,{maxBytes:maxOptimizerBytes||100*1024*1024});
-        else { await libraryStore.markOptimization({siteId,id,status:'skipped',details:{optimizationReason:'no-optimizer-for-this-media-type'}});return sendJson(res,200,{optimization:{status:'skipped',reason:'no-optimizer-for-this-media-type'},requestId}); }
-        if(!result.optimized){const status='skipped';await libraryStore.markOptimization({siteId,id,status,details:{optimizationReason:result.reason,bytesSaved:result.bytesSaved||0}});return sendJson(res,200,{optimization:{status,reason:result.reason,bytesSaved:result.bytesSaved||0},requestId});}
-        const variant=await libraryStore.createVariant({siteId,id,variantKey:result.mimeType==='image/webp'?'webp-optimized':'webm-optimized',data:result.buffer,mimeType:result.mimeType});
-        await libraryStore.markOptimization({siteId,id,status:'optimized',details:{optimizationReason:result.reason,bytesSaved:result.bytesSaved,variantId:variant.id}});
+        else { await markForSourceVersion('skipped',{optimizationReason:'no-optimizer-for-this-media-type'});return sendJson(res,200,{optimization:{status:'skipped',reason:'no-optimizer-for-this-media-type'},requestId}); }
+        if(!result.optimized){const status='skipped';await markForSourceVersion(status,{optimizationReason:result.reason,bytesSaved:result.bytesSaved||0});return sendJson(res,200,{optimization:{status,reason:result.reason,bytesSaved:result.bytesSaved||0},requestId});}
+        const variant=await libraryStore.createVariant({siteId,id,variantKey:result.mimeType==='image/webp'?'webp-optimized':'webm-optimized',data:result.buffer,mimeType:result.mimeType,expectedVersion});
+        await markForSourceVersion('optimized',{optimizationReason:result.reason,bytesSaved:result.bytesSaved,variantId:variant.id});
         return sendJson(res,200,{optimization:{status:'optimized',variant,bytesSaved:result.bytesSaved},requestId});
-      } catch(error){await libraryStore.markOptimization({siteId,id,status:error.code==='ERR_VIRGOSCORPIO_HUB_OPTIMIZER_UNAVAILABLE'?'skipped':'failed',details:{optimizationReason:error.code||'optimizer-failed'}});if(error.statusCode)throw error;return sendJson(res,200,{optimization:{status:error.code==='ERR_VIRGOSCORPIO_HUB_OPTIMIZER_UNAVAILABLE'?'skipped':'failed',reason:error.code||'optimizer-failed'},requestId});}
+      } catch(error){
+        if(error.code!=='ERR_VIRGOSCORPIO_HUB_VERSION_CONFLICT') {
+          const updated = await libraryStore.markOptimization({siteId,id,status:error.code==='ERR_VIRGOSCORPIO_HUB_OPTIMIZER_UNAVAILABLE'?'skipped':'failed',details:{optimizationReason:error.code||'optimizer-failed'},expectedVersion});
+          if (!updated) throw fail(409, 'ERR_VIRGOSCORPIO_HUB_VERSION_CONFLICT', 'Asset version is stale.');
+        }
+        if(error.statusCode)throw error;
+        return sendJson(res,200,{optimization:{status:error.code==='ERR_VIRGOSCORPIO_HUB_OPTIMIZER_UNAVAILABLE'?'skipped':'failed',reason:error.code||'optimizer-failed'},requestId});
+      }
     }
     if(method==='GET'){const item=await libraryStore.get({siteId,id});if(!item)throw fail(404,'ERR_VIRGOSCORPIO_HUB_LIBRARY_NOT_FOUND','Library asset not found.');return sendJson(res,200,{item,versions:await libraryStore.history({siteId,id}),requestId});}
     if(method==='PATCH'){const item=await libraryStore.updateMetadata({siteId,id,actorId:actor.user.id,expectedVersion:body.expectedVersion,patch:body.patch});return sendJson(res,200,{item,requestId});}
