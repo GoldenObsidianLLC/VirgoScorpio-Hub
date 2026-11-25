@@ -700,7 +700,7 @@
     state.user = null;
     showLogin('You are signed out.');
   });
-  $('security-button').addEventListener('click', () => { $('security-dialog').showModal(); $('security-status').textContent = ''; $('mfa-enroll-panel').classList.add('hidden'); $('mfa-recovery-panel').classList.add('hidden'); $('mfa-disable-panel').classList.add('hidden'); });
+  $('security-button').addEventListener('click', () => { $('security-dialog').showModal(); $('security-status').textContent = ''; $('mfa-enroll-password').value = ''; $('mfa-enroll-existing-code').value = ''; $('mfa-enroll-panel').classList.add('hidden'); $('mfa-recovery-panel').classList.add('hidden'); $('mfa-disable-panel').classList.add('hidden'); });
   $('security-sessions').addEventListener('click', async () => {
     try {
       const result = await api('/api/v1/auth/sessions'); const host = $('security-session-list'); host.replaceChildren();
@@ -715,8 +715,31 @@
     } catch (error) { $('security-status').textContent = error.message; }
   });
   $('mfa-enroll').addEventListener('click', async () => {
-    try { const enrollPassword = window.prompt('Confirm your account password to continue.'); if (enrollPassword === null) return; const enrollCode = window.prompt('If MFA is already enabled, enter a current authentication code or an unused recovery code. Leave blank otherwise.'); if (enrollCode === null) return; const result = await api('/api/v1/auth/mfa/enroll', { method: 'POST', body: JSON.stringify({ password: enrollPassword, code: enrollCode.trim() }) }); $('mfa-secret').textContent = result.enrollment.secret; $('mfa-otpauth').href = result.enrollment.otpauthUrl; $('mfa-enroll-panel').classList.remove('hidden'); $('security-status').textContent = 'Scan the URI or enter the secret manually, then verify a current code.'; }
-    catch (error) { $('security-status').textContent = error.message; }
+    const passwordInput = $('mfa-enroll-password');
+    const codeInput = $('mfa-enroll-existing-code');
+    const button = $('mfa-enroll');
+    if (!passwordInput.value) {
+      $('security-status').textContent = 'Enter your current password to continue.';
+      passwordInput.focus();
+      return;
+    }
+    button.disabled = true;
+    try {
+      const result = await api('/api/v1/auth/mfa/enroll', {
+        method: 'POST',
+        body: JSON.stringify({ password: passwordInput.value, code: codeInput.value.trim() })
+      });
+      $('mfa-secret').textContent = result.enrollment.secret;
+      $('mfa-otpauth').href = result.enrollment.otpauthUrl;
+      $('mfa-enroll-panel').classList.remove('hidden');
+      $('security-status').textContent = 'Scan the URI or enter the secret manually, then verify a current code.';
+    } catch (error) {
+      $('security-status').textContent = error.message;
+    } finally {
+      passwordInput.value = '';
+      codeInput.value = '';
+      button.disabled = false;
+    }
   });
   $('mfa-confirm').addEventListener('click', async () => {
     try { const result = await api('/api/v1/auth/mfa/confirm', { method: 'POST', body: JSON.stringify({ code: $('mfa-enroll-code').value.trim() }) }); $('mfa-enroll-panel').classList.add('hidden'); $('mfa-recovery-codes').textContent = result.recoveryCodes.join('\n'); $('mfa-recovery-panel').classList.remove('hidden'); $('security-status').textContent = 'MFA enabled. Save the recovery codes now.'; }

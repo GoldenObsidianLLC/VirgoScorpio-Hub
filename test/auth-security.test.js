@@ -642,7 +642,7 @@ test('MFA re-enrollment requires current factor verification when MFA is already
   const env = { VIRGOSCORPIO_HUB_MFA_ENCRYPTION_KEY: mfaKey };
   const existingSecret = generateTotpSecret();
   const encryptedSecret = encryptSecret(existingSecret, env);
-  
+
   const user = {
     id: userId,
     email: 'mfa-user@example.test',
@@ -855,6 +855,14 @@ test('MFA login rejects pending credentials but accepts recovery codes during ab
               events.push(sql);
               return { rowCount: 0, rows: [] };
             }
+            if (sql.includes('SELECT pg_advisory_xact_lock(hashtext($1))')) {
+              events.push('LOCK_MFA_VERIFY');
+              return { rowCount: 0, rows: [] };
+            }
+            if (sql.includes('SELECT COALESCE(SUM(attempts),0)::integer AS failures FROM auth_mfa_challenges')) {
+              events.push('COUNT_MFA_FAILURES');
+              return { rowCount: 1, rows: [{ failures: 0 }] };
+            }
             if (sql.includes('FROM auth_mfa_challenges c JOIN users u')) {
               events.push('SELECT_CHALLENGE');
               return { rowCount: 1, rows: [challenge] };
@@ -883,6 +891,8 @@ test('MFA login rejects pending credentials but accepts recovery codes during ab
       error => error.statusCode === 401 && error.code === 'ERR_VIRGOSCORPIO_HUB_MFA_INVALID'
     );
     assert.ok(events.includes('SELECT_CHALLENGE'));
+    assert.ok(events.includes('LOCK_MFA_VERIFY'), 'concurrent MFA verification attempts must serialize per account');
+    assert.ok(events.includes('COUNT_MFA_FAILURES'), 'account-wide retry budget must be checked');
     assert.ok(events.includes('SELECT_CREDENTIAL'));
     assert.ok(events.includes('INCREMENT_ATTEMPTS'), 'failed login attempt must be recorded');
     assert.ok(events.includes('COMMIT'), 'attempt increment must be committed');
@@ -908,6 +918,14 @@ test('MFA login rejects pending credentials but accepts recovery codes during ab
               events.push(sql);
               return { rowCount: 0, rows: [] };
             }
+            if (sql.includes('SELECT pg_advisory_xact_lock(hashtext($1))')) {
+              events.push('LOCK_MFA_VERIFY');
+              return { rowCount: 0, rows: [] };
+            }
+            if (sql.includes('SELECT COALESCE(SUM(attempts),0)::integer AS failures FROM auth_mfa_challenges')) {
+              events.push('COUNT_MFA_FAILURES');
+              return { rowCount: 1, rows: [{ failures: 0 }] };
+            }
             if (sql.includes('FROM auth_mfa_challenges c JOIN users u')) {
               events.push('SELECT_CHALLENGE');
               return { rowCount: 1, rows: [challenge] };
@@ -924,6 +942,10 @@ test('MFA login rejects pending credentials but accepts recovery codes during ab
               events.push('CONSUME_CHALLENGE');
               return { rowCount: 1, rows: [] };
             }
+            if (sql.includes('INSERT INTO auth_sessions')) {
+              events.push('CREATE_SESSION');
+              return { rowCount: 1, rows: [{ id: sessionId }] };
+            }
             throw new Error('Unexpected query: ' + sql);
           },
           release() { events.push('RELEASE'); },
@@ -935,6 +957,8 @@ test('MFA login rejects pending credentials but accepts recovery codes during ab
     assert.equal(session.mfaRequired, false);
     assert.ok(session.token);
     assert.ok(events.includes('SELECT_CHALLENGE'));
+    assert.ok(events.includes('LOCK_MFA_VERIFY'), 'concurrent MFA verification attempts must serialize per account');
+    assert.ok(events.includes('COUNT_MFA_FAILURES'), 'account-wide retry budget must be checked');
     assert.ok(events.includes('SELECT_CREDENTIAL'));
     assert.ok(events.includes('CONSUME_RECOVERY'), 'recovery code must be accepted during pending state');
     assert.ok(events.includes('CONSUME_CHALLENGE'));
