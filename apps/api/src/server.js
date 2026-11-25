@@ -1906,11 +1906,16 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
         const caps = { 'submit-review': 'content:submit-review', approve: 'content:approve', reject: 'content:approve', publish: 'content:publish', schedule: 'content:publish', archive: 'content:archive', unpublish: 'content:publish' };
         await requireCapability(actor, siteId, caps[action]);
         const pageScopedWorkflow = /^\/api\/v1\/pages\//i.test(url.pathname);
-        if (action === 'submit-review' || pageScopedWorkflow) {
-          const current = await store.getById({ siteId, id });
-          if (pageScopedWorkflow) assertPageContent(current);
-          if (action === 'submit-review') await canEditContent(actor, siteId, current);
-        }
+        // Load the site-scoped record before evaluating its type policy. Reuse
+        // this exact row for the author check and constrain the later locked
+        // transition to its content_type to prevent a type-change TOCTOU bypass.
+        const current = await store.getById({ siteId, id });
+        if (pageScopedWorkflow) assertPageContent(current);
+        await contentTypeRouteHandler.authorizeWorkflowAction({
+          actor, siteId, action, record: current, localPool, fail,
+          hasSiteCapability: async capability => Boolean(await identity?.authorizeSite(actor.user.id, siteId, capability)),
+        });
+        if (action === 'submit-review') await canEditContent(actor, siteId, current);
         const onTransition = identity && actor.user.id
           ? async ({ queryable, result }) => identity.audit(
             { siteId, actorId: actor.user.id, action: `content.${action}`, targetType: 'content', targetId: id, requestId, details: { version: result.version, status: result.status } },
@@ -1923,7 +1928,7 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
           actorId: actor.user.id,
           correlationId: requestId,
           expectedVersion,
-          expectedContentType: pageScopedWorkflow ? 'page' : null,
+          expectedContentType: current?.content_type || (pageScopedWorkflow ? 'page' : null),
           note,
           onTransition,
         };

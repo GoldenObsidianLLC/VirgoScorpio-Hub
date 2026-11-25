@@ -114,3 +114,85 @@ test('all editorial workflow routes hand audit persistence to their store transa
     await server.virgoScorpioHub.close().catch(() => {});
   }
 });
+
+test('custom content workflow requires a separate reviewer and pins the content type into the transition', async () => {
+  const reviewerId = '44444444-4444-4444-8444-444444444444';
+  const storeCalls = [];
+  const transactionClient = { query: async () => ({ rows: [] }) };
+  const identityService = {
+    async authenticate(token) {
+      const userId = token === 'author-session' ? ACTOR_ID : token === 'reviewer-session' ? reviewerId : null;
+      if (!userId) return null;
+      return {
+        sessionId: token,
+        user: { id: userId, email: 'user@example.test', displayName: 'User', status: 'active' },
+        memberships: [{
+          siteId: SITE_ID,
+          siteSlug: 'workflow-site',
+          siteName: 'Workflow Site',
+          role: 'editor',
+          roles: ['editor'],
+          capabilities: ['*'],
+        }],
+      };
+    },
+    async authorizeSite(userId, siteId, capability) {
+      return userId !== null && siteId === SITE_ID && capability !== 'site:manage';
+    },
+    async audit() {},
+  };
+  const contentStore = {
+    async getById({ siteId, id }) {
+      if (siteId !== SITE_ID || id !== CONTENT_ID) return null;
+      return {
+        id: CONTENT_ID,
+        site_id: SITE_ID,
+        created_by: ACTOR_ID,
+        content_type: 'article',
+        status: 'in_review',
+        version: 1,
+      };
+    },
+    async approve(input) {
+      storeCalls.push(input);
+      const result = { id: CONTENT_ID, site_id: SITE_ID, status: 'approved', version: 1, lock_version: 2 };
+      await input.onTransition({ queryable: transactionClient, result, previous: { status: 'in_review' }, action: 'approve' });
+      return result;
+    },
+  };
+  const server = createApiServer({
+    env: { NODE_ENV: 'test', AI_PROVIDER: 'mock', MAX_REQUEST_BYTES: '16384' },
+    logger: { error() {} },
+    identityService,
+    contentStore,
+  });
+  await new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', resolve);
+  });
+
+  try {
+    const url = 'http://127.0.0.1:' + server.address().port + '/api/v1/content/' + CONTENT_ID + '/approve';
+    const request = token => fetch(url, {
+      method: 'POST',
+      headers: {
+        authorization: 'Bearer ' + token,
+        'x-virgoscorpio-hub-site-id': SITE_ID,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ expectedVersion: 1 }),
+    });
+
+    const authorResponse = await request('author-session');
+    assert.equal(authorResponse.status, 403, 'the author cannot approve their own review-required content');
+    assert.equal(storeCalls.length, 0, 'a denied self-review must not reach the workflow transition');
+
+    const reviewerResponse = await request('reviewer-session');
+    assert.equal(reviewerResponse.status, 200, 'a different site-capable reviewer may approve the content');
+    assert.equal(storeCalls.length, 1);
+    assert.equal(storeCalls[0].expectedContentType, 'article', 'the locked transition must pin the type checked during authorization');
+  } finally {
+    if (server.listening) await new Promise(resolve => server.close(resolve));
+    await server.virgoScorpioHub.close().catch(() => {});
+  }
+});
