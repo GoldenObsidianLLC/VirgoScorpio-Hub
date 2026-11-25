@@ -70,19 +70,20 @@ async function main() {
 
     const migrationFiles = fs.readdirSync(path.join(root, 'database', 'migrations'))
       .filter(file => /^\d+_[a-z0-9_-]+\.sql$/i.test(file)).sort();
-    if (migrationFiles.length !== 18) throw new Error('Expected 18 versioned migrations; found ' + migrationFiles.length + '.');
-    evidence.migrationCount = migrationFiles.length;
+    if (migrationFiles.length < 1) throw new Error('No versioned database migrations were found.');
+    const migrationCount = migrationFiles.length;
+    evidence.migrationCount = migrationCount;
 
     const firstOutput = runMigrations(targetUrl.toString(), 'Fresh database migration pass');
     if (!migrationFiles.every(file => firstOutput.includes('OK   ' + file))) throw new Error('First migration pass did not report every migration as applied.');
-    evidence.firstPass = '18/18 migrations applied';
+    evidence.firstPass = migrationCount + '/' + migrationCount + ' migrations applied';
 
     const verifyPool = new Pool({ connectionString: targetUrl.toString(), connectionTimeoutMillis: 4000, max: 1 });
     try {
       const rows = await verifyPool.query('SELECT version FROM virgoscorpio_hub_schema_migrations ORDER BY version');
       const actual = rows.rows.map(row => row.version);
       if (actual.length !== migrationFiles.length || actual.some((value, index) => value !== migrationFiles[index])) {
-        throw new Error('Migration ledger mismatch: expected 18 ordered versions; found ' + actual.length + '.');
+        throw new Error('Migration ledger mismatch: expected ' + migrationCount + ' ordered versions; found ' + actual.length + '.');
       }
     } finally { await verifyPool.end(); }
 
@@ -90,7 +91,7 @@ async function main() {
     if (!migrationFiles.every(file => secondOutput.includes('SKIP ' + file + ' (already applied)'))) {
       throw new Error('Second migration pass did not skip every previously applied migration.');
     }
-    evidence.secondPass = '18/18 migrations skipped as already applied';
+    evidence.secondPass = migrationCount + '/' + migrationCount + ' migrations skipped as already applied';
     evidence.status = 'PASS';
     log('FRESH MIGRATION RESULT: PASS');
   } finally {

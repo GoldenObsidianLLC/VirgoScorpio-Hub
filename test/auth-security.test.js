@@ -19,6 +19,38 @@ test('password policy and scrypt hashes are enforced', async () => {
   assert.equal(await verifyPassword('anything', 'unknown$scheme'), false);
 });
 
+test('password verification performs fixed-cost dummy scrypt for missing and malformed hashes', async () => {
+  const derivedKey = Buffer.alloc(64, 0x3c);
+  const salt = Buffer.alloc(16, 0x2d);
+  const validHash = 'scrypt$32768$8$1$' + salt.toString('base64url') + '$' + derivedKey.toString('base64url');
+  const calls = [];
+  const deriveKey = async (password, suppliedSalt, keyLength, options) => {
+    calls.push({ password, salt: Buffer.from(suppliedSalt), keyLength, options: { ...options } });
+    return Buffer.from(derivedKey);
+  };
+
+  assert.equal(await verifyPassword('CorrectHorse9Battery', validHash, deriveKey), true);
+  assert.equal(await verifyPassword('CorrectHorse9Battery', null, deriveKey), false);
+  assert.equal(await verifyPassword('CorrectHorse9Battery', 'not-a-scrypt-hash', deriveKey), false);
+  assert.equal(await verifyPassword('x'.repeat(129), undefined, deriveKey), false);
+  assert.equal(await verifyPassword('x'.repeat(129), validHash, deriveKey), false,
+    'oversized input must not authenticate even if the bounded empty candidate matches a legacy hash');
+  assert.equal(await verifyPassword(Buffer.from('CorrectHorse9Battery'), validHash, deriveKey), false,
+    'non-string input must remain ineligible for authentication');
+
+  assert.equal(calls.length, 6, 'all credential shapes must perform one derivation');
+  for (const call of calls) {
+    assert.equal(call.keyLength, 64);
+    assert.equal(call.salt.length, 16);
+    assert.deepEqual(call.options, { N: 32768, r: 8, p: 1, maxmem: 128 * 1024 * 1024 });
+  }
+  assert.equal(calls[0].salt.equals(salt), true, 'valid hashes use their stored salt');
+  assert.equal(calls[1].salt.equals(salt), false, 'unknown users use the fixed dummy salt');
+  assert.equal(calls[2].salt.equals(calls[1].salt), true, 'malformed hashes use the same dummy salt');
+  assert.equal(calls[3].password, '', 'oversized passwords are bounded before scrypt');
+  assert.equal(calls[4].password, '', 'valid stored hashes still use bounded input for oversized passwords');
+  assert.equal(calls[5].password, '', 'non-string passwords are normalized before scrypt');
+});
 test('ordinary membership and invitation APIs cannot grant the site-owner role', async () => {
   const queries = [];
   const pool = {
@@ -53,6 +85,37 @@ test('ordinary membership and invitation APIs cannot grant the site-owner role',
   assert.deepEqual(queries, [], 'unsupported owner grants must fail before PostgreSQL side effects');
 });
 
+test('production membership operations fail closed when the actor ID is omitted', async () => {
+  const siteId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+  const transactionQueries = [];
+  const client = {
+    async query(sql) {
+      const normalized = String(sql).replace(/\s+/g, ' ').trim();
+      transactionQueries.push(normalized);
+      if (['BEGIN', 'COMMIT', 'ROLLBACK'].includes(normalized)) return { rowCount: 0, rows: [] };
+      if (normalized === 'SELECT id FROM sites WHERE id=$1 FOR KEY SHARE' || normalized === 'SELECT id FROM sites WHERE id=$1 FOR UPDATE') return { rowCount: 1, rows: [{ id: siteId }] };
+      if (normalized.includes('SELECT r.capabilities') || normalized.includes('INSERT INTO')) throw new Error('A missing production actor must be rejected before membership reads or writes.');
+      throw new Error('Unexpected membership transaction query: ' + normalized);
+    },
+    release() {},
+  };
+  const pool = {
+    async connect() { return client; },
+    async query(sql) {
+      if (sql.includes('SELECT id FROM roles WHERE slug=$1')) return { rowCount: 1, rows: [{ id: 'role-id' }] };
+      if (sql.includes('SELECT slug,name FROM sites WHERE id=$1')) return { rowCount: 1, rows: [{ slug: 'site', name: 'Site' }] };
+      throw new Error('Unexpected pool query: ' + sql);
+    },
+  };
+  const identity = createIdentityService({ pool, env: { NODE_ENV: 'production' } });
+  const forbidden = error => error.statusCode === 403 && error.code === 'ERR_VIRGOSCORPIO_HUB_FORBIDDEN';
+  await assert.rejects(identity.listMembers({ siteId }), forbidden);
+  await assert.rejects(identity.addMember({ siteId, email: 'member@example.test', roleSlug: 'editor' }), forbidden);
+  await assert.rejects(identity.removeMember({ siteId, userId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' }), forbidden);
+  await assert.rejects(identity.createInvitation({ siteId, email: 'invite@example.test', roleSlug: 'viewer' }), forbidden);
+  assert.equal(transactionQueries.filter(sql => sql.includes('SELECT r.capabilities')).length, 0);
+  assert.equal(transactionQueries.filter(sql => sql.includes('INSERT INTO')).length, 0);
+});
 test('site creation writes its owner membership and correlated audit in one transaction', async t => {
   const actorId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
   const siteId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
@@ -330,6 +393,8 @@ test('identity service emits scoped authorization invalidations after membership
           if (sql.includes('SELECT id FROM roles')) return { rowCount: 1, rows: [{ id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd' }] };
           if (sql.includes('INSERT INTO site_memberships')) return { rowCount: 1, rows: [{ user_id: userId }] };
           if (sql.includes('INSERT INTO audit_events')) { membershipAuditValues.push(values); return { rowCount: 1, rows: [] }; }
+          if (sql.includes('SELECT id FROM sites WHERE id=$1 FOR KEY SHARE')) return { rowCount: 1, rows: [{ id: siteId }] };
+          if (sql.includes('FOR SHARE OF m, r, u')) return { rowCount: 1, rows: [{ capabilities: ['site:manage'] }] };
           if (sql.includes('SELECT id FROM sites WHERE id=$1 FOR UPDATE')) {
             lockedSites.push(siteId);
             return { rowCount: 1, rows: [{ id: siteId }] };

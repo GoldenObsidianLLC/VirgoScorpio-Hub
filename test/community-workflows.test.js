@@ -84,7 +84,11 @@ test('notification read-all endpoint is recognized and scopes updates by user an
   assert.deepEqual(values, [siteId, actorId]);
 });
 
-function transactionalDirectConversationPool({ blocked = false } = {}) {
+function transactionalDirectConversationPool({
+  blocked = false,
+  inactiveParticipantId = null,
+  missingMembershipId = null,
+} = {}) {
   const state = { statements: [], commits: 0, rollbacks: 0, releases: 0 };
   const conversation = {
     id: 'd47bf4ed-2029-401c-8f31-4e0ec17199ef',
@@ -98,12 +102,32 @@ function transactionalDirectConversationPool({ blocked = false } = {}) {
       if (sql === 'BEGIN') return { rows: [] };
       if (sql === 'COMMIT') { state.commits += 1; return { rows: [] }; }
       if (sql === 'ROLLBACK') { state.rollbacks += 1; return { rows: [] }; }
-      if (/pg_advisory_xact_lock/.test(sql)) return { rows: [] };
-      if (/SELECT 1 FROM social_blocks/.test(sql)) return { rows: blocked ? [{ present: 1 }] : [] };
-      if (/SELECT c\.id FROM social_conversations/.test(sql)) return { rows: [] };
-      if (/INSERT INTO social_conversations/.test(sql)) return { rows: [{ id: conversation.id }] };
-      if (/SELECT c\.id,c\.site_id/.test(sql)) return { rows: [conversation] };
-      if (/INSERT INTO social_conversation_members|INSERT INTO social_notifications/.test(sql)) return { rows: [] };
+      if (sql.includes('pg_advisory_xact_lock')) return { rows: [] };
+      if (sql.includes('SELECT id FROM sites WHERE id=$1 FOR KEY SHARE')) {
+        return { rows: [{ id: siteId }] };
+      }
+      if (sql.includes('SELECT id,status FROM users')) {
+        return {
+          rows: [actorId, recipientId].map(id => ({
+            id,
+            status: id === inactiveParticipantId ? 'disabled' : 'active'
+          }))
+        };
+      }
+      if (sql.includes('FROM site_memberships')) {
+        return {
+          rows: [actorId, recipientId]
+            .filter(id => id !== missingMembershipId)
+            .map(user_id => ({ user_id }))
+        };
+      }
+      if (sql.includes('SELECT 1 FROM social_blocks')) return { rows: blocked ? [{ present: 1 }] : [] };
+      if (sql.includes('SELECT c.id FROM social_conversations')) return { rows: [] };
+      if (sql.includes('INSERT INTO social_conversations')) return { rows: [{ id: conversation.id }] };
+      if (sql.includes('SELECT c.id,c.site_id')) return { rows: [conversation] };
+      if (sql.includes('INSERT INTO social_conversation_members') || sql.includes('INSERT INTO social_notifications')) {
+        return { rows: [] };
+      }
       throw new Error(`Unexpected transaction query: ${sql}`);
     },
     release() { state.releases += 1; }
@@ -111,12 +135,40 @@ function transactionalDirectConversationPool({ blocked = false } = {}) {
   return {
     state,
     async query(sql) {
-      assert.match(sql, /SELECT u\.id FROM users/);
+      assert.ok(sql.includes('SELECT u.id FROM users'));
       return { rows: [{ id: recipientId }] };
     },
     async connect() { return client; }
   };
 }
+
+test('direct conversation creation rejects an inactive participant at the transaction boundary', async () => {
+  const pool = transactionalDirectConversationPool({ inactiveParticipantId: recipientId });
+  const ctx = createContext({ method: 'POST', body: { recipientId }, pool });
+
+  await assert.rejects(
+    handleCommunityWorkflowRoute(ctx),
+    error => error.code === 'ERR_VIRGOSCORPIO_HUB_COMMUNITY_USER_NOT_FOUND' && error.statusCode === 404
+  );
+  assert.equal(pool.state.commits, 0);
+  assert.equal(pool.state.rollbacks, 1);
+  assert.equal(pool.state.releases, 1);
+  assert.equal(pool.state.statements.some(sql => /INSERT INTO social_conversations/.test(sql)), false);
+});
+
+test('direct conversation creation rejects a participant without current site membership', async () => {
+  const pool = transactionalDirectConversationPool({ missingMembershipId: actorId });
+  const ctx = createContext({ method: 'POST', body: { recipientId }, pool });
+
+  await assert.rejects(
+    handleCommunityWorkflowRoute(ctx),
+    error => error.code === 'ERR_VIRGOSCORPIO_HUB_COMMUNITY_USER_NOT_FOUND' && error.statusCode === 404
+  );
+  assert.equal(pool.state.commits, 0);
+  assert.equal(pool.state.rollbacks, 1);
+  assert.equal(pool.state.releases, 1);
+  assert.equal(pool.state.statements.some(sql => /INSERT INTO social_conversations/.test(sql)), false);
+});
 
 test('direct conversation creation commits before returning and releases its transaction client', async () => {
   const pool = transactionalDirectConversationPool();

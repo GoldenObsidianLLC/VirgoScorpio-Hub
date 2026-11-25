@@ -21,6 +21,12 @@ function createInvitationFixture({ failAudit = false } = {}) {
       if (failAudit && normalized.startsWith('INSERT INTO audit_events')) {
         throw Object.assign(new Error('injected audit failure'), { code: 'P0001' });
       }
+      if (normalized.startsWith('SELECT r.capabilities FROM site_memberships')) {
+        return { rowCount: 1, rows: [{ capabilities: ['site:manage'] }] };
+      }
+      if (normalized.startsWith('SELECT slug,name FROM sites')) {
+        return { rowCount: 1, rows: [{ slug: 'site-one', name: 'Site One' }] };
+      }
       if (normalized.startsWith('INSERT INTO site_invitations')) {
         return { rowCount: 1, rows: [{ id: INVITATION_ID }] };
       }
@@ -37,9 +43,6 @@ function createInvitationFixture({ failAudit = false } = {}) {
       poolCalls.push({ sql: normalized, values });
       if (normalized.startsWith('SELECT id FROM roles')) {
         return { rowCount: 1, rows: [{ id: ROLE_ID }] };
-      }
-      if (normalized.startsWith('SELECT slug,name FROM sites')) {
-        return { rowCount: 1, rows: [{ slug: 'site-one', name: 'Site One' }] };
       }
       throw new Error(`Unexpected pool query: ${normalized}`);
     },

@@ -32,6 +32,20 @@ function createPluginRunnerServer({ env = process.env, runner, logger = console,
     environment: env.NODE_ENV || 'development'
   });
 
+  // Process-local admission control. Per-child limits do not bound the number
+  // of simultaneous children, so cap active executions globally and per pinned
+  // image. Image identity is not tenant identity: this is not per-tenant fairness
+  // and does not coordinate limits across multiple runner processes or replicas.
+  const parseLimit = (value, fallback) => {
+    const n = Number(value);
+    return Number.isInteger(n) && n >= 1 && n <= 1024 ? n : fallback;
+  };
+  const maxConcurrent = parseLimit(env.VIRGOSCORPIO_HUB_PLUGIN_MAX_CONCURRENCY, 4);
+  const maxPerImage = Math.min(maxConcurrent, parseLimit(env.VIRGOSCORPIO_HUB_PLUGIN_MAX_CONCURRENCY_PER_IMAGE, Math.max(1, Math.ceil(maxConcurrent / 2))));
+  let inFlight = 0;
+  const inFlightByImage = new Map();
+  const busyError = () => Object.assign(new Error('Plugin runner is at capacity. Retry later.'), { statusCode: 429, code: 'ERR_VIRGOSCORPIO_HUB_PLUGIN_RUNNER_BUSY' });
+
   const server = http.createServer(async (req, res) => {
     const json = (status, data) => {
       const body = Buffer.from(JSON.stringify(data));
@@ -66,7 +80,11 @@ function createPluginRunnerServer({ env = process.env, runner, logger = console,
       let outcome = 'failure';
       let code = 'ERR_VIRGOSCORPIO_HUB_PLUGIN_RUNNER';
       let errorType;
+      let globalSlot = false;
+      let imageSlot = null;
       try {
+        if (inFlight >= maxConcurrent) { res.setHeader('retry-after', '1'); throw busyError(); }
+        inFlight += 1; globalSlot = true;
         const body = await readJson(req);
         if (!allowlist.includes(body.imageDigest)) {
           statusCode = 403;
@@ -74,6 +92,9 @@ function createPluginRunnerServer({ env = process.env, runner, logger = console,
           code = 'ERR_VIRGOSCORPIO_HUB_PLUGIN_IMAGE_NOT_ALLOWED';
           return json(statusCode, { error: 'Image is not allowlisted by the sandbox host.', code });
         }
+        const imageCount = inFlightByImage.get(body.imageDigest) || 0;
+        if (imageCount >= maxPerImage) { res.setHeader('retry-after', '1'); throw busyError(); }
+        inFlightByImage.set(body.imageDigest, imageCount + 1); imageSlot = body.imageDigest;
         const result = await execute.invoke({ imageDigest: body.imageDigest, action: body.action, input: body.input, requestId: body.requestId });
         statusCode = 200;
         outcome = 'success';
@@ -85,6 +106,11 @@ function createPluginRunnerServer({ env = process.env, runner, logger = console,
         errorType = error.name || 'Error';
         return json(statusCode, { error: error.message || 'Invocation failed.', code });
       } finally {
+        if (imageSlot !== null) {
+          const remaining = (inFlightByImage.get(imageSlot) || 1) - 1;
+          if (remaining > 0) inFlightByImage.set(imageSlot, remaining); else inFlightByImage.delete(imageSlot);
+        }
+        if (globalSlot) inFlight -= 1;
         setHttpStatus(invocationSpan, statusCode);
         structuredLogger.emit(statusCode >= 500 ? 'error' : 'info', 'virgoscorpio_hub.plugin_runner.invocation_completed', {
           method: req.method,
