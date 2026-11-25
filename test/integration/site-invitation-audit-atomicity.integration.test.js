@@ -96,6 +96,7 @@ test(
         [invitedEmail]
       ).catch(() => {});
       await pool.query('DELETE FROM site_invitations WHERE site_id=$1', [siteId]).catch(() => {});
+      await pool.query('DELETE FROM site_memberships WHERE site_id=$1', [siteId]).catch(() => {});
       await pool.query('DELETE FROM sites WHERE id=$1', [siteId]).catch(() => {});
       await pool.query('DELETE FROM users WHERE id=$1', [actorId]).catch(() => {});
       await pool.end();
@@ -111,6 +112,12 @@ test(
     );
     const role = await pool.query("SELECT id FROM roles WHERE slug='editor'");
     assert.equal(role.rowCount, 1, 'the editor seed role must exist');
+    const ownerRole = await pool.query("SELECT id FROM roles WHERE slug='site-owner'");
+    assert.equal(ownerRole.rowCount, 1, 'the site-owner seed role must exist');
+    await pool.query(
+      'INSERT INTO site_memberships(site_id,user_id,role_id) VALUES($1,$2,$3)',
+      [siteId, actorId, ownerRole.rows[0].id]
+    );
 
     await t.test('audit failure rolls back the active invitation upsert and mail outbox row', async () => {
       await installAuditFailure();
