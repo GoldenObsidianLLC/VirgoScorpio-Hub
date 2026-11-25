@@ -8,6 +8,7 @@
 
 - Default maximum library asset size is 50 MiB at the library service level; API body limits include base64 overhead and must be configured consistently.
 - Uploads validate a file signature plus an explicit category/MIME allow-list.
+- For library writes, the API resolves the route site and checks membership plus `library:manage` before reading/parsing the request body. A non-empty parsed body `siteId` is reconciled against route/header/query selectors before storage access without repeating membership authorization. GET/list and download paths do not invoke the JSON body parser.
 - SVG, HTML, executable formats, scripts, and unapproved archives are not accepted by the library upload route.
 - Download responses use content-disposition, `nosniff`, private/no-store headers, and a restrictive CSP.
 - Public assets must be explicitly marked public. Public access must never be used for confidential documents.
