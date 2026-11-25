@@ -45,6 +45,166 @@ test('OpenAI-compatible adapter uses configured base URL and JSON output mode', 
   } finally { global.fetch = originalFetch; }
 });
 
+test('OpenAI-compatible provider rejects plaintext HTTP with API key to remote hosts', () => {
+  // Pentest reproduction: remote HTTP URL with API key should be rejected
+  assert.throws(
+    () => createOpenAICompatibleProvider({ baseUrl: 'http://evil.example.com/v1', apiKey: 'secret-key', model: 'test' }),
+    { code: 'ERR_VIRGOSCORPIO_HUB_AI_CONFIG', message: /must use https: when AI_API_KEY is configured/ }
+  );
+  
+  // Various remote HTTP hosts should all be rejected when API key is present
+  assert.throws(
+    () => createOpenAICompatibleProvider({ baseUrl: 'http://192.168.1.100:8080/v1', apiKey: 'secret', model: 'test' }),
+    { code: 'ERR_VIRGOSCORPIO_HUB_AI_CONFIG', message: /must use https: when AI_API_KEY is configured/ }
+  );
+  
+  assert.throws(
+    () => createOpenAICompatibleProvider({ baseUrl: 'http://10.0.0.1/v1', apiKey: 'secret', model: 'test' }),
+    { code: 'ERR_VIRGOSCORPIO_HUB_AI_CONFIG', message: /must use https: when AI_API_KEY is configured/ }
+  );
+  
+  assert.throws(
+    () => createOpenAICompatibleProvider({ baseUrl: 'http://attacker.local/v1', apiKey: 'secret', model: 'test' }),
+    { code: 'ERR_VIRGOSCORPIO_HUB_AI_CONFIG', message: /must use https: when AI_API_KEY is configured/ }
+  );
+});
+
+test('OpenAI-compatible provider permits plaintext HTTP to loopback hosts with API key', () => {
+  // localhost variants should be allowed with API key
+  assert.doesNotThrow(() => createOpenAICompatibleProvider({ 
+    baseUrl: 'http://localhost:11434/v1', 
+    apiKey: 'local-key', 
+    model: 'test' 
+  }));
+  
+  assert.doesNotThrow(() => createOpenAICompatibleProvider({ 
+    baseUrl: 'http://LOCALHOST:11434/v1', 
+    apiKey: 'local-key', 
+    model: 'test' 
+  }));
+  
+  // 127.x.x.x addresses should be allowed with API key
+  assert.doesNotThrow(() => createOpenAICompatibleProvider({ 
+    baseUrl: 'http://127.0.0.1:11434/v1', 
+    apiKey: 'local-key', 
+    model: 'test' 
+  }));
+  
+  assert.doesNotThrow(() => createOpenAICompatibleProvider({ 
+    baseUrl: 'http://127.1.2.3:8080/v1', 
+    apiKey: 'local-key', 
+    model: 'test' 
+  }));
+  
+  // IPv6 loopback should be allowed with API key
+  assert.doesNotThrow(() => createOpenAICompatibleProvider({ 
+    baseUrl: 'http://[::1]:11434/v1', 
+    apiKey: 'local-key', 
+    model: 'test' 
+  }));
+});
+
+test('OpenAI-compatible provider permits plaintext HTTP to remote hosts without API key', () => {
+  // Remote HTTP without API key is allowed (no credential exposure risk)
+  assert.doesNotThrow(() => createOpenAICompatibleProvider({ 
+    baseUrl: 'http://public-gateway.example.com/v1', 
+    apiKey: '', 
+    model: 'test' 
+  }));
+  
+  assert.doesNotThrow(() => createOpenAICompatibleProvider({ 
+    baseUrl: 'http://192.168.1.100:8080/v1', 
+    model: 'test' 
+  }));
+});
+
+test('OpenAI-compatible provider requires HTTPS for remote hosts with API key', () => {
+  // HTTPS with API key to remote host should work
+  assert.doesNotThrow(() => createOpenAICompatibleProvider({ 
+    baseUrl: 'https://api.example.com/v1', 
+    apiKey: 'secret-key', 
+    model: 'test' 
+  }));
+  
+  assert.doesNotThrow(() => createOpenAICompatibleProvider({ 
+    baseUrl: 'https://secure-gateway.example.com:8443/v1', 
+    apiKey: 'secret-key', 
+    model: 'test' 
+  }));
+});
+
+test('OpenAI-compatible provider validates URL format and protocol', () => {
+  // Invalid URL should be rejected
+  assert.throws(
+    () => createOpenAICompatibleProvider({ baseUrl: 'not-a-url', apiKey: 'key', model: 'test' }),
+    { code: 'ERR_VIRGOSCORPIO_HUB_AI_CONFIG', message: /must be an absolute HTTP\(S\) URL/ }
+  );
+  
+  // Relative URL should be rejected
+  assert.throws(
+    () => createOpenAICompatibleProvider({ baseUrl: '/relative/path', apiKey: 'key', model: 'test' }),
+    { code: 'ERR_VIRGOSCORPIO_HUB_AI_CONFIG', message: /must be an absolute HTTP\(S\) URL/ }
+  );
+  
+  // Unsupported protocol should be rejected
+  assert.throws(
+    () => createOpenAICompatibleProvider({ baseUrl: 'ftp://example.com/v1', apiKey: 'key', model: 'test' }),
+    { code: 'ERR_VIRGOSCORPIO_HUB_AI_CONFIG', message: /must use https: or http:/ }
+  );
+  
+  assert.throws(
+    () => createOpenAICompatibleProvider({ baseUrl: 'file:///tmp/model', apiKey: 'key', model: 'test' }),
+    { code: 'ERR_VIRGOSCORPIO_HUB_AI_CONFIG', message: /must use https: or http:/ }
+  );
+});
+
+test('OpenAI-compatible provider loopback detection handles edge cases', () => {
+  // Trailing dots in hostname should be normalized
+  assert.doesNotThrow(() => createOpenAICompatibleProvider({ 
+    baseUrl: 'http://localhost.:11434/v1', 
+    apiKey: 'key', 
+    model: 'test' 
+  }));
+  
+  // IPv6 with brackets should be handled
+  assert.doesNotThrow(() => createOpenAICompatibleProvider({ 
+    baseUrl: 'http://[::1]:11434/v1', 
+    apiKey: 'key', 
+    model: 'test' 
+  }));
+  
+  // Non-loopback IPv6 should be rejected with API key
+  assert.throws(
+    () => createOpenAICompatibleProvider({ 
+      baseUrl: 'http://[2001:db8::1]:8080/v1', 
+      apiKey: 'key', 
+      model: 'test' 
+    }),
+    { code: 'ERR_VIRGOSCORPIO_HUB_AI_CONFIG', message: /must use https: when AI_API_KEY is configured/ }
+  );
+  
+  // localhost.localdomain should NOT be treated as loopback (only exact 'localhost')
+  assert.throws(
+    () => createOpenAICompatibleProvider({ 
+      baseUrl: 'http://localhost.localdomain:8080/v1', 
+      apiKey: 'key', 
+      model: 'test' 
+    }),
+    { code: 'ERR_VIRGOSCORPIO_HUB_AI_CONFIG', message: /must use https: when AI_API_KEY is configured/ }
+  );
+  
+  // 128.0.0.1 is NOT in 127.0.0.0/8 range
+  assert.throws(
+    () => createOpenAICompatibleProvider({ 
+      baseUrl: 'http://128.0.0.1:8080/v1', 
+      apiKey: 'key', 
+      model: 'test' 
+    }),
+    { code: 'ERR_VIRGOSCORPIO_HUB_AI_CONFIG', message: /must use https: when AI_API_KEY is configured/ }
+  );
+});
+
+
 test('Anthropic and Gemini adapters use headers rather than logging provider keys in URLs', async () => {
   const originalFetch = global.fetch;
   const calls = [];

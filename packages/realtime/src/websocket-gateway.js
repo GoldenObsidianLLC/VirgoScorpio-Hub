@@ -338,6 +338,19 @@ function createWebSocketGateway({
             })();
           }
 
+          async function assertDocumentAuthorization(contentId) {
+            if (!authorizeDocument) return;
+            const authorized = await authorizeDocument({
+              principal,
+              sessionId,
+              siteId,
+              contentId
+            });
+            if (!authorized) {
+              throw realtimeError(403, 'ERR_VIRGOSCORPIO_HUB_REALTIME_FORBIDDEN', 'The principal cannot edit this draft.');
+            }
+          }
+
           async function joinDocument(command) {
             if (!store || typeof store.getCollaborationSync !== 'function' ||
                 !DOCUMENT_ID_PATTERN.test(String(command.contentId || '')) ||
@@ -350,14 +363,7 @@ function createWebSocketGateway({
             await closeDocumentSubscription(contentId);
             let documentSubscription;
             try {
-              if (authorizeDocument && !(await authorizeDocument({
-                principal,
-                sessionId,
-                siteId,
-                contentId
-              }))) {
-                throw realtimeError(403, 'ERR_VIRGOSCORPIO_HUB_REALTIME_FORBIDDEN', 'The principal cannot edit this draft.');
-              }
+              await assertDocumentAuthorization(contentId);
               documentSubscription = await hub.subscribe({
                 principal: { id: principalId, isDeveloper: principal.isDeveloper === true },
                 siteId,
@@ -372,6 +378,13 @@ function createWebSocketGateway({
                 contentId,
                 afterSequence: command.afterSequence
               });
+              if (cleaned || documentSubscriptions.get(contentId) !== entry) return;
+              // The hub reauthorization can itself await. Run the narrower document
+              // grant check last, immediately before delivering the join or snapshot.
+              if (!(await hub.reauthorize(documentSubscription))) {
+                throw realtimeError(403, 'ERR_VIRGOSCORPIO_HUB_REALTIME_FORBIDDEN', 'The principal cannot edit this draft.');
+              }
+              await assertDocumentAuthorization(contentId);
               if (cleaned || documentSubscriptions.get(contentId) !== entry) return;
               send({
                 type: 'document.joined',

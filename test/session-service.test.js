@@ -96,7 +96,8 @@ test('session authentication returns normalized memberships and only queries wit
             display_name: 'Editor',
             status: 'active',
             email_verified_at: new Date(),
-            mfa_enabled: true
+            mfa_enabled: true,
+            should_touch: true
           }]
         };
       }
@@ -134,6 +135,41 @@ test('session authentication returns normalized memberships and only queries wit
   assert.equal(calls[0].values[0], digestToken(token));
   assert.notEqual(calls[0].values[0], token);
   assert.equal(calls[0].values[1], 60);
+  assert.equal(calls.filter(call => /UPDATE auth_sessions SET last_seen_at/.test(call.sql)).length, 1);
+});
+
+test('fresh session authentication skips the unnecessary last-seen update', async () => {
+  const calls = [];
+  const pool = {
+    async query(sql, values) {
+      calls.push({ sql, values });
+      if (/FROM auth_sessions s JOIN users u/.test(sql)) {
+        return {
+          rowCount: 1,
+          rows: [{
+            session_id: sessionId,
+            user_id: userId,
+            expires_at: new Date(Date.UTC(2026, 10, 4, 20)),
+            email: 'editor@example.test',
+            display_name: 'Editor',
+            status: 'active',
+            email_verified_at: null,
+            mfa_enabled: false,
+            should_touch: false
+          }]
+        };
+      }
+      if (/FROM site_memberships m JOIN sites/.test(sql)) return { rowCount: 0, rows: [] };
+      throw new Error('Unexpected query: ' + sql);
+    }
+  };
+  const { service } = createService(pool);
+  const actor = await service.authenticate('f'.repeat(43));
+
+  assert.equal(actor.sessionId, sessionId);
+  assert.equal(calls.length, 2, 'fresh session authentication should only read the session and memberships');
+  assert.match(calls[0].sql, /AS should_touch/);
+  assert.equal(calls.some(call => /UPDATE auth_sessions SET last_seen_at/.test(call.sql)), false);
 });
 
 test('session authentication rejects malformed tokens without database access', async () => {
