@@ -37,6 +37,7 @@
 - Preview iframe is sandboxed. Preview/public render responses use CSP with scripts disabled.
 - Body sizes, image size, render output, worker queues, plugin input/output and execution time are bounded.
 - Public page delivery reads a published snapshot, not the mutable draft document.
+- New page documents are limited to five query-loop widgets. Public delivery groups duplicate content types and executes at most five site/locale-scoped published-content queries per request, with at most 12 rows per group and the current page excluded. Legacy published snapshots may bypass only the write-time loop-count check after the same query budget is enforced; content types beyond the budget receive no dynamic rows. Node/depth and rendered-output bounds remain in force.
 - Expected-version checks prevent silent lost updates.
 
 ### SSO, AI governance, and media
@@ -73,8 +74,9 @@
 | XSS/unsafe HTML | Escaped rendering, restricted styles, script-disabled CSP | Browser-level tests, HTML fuzzing, review every new widget/renderer helper |
 | Malicious archive | Safe path checks, metadata validation, Ed25519 provenance tooling and signed artifact/SBOM digest fields | Complete quarantine build pipeline, registry/image attestation, malware/vulnerability scanning and adversarial testing |
 | Malicious plugin | Isolated OCI runtime controls and allowlist | Host-level sandbox validation, gVisor/Kata assessment, per-capability enforcement and independent audit |
-| Resource exhaustion | Request/render/media/plugin bounds, queue backpressure, container-runner concurrency cap with awaited timeout/output-limit cleanup retries, and plugin-runner process-local global/per-image caps | Load/soak tests, per-tenant quotas, distributed rate limiting, cross-replica plugin-runner admission and host-level orphan recovery; per-image limits are not tenant identity or a distributed quota |
+| Resource exhaustion | Request/render/media/plugin bounds, queue backpressure, container-runner concurrency cap with awaited timeout/output-limit cleanup retries, plugin-runner process-local global/per-image caps, and a five-query public query-loop delivery budget | Load/soak tests, per-tenant quotas, distributed rate limiting, cross-replica plugin-runner admission and host-level orphan recovery; per-image limits are not tenant identity or a distributed quota |
 | Library route body-buffer exhaustion | Route-site membership and `library:manage` are checked before body buffering/JSON parsing; a non-empty body `siteId` is reconciled after parsing before persistence | Preserve the preflight, optional selector-reconciliation and parser-free GET/download regressions if shared middleware or upload paths change |
+| Public query-loop amplification | New page writes are limited to five loops; public delivery batches same-type loops into one tenant/locale-scoped query, caps distinct queries at five and rows per query at 12; legacy published pages use this same bounded delivery path | Keep route-level query-count/tenant-scope regression and cross-site live integration coverage; load/soak testing remains required |
 | AI prompt injection | Allowlisted task and tool design; model output validation | Adversarial prompt-injection evaluation; tenant/model/provider policies |
 | AI data disclosure | External processing opt-in, site provider policy, classification field, request/input-character budgets and selected audit events | Verify enforcement for every data path, provider contracts/regions/retention, cost accounting and policy/audit UI |
 | Secret leakage | `.env.example` uses placeholders; status avoids keys | Secret scanner, rotation procedures, production secret manager and repository scan |

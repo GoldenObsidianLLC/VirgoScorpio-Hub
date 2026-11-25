@@ -30,7 +30,7 @@ const { verifyStripeSignature, digestWebhookBody, normalizeStripeRefundStatus, r
 const { releaseOrderStockReservations, commitOrderStockReservations } = require('../../../packages/commerce/src/stock-reservations');
 const { validatePluginManifest, validatePinnedImageDigest } = require('../../../packages/plugins/src/manifest');
 const { createWidgetRegistry } = require('../../../packages/widgets/src/registry');
-const { validatePageDocument } = require('../../../packages/domain/src/page-document');
+const { validatePageDocument, MAX_QUERY_LOOPS } = require('../../../packages/domain/src/page-document');
 const { validateDesignTokens } = require('../../../packages/domain/src/design-system');
 const { validateMenuItems } = require('../../../packages/domain/src/navigation');
 const { renderPageDocument, rendererInfo } = require('../../../packages/render/src');
@@ -830,7 +830,7 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
         // Page-level work budget: loops sharing a content type are served by a single query (rows are ordered
         // identically, so a node's rows are a prefix of the widest result), and at most MAX_PUBLIC_QUERY_LOOP_QUERIES
         // distinct queries run per request. This also bounds pages published before validation capped query loops.
-        const MAX_PUBLIC_QUERY_LOOP_QUERIES = 5;
+        const MAX_PUBLIC_QUERY_LOOP_QUERIES = MAX_QUERY_LOOPS;
         const queryGroups = new Map();
         for (const node of queryNodes) {
           const contentType = node.props?.contentType;
@@ -862,7 +862,7 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
             designTokens = design.rows[0].tokens;
           }
         }
-        return sendHtml(res, 200, renderPageDocument(page.body, { dynamicData, designTokens }), "default-src 'self'; style-src 'unsafe-inline'; img-src 'self' https:; base-uri 'none'; object-src 'none'; form-action 'none'; frame-ancestors 'self'; script-src 'none'; connect-src 'none'");
+        return sendHtml(res, 200, renderPageDocument(page.body, { dynamicData, designTokens, allowLegacyQueryLoops: true }), "default-src 'self'; style-src 'unsafe-inline'; img-src 'self' https:; base-uri 'none'; object-src 'none'; form-action 'none'; frame-ancestors 'self'; script-src 'none'; connect-src 'none'");
       }
       const mediaPublicMatch = url.pathname.match(/^\/media\/([0-9a-f-]{36})$/i);
       if (req.method === 'GET' && mediaPublicMatch) {
