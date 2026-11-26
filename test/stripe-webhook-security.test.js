@@ -3,7 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createHmac } = require('node:crypto');
-const { Readable } = require('node:stream');
+const http = require('node:http');
 const { createApiServer } = require('../apps/api/src/server');
 
 const WEBHOOK_SECRET = 'whsec_virgoscorpio_hub_security_test';
@@ -24,6 +24,7 @@ function signedPayload(event) {
 function createWebhookSecurityHarness(t, { webhookRateLimit = '5', webhookBodyTimeout = '5000' } = {}) {
   const state = {
     queries: [],
+    processedEvents: new Set(),
     commits: 0,
     rollbacks: 0
   };
@@ -33,7 +34,11 @@ function createWebhookSecurityHarness(t, { webhookRateLimit = '5', webhookBodyTi
       if (sql === 'BEGIN') return { rows: [] };
       if (sql === 'COMMIT') { state.commits += 1; return { rows: [] }; }
       if (sql === 'ROLLBACK') { state.rollbacks += 1; return { rows: [] }; }
-      if (sql.includes('INSERT INTO billing_webhook_events')) return { rows: [{ provider_event_id: params[0] }], rowCount: 1 };
+      if (sql.includes('INSERT INTO billing_webhook_events')) {
+        if (state.processedEvents.has(params[0])) return { rows: [], rowCount: 0 };
+        state.processedEvents.add(params[0]);
+        return { rows: [{ provider_event_id: params[0] }], rowCount: 1 };
+      }
       if (sql.includes('UPDATE billing_webhook_events')) return { rows: [], rowCount: 1 };
       throw new Error('Unexpected transaction query: ' + sql);
     },
@@ -83,6 +88,26 @@ async function sendWebhook(base, event, options = {}) {
   });
 }
 
+function sendSlowBody(url, rawBody, signature, { chunkSize = 10, delayMs = 300 } = {}) {
+  return new Promise((resolve, reject) => {
+    let offset = 0; let timer = null; let responseReceived = false;
+    const request = http.request(url, { method: 'POST', headers: {
+      'content-type': 'application/json', 'stripe-signature': signature,
+      'content-length': String(rawBody.length)
+    } }, response => {
+      responseReceived = true; if (timer) clearTimeout(timer); resolve(response);
+    });
+    request.on('error', error => { if (!responseReceived) reject(error); });
+    const sendNext = () => {
+      if (responseReceived) return;
+      if (offset >= rawBody.length) { request.end(); return; }
+      request.write(rawBody.subarray(offset, offset + chunkSize)); offset += chunkSize;
+      timer = setTimeout(sendNext, delayMs);
+    };
+    sendNext();
+  });
+}
+
 test('Stripe webhook rejects requests without a Stripe-Signature header before buffering body', async t => {
   const { base } = await createWebhookSecurityHarness(t);
   
@@ -120,7 +145,7 @@ test('Stripe webhook enforces dedicated per-IP rate limit before buffering body'
   
   const event = { id: 'evt_rate_limit_test', type: 'test.event', data: { object: {} } };
   
-  // First 3 requests should be rate-limited (429) before signature verification
+  // First 3 requests consume the webhook budget, then fail signature verification
   for (let i = 0; i < 3; i++) {
     const response = await sendWebhook(base, { ...event, id: `evt_rate_${i}` }, { signature: 'invalid' });
     assert.equal(response.status, 400, `Request ${i + 1} should fail signature check`);
@@ -176,42 +201,11 @@ test('Stripe webhook rejects invalid signature after rate limit check but before
 test('Stripe webhook enforces body timeout to prevent slow-body attacks', async t => {
   const { base } = await createWebhookSecurityHarness(t, { webhookBodyTimeout: '1000' });
   
-  // Create a custom request that sends body slowly
   const url = new URL(base + '/api/v1/billing/stripe/webhook');
   const event = { id: 'evt_slow_body', type: 'test.event', data: { object: {} } };
   const signed = signedPayload(event);
-  
-  // Use Node's http module to send a slow request
-  const http = require('node:http');
-  const slowResponse = await new Promise((resolve, reject) => {
-    const req = http.request(url, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'stripe-signature': signed.signature,
-        'content-length': String(signed.rawBody.length)
-      }
-    }, resolve);
-    
-    req.on('error', reject);
-    
-    // Send body in tiny chunks with delays to trigger timeout
-    let offset = 0;
-    const chunkSize = 10;
-    const sendChunk = () => {
-      if (offset < signed.rawBody.length) {
-        const chunk = signed.rawBody.slice(offset, offset + chunkSize);
-        req.write(chunk);
-        offset += chunkSize;
-        // Delay next chunk by 300ms (total will exceed 1000ms timeout)
-        setTimeout(sendChunk, 300);
-      } else {
-        req.end();
-      }
-    };
-    sendChunk();
-  });
-  
+  const slowResponse = await sendSlowBody(url, signed.rawBody, signed.signature, { chunkSize: 10, delayMs: 300 });
+
   assert.equal(slowResponse.statusCode, 408);
   
   const chunks = [];
@@ -316,11 +310,10 @@ test('Stripe webhook with valid signature but missing required fields is rejecte
   const body = await response.json();
   assert.equal(body.code, 'ERR_VIRGOSCORPIO_HUB_BILLING_WEBHOOK_INVALID');
   
-  // Transaction should have been started but rolled back
-  assert.ok(state.queries.some(q => q.sql === 'BEGIN'));
-  assert.ok(state.queries.some(q => q.sql === 'ROLLBACK'));
+  // Malformed event envelopes are rejected before any database transaction.
+  assert.equal(state.queries.length, 0);
   assert.equal(state.commits, 0);
-  assert.equal(state.rollbacks, 1);
+  assert.equal(state.rollbacks, 0);
 });
 
 test('Stripe webhook duplicate events are idempotent and do not cause errors', async t => {
@@ -336,9 +329,7 @@ test('Stripe webhook duplicate events are idempotent and do not cause errors', a
   const first = await sendWebhook(base, event);
   assert.equal(first.status, 200);
   
-  // Simulate duplicate by returning no rows on INSERT (conflict)
-  const originalQuery = state.queries.length;
-  
+  // The harness returns no inserted row for a previously processed event ID.
   // Second request with same event ID
   const second = await sendWebhook(base, event);
   assert.equal(second.status, 200);
@@ -347,35 +338,17 @@ test('Stripe webhook duplicate events are idempotent and do not cause errors', a
 });
 
 test('Stripe webhook body timeout is configurable via environment variable', async t => {
-  // Test with a very short timeout
-  const { base } = await createWebhookSecurityHarness(t, { webhookBodyTimeout: '100' });
-  
+  // The supported configuration floor is 1000 ms, below the 10 s default.
+  const { base } = await createWebhookSecurityHarness(t, { webhookBodyTimeout: '1000' });
   const url = new URL(base + '/api/v1/billing/stripe/webhook');
   const event = { id: 'evt_timeout_config', type: 'test.event', data: { object: {} } };
   const signed = signedPayload(event);
-  
-  const http = require('node:http');
-  const response = await new Promise((resolve, reject) => {
-    const req = http.request(url, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'stripe-signature': signed.signature,
-        'content-length': String(signed.rawBody.length)
-      }
-    }, resolve);
-    
-    req.on('error', reject);
-    
-    // Send first byte, then wait longer than timeout
-    req.write(signed.rawBody.slice(0, 1));
-    setTimeout(() => {
-      req.write(signed.rawBody.slice(1));
-      req.end();
-    }, 200); // Longer than 100ms timeout
-  });
-  
+  const response = await sendSlowBody(url, signed.rawBody, signed.signature, { chunkSize: 1, delayMs: 1_200 });
   assert.equal(response.statusCode, 408);
+  const chunks = [];
+  for await (const chunk of response) chunks.push(chunk);
+  const body = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+  assert.equal(body.code, 'ERR_VIRGOSCORPIO_HUB_BODY_TIMEOUT');
 });
 
 test('Stripe webhook without billing configuration returns 503 before any security checks', async t => {

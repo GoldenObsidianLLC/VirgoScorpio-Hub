@@ -81,20 +81,44 @@ function parseBearer(req) { const header = req.headers.authorization; return typ
 function normalizeSlug(value) {
   return String(value || '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 180);
 }
+// Read bounded request bytes by events so timeout/overflow errors can be returned before closing the connection.
 async function readRawBody(req, maxBytes, { timeoutMs = 0 } = {}) {
   const declared = Number(req.headers['content-length'] || 0);
-  if (declared > maxBytes) throw fail(413, 'ERR_VIRGOSCORPIO_HUB_BODY_TOO_LARGE', `Request body exceeds ${maxBytes} bytes.`);
-  const chunks = []; let size = 0; let timedOut = false; let timer = null;
-  // An optional total read deadline prevents slow-body clients from holding the connection and buffer indefinitely.
-  if (timeoutMs > 0) timer = setTimeout(() => { timedOut = true; req.destroy(); }, timeoutMs);
-  try {
-    for await (const chunk of req) { size += chunk.length; if (size > maxBytes) throw fail(413, 'ERR_VIRGOSCORPIO_HUB_BODY_TOO_LARGE', `Request body exceeds ${maxBytes} bytes.`); chunks.push(chunk); }
-  } catch (error) {
-    if (timedOut) throw fail(408, 'ERR_VIRGOSCORPIO_HUB_BODY_TIMEOUT', 'Request body was not received before the deadline.');
+  if (declared > maxBytes) {
+    req.pause();
+    const error = fail(413, 'ERR_VIRGOSCORPIO_HUB_BODY_TOO_LARGE', `Request body exceeds ${maxBytes} bytes.`);
+    error.closeConnection = true;
     throw error;
-  } finally { if (timer) clearTimeout(timer); }
-  if (timedOut) throw fail(408, 'ERR_VIRGOSCORPIO_HUB_BODY_TIMEOUT', 'Request body was not received before the deadline.');
-  return Buffer.concat(chunks);
+  }
+  return new Promise((resolve, reject) => {
+    const chunks = []; let size = 0; let settled = false; let timer = null;
+    const cleanup = () => {
+      if (timer) clearTimeout(timer);
+      req.off('data', onData); req.off('end', onEnd); req.off('error', onError); req.off('aborted', onAborted);
+    };
+    const finish = (callback, value) => { if (settled) return; settled = true; cleanup(); callback(value); };
+    const onData = chunk => {
+      size += chunk.length;
+      if (size > maxBytes) {
+        req.pause();
+        const error = fail(413, 'ERR_VIRGOSCORPIO_HUB_BODY_TOO_LARGE', `Request body exceeds ${maxBytes} bytes.`);
+        error.closeConnection = true; finish(reject, error); return;
+      }
+      chunks.push(chunk);
+    };
+    const onEnd = () => finish(resolve, Buffer.concat(chunks));
+    const onError = error => finish(reject, error);
+    const onAborted = () => {
+      const error = fail(408, 'ERR_VIRGOSCORPIO_HUB_BODY_ABORTED', 'Request body was interrupted before it was received.');
+      error.closeConnection = true; finish(reject, error);
+    };
+    req.on('data', onData); req.once('end', onEnd); req.once('error', onError); req.once('aborted', onAborted);
+    if (timeoutMs > 0) timer = setTimeout(() => {
+      req.pause();
+      const error = fail(408, 'ERR_VIRGOSCORPIO_HUB_BODY_TIMEOUT', 'Request body was not received before the deadline.');
+      error.closeConnection = true; finish(reject, error);
+    }, timeoutMs);
+  });
 }
 async function readForm(req, maxBytes) {
   if (!String(req.headers['content-type'] || '').toLowerCase().startsWith('application/x-www-form-urlencoded')) throw fail(415, 'ERR_VIRGOSCORPIO_HUB_FORM_CONTENT_TYPE', 'Expected application/x-www-form-urlencoded.');
@@ -2133,6 +2157,7 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
       const status = Number.isInteger(error.statusCode) ? error.statusCode : error.code === 'ERR_VIRGOSCORPIO_HUB_INVALID_DOCUMENT' ? 422 : 500;
       const errorPath = (() => { try { return new URL(req.url, 'http://localhost').pathname; } catch { return '/other'; } })();
       setHttpStatus(requestSpan, status);
+      if (error.closeConnection) { res.shouldKeepAlive = false; res.setHeader('connection', 'close'); }
       structuredLogger.emit('error', 'virgoscorpio_hub.http.error', {
         requestId,
         method: req.method,
