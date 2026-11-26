@@ -38,11 +38,11 @@ function createSessionService({
     await onAuthorizationChange(Object.freeze({ ...change }));
   }
 
-  async function createSession(user, metadata = {}) {
+  async function createSession(user, metadata = {}, queryable = pool) {
     const token = randomBytes(32).toString('base64url');
     const csrf = randomBytes(32).toString('base64url');
     const expiresAt = new Date(clock() + sessionTtlMs);
-    await pool.query(
+    await queryable.query(
       `INSERT INTO auth_sessions(user_id,token_hash,csrf_hash,expires_at,user_agent_hash,ip_hash)
        VALUES($1,$2,$3,$4,$5,$6)`,
       [
@@ -60,7 +60,9 @@ function createSessionService({
   async function authenticate(token) {
     if (typeof token !== 'string' || token.length < 32 || token.length > 200) return null;
     const result = await pool.query(
-      `SELECT s.id AS session_id,s.user_id,s.csrf_hash,s.expires_at,u.email,u.display_name,u.status,u.email_verified_at,u.mfa_enabled
+      `SELECT s.id AS session_id,s.user_id,s.csrf_hash,s.expires_at,
+              (s.last_seen_at < now() - interval '1 minute') AS should_touch,
+              u.email,u.display_name,u.status,u.email_verified_at,u.mfa_enabled
        FROM auth_sessions s JOIN users u ON u.id=s.user_id
        WHERE s.token_hash=$1 AND s.revoked_at IS NULL AND s.expires_at > now()
          AND s.last_seen_at > now() - ($2 * interval '1 minute') AND u.status='active' LIMIT 1`,
@@ -69,13 +71,15 @@ function createSessionService({
     const row = result.rows[0];
     if (!row) return null;
 
-    // Touches are intentionally best-effort and throttled to one write/minute.
-    // A failed last_seen_at update must not turn a valid authenticated request
-    // into an error or extend the hard expiry.
-    void pool.query(
-      "UPDATE auth_sessions SET last_seen_at=now() WHERE id=$1 AND last_seen_at < now() - interval '1 minute'",
-      [row.session_id]
-    ).catch(() => {});
+    // Avoid an extra pool round-trip for sessions touched within the last minute.
+    // Stale-session touches remain best-effort; the UPDATE predicate still
+    // coalesces concurrent requests so only one request refreshes the timestamp.
+    if (row.should_touch === true) {
+      void pool.query(
+        "UPDATE auth_sessions SET last_seen_at=now() WHERE id=$1 AND last_seen_at < now() - interval '1 minute'",
+        [row.session_id]
+      ).catch(() => {});
+    }
 
     const memberships = await pool.query(
       `SELECT s.id AS site_id,s.slug AS site_slug,s.name AS site_name,r.slug AS role_slug,r.capabilities

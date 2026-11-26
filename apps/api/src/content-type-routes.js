@@ -78,6 +78,66 @@ function createContentTypeRouteHandler({
     return scope;
   }
 
+  // Definition-level capability required for each generic workflow action.
+  const WORKFLOW_DEFINITION_CAPABILITY = Object.freeze({
+    'submit-review': 'submitForReview',
+    approve: 'publish',
+    reject: 'publish',
+    publish: 'publish',
+    schedule: 'publish',
+    unpublish: 'publish',
+    archive: 'archive',
+  });
+  const OWNER_ONLY_ACTIONS = new Set(['publish', 'schedule', 'unpublish']);
+  const REVIEW_ACTIONS = new Set(['approve', 'reject']);
+
+  function requireDefinitionCapability({ actor, definition, capability, fail }) {
+    if (actor.isDeveloper) return;
+    const allowed = Array.isArray(definition?.capabilities) && definition.capabilities.includes(capability);
+    if (!allowed) {
+      throw fail(403, 'ERR_VIRGOSCORPIO_HUB_FORBIDDEN', 'The content type does not permit this operation.');
+    }
+  }
+
+  /**
+   * Enforce the per-content-type capability list and publication policy on a
+   * generic workflow transition. Records without a content-type definition
+   * (for example built-in pages) are not affected. The caller must already
+   * have verified the broad site capability for the action.
+   *
+   * hasSiteCapability(capability) must resolve to a boolean for the actor and site.
+   */
+  async function authorizeWorkflowAction({ actor, siteId, action, record, localPool, hasSiteCapability, fail }) {
+    if (!record || actor.isDeveloper) return;
+    const slug = record.content_type;
+    // Built-in pages intentionally have no custom content-type definition.
+    // Every other stored type must resolve to an active definition; a deleted,
+    // disabled or malformed definition must not silently disable policy checks.
+    if (slug === 'page' || slug === undefined || slug === null) return;
+    if (typeof slug !== 'string' || !CONTENT_TYPE_NAME_RE.test(slug)) {
+      throw fail(403, 'ERR_VIRGOSCORPIO_HUB_FORBIDDEN', 'The content type does not permit this operation.');
+    }
+    const definition = await getContentTypeDefinition({ siteId, slug, localPool, fail });
+    if (!definition) {
+      throw fail(403, 'ERR_VIRGOSCORPIO_HUB_FORBIDDEN', 'The content type does not permit this operation.');
+    }
+
+    const capability = WORKFLOW_DEFINITION_CAPABILITY[action];
+    if (!capability) throw fail(403, 'ERR_VIRGOSCORPIO_HUB_FORBIDDEN', 'The content type does not permit this operation.');
+    requireDefinitionCapability({ actor, definition, capability, fail });
+
+    const policy = definition.publicationPolicy;
+    if (policy === 'owner-only' && OWNER_ONLY_ACTIONS.has(action) && !(await hasSiteCapability('site:manage'))) {
+      throw fail(403, 'ERR_VIRGOSCORPIO_HUB_FORBIDDEN', 'Only a site owner may change the publication state of this content type.');
+    }
+    if (policy === 'review-required' && REVIEW_ACTIONS.has(action)) {
+      const isAuthor = String(record.created_by || '').toLowerCase() === String(actor.user.id).toLowerCase();
+      if (isAuthor && !(await hasSiteCapability('site:manage'))) {
+        throw fail(403, 'ERR_VIRGOSCORPIO_HUB_FORBIDDEN', 'This content type requires review by someone other than the author.');
+      }
+    }
+  }
+
   /**
    * Handle the custom content-type registry and record route family.
    *
@@ -88,7 +148,7 @@ function createContentTypeRouteHandler({
    * validation, and site-scoped record dispatch. It returns false only when
    * the path/method is not part of this route family.
    */
-  return async function handleContentTypeRoute(ctx) {
+  async function handleContentTypeRoute(ctx) {
     const {
       req,
       res,
@@ -206,6 +266,7 @@ function createContentTypeRouteHandler({
             requestId,
           });
         }
+        requireDefinitionCapability({ actor, definition, capability: 'read', fail });
         return sendJson(res, 200, {
           items: await store.listContent({
             siteId,
@@ -228,6 +289,7 @@ function createContentTypeRouteHandler({
           requestId,
         });
       }
+      requireDefinitionCapability({ actor, definition, capability: 'create', fail });
       const validation = validateRecordValues(definition, body.values);
       if (!validation.valid) {
         throw fail(422, 'ERR_VIRGOSCORPIO_HUB_CONTENT_VALUES_INVALID', 'Record values failed schema validation.', validation.errors);
@@ -264,6 +326,7 @@ function createContentTypeRouteHandler({
       const readScope = await requireContentRead({ actor, siteId, contentReadScope, fail });
       const definition = await getContentTypeDefinition({ siteId, slug: recordMatch[1], localPool, fail });
       if (!definition) return sendJson(res, 404, { error: 'Content type not found.', requestId });
+      requireDefinitionCapability({ actor, definition, capability: 'read', fail });
 
       const record = readScope.ownOnly
         ? await store.getByIdForOwner({ siteId, id: recordMatch[2], actorId: actor.user.id })
@@ -276,7 +339,9 @@ function createContentTypeRouteHandler({
     }
 
     return false;
-  };
+  }
+  handleContentTypeRoute.authorizeWorkflowAction = authorizeWorkflowAction;
+  return handleContentTypeRoute;
 }
 
 module.exports = { createContentTypeRouteHandler, loadGitContentTypeDefinitions };

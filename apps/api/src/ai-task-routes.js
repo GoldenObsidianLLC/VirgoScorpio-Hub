@@ -117,7 +117,7 @@ function createAITaskRouteHandlers(dependencies = {}) {
         }
       }
 
-      const siteId = await ensureSiteCapability(actor, url);
+      const siteId = await ensureSiteCapability(actor, url, req);
       if (!siteId) throw fail(400, 'ERR_VIRGOSCORPIO_HUB_SITE_REQUIRED', 'Select a site using the siteId query parameter.');
 
       const limitValue = url.searchParams.get('limit');
@@ -160,7 +160,7 @@ function createAITaskRouteHandlers(dependencies = {}) {
           requestId
         });
       }
-      const siteId = await ensureSiteCapability(actor, url);
+      const siteId = await ensureSiteCapability(actor, url, req);
       if (!siteId) throw fail(400, 'ERR_VIRGOSCORPIO_HUB_SITE_REQUIRED', 'Select a site using the siteId query parameter.');
       const task = await taskStore.get({ taskId, siteId, actorId: actor.user?.id || null });
       if (!task) {

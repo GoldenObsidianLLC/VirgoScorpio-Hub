@@ -8,6 +8,67 @@ const { initializeTracing, withSpan } = require('../../../packages/observability
 const { initializeLogExport } = require('../../../packages/observability/src/otel-logs');
 const { createStructuredLogger } = require('../../../packages/observability/src/structured-logger');
 
+/**
+ * Wait for one scheduler polling interval without retaining listeners on the
+ * process-lifetime shutdown signal. Timer ownership and abort cleanup live in
+ * one place so every completion path releases the same resources.
+ *
+ * @param {AbortSignal} signal Scheduler shutdown signal.
+ * @param {number} interval Polling delay in milliseconds.
+ * @param {typeof globalThis} timers Timer adapter (injectable for deterministic tests).
+ * @returns {Promise<void>} Resolves on timeout or shutdown; rejects on timer setup failure.
+ */
+function waitForSchedulerInterval(signal, interval, timers = globalThis) {
+  return new Promise((resolve, reject) => {
+    if (signal.aborted) {
+      resolve();
+      return;
+    }
+
+    let timer = null;
+    let settled = false;
+
+    const cleanup = () => {
+      signal.removeEventListener('abort', onAbort);
+      if (timer !== null) {
+        timers.clearTimeout(timer);
+        timer = null;
+      }
+    };
+
+    const finish = error => {
+      if (settled) return;
+      settled = true;
+
+      try {
+        cleanup();
+      } catch (cleanupError) {
+        reject(error
+          ? new AggregateError([error, cleanupError], 'Scheduler interval setup and cleanup failed')
+          : cleanupError);
+        return;
+      }
+
+      if (error) reject(error);
+      else resolve();
+    };
+
+    const onAbort = () => finish();
+
+    try {
+      signal.addEventListener('abort', onAbort, { once: true });
+      // Recheck after registration so an abort during listener setup cannot
+      // leave a newly scheduled interval behind.
+      if (settled || signal.aborted) {
+        finish();
+        return;
+      }
+      timer = timers.setTimeout(finish, interval);
+    } catch (error) {
+      finish(error);
+    }
+  });
+}
 async function main() {
   loadEnvFile(path.resolve(process.cwd(), '.env'));
   if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL must be configured for scheduled publishing.');
@@ -64,7 +125,7 @@ async function main() {
         component: 'scheduler', operation: 'run', outcome: 'failure',
         code: error?.code || 'ERR_SCHEDULER', errorType: error?.name || 'Error'
       }); }
-      await new Promise(resolve => { const timer = setTimeout(resolve, interval); controller.signal.addEventListener('abort', () => { clearTimeout(timer); resolve(); }, { once: true }); });
+      await waitForSchedulerInterval(controller.signal, interval);
     }
   } finally {
     try {
@@ -82,4 +143,4 @@ if (require.main === module) main().catch(error => {
   });
   process.exitCode = 1;
 });
-module.exports = { main };
+module.exports = { main, waitForSchedulerInterval };
