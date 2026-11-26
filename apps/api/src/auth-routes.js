@@ -177,11 +177,6 @@ function createAuthRouteHandlers(dependencies = {}) {
         return sendJson(res, 429, { error: 'Too many password reset requests.', code: 'ERR_VIRGOSCORPIO_HUB_RATE_LIMIT', requestId });
       }
       if (!identity) return sendJson(res, 503, { error: 'Authentication requires PostgreSQL.', code: 'ERR_VIRGOSCORPIO_HUB_IDENTITY_DISABLED', requestId });
-      const limit = allowRequest('password-reset:' + (req.socket.remoteAddress || 'unknown'));
-      if (!limit.allowed) {
-        res.setHeader('retry-after', String(limit.retryAfterSeconds));
-        return sendJson(res, 429, { error: 'Too many password reset requests.', code: 'ERR_VIRGOSCORPIO_HUB_RATE_LIMIT', requestId });
-      }
       const body = await readJson(req, Math.min(maxBody, MAX_AUTH_BODY_BYTES));
       const targetEmail = typeof body?.email === 'string' ? body.email.trim().toLowerCase().slice(0, 320) : '';
       if (targetEmail && !allowRequest('password-reset-target:' + targetEmail).allowed) {
