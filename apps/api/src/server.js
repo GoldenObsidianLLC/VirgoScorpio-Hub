@@ -86,37 +86,45 @@ async function readRawBody(req, maxBytes, { timeoutMs = 0 } = {}) {
   const declared = Number(req.headers['content-length'] || 0);
   if (declared > maxBytes) {
     req.pause();
+    // The response closes the connection while the oversized request may still be
+    // draining. Keep an error listener until close so the socket teardown cannot emit
+    // an unhandled IncomingMessage error after the response path has settled.
+    const ignoreRequestError = () => {};
+    req.on('error', ignoreRequestError);
+    req.once('close', () => req.off('error', ignoreRequestError));
     const error = fail(413, 'ERR_VIRGOSCORPIO_HUB_BODY_TOO_LARGE', `Request body exceeds ${maxBytes} bytes.`);
     error.closeConnection = true;
     throw error;
   }
   return new Promise((resolve, reject) => {
     const chunks = []; let size = 0; let settled = false; let timer = null;
-    const cleanup = () => {
+    const cleanup = ({ preserveError = false } = {}) => {
       if (timer) clearTimeout(timer);
-      req.off('data', onData); req.off('end', onEnd); req.off('error', onError); req.off('aborted', onAborted);
+      req.off('data', onData); req.off('end', onEnd); req.off('aborted', onAborted);
+      if (preserveError) req.once('close', () => req.off('error', onError));
+      else req.off('error', onError);
     };
-    const finish = (callback, value) => { if (settled) return; settled = true; cleanup(); callback(value); };
+    const finish = (callback, value, options) => { if (settled) return; settled = true; cleanup(options); callback(value); };
     const onData = chunk => {
       size += chunk.length;
       if (size > maxBytes) {
         req.pause();
         const error = fail(413, 'ERR_VIRGOSCORPIO_HUB_BODY_TOO_LARGE', `Request body exceeds ${maxBytes} bytes.`);
-        error.closeConnection = true; finish(reject, error); return;
+        error.closeConnection = true; finish(reject, error, { preserveError: true }); return;
       }
       chunks.push(chunk);
     };
     const onEnd = () => finish(resolve, Buffer.concat(chunks));
-    const onError = error => finish(reject, error);
+    const onError = error => finish(reject, error, { preserveError: true });
     const onAborted = () => {
       const error = fail(408, 'ERR_VIRGOSCORPIO_HUB_BODY_ABORTED', 'Request body was interrupted before it was received.');
-      error.closeConnection = true; finish(reject, error);
+      error.closeConnection = true; finish(reject, error, { preserveError: true });
     };
     req.on('data', onData); req.once('end', onEnd); req.once('error', onError); req.once('aborted', onAborted);
     if (timeoutMs > 0) timer = setTimeout(() => {
       req.pause();
       const error = fail(408, 'ERR_VIRGOSCORPIO_HUB_BODY_TIMEOUT', 'Request body was not received before the deadline.');
-      error.closeConnection = true; finish(reject, error);
+      error.closeConnection = true; finish(reject, error, { preserveError: true });
     }, timeoutMs);
   });
 }
