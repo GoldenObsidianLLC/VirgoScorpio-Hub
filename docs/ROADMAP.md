@@ -1,12 +1,28 @@
-## Current mainline baseline - 25 November 2026 (America/Chicago; F1.71 merged; F1.72 candidate)
+## Historical mainline baseline before F1.72 merge — 25 November 2026 (America/Chicago)
 
-Current main is de16a4275828fa6411800bbaf20c16b51186dc05 after F1.71 / PR #256 merged. Exact-main [workflow #1396 / run 45693182743](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45693182743) passed all seven jobs: Node 22/24, PostgreSQL/Memgraph 195/195, 19/19 fresh/idempotent migrations, browser/accessibility 9/9, CodeQL, signed lockfile/SBOM attestation and exact-source evidence consolidation. Node 22 logged 965/965 Hub tests with zero skips; both dependency audits reported zero vulnerabilities. Canonical readiness [artifact #15060181017](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45693182743/artifacts/15060181017) remains 8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN, `readyForProduction=false`, NOT_PRODUCTION_CERTIFIED / NO-GO. Package 0.6.2 remains private/unreleased.
+## Current authoritative status — 26 November 2026
+
+- Main: `a1ab72cce3c11e0e9113831e72bab5954e867a81`. Exact-main run #45902431703 passed all seven workflow jobs. Node 22/24 each passed 1,113/1,113 Hub and 94/94 EnginEx tests; PostgreSQL/Memgraph 200/200; 21/21 fresh and idempotent migrations; browser smoke 9/9; CodeQL, signed attestations and evidence consolidation.
+- Canonical readiness artifact #15155968721: 8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN. `readyForProduction=false`, NOT_PRODUCTION_CERTIFIED / NO-GO. Partial results are human dependency/lockfile review and a service-less diagnostic with 54/55 skipped; the latter is not the live integration result.
+- Merged increments: F1.73 / PR #304, and runtime PRs #265, #266, #270 and #269. Their merge SHAs and features are documented in the 26 November release-gate report.
+- Current open PRs: #274 (password-reset timing mitigation, Changes requested) and #305 (documentation-only release-gate refresh). #274 is blocked by a duplicate handler declaration, non-durable fire-and-forget request acceptance and mock-only tests that do not cover the real route/outbox boundary.
+- The Aikido proposal audit in issue #277 is a PR-state summary, not scanner-fingerprint disposition. Current GitHub open-PR state is authoritative for PR inventory.
+
+### Execution order
+
+1. Keep #274 blocked. Replace in-memory deferred work with a bounded durable reset-request record created before generic acknowledgement; process it via a worker; add actual route/service tests, restart recovery, idempotency, abuse-quota and response-timing coverage.
+2. Complete independent tenant-isolation, dependency/SBOM and platform-security reviews.
+3. Complete external identity/email/MFA, malware, cloud provider, Stripe, commerce, community and full accessibility/product-parity acceptance.
+4. Complete load/soak, fault injection, backup/restore, production OTLP, deployment runbooks, secrets/rollback and monitoring evidence.
+5. Regenerate exact-source readiness after implementation is stable and obtain explicit release-owner sign-off only after all required gates are satisfied.
+
+Older roadmap entries below are historical planning context; this snapshot is authoritative for current main and open-PR status. Package 0.6.2 remains private/unreleased. Do not tag, publish, deploy or promote while readiness is NO-GO.
 
 ### Merged - F1.71 MFA enrollment step-up reauthentication ([PR #256](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/256); main SHA de16a4275828fa6411800bbaf20c16b51186dc05)
 
 Enrollment requires the current password and, when MFA is already active, the current TOTP factor or an unused recovery code before replacing an existing factor. The service checks proof under the active-user lock and consumes recovery proof transactionally. Pending secrets cannot authenticate. The route reads a bounded 16 KiB body and rejects developer actors before parsing; UI credential fields are masked and cleared. Exact-head PR workflow #1395 and post-merge main workflow #1396 passed; no schema, migration, dependency, lockfile, API response-shape or SemVer change.
 
-### Active candidate - F1.72 public query-loop amplification containment ([PR #253](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/253))
+### Merged - F1.72 public query-loop amplification containment ([PR #253](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/253))
 
 Public delivery groups duplicate query-loop content types and caps each request at five site/locale/page-exclusion-scoped published-content queries, at most 12 rows per group. New documents retain the five-loop validator cap. A narrow legacy published-page renderer option relaxes only that count check after the database query budget is applied; other validation bounds remain active.
 
