@@ -113,7 +113,7 @@ test('member listing checks site management capability before identity access', 
       type: 'requireCapability',
       args: [ctx.actor, SITE_ID, 'site:manage'],
     },
-    { type: 'listMembers', input: { siteId: SITE_ID } },
+    { type: 'listMembers', input: { siteId: SITE_ID, actorId: ACTOR_ID } },
     { type: 'sendJson', statusCode: 200 },
   ]);
   assert.deepEqual(ctx.res.payload.body, {

@@ -130,6 +130,7 @@ function createPool({ failAudit = false } = {}) {
     async query(sql, values = []) {
       const statement = String(sql).trim();
       events.push({ type: 'pool-query', statement, values: copy(values) });
+      if (statement.includes('FROM firewall_rules')) return { rowCount: 0, rows: [] };
       if (statement.startsWith('SELECT id,slug,name,version,document,created_at,updated_at FROM reusable_components')) {
         const [siteId] = values;
         return {

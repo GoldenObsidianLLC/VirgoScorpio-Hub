@@ -27,8 +27,8 @@ function safeClassName(value) {
   return typeof value === 'string' && /^[A-Za-z0-9 _-]{0,120}$/.test(value) ? value.trim() : '';
 }
 
-function renderPageDocument(document, { assetUrl = id => `/media/${encodeURIComponent(id)}`, libraryAssetUrl = id => `/library/public/${encodeURIComponent(id)}`, dynamicData = {}, designTokens = {} } = {}) {
-  const validation = validatePageDocument(document);
+function renderPageDocument(document, { assetUrl = id => `/media/${encodeURIComponent(id)}`, libraryAssetUrl = id => `/library/public/${encodeURIComponent(id)}`, dynamicData = {}, designTokens = {}, allowLegacyQueryLoops = false } = {}) {
+  const validation = validatePageDocument(document, { allowLegacyQueryLoops });
   if (!validation.valid) {
     const error = new Error(`Page document is invalid: ${validation.errors.join('; ')}`);
     error.code = 'ERR_VIRGOSCORPIO_HUB_INVALID_DOCUMENT'; error.details = validation.errors; throw error;

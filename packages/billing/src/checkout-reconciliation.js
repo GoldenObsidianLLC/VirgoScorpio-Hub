@@ -8,8 +8,8 @@ const { withTransaction } = require('../../db/src/transaction');
 
 const MAX_BATCH_SIZE = 1_000;
 const DEFAULT_BATCH_SIZE = 100;
+const RECONCILIATION_RETRY_DELAY_MINUTES = 15;
 const STRIPE_API_BASE = 'https://api.stripe.com/v1';
-
 function validateBatchSize(batchSize) {
   if (!Number.isInteger(batchSize) || batchSize < 1 || batchSize > MAX_BATCH_SIZE) {
     const error = new TypeError(`batchSize must be an integer between 1 and ${MAX_BATCH_SIZE}.`);
@@ -19,9 +19,9 @@ function validateBatchSize(batchSize) {
   return batchSize;
 }
 
-async function getStripeSession({ secretKey, sessionId, fetchImpl }) {
-  const response = await fetchImpl(`${STRIPE_API_BASE}/checkout/sessions/${encodeURIComponent(sessionId)}`, {
-    method: 'GET',
+async function stripeSessionRequest({ secretKey, sessionId, fetchImpl, method = 'GET', action = '' }) {
+  const response = await fetchImpl(`${STRIPE_API_BASE}/checkout/sessions/${encodeURIComponent(sessionId)}${action}`, {
+    method,
     headers: { Authorization: `Bearer ${secretKey}`, Accept: 'application/json' },
     signal: AbortSignal.timeout(10_000)
   });
@@ -47,11 +47,37 @@ async function getStripeSession({ secretKey, sessionId, fetchImpl }) {
   return session;
 }
 
+function getStripeSession(options) {
+  return stripeSessionRequest(options);
+}
+
+// Ask Stripe to expire a still-open session so that it can no longer be paid; only
+// the provider's confirmation (status 'expired') permits the local hold to be released.
+function expireStripeSession(options) {
+  return stripeSessionRequest({ ...options, method: 'POST', action: '/expire' });
+}
+
+// Keep unresolved reservations out of the next scheduler tick. Reuse the
+// reservation expiry as a durable retry-after timestamp across worker restarts.
+async function deferReservationReconciliation(pool, order) {
+  await pool.query(
+    `UPDATE commerce_stock_reservations
+        SET expires_at=GREATEST(expires_at, now() + ($3::integer * INTERVAL '1 minute'))
+      WHERE site_id=$1 AND order_id=$2 AND status='reserved'`,
+    [order.site_id, order.order_id, RECONCILIATION_RETRY_DELAY_MINUTES]
+  );
+}
+
 /**
  * Reconcile expired local inventory holds against Stripe's current session state.
- * A local timer is never sufficient evidence to release stock: sessions without a
- * provider ID, provider errors, open sessions, and unpaid completed sessions keep
- * their holds until a definitive webhook or subsequent reconciliation resolves them.
+ * A local timer is never sufficient evidence to release stock. Sessions without a
+ * provider ID, provider lookup/expiry failures, sessions that remain open after an
+ * expiry request, and unpaid completed sessions (including delayed payment methods)
+ * retain their holds until Stripe or a definitive webhook establishes the outcome.
+ * Only a provider-confirmed expired session releases inventory; a completed paid
+ * session commits the reservation. Unknown provider state is an operational exception,
+ * not evidence that the payment cannot still settle.
+ * Unresolved outcomes advance reservation expiry as a durable 15-minute retry-after.
  */
 async function reconcileExpiredStripeCheckouts(pool, {
   secretKey = process.env.STRIPE_SECRET_KEY,
@@ -87,16 +113,33 @@ async function reconcileExpiredStripeCheckouts(pool, {
     if (typeof order.provider_session_id !== 'string' || !order.provider_session_id) {
       // An absent ID can represent an ambiguous provider outcome. Never guess that
       // Stripe failed; retain the reservation for same-key recovery/manual review.
+      await deferReservationReconciliation(pool, order);
       summary.unlinked += 1;
       summary.held += 1;
       continue;
     }
 
+    const sessionOptions = { secretKey, sessionId: order.provider_session_id, fetchImpl };
+
     let session;
     try {
-      session = await getStripeSession({ secretKey, sessionId: order.provider_session_id, fetchImpl });
+      session = await getStripeSession(sessionOptions);
+      if (session.status === 'open') {
+        // Ask Stripe to close the session, but release stock only if Stripe confirms it
+        // is expired. A 2xx response that remains open is not terminal evidence.
+        session = await expireStripeSession(sessionOptions);
+      }
     } catch {
+      // Network errors, timeouts, rate limits, provider 5xx responses, and malformed
+      // responses all leave the provider outcome unknown. Preserve stock for recovery.
       summary.errors += 1;
+      await deferReservationReconciliation(pool, order);
+      summary.held += 1;
+      continue;
+    }
+
+    if (session.status === 'open') {
+      await deferReservationReconciliation(pool, order);
       summary.held += 1;
       continue;
     }
@@ -104,6 +147,7 @@ async function reconcileExpiredStripeCheckouts(pool, {
     const isExpired = session.status === 'expired' && session.payment_status !== 'paid';
     const isPaid = session.status === 'complete' && ['paid', 'no_payment_required'].includes(session.payment_status);
     if (!isExpired && !isPaid) {
+      await deferReservationReconciliation(pool, order);
       summary.held += 1;
       continue;
     }
