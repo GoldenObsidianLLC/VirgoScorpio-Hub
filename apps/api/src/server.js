@@ -21,7 +21,7 @@ const { verifyPluginArtifactSignature, trustedKeysFromEnv, digestForArtifact } =
 const { createRemotePluginRunner } = require('../../../packages/plugins/src/remote-runner');
 const { createLocalMediaStore } = require('../../../packages/media/src/local-store');
 const { createS3MediaStore } = require('../../../packages/media/src/s3-store');
-const { createLibraryStore } = require('../../../packages/library/src/file-store');
+const { createLibraryStore, DEFAULT_MAX_SITE_BYTES, DEFAULT_MAX_SITE_OBJECTS } = require('../../../packages/library/src/file-store');
 const { createClamDScanScanner } = require('../../../packages/security/src/malware-scanner');
 const { createCloudStorageAdapterFromEnv } = require('../../../packages/cloud/src/storage-adapters');
 const { createFirewall } = require('../../../packages/security/src/firewall');
@@ -81,12 +81,52 @@ function parseBearer(req) { const header = req.headers.authorization; return typ
 function normalizeSlug(value) {
   return String(value || '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 180);
 }
-async function readRawBody(req, maxBytes) {
+// Read bounded request bytes by events so timeout/overflow errors can be returned before closing the connection.
+async function readRawBody(req, maxBytes, { timeoutMs = 0 } = {}) {
   const declared = Number(req.headers['content-length'] || 0);
-  if (declared > maxBytes) throw fail(413, 'ERR_VIRGOSCORPIO_HUB_BODY_TOO_LARGE', `Request body exceeds ${maxBytes} bytes.`);
-  const chunks = []; let size = 0;
-  for await (const chunk of req) { size += chunk.length; if (size > maxBytes) throw fail(413, 'ERR_VIRGOSCORPIO_HUB_BODY_TOO_LARGE', `Request body exceeds ${maxBytes} bytes.`); chunks.push(chunk); }
-  return Buffer.concat(chunks);
+  if (declared > maxBytes) {
+    req.pause();
+    // The response closes the connection while the oversized request may still be
+    // draining. Keep an error listener until close so the socket teardown cannot emit
+    // an unhandled IncomingMessage error after the response path has settled.
+    const ignoreRequestError = () => {};
+    req.on('error', ignoreRequestError);
+    req.once('close', () => req.off('error', ignoreRequestError));
+    const error = fail(413, 'ERR_VIRGOSCORPIO_HUB_BODY_TOO_LARGE', `Request body exceeds ${maxBytes} bytes.`);
+    error.closeConnection = true;
+    throw error;
+  }
+  return new Promise((resolve, reject) => {
+    const chunks = []; let size = 0; let settled = false; let timer = null;
+    const cleanup = ({ preserveError = false } = {}) => {
+      if (timer) clearTimeout(timer);
+      req.off('data', onData); req.off('end', onEnd); req.off('aborted', onAborted);
+      if (preserveError) req.once('close', () => req.off('error', onError));
+      else req.off('error', onError);
+    };
+    const finish = (callback, value, options) => { if (settled) return; settled = true; cleanup(options); callback(value); };
+    const onData = chunk => {
+      size += chunk.length;
+      if (size > maxBytes) {
+        req.pause();
+        const error = fail(413, 'ERR_VIRGOSCORPIO_HUB_BODY_TOO_LARGE', `Request body exceeds ${maxBytes} bytes.`);
+        error.closeConnection = true; finish(reject, error, { preserveError: true }); return;
+      }
+      chunks.push(chunk);
+    };
+    const onEnd = () => finish(resolve, Buffer.concat(chunks));
+    const onError = error => finish(reject, error, { preserveError: true });
+    const onAborted = () => {
+      const error = fail(408, 'ERR_VIRGOSCORPIO_HUB_BODY_ABORTED', 'Request body was interrupted before it was received.');
+      error.closeConnection = true; finish(reject, error, { preserveError: true });
+    };
+    req.on('data', onData); req.once('end', onEnd); req.once('error', onError); req.once('aborted', onAborted);
+    if (timeoutMs > 0) timer = setTimeout(() => {
+      req.pause();
+      const error = fail(408, 'ERR_VIRGOSCORPIO_HUB_BODY_TIMEOUT', 'Request body was not received before the deadline.');
+      error.closeConnection = true; finish(reject, error, { preserveError: true });
+    }, timeoutMs);
+  });
 }
 async function readForm(req, maxBytes) {
   if (!String(req.headers['content-type'] || '').toLowerCase().startsWith('application/x-www-form-urlencoded')) throw fail(415, 'ERR_VIRGOSCORPIO_HUB_FORM_CONTENT_TYPE', 'Expected application/x-www-form-urlencoded.');
@@ -109,10 +149,10 @@ async function readJson(req, maxBytes) {
   try { return JSON.parse(Buffer.concat(chunks).toString('utf8')); }
   catch { const error = new Error('Request body must be valid JSON.'); error.statusCode = 400; error.code = 'ERR_VIRGOSCORPIO_HUB_INVALID_JSON'; throw error; }
 }
-function createRateLimiter(env) {
+function createRateLimiter(env, { maxKey = 'RATE_LIMIT_MAX_REQUESTS', defaultMax = 60 } = {}) {
   const buckets = new Map();
   const windowMs = boundedInt(env.RATE_LIMIT_WINDOW_MS, 60_000, 1_000, 3_600_000, 'RATE_LIMIT_WINDOW_MS');
-  const maxRequests = boundedInt(env.RATE_LIMIT_MAX_REQUESTS, 60, 1, 10_000, 'RATE_LIMIT_MAX_REQUESTS');
+  const maxRequests = boundedInt(env[maxKey], defaultMax, 1, 10_000, maxKey);
   let lastSweep = 0;
   return function allow(key) {
     const now = Date.now();
@@ -167,7 +207,7 @@ async function writeTaxonomyOutboxEvent(client, { term, status, actorId = null, 
     ]
   );
 }
-function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAITaskStore, contentStore, pool, identityService, pluginRunner, mediaStore: injectedMediaStore, stripeFetch = fetch, realtimeHub: injectedRealtimeHub, presenceService: injectedPresenceService, realtimeBridge: injectedRealtimeBridge, realtimeMetrics: injectedRealtimeMetrics, realtimeConnectionLimiter: injectedRealtimeConnectionLimiter, publishDocumentOperation: injectedDocumentPublisher, realtimeHeartbeatMs = 15_000, logger = console, otelLogger = null, structuredLogger: suppliedStructuredLogger = null } = {}) {
+function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAITaskStore, contentStore, pool, identityService, pluginRunner, mediaStore: injectedMediaStore, libraryStore: injectedLibraryStore, stripeFetch = fetch, realtimeHub: injectedRealtimeHub, presenceService: injectedPresenceService, realtimeBridge: injectedRealtimeBridge, realtimeMetrics: injectedRealtimeMetrics, realtimeConnectionLimiter: injectedRealtimeConnectionLimiter, publishDocumentOperation: injectedDocumentPublisher, realtimeHeartbeatMs = 15_000, logger = console, otelLogger = null, structuredLogger: suppliedStructuredLogger = null } = {}) {
   if (env.NODE_ENV === 'production') {
     const missing = [];
     if (!env.DATABASE_URL && !pool) missing.push('DATABASE_URL');
@@ -196,6 +236,27 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
   const maxBody = boundedInt(env.MAX_REQUEST_BYTES, MAX_BODY_DEFAULT, 1_024, 16 * 1024 * 1024, 'MAX_REQUEST_BYTES');
   const maxMediaBody = Math.max(maxBody, MAX_MEDIA_BODY);
   const allowRequest = createRateLimiter(env);
+  // Dedicated per-IP budget for the unauthenticated Stripe webhook, enforced before its body is buffered.
+  const allowWebhookRequest = createRateLimiter(env, { maxKey: 'STRIPE_WEBHOOK_RATE_LIMIT_MAX_REQUESTS', defaultMax: 300 });
+  const webhookBodyTimeoutMs = boundedInt(env.STRIPE_WEBHOOK_BODY_TIMEOUT_MS, 10_000, 1_000, 60_000, 'STRIPE_WEBHOOK_BODY_TIMEOUT_MS');
+  // Process-wide cap on simultaneous anonymous asset deliveries. Each delivery buffers a whole object
+  // (up to the library ceiling), so bounding concurrency bounds aggregate memory, storage reads and hashing.
+  const maxPublicDeliveries = boundedInt(env.PUBLIC_ASSET_MAX_CONCURRENCY, 4, 1, 8, 'PUBLIC_ASSET_MAX_CONCURRENCY');
+  let activePublicDeliveries = 0;
+  function reservePublicDelivery(res, requestId) {
+    if (activePublicDeliveries >= maxPublicDeliveries) {
+      res.setHeader('retry-after', '1');
+      sendJson(res, 503, { error: 'Public asset delivery capacity is exhausted. Retry shortly.', code: 'ERR_VIRGOSCORPIO_HUB_PUBLIC_ASSET_BUSY', requestId });
+      return false;
+    }
+    activePublicDeliveries += 1;
+    let released = false;
+    // The slot is held until the response is fully flushed or the connection is closed, because the buffer is retained until then.
+    const release = () => { if (!released) { released = true; activePublicDeliveries -= 1; } };
+    res.once('close', release);
+    res.once('finish', release);
+    return true;
+  }
   const ai = aiService || createAIService({
     env,
     audit: event => structuredLogger.emit(event.succeeded ? 'info' : 'warn', 'virgoscorpio_hub.ai.audit', {
@@ -242,9 +303,11 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
   const mediaStore = injectedMediaStore || (localPool ? (env.MEDIA_DRIVER === 's3' ? createS3MediaStore({ pool: localPool, env }) : createLocalMediaStore({ pool: localPool, root: env.MEDIA_ROOT || path.resolve(process.cwd(), 'var', 'media') })) : null);
   const maxLibraryFileBytes = boundedInt(env.VIRGOSCORPIO_HUB_LIBRARY_MAX_FILE_BYTES, 50 * 1024 * 1024, 1024, 50 * 1024 * 1024, 'VIRGOSCORPIO_HUB_LIBRARY_MAX_FILE_BYTES');
   const maxLibraryBody = boundedInt(env.VIRGOSCORPIO_HUB_LIBRARY_MAX_BODY_BYTES, MAX_LIBRARY_BODY_DEFAULT, 16 * 1024 * 1024, 80 * 1024 * 1024, 'VIRGOSCORPIO_HUB_LIBRARY_MAX_BODY_BYTES');
+  const maxLibrarySiteBytes = boundedInt(env.VIRGOSCORPIO_HUB_LIBRARY_MAX_SITE_BYTES, DEFAULT_MAX_SITE_BYTES, 1024 * 1024, Number.MAX_SAFE_INTEGER, 'VIRGOSCORPIO_HUB_LIBRARY_MAX_SITE_BYTES');
+  const maxLibrarySiteObjects = boundedInt(env.VIRGOSCORPIO_HUB_LIBRARY_MAX_SITE_OBJECTS, DEFAULT_MAX_SITE_OBJECTS, 1, 10_000_000, 'VIRGOSCORPIO_HUB_LIBRARY_MAX_SITE_OBJECTS');
   const libraryStorageAdapter = createCloudStorageAdapterFromEnv({ env });
   const malwareScanner = String(env.LIBRARY_MALWARE_SCANNER || '').toLowerCase() === 'clamdscan' ? createClamDScanScanner({ executable: env.CLAMDSCAN_PATH || 'clamdscan', timeoutMs: Number(env.LIBRARY_MALWARE_SCAN_TIMEOUT_MS || 20000), maxBytes: maxLibraryFileBytes }) : null;
-  const libraryStore = localPool ? createLibraryStore({ pool: localPool, root: env.LIBRARY_ROOT || path.resolve(process.cwd(), 'var', 'library'), maxFileBytes: maxLibraryFileBytes, storageAdapter: libraryStorageAdapter, malwareScanner, requireMalwareScan: env.NODE_ENV === 'production' }) : null;
+  const libraryStore = injectedLibraryStore || (localPool ? createLibraryStore({ pool: localPool, root: env.LIBRARY_ROOT || path.resolve(process.cwd(), 'var', 'library'), maxFileBytes: maxLibraryFileBytes, maxSiteBytes: maxLibrarySiteBytes, maxSiteObjects: maxLibrarySiteObjects, storageAdapter: libraryStorageAdapter, malwareScanner, requireMalwareScan: env.NODE_ENV === 'production' }) : null);
   const firewall = createFirewall({ pool: localPool, env, cacheTtlMs: boundedInt(env.VIRGOSCORPIO_HUB_FIREWALL_CACHE_MS, 5000, 500, 60_000, 'VIRGOSCORPIO_HUB_FIREWALL_CACHE_MS') });
   const sandboxRunner = pluginRunner || createRemotePluginRunner({
     url: env.VIRGOSCORPIO_HUB_PLUGIN_RUNNER_URL, token: env.VIRGOSCORPIO_HUB_PLUGIN_RUNNER_TOKEN,
@@ -389,6 +452,12 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
     }
     return null;
   }
+  async function enforceSiteFirewall(req, url, siteId) {
+    const result = await firewall.evaluate({ ip: req?.socket?.remoteAddress || 'unknown', path: url.pathname, userAgent: String(req?.headers?.['user-agent'] || '').slice(0, 500), siteId: String(siteId || '').toLowerCase() || null });
+    if (result.action === 'deny') throw fail(403, 'ERR_VIRGOSCORPIO_HUB_FIREWALL_DENY', 'Request blocked by VirgoScorpio Hub firewall policy.');
+    if (result.action === 'challenge') throw fail(403, 'ERR_VIRGOSCORPIO_HUB_FIREWALL_CHALLENGE', 'This request requires an additional verification step.');
+    if (result.action === 'rate_limit') throw fail(429, 'ERR_VIRGOSCORPIO_HUB_FIREWALL_RATE_LIMIT', 'Firewall rate limit exceeded.');
+  }
   async function siteIdFor({ req, url, body, actor, required = true, routeSiteId, requireMembership = true }) {
     const querySiteIds = url.searchParams.getAll('siteId');
     if (querySiteIds.length > 1) {
@@ -415,6 +484,10 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
     if (!siteId && actor.memberships.length > 1) throw fail(400, 'ERR_VIRGOSCORPIO_HUB_SITE_REQUIRED', 'Select a site using x-virgoscorpio-hub-site-id or siteId.');
     if (!siteId) throw fail(400, 'ERR_VIRGOSCORPIO_HUB_SITE_REQUIRED', 'A siteId is required for this operation.');
     if (!ID_RE.test(siteId)) throw fail(400, 'ERR_VIRGOSCORPIO_HUB_INVALID_SITE_ID', 'siteId must be a valid UUID.');
+
+    // Re-evaluate the firewall with the resolved site so site-scoped rules apply to routes
+    // that select the tenant by query, header, body or membership rather than by path.
+    await enforceSiteFirewall(req, url, siteId);
 
     if (requireMembership && !actor.isDeveloper && !(await identity.authorizeSite(actor.user.id, siteId, 'content:read'))) {
       // Read membership directly; the requested capability is checked by route-specific authorization below.
@@ -459,8 +532,8 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
     }
     return content;
   }
-  async function ensureSiteCapabilityForAI(actor, url, body, capability = 'ai:use') {
-    const siteId = await siteIdFor({ req: { headers: {}, }, url, body, actor, required: false });
+  async function ensureSiteCapabilityForAI(actor, url, body, capability = 'ai:use', req = null) {
+    const siteId = await siteIdFor({ req: req || { headers: {} }, url, body, actor, required: false });
     if (siteId) await requireCapability(actor, siteId, capability);
     else if (!actor.isDeveloper) {
       const allowed = actor.memberships.some(m => m.capabilities.includes(capability) || m.capabilities.includes('site:manage'));
@@ -471,7 +544,7 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
   const aiTaskRoutes = createAITaskRouteHandlers({
     getTaskStore: getAvailableAITaskStore,
     getProviderInfo: () => ai.providerInfo(),
-    ensureSiteCapability: (actor, url) => ensureSiteCapabilityForAI(actor, url, {}, 'ai:use'),
+    ensureSiteCapability: (actor, url, req) => ensureSiteCapabilityForAI(actor, url, {}, 'ai:use', req),
     sendJson,
     fail
   });
@@ -752,8 +825,8 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
       });
       try {
       const url = new URL(req.url, 'http://localhost');
-      const firewallSite = url.pathname.match(/\/sites\/([0-9a-f-]{36})(?:\/|$)/i)?.[1] || null;
-      const firewallResult = await firewall.evaluate({ ip: req.socket.remoteAddress || 'unknown', path: url.pathname, userAgent: String(req.headers['user-agent'] || '').slice(0, 500), siteId: firewallSite });
+      const firewallSite = url.pathname.match(/\/sites\/([0-9a-f-]{36})(?:\/|$)/i)?.[1]?.toLowerCase() || null;
+      const firewallResult = await firewall.evaluate({ ip: req?.socket?.remoteAddress || 'unknown', path: url.pathname, userAgent: String(req?.headers?.['user-agent'] || '').slice(0, 500), siteId: firewallSite });
       if (firewallResult.action === 'deny') return sendJson(res, 403, { error: 'Request blocked by VirgoScorpio Hub firewall policy.', code: 'ERR_VIRGOSCORPIO_HUB_FIREWALL_DENY', requestId });
       if (firewallResult.action === 'challenge') return sendJson(res, 403, { error: 'This request requires an additional verification step.', code: 'ERR_VIRGOSCORPIO_HUB_FIREWALL_CHALLENGE', requestId });
       if (firewallResult.action === 'rate_limit') return sendJson(res, 429, { error: 'Firewall rate limit exceeded.', code: 'ERR_VIRGOSCORPIO_HUB_FIREWALL_RATE_LIMIT', requestId });
@@ -818,6 +891,7 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
       if (req.method === 'GET' && publicPageMatch) {
         if (!store) return sendJson(res, 503, { error: 'Published page delivery requires PostgreSQL.', code: 'ERR_VIRGOSCORPIO_HUB_DATABASE_DISABLED', requestId });
         const site = await store.getSiteBySlug(publicPageMatch[1]); if (!site) return sendJson(res, 404, { error: 'Page not found.', requestId });
+        await enforceSiteFirewall(req, url, site.id);
         const slug = decodeURIComponent(publicPageMatch[2]).replace(/^\/+|\/+$/g, '');
         const locale = url.searchParams.get('locale') || site.default_locale || 'en';
         const page = await store.getPublishedBySlug({ siteId: site.id, slug, locale });
@@ -867,6 +941,7 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
       const mediaPublicMatch = url.pathname.match(/^\/media\/([0-9a-f-]{36})$/i);
       if (req.method === 'GET' && mediaPublicMatch) {
         if (!mediaStore) return sendJson(res, 404, { error: 'Media not found.', requestId });
+        if (!reservePublicDelivery(res, requestId)) return;
         const asset = await mediaStore.readPublic(mediaPublicMatch[1]);
         if (!asset) return sendJson(res, 404, { error: 'Media not found.', requestId });
         res.writeHead(200, { 'content-type': asset.mime_type, 'content-length': asset.data.length, 'cache-control': 'private, no-store', 'x-content-type-options': 'nosniff', 'content-security-policy': "default-src 'none'; sandbox", 'cross-origin-resource-policy': 'same-site', 'content-disposition': 'inline' });
@@ -876,6 +951,7 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
       if (req.method === 'GET' && publicSearchMatch) {
         if (!store) return sendJson(res, 503, { error: 'Search requires PostgreSQL.', code: 'ERR_VIRGOSCORPIO_HUB_DATABASE_DISABLED', requestId });
         const site = await store.getSiteBySlug(publicSearchMatch[1]); if (!site) return sendJson(res, 404, { error: 'Site not found.', requestId });
+        await enforceSiteFirewall(req, url, site.id);
         const query = url.searchParams.get('q') || ''; if (!query.trim() || query.length > 500) return sendJson(res, 400, { error: 'q is required and must be at most 500 characters.', requestId });
         return sendJson(res, 200, { results: await store.search({ siteId: site.id, query, locale: url.searchParams.get('locale') || null, limit: url.searchParams.get('limit') || 20 }), requestId });
       }
@@ -883,6 +959,7 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
       const libraryVariantMatch = url.pathname.match(/^\/library\/public\/([0-9a-f-]{36})\/variants\/([a-z0-9][a-z0-9_-]{0,60})$/i);
       if (req.method === 'GET' && libraryVariantMatch) {
         if (!libraryStore) return sendJson(res, 404, { error: 'Asset variant not found.', code: 'ERR_VIRGOSCORPIO_HUB_LIBRARY_NOT_FOUND', requestId });
+        if (!reservePublicDelivery(res, requestId)) return;
         const variant = await libraryStore.readPublicVariant({ assetId: libraryVariantMatch[1], variantKey: libraryVariantMatch[2] });
         if (!variant) return sendJson(res, 404, { error: 'Asset variant not found.', code: 'ERR_VIRGOSCORPIO_HUB_LIBRARY_NOT_FOUND', requestId });
         res.writeHead(200, { 'content-type': variant.mime_type, 'content-length': variant.data.length, 'cache-control': 'private, no-store', 'x-content-type-options': 'nosniff', 'content-security-policy': "default-src 'none'; sandbox", 'cross-origin-resource-policy': 'same-site', 'content-disposition': 'inline' });
@@ -891,6 +968,7 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
       const libraryPublicMatch = url.pathname.match(/^\/library\/public\/([0-9a-f-]{36})$/i);
       if (req.method === 'GET' && libraryPublicMatch) {
         if (!libraryStore) return sendJson(res, 404, { error: 'Asset not found.', code: 'ERR_VIRGOSCORPIO_HUB_LIBRARY_NOT_FOUND', requestId });
+        if (!reservePublicDelivery(res, requestId)) return;
         const asset = await libraryStore.readPublic(libraryPublicMatch[1]);
         if (!asset) return sendJson(res, 404, { error: 'Asset not found.', code: 'ERR_VIRGOSCORPIO_HUB_LIBRARY_NOT_FOUND', requestId });
         const disposition = /^(?:image|video|audio|font)\//.test(asset.mime_type) ? 'inline' : 'attachment';
@@ -902,6 +980,7 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
         if (!localPool) return sendJson(res, 503, { error: 'Storefront requires PostgreSQL.', code: 'ERR_VIRGOSCORPIO_HUB_DATABASE_DISABLED', requestId });
         const site = await localPool.query('SELECT id,slug FROM sites WHERE slug=$1', [publicProductsMatch[1]]);
         if (!site.rows[0]) return sendJson(res, 404, { error: 'Store not found.', requestId });
+        await enforceSiteFirewall(req, url, site.rows[0].id);
         const result = await localPool.query("SELECT id,slug,name,description,product_type,currency,price_minor,compare_at_price_minor,sku,stock_status,requires_shipping,weight_grams,images,attributes,version,updated_at FROM commerce_products WHERE site_id=$1 AND status='published' ORDER BY created_at DESC LIMIT $2", [site.rows[0].id, Math.min(100, Math.max(1, Number(url.searchParams.get('limit')) || 50))]);
         return sendJson(res, 200, { siteSlug: site.rows[0].slug, products: result.rows, requestId });
       }
@@ -909,12 +988,16 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
       if (req.method === 'GET' && publicPlansMatch) {
         if (!localPool) return sendJson(res, 503, { error: 'Membership plans require PostgreSQL.', code: 'ERR_VIRGOSCORPIO_HUB_DATABASE_DISABLED', requestId });
         const site = await localPool.query('SELECT id,slug FROM sites WHERE slug=$1', [publicPlansMatch[1]]); if (!site.rows[0]) return sendJson(res, 404, { error: 'Site not found.', requestId });
+        await enforceSiteFirewall(req, url, site.rows[0].id);
         const plans = await localPool.query('SELECT id,slug,name,description,price_minor,currency,interval_unit,interval_count FROM membership_plans WHERE site_id=$1 AND active=true ORDER BY price_minor', [site.rows[0].id]);
         return sendJson(res, 200, { siteSlug: site.rows[0].slug, plans: plans.rows, requestId });
       }
       if (req.method === 'POST' && url.pathname === '/api/v1/billing/stripe/webhook') {
         if (!localPool || !env.STRIPE_WEBHOOK_SECRET) return sendJson(res, 503, { error: 'Payment webhook is not configured.', code: 'ERR_VIRGOSCORPIO_HUB_BILLING_DISABLED', requestId });
-        const rawBody = await readRawBody(req, 2 * 1024 * 1024);
+        if (typeof req.headers['stripe-signature'] !== 'string' || !req.headers['stripe-signature']) return sendJson(res, 400, { error: 'Stripe signature is invalid or outside its timestamp tolerance.', code: 'ERR_VIRGOSCORPIO_HUB_BILLING_SIGNATURE', requestId });
+        const webhookLimit = allowWebhookRequest(req.socket.remoteAddress || 'unknown');
+        if (!webhookLimit.allowed) { res.setHeader('retry-after', String(webhookLimit.retryAfterSeconds)); return sendJson(res, 429, { error: 'Request rate limit exceeded.', code: 'ERR_VIRGOSCORPIO_HUB_RATE_LIMIT', requestId }); }
+        const rawBody = await readRawBody(req, 2 * 1024 * 1024, { timeoutMs: webhookBodyTimeoutMs });
         if (!verifyStripeSignature(rawBody, req.headers['stripe-signature'], env.STRIPE_WEBHOOK_SECRET)) return sendJson(res, 400, { error: 'Stripe signature is invalid or outside its timestamp tolerance.', code: 'ERR_VIRGOSCORPIO_HUB_BILLING_SIGNATURE', requestId });
         let event; try { event = JSON.parse(rawBody.toString('utf8')); } catch { return sendJson(res, 400, { error: 'Webhook body must be JSON.', code: 'ERR_VIRGOSCORPIO_HUB_BILLING_WEBHOOK_JSON', requestId }); }
         if (typeof event.id !== 'string' || typeof event.type !== 'string' || !event.data?.object) return sendJson(res, 400, { error: 'Webhook event structure is invalid.', code: 'ERR_VIRGOSCORPIO_HUB_BILLING_WEBHOOK_INVALID', requestId });
@@ -1710,7 +1793,7 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
 
       if (req.method === 'POST' && url.pathname === '/api/v1/ai/page-draft') {
         const body = await readJson(req, maxBody);
-        const siteId = await ensureSiteCapabilityForAI(actor, url, body, 'ai:use');
+        const siteId = await ensureSiteCapabilityForAI(actor, url, body, 'ai:use', req);
         const context = await prepareAIPageDraftContext({ actor, siteId, body });
         const { result, taskId } = await runGovernedAIForRequest({
           req, res, actor, siteId, body: context.body, action: 'page_draft',
@@ -1725,17 +1808,17 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
         return sendJson(res, 200, { ...result, requestId, taskId, humanReviewRequired: true });
       }
       if (req.method === 'POST' && url.pathname === '/api/v1/ai/content-assist') {
-        const body = await readJson(req, maxBody); const siteId = await ensureSiteCapabilityForAI(actor, url, body, 'ai:use');
+        const body = await readJson(req, maxBody); const siteId = await ensureSiteCapabilityForAI(actor, url, body, 'ai:use', req);
         const { result, taskId } = await runGovernedAIForRequest({ req, res, actor, siteId, body, action: 'content_assist', inputChars: String(body.text || '').length, requestId, run: signal => ai.assistContent({ text: body.text, operation: body.operation || 'make-clearer', tone: body.tone || 'clear and professional', actor: actor.user.id || 'local-development-token', signal }) });
         return sendJson(res, 200, { ...result, requestId, taskId, humanReviewRequired: true });
       }
       if (req.method === 'POST' && url.pathname === '/api/v1/ai/seo') {
-        const body = await readJson(req, maxBody); const siteId = await ensureSiteCapabilityForAI(actor, url, body, 'ai:use');
+        const body = await readJson(req, maxBody); const siteId = await ensureSiteCapabilityForAI(actor, url, body, 'ai:use', req);
         const { result, taskId } = await runGovernedAIForRequest({ req, res, actor, siteId, body, action: 'seo', inputChars: String(body.title || '').length + String(body.content || '').length, requestId, run: signal => ai.generateSeo({ title: body.title, content: body.content, actor: actor.user.id || 'local-development-token', signal }) });
         return sendJson(res, 200, { ...result, requestId, taskId, humanReviewRequired: true });
       }
       if (req.method === 'POST' && url.pathname === '/api/v1/ai/translate') {
-        const body = await readJson(req, maxBody); const siteId = await ensureSiteCapabilityForAI(actor, url, body, 'ai:use');
+        const body = await readJson(req, maxBody); const siteId = await ensureSiteCapabilityForAI(actor, url, body, 'ai:use', req);
         const { result, taskId } = await runGovernedAIForRequest({ req, res, actor, siteId, body, action: 'translate', inputChars: String(body.text || '').length, requestId, run: signal => ai.translate({ text: body.text, targetLanguage: body.targetLanguage, actor: actor.user.id || 'local-development-token', signal }) });
         return sendJson(res, 200, { ...result, requestId, taskId, humanReviewRequired: true });
       }
@@ -1983,8 +2066,19 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
       if (req.method === 'GET' && url.pathname === '/api/v1/plugins') {
         if (!localPool) return sendJson(res, 503, { error: 'Plugin registry requires PostgreSQL.', code: 'ERR_VIRGOSCORPIO_HUB_DATABASE_DISABLED', requestId });
         const siteId = await siteIdFor({ req, url, actor }); await requireCapability(actor, siteId, 'plugins:read');
-        const result = await localPool.query('SELECT id,name,version,api_version,status,source_type,package_sha256,image_digest,artifact_digest,sbom_reference,provenance,signature_verified,security_reviewed_at,security_reviewed_by,manifest,requested_capabilities,approved_capabilities,created_at,updated_at FROM plugin_installs WHERE site_id=$1 ORDER BY name', [siteId]);
-        return sendJson(res, 200, { plugins: result.rows, requestId });
+        const parseListParam = (name, fallback, min, max) => {
+          const raw = url.searchParams.get(name);
+          if (raw === null || raw === '') return fallback;
+          if (!/^\d{1,9}$/.test(raw)) throw fail(400, 'ERR_VIRGOSCORPIO_HUB_PLUGIN_PAGINATION_INVALID', `${name} must be an integer between ${min} and ${max}.`);
+          const value = Number(raw);
+          if (value < min || value > max) throw fail(400, 'ERR_VIRGOSCORPIO_HUB_PLUGIN_PAGINATION_INVALID', `${name} must be an integer between ${min} and ${max}.`);
+          return value;
+        };
+        const listLimit = parseListParam('limit', 100, 1, 100);
+        const listOffset = parseListParam('offset', 0, 0, 1_000_000);
+        const result = await localPool.query('SELECT id,name,version,api_version,status,source_type,package_sha256,image_digest,artifact_digest,sbom_reference,provenance,signature_verified,security_reviewed_at,security_reviewed_by,manifest,requested_capabilities,approved_capabilities,created_at,updated_at FROM plugin_installs WHERE site_id=$1 ORDER BY name,id LIMIT $2 OFFSET $3', [siteId, listLimit + 1, listOffset]);
+        const hasMore = result.rows.length > listLimit;
+        return sendJson(res, 200, { plugins: hasMore ? result.rows.slice(0, listLimit) : result.rows, limit: listLimit, offset: listOffset, hasMore, requestId });
       }
       if (req.method === 'POST' && url.pathname === '/api/v1/plugins/register') {
         const body = await readJson(req, Math.min(maxBody, 256_000)); const siteId = await siteIdFor({ req, url, body, actor }); await requireCapability(actor, siteId, 'plugins:manage');
@@ -2006,6 +2100,11 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
         if (signatureResult.valid && (!body.sbomReference || !body.sbomDigest)) throw fail(400, 'ERR_VIRGOSCORPIO_HUB_PLUGIN_SBOM_REQUIRED', 'Signed plugin registration must include a verifiable SBOM reference and SHA-256 digest.');
         const provenance = { ...(body.provenance || {}), signingKeyId: signatureResult.valid ? body.keyId : null, signatureVerification: signatureResult.valid ? 'verified' : 'not-verified', signatureReason: signatureResult.valid ? null : signatureResult.reason };
         const plugin = await withTransaction(localPool, async client => {
+          // Cumulative per-site quota: serialize concurrent registrations for the site, then
+          // refuse new plugin names once the quota is reached. Re-registration of an existing name is unaffected.
+          await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`plugin_installs:${siteId}`]);
+          const quota = await client.query('SELECT count(*)::int AS total, COALESCE(bool_or(name=$2), false) AS present FROM plugin_installs WHERE site_id=$1', [siteId, body.manifest.name]);
+          if (!quota.rows[0].present && quota.rows[0].total >= 100) throw fail(409, 'ERR_VIRGOSCORPIO_HUB_PLUGIN_QUOTA_EXCEEDED', 'This site has reached the maximum of 100 registered plugins.');
           const result = await client.query(
             `INSERT INTO plugin_installs(site_id,name,version,api_version,status,source_type,package_sha256,image_digest,artifact_digest,sbom_reference,sbom_digest,provenance,signature_verified,security_reviewed_at,security_reviewed_by,manifest,requested_capabilities,installed_by)
              VALUES($1,$2,$3,$4,'pending',$5,$6,$7,$8,$9,$10,$11::jsonb,$12,NULL,NULL,$13::jsonb,$14::jsonb,$15)
@@ -2103,6 +2202,7 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
       const status = Number.isInteger(error.statusCode) ? error.statusCode : error.code === 'ERR_VIRGOSCORPIO_HUB_INVALID_DOCUMENT' ? 422 : 500;
       const errorPath = (() => { try { return new URL(req.url, 'http://localhost').pathname; } catch { return '/other'; } })();
       setHttpStatus(requestSpan, status);
+      if (error.closeConnection) { res.shouldKeepAlive = false; res.setHeader('connection', 'close'); }
       structuredLogger.emit('error', 'virgoscorpio_hub.http.error', {
         requestId,
         method: req.method,
@@ -2170,9 +2270,9 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
       }
 
       const firewallResult = await firewall.evaluate({
-        ip: req.socket.remoteAddress || 'unknown',
+        ip: req?.socket?.remoteAddress || 'unknown',
         path: url.pathname,
-        userAgent: String(req.headers['user-agent'] || '').slice(0, 500),
+        userAgent: String(req?.headers?.['user-agent'] || '').slice(0, 500),
         siteId
       });
       if (firewallResult.action === 'deny' || firewallResult.action === 'challenge') {
