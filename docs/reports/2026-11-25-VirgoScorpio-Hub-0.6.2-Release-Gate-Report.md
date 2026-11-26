@@ -18,7 +18,7 @@ The current mainline is healthy under its hosted CI evidence, but the canonical 
 
 All seven exact-main workflow jobs passed. The Node 22/24 test and dependency checks, live PostgreSQL/Memgraph integration, migration replay, browser smoke, CodeQL, signed dependency/SBOM provenance, and evidence aggregation are green. These results establish a strong maintainer/CI baseline; they do not replace independent assessment, external-provider validation, operational recovery evidence, or release-owner approval.
 
-F1.72 / PR #253 is now merged into main. F1.73 / draft PR #304 is the current next implementation candidate: per-site retained-library quotas with 30-minute database-backed reservation leases. Local full tests pass 988/988 non-skipped tests (3 conditional skips); fresh/idempotent PostgreSQL migrations pass 20/20 twice; focused live PostgreSQL audit/quota/source-version tests pass 11/11 with zero skips. Exact-head hosted PR and push workflows both pass on 5e9235223cb4712d3f07f2e8c7b6888b06631afe; hosted PostgreSQL/Memgraph passes 199/199 with zero skips, and exact-source candidate evidence aggregation passes. This does not change mainline release readiness or the NO-GO production decision.
+F1.72 / PR #253 is merged into main. F1.73 / draft PR #304 is the current implementation candidate: per-site retained-library quotas with 30-minute database-backed reservation leases. Its final exact branch head is 6cf69140d80d8f468ac0cc027afa22d5c5086f4f; the follow-up from implementation head 5e9235223cb4712d3f07f2e8c7b6888b06631afe changes only test-fixture deduplication and generated tenant-isolation inventory, not runtime code or migration SQL. Final-head local npm run check reported 991 tests: 988 passed, 0 failed and 3 conditional Windows skips; the tenant inventory regenerated at 28 families / 80 route patterns / 22 source files / 61 test files, and git diff --check passed. Focused live PostgreSQL tests (11/11) and local fresh/idempotent migrations (20/20 twice) were run on implementation head 5e92352 before that test-only follow-up. Exact-head hosted PR workflow #45742995501 and push workflow #45742988259 both completed successfully: Node.js 22/24 each passed 991/991 Hub and 94/94 EnginEx tests with zero skips; PostgreSQL/Memgraph passed 199/199 with zero skips; 20/20 fresh/idempotent migrations, browser/accessibility, CodeQL and candidate evidence consolidation passed. The candidate CI artifact reports ciStatus PASS; PR-context SBOM attestation is skipped by design and signed mainline provenance remains post-merge. These results do not change mainline release readiness or the NO-GO production decision.
 
 **No release tag, GitHub Release, package publication, SemVer increment, production deployment, or promotion is authorized.** Keep package version 0.6.2 unchanged and unreleased.
 
@@ -94,7 +94,7 @@ F1.72 is no longer an active PR candidate. It is part of main SHA bc80a3389fd6d6
 
 **PR:** [#304](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/304) — draft, not merged; awaiting maintainer review
 **Branch:** security/f1-73-library-storage-quota-variant-2026-11-25
-**Exact head:** 5e9235223cb4712d3f07f2e8c7b6888b06631afe
+**Exact branch head:** 6cf69140d80d8f468ac0cc027afa22d5c5086f4f
 **Base:** main at bc80a3389fd6d61ef951dd15b019a5d235539d42
 
 The candidate implements:
@@ -110,21 +110,21 @@ Local validation in the isolated feature worktree:
 
 | Check | Result |
 |---|---|
-| NODE_OPTIONS=--max-old-space-size=4096 npm run check | **991 tests, 988 passed, 0 failed, 3 conditional skips** (Node.js 26.12.1, Windows host) |
-| Fresh migrations | **20/20 applied**, then **20/20 idempotent skips**; disposable PostgreSQL database dropped |
-| Focused live PostgreSQL | **11/11 passed, zero failures/skips**: audit rollback/retry, concurrent quota allocation, slow derivative vs. source replacement, same-asset concurrent replacement with retained derivative, history/derivative accounting, metadata-only carry-forward and source-version enforcement |
-| npm run security:tenant-inventory | PASS; 28 families / 80 route patterns / 22 source files / 61 test files |
+| npm run check (final branch head) | **991 tests, 988 passed, 0 failed, 3 conditional Windows skips** (Node.js 26.12.1); artifact check passed (241 required paths / 296 JavaScript files syntax-checked) |
+| Fresh migrations | **20/20 applied**, then **20/20 idempotent skips** on implementation head `5e92352`; final follow-up did not change migration SQL, and final-head hosted integration revalidated all 20 twice |
+| Focused live PostgreSQL | **11/11 passed, zero failures/skips** on implementation head `5e92352` before the test-only follow-up: audit rollback/retry, concurrent quota allocation, slow derivative/source replacement race, retained-derivative replacement race, history/derivative accounting and source-version enforcement |
+| npm run security:tenant-inventory (final branch head) | PASS; 28 families / 80 route patterns / 22 source files / 61 test files |
 | git diff --check | PASS |
 
-Hosted exact-head validation on 5e9235223cb4712d3f07f2e8c7b6888b06631afe:
+Hosted exact-head validation on 6cf69140d80d8f468ac0cc027afa22d5c5086f4f:
 
-- PR workflow [#45726544069](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45726544069) **completed successfully**. Node.js 22/24, live PostgreSQL/Memgraph, browser/accessibility, CodeQL and candidate evidence consolidation all passed. The PR-context lockfile/SBOM attestation job was skipped by design.
-- Push workflow [#45726537305](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45726537305) **completed successfully**, with all producer jobs and candidate evidence consolidation passing. Mainline signed provenance remains a post-merge check.
-- Hosted Node.js 22 and 24 each passed **991/991 tests with zero skips**; both npm audit scopes reported **0 vulnerabilities**; the syntax/artifact checker covered 241 required paths and 296 JavaScript files.
-- Hosted PostgreSQL/Memgraph integration passed **199/199 tests, zero failures/skips**. Fresh migration pass applied **20/20**, idempotent second pass skipped **20/20**, and disposable database cleanup passed. Collaboration Playwright passed 4/4; browser/accessibility smoke and CodeQL passed.
-- The exact-source candidate canonical artifact reports ciStatus PASS. It independently retains service-less diagnostics as PARTIAL (1 pass / 53 skips per runtime) and production certification as BLOCKED pending independent evidence.
+- PR workflow [#45742995501](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45742995501) **completed successfully**. Node.js 22/24, live PostgreSQL/Memgraph, browser/accessibility, CodeQL and candidate evidence consolidation all passed. The PR-context dependency/SBOM attestation job was skipped by design; the workflow's final evidence aggregator completed successfully.
+- Push workflow [#45742988259](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45742988259) **completed successfully**, with all producer jobs and candidate evidence consolidation passing. Branch-push dependency/SBOM attestation was skipped; signed mainline provenance remains a post-merge check.
+- Hosted Node.js 22.23.4 and 24.22.1 each passed **991/991 Hub tests and 94/94 EnginEx tests, zero skips**; both npm audit scopes reported **0 vulnerabilities**; the artifact/syntax checker passed.
+- Hosted PostgreSQL/Memgraph integration passed **199/199 tests, zero failures/skips**. Fresh migration pass applied **20/20**, idempotent second pass skipped **20/20**, and the disposable database was dropped. Memgraph outage/recovery and canonical graph rebuild passed; collaboration Playwright passed 4/4; browser/accessibility smoke and CodeQL passed.
+- Candidate readiness CI artifact [#15081384223](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45742995501/artifacts/15081384223) reports `ciStatus: PASS` and is bound to the exact PR run/head with checksum-verified producer manifests. Service-less diagnostics remain PARTIAL (1 pass / 53 skips per runtime); production certification remains separately BLOCKED.
 
-**Gate interpretation:** F1.73 has passed focused local and hosted CI on the exact PR head. It remains an unmerged draft pending maintainer review. Candidate CI does not constitute independent tenant/security approval or alter the canonical main release decision.
+**Gate interpretation:** F1.73 has passed exact-head local checks and hosted PR/push CI on `6cf69140d80d8f468ac0cc027afa22d5c5086f4f`. It remains an unmerged draft pending human maintainer review. Candidate CI does not constitute independent tenant/security approval or alter the canonical main release decision.
 ## Current open implementation/security pull-request inventory
 
 GitHub reported ten open implementation/security pull requests at the time of this review. The inventory is a triage queue, not a recommendation to merge bot proposals in bulk. A subsequent documentation-only draft PR #305 carries this report and the aligned status-document refresh; it is intentionally excluded from this implementation/security triage inventory.
