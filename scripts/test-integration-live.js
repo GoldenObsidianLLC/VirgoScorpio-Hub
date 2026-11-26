@@ -36,6 +36,7 @@ function run(label, args, env, evidenceFile) {
     cwd: root,
     env,
     encoding: 'utf8',
+    // Keep a bounded subprocess guard; the integration tests must release transactions during storage I/O.
     timeout: 240_000,
     maxBuffer: 32 * 1024 * 1024,
     windowsHide: true

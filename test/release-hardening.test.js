@@ -19,6 +19,9 @@ function poolForInsert(capture = {}) {
       return {
         async query(sql, args) {
           capture.calls ||= []; capture.calls.push({ sql, args });
+          if (/INSERT INTO library_storage_reservations/.test(sql)) return { rows: [{ id: args[0] }], rowCount: 1 };
+          if (/DELETE FROM library_storage_reservations/.test(sql)) return { rows: [{ id: args[0] }], rowCount: 1 };
+          if (sql.includes('COALESCE(SUM(size),0)::text AS bytes')) return { rows: [{ bytes: '0', objects: '0' }] };
           if (/INSERT INTO library_assets/.test(sql)) return { rows: [{ id: args[0], site_id: args[1], storage_key: args[6], is_public: args[13], status: args[16], malware_scan_status: args[17], malware_scan_engine: args[18], metadata: JSON.parse(args[14]) }] };
           return { rows: [], rowCount: 1 };
         },
@@ -93,6 +96,9 @@ test('library upload persists its audit callback on the store transaction before
       client = {
         async query(sql, args) {
           calls.push({ sql, args });
+          if (/INSERT INTO library_storage_reservations/.test(sql)) return { rows: [{ id: args[0] }], rowCount: 1 };
+          if (/DELETE FROM library_storage_reservations/.test(sql)) return { rows: [{ id: args[0] }], rowCount: 1 };
+          if (sql.includes('COALESCE(SUM(size),0)::text AS bytes')) return { rows: [{ bytes: '0', objects: '0' }] };
           if (/INSERT INTO library_assets/.test(sql)) {
             return { rows: [{
               id: args[0], site_id: args[1], asset_kind: args[2], storage_key: args[6],
@@ -120,10 +126,10 @@ test('library upload persists its audit callback on the store transaction before
 
   assert.equal(callbackResult, asset);
   const auditIndex = calls.findIndex(call => /INSERT INTO audit_events/.test(call.sql));
-  const commitIndex = calls.findIndex(call => call.sql === 'COMMIT');
+  const commitIndex = calls.findLastIndex(call => call.sql === 'COMMIT');
   assert.ok(auditIndex >= 0);
-  assert.ok(commitIndex > auditIndex, 'the audit insert must precede COMMIT');
-  assert.equal(calls.filter(call => call.sql === 'COMMIT').length, 1);
+  assert.ok(commitIndex > auditIndex, 'the audit insert must precede the asset transaction COMMIT');
+  assert.equal(calls.filter(call => call.sql === 'COMMIT').length, 2, 'reservation and asset finalization are separate short transactions');
   assert.equal(calls.some(call => call.sql === 'ROLLBACK'), false);
   assert.equal(fs.existsSync(path.join(root, asset.storage_key)), true);
 });
@@ -138,6 +144,11 @@ test('library upload rolls back and removes its object when the in-transaction a
       return {
         async query(sql, args) {
           calls.push({ sql, args });
+          if (/INSERT INTO library_storage_reservations/.test(sql)) return { rows: [{ id: args[0] }], rowCount: 1 };
+          if (/DELETE FROM library_storage_reservations/.test(sql)) return { rows: [{ id: args[0] }], rowCount: 1 };
+          if (/pg_advisory_xact_lock/.test(sql)) return { rows: [] };
+          if (sql.includes('COALESCE(SUM(size),0)::text AS bytes')) return { rows: [{ bytes: '0', objects: '0' }] };
+          if (sql.includes('DELETE FROM media_variants WHERE asset_id=$1 RETURNING storage_key')) return { rows: [] };
           if (/INSERT INTO library_assets/.test(sql)) {
             return { rows: [{ id: args[0], site_id: args[1], storage_key: args[6] }] };
           }
@@ -164,7 +175,7 @@ test('library upload rolls back and removes its object when the in-transaction a
 
   assert.ok(calls.some(call => call.sql === 'AUDIT_CALLBACK'));
   assert.ok(calls.some(call => call.sql === 'ROLLBACK'));
-  assert.equal(calls.some(call => call.sql === 'COMMIT'), false);
+  assert.equal(calls.filter(call => call.sql === 'COMMIT').length, 1, 'only the quota reservation commits; the asset/audit transaction rolls back');
   assert.deepEqual(await filesBelow(root), [], 'the newly written object must be compensated');
 });
 
@@ -196,7 +207,7 @@ test('library version replacement rolls back and removes the new object when aud
   const oldBytes = Buffer.from('original library file');
   const newBytes = Buffer.from('replacement library file');
   const oldKey = siteId + '/' + assetId + '/v1.txt';
-  const newKey = siteId + '/' + assetId + '/v2.txt';
+  const nextVersionPrefix = path.join(siteId, assetId, 'v2-');
   await fs.promises.mkdir(path.dirname(path.join(root, oldKey)), { recursive: true });
   await fs.promises.writeFile(path.join(root, oldKey), oldBytes);
   const calls = [];
@@ -207,6 +218,11 @@ test('library version replacement rolls back and removes the new object when aud
       client = {
         async query(sql, args) {
           calls.push({ sql, args });
+          if (/INSERT INTO library_storage_reservations/.test(sql)) return { rows: [{ id: args[0] }], rowCount: 1 };
+          if (/DELETE FROM library_storage_reservations/.test(sql)) return { rows: [{ id: args[0] }], rowCount: 1 };
+          if (/pg_advisory_xact_lock/.test(sql)) return { rows: [] };
+          if (sql.includes('COALESCE(SUM(size),0)::text AS bytes')) return { rows: [{ bytes: '0', objects: '0' }] };
+          if (sql.includes('DELETE FROM media_variants WHERE asset_id=$1 RETURNING storage_key')) return { rows: [] };
           if (/SELECT \* FROM library_assets/.test(sql)) {
             return { rows: [{
               id: assetId, site_id: siteId, version: 1, status: 'active',
@@ -249,9 +265,9 @@ test('library version replacement rolls back and removes the new object when aud
 
   assert.ok(calls.some(call => call.sql === 'AUDIT_CALLBACK'));
   assert.ok(calls.some(call => call.sql === 'ROLLBACK'));
-  assert.equal(calls.some(call => call.sql === 'COMMIT'), false);
+  assert.equal(calls.filter(call => call.sql === 'COMMIT').length, 1, 'only the quota reservation commits; the asset/audit transaction rolls back');
   assert.equal(fs.existsSync(path.join(root, oldKey)), true, 'the previous object must remain');
-  assert.equal(fs.existsSync(path.join(root, newKey)), false, 'the replacement object must be removed');
+  assert.deepEqual(await filesBelow(root), [path.join(siteId, assetId, 'v1.txt')], 'the failed replacement object must be removed while the old source remains');
 });
 
 test('library version replacement preserves the new object when COMMIT acknowledgement is ambiguous', async t => {
@@ -262,17 +278,23 @@ test('library version replacement preserves the new object when COMMIT acknowled
   const oldBytes = Buffer.from('original library file');
   const newBytes = Buffer.from('replacement library file');
   const oldKey = siteId + '/' + assetId + '/v1.txt';
-  const newKey = siteId + '/' + assetId + '/v2.txt';
+  const nextVersionPrefix = path.join(siteId, assetId, 'v2-');
   await fs.promises.mkdir(path.dirname(path.join(root, oldKey)), { recursive: true });
   await fs.promises.writeFile(path.join(root, oldKey), oldBytes);
   const calls = [];
   const commitError = new Error('connection dropped after PostgreSQL committed');
   let commitApplied = false;
+  let commitCount = 0;
   const pool = {
     async connect() {
       return {
         async query(sql, args) {
           calls.push({ sql, args });
+          if (/INSERT INTO library_storage_reservations/.test(sql)) return { rows: [{ id: args[0] }], rowCount: 1 };
+          if (/DELETE FROM library_storage_reservations/.test(sql)) return { rows: [{ id: args[0] }], rowCount: 1 };
+          if (/pg_advisory_xact_lock/.test(sql)) return { rows: [] };
+          if (sql.includes('COALESCE(SUM(size),0)::text AS bytes')) return { rows: [{ bytes: '0', objects: '0' }] };
+          if (sql.includes('DELETE FROM media_variants WHERE asset_id=$1 RETURNING storage_key')) return { rows: [] };
           if (/SELECT \* FROM library_assets/.test(sql)) {
             return { rows: [{
               id: assetId, site_id: siteId, version: 1, status: 'active',
@@ -291,8 +313,9 @@ test('library version replacement preserves the new object when COMMIT acknowled
             }] };
           }
           if (sql === 'COMMIT') {
-            commitApplied = true;
-            throw commitError;
+            commitCount += 1;
+            if (commitCount === 2) { commitApplied = true; throw commitError; }
+            return { rows: [] };
           }
           return { rows: [], rowCount: 1 };
         },
@@ -313,7 +336,9 @@ test('library version replacement preserves the new object when COMMIT acknowled
   assert.equal(commitApplied, true, 'the simulated database commit completed before its acknowledgement was lost');
   assert.ok(calls.some(call => call.sql === 'ROLLBACK'), 'cleanup still attempts to close the client transaction');
   assert.equal(fs.existsSync(path.join(root, oldKey)), true, 'the previous object remains available to the version history');
-  assert.equal(fs.existsSync(path.join(root, newKey)), true,
+  const retainedFiles = await filesBelow(root);
+  assert.equal(retainedFiles.length, 2, 'the old source and ambiguously committed replacement must both remain');
+  assert.ok(retainedFiles.some(key => key.startsWith(nextVersionPrefix)),
     'the replacement object must remain because the committed row may reference it');
 });
 test('library media variants validate file signatures and parent asset categories before storage', async t => {
@@ -328,6 +353,12 @@ test('library media variants validate file signatures and parent asset categorie
   const pool = {
     async query(sql, args) {
       calls.push({ sql, args });
+      if (/INSERT INTO library_storage_reservations/.test(sql)) return { rows: [{ id: args[0] }], rowCount: 1 };
+      if (/DELETE FROM library_storage_reservations/.test(sql)) return { rows: [{ id: args[0] }], rowCount: 1 };
+      if (/pg_advisory_xact_lock/.test(sql)) return { rows: [] };
+      if (sql.includes('COALESCE(SUM(size),0)::text AS bytes')) return { rows: [{ bytes: '0', objects: '0' }] };
+      if (sql.includes('DELETE FROM media_variants WHERE asset_id=$1 RETURNING storage_key')) return { rows: [] };
+      if (sql.includes('SELECT storage_key FROM media_variants WHERE asset_id=')) return { rows: [] };
       if (/SELECT id,asset_kind,version FROM library_assets/.test(sql)) return { rows: [{ id: 'asset-one', asset_kind: 'image', version: 1 }] };
       if (/INSERT INTO media_variants/.test(sql)) {
         insertCount += 1;

@@ -21,7 +21,7 @@ const { verifyPluginArtifactSignature, trustedKeysFromEnv, digestForArtifact } =
 const { createRemotePluginRunner } = require('../../../packages/plugins/src/remote-runner');
 const { createLocalMediaStore } = require('../../../packages/media/src/local-store');
 const { createS3MediaStore } = require('../../../packages/media/src/s3-store');
-const { createLibraryStore } = require('../../../packages/library/src/file-store');
+const { createLibraryStore, DEFAULT_MAX_SITE_BYTES, DEFAULT_MAX_SITE_OBJECTS } = require('../../../packages/library/src/file-store');
 const { createClamDScanScanner } = require('../../../packages/security/src/malware-scanner');
 const { createCloudStorageAdapterFromEnv } = require('../../../packages/cloud/src/storage-adapters');
 const { createFirewall } = require('../../../packages/security/src/firewall');
@@ -242,9 +242,11 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
   const mediaStore = injectedMediaStore || (localPool ? (env.MEDIA_DRIVER === 's3' ? createS3MediaStore({ pool: localPool, env }) : createLocalMediaStore({ pool: localPool, root: env.MEDIA_ROOT || path.resolve(process.cwd(), 'var', 'media') })) : null);
   const maxLibraryFileBytes = boundedInt(env.VIRGOSCORPIO_HUB_LIBRARY_MAX_FILE_BYTES, 50 * 1024 * 1024, 1024, 50 * 1024 * 1024, 'VIRGOSCORPIO_HUB_LIBRARY_MAX_FILE_BYTES');
   const maxLibraryBody = boundedInt(env.VIRGOSCORPIO_HUB_LIBRARY_MAX_BODY_BYTES, MAX_LIBRARY_BODY_DEFAULT, 16 * 1024 * 1024, 80 * 1024 * 1024, 'VIRGOSCORPIO_HUB_LIBRARY_MAX_BODY_BYTES');
+  const maxLibrarySiteBytes = boundedInt(env.VIRGOSCORPIO_HUB_LIBRARY_MAX_SITE_BYTES, DEFAULT_MAX_SITE_BYTES, 1024 * 1024, Number.MAX_SAFE_INTEGER, 'VIRGOSCORPIO_HUB_LIBRARY_MAX_SITE_BYTES');
+  const maxLibrarySiteObjects = boundedInt(env.VIRGOSCORPIO_HUB_LIBRARY_MAX_SITE_OBJECTS, DEFAULT_MAX_SITE_OBJECTS, 1, 10_000_000, 'VIRGOSCORPIO_HUB_LIBRARY_MAX_SITE_OBJECTS');
   const libraryStorageAdapter = createCloudStorageAdapterFromEnv({ env });
   const malwareScanner = String(env.LIBRARY_MALWARE_SCANNER || '').toLowerCase() === 'clamdscan' ? createClamDScanScanner({ executable: env.CLAMDSCAN_PATH || 'clamdscan', timeoutMs: Number(env.LIBRARY_MALWARE_SCAN_TIMEOUT_MS || 20000), maxBytes: maxLibraryFileBytes }) : null;
-  const libraryStore = localPool ? createLibraryStore({ pool: localPool, root: env.LIBRARY_ROOT || path.resolve(process.cwd(), 'var', 'library'), maxFileBytes: maxLibraryFileBytes, storageAdapter: libraryStorageAdapter, malwareScanner, requireMalwareScan: env.NODE_ENV === 'production' }) : null;
+  const libraryStore = localPool ? createLibraryStore({ pool: localPool, root: env.LIBRARY_ROOT || path.resolve(process.cwd(), 'var', 'library'), maxFileBytes: maxLibraryFileBytes, maxSiteBytes: maxLibrarySiteBytes, maxSiteObjects: maxLibrarySiteObjects, storageAdapter: libraryStorageAdapter, malwareScanner, requireMalwareScan: env.NODE_ENV === 'production' }) : null;
   const firewall = createFirewall({ pool: localPool, env, cacheTtlMs: boundedInt(env.VIRGOSCORPIO_HUB_FIREWALL_CACHE_MS, 5000, 500, 60_000, 'VIRGOSCORPIO_HUB_FIREWALL_CACHE_MS') });
   const sandboxRunner = pluginRunner || createRemotePluginRunner({
     url: env.VIRGOSCORPIO_HUB_PLUGIN_RUNNER_URL, token: env.VIRGOSCORPIO_HUB_PLUGIN_RUNNER_TOKEN,

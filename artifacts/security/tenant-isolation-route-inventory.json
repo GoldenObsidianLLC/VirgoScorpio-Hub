@@ -8,7 +8,7 @@
   "generatedBy": "scripts/generate-tenant-isolation-route-inventory.js",
   "sourceTree": {
     "fileCount": 22,
-    "sha256": "ff1489f050a79554ac4dbfa1e2ee9970909118350773f1ad7cc1452123db22a6",
+    "sha256": "4c4784e6cd811faf105599cdcd5978a8f43d5045c4a0ea6afadd01cd38495205",
     "files": [
       "apps/api/src/ai-task-routes.js",
       "apps/api/src/auth-routes.js",
@@ -36,7 +36,7 @@
   },
   "testTree": {
     "fileCount": 61,
-    "sha256": "ccdea3b86d064f3623cbee2248ff99effd9e5de51cdf85fa0a72797beba2df57",
+    "sha256": "77b851d5145746e6fd0060cbf467fefd0f3e868c7eacb804684b8375120c8c4c",
     "files": [
       "test/ai-queue-worker.test.js",
       "test/ai-task-queue.test.js",
@@ -120,13 +120,13 @@
             {
               "anchor": "async function authenticate(req)",
               "lines": [
-                360
+                362
               ]
             },
             {
               "anchor": "if (env.NODE_ENV !== 'production' && devToken",
               "lines": [
-                387
+                389
               ]
             }
           ]
@@ -148,13 +148,13 @@
             {
               "anchor": "async function siteIdFor(",
               "lines": [
-                392
+                394
               ]
             },
             {
               "anchor": "const selectorEntries = [",
               "lines": [
-                397
+                399
               ]
             }
           ]
@@ -174,13 +174,13 @@
             {
               "anchor": "async function requireCapability(",
               "lines": [
-                426
+                428
               ]
             },
             {
               "anchor": "async function requireRealtimeCapability(",
               "lines": [
-                431
+                433
               ]
             }
           ]
@@ -200,18 +200,18 @@
             {
               "anchor": "authorizeCollaborationDocument",
               "lines": [
-                351,
-                439
+                353,
+                441
               ]
             },
             {
               "anchor": "canEditContent",
               "lines": [
-                450,
-                1797,
-                1825,
-                1904,
-                1936
+                452,
+                1799,
+                1827,
+                1906,
+                1938
               ]
             }
           ]
@@ -255,19 +255,19 @@
             {
               "anchor": "url.pathname === '/health'",
               "lines": [
-                767
+                769
               ]
             },
             {
               "anchor": "url.pathname === '/ready'",
               "lines": [
-                803
+                805
               ]
             },
             {
               "anchor": "url.pathname === '/metrics'",
               "lines": [
-                760
+                762
               ]
             }
           ]
@@ -379,8 +379,8 @@
             {
               "anchor": "url.pathname === '/api/v1/sites'",
               "lines": [
-                1358,
-                1362
+                1360,
+                1364
               ]
             }
           ]
@@ -460,7 +460,7 @@
             {
               "anchor": "const siteMembershipHandled = await handleSiteMembershipRoute({",
               "lines": [
-                1966
+                1968
               ]
             }
           ]
@@ -526,55 +526,55 @@
             {
               "anchor": "const designSystemMatch",
               "lines": [
-                1369
+                1371
               ]
             },
             {
               "anchor": "const reusableCollectionMatch",
               "lines": [
-                1395
+                1397
               ]
             },
             {
               "anchor": "const auditMutation = async (action, component, queryable) =>",
               "lines": [
-                1400
+                1402
               ]
             },
             {
               "anchor": "const templateCollectionMatch",
               "lines": [
-                1449
+                1451
               ]
             },
             {
               "anchor": "const termsCollectionMatch",
               "lines": [
-                1476
+                1478
               ]
             },
             {
               "anchor": "const relationshipsCollectionMatch",
               "lines": [
-                1541
+                1543
               ]
             },
             {
               "anchor": "const menuCollectionMatch",
               "lines": [
-                1599
+                1601
               ]
             },
             {
               "anchor": "const aiPolicyMatch",
               "lines": [
-                1675
+                1677
               ]
             },
             {
               "anchor": "async function reconcileRouteSiteContext(routeSiteId, body = {})",
               "lines": [
-                1265
+                1267
               ]
             }
           ]
@@ -749,32 +749,32 @@
             {
               "anchor": "const pageIdMatch",
               "lines": [
-                1876
+                1878
               ]
             },
             {
               "anchor": "const revisionsMatch",
               "lines": [
-                1890
+                1892
               ]
             },
             {
               "anchor": "const restoreMatch",
               "lines": [
-                1900
+                1902
               ]
             },
             {
               "anchor": "const workflowMatch",
               "lines": [
-                1919
+                1921
               ]
             },
             {
               "anchor": "url.pathname === '/api/v1/pages/drafts'",
               "lines": [
-                1787,
-                1792
+                1789,
+                1794
               ]
             }
           ]
@@ -842,14 +842,14 @@
             {
               "anchor": "const collaborationMatch",
               "lines": [
-                1810
+                1812
               ]
             },
             {
               "anchor": "authorizeCollaborationDocument",
               "lines": [
-                351,
-                439
+                353,
+                441
               ]
             }
           ]
@@ -900,13 +900,13 @@
             {
               "anchor": "async function ensureSiteCapabilityForAI(",
               "lines": [
-                462
+                464
               ]
             },
             {
               "anchor": "url.pathname === '/api/v1/ai/page-draft'",
               "lines": [
-                1711
+                1713
               ]
             }
           ]
@@ -968,13 +968,13 @@
             {
               "anchor": "url.pathname === '/api/v1/media'",
               "lines": [
-                1760
+                1762
               ]
             },
             {
               "anchor": "url.pathname === '/api/v1/media/uploads'",
               "lines": [
-                1765
+                1767
               ]
             }
           ]
@@ -1058,13 +1058,13 @@
             {
               "anchor": "async createVariant(",
               "lines": [
-                254
+                307
               ]
             },
             {
               "anchor": "async replaceVersion(",
               "lines": [
-                185
+                239
               ]
             }
           ]
@@ -1122,31 +1122,31 @@
             {
               "anchor": "const publicSearchMatch",
               "lines": [
-                875
+                877
               ]
             },
             {
               "anchor": "const publicProductsMatch",
               "lines": [
-                900
+                902
               ]
             },
             {
               "anchor": "const publicPlansMatch",
               "lines": [
-                908
+                910
               ]
             },
             {
               "anchor": "const publicProductPath",
               "lines": [
-                1236
+                1238
               ]
             },
             {
               "anchor": "const publicPlansPath",
               "lines": [
-                1251
+                1253
               ]
             }
           ]
@@ -1194,19 +1194,19 @@
             {
               "anchor": "const mediaPublicMatch",
               "lines": [
-                867
+                869
               ]
             },
             {
               "anchor": "const libraryVariantMatch",
               "lines": [
-                883
+                885
               ]
             },
             {
               "anchor": "const libraryPublicMatch",
               "lines": [
-                891
+                893
               ]
             }
           ]
@@ -1217,13 +1217,13 @@
             {
               "anchor": "async readPublicVariant(",
               "lines": [
-                240
+                293
               ]
             },
             {
               "anchor": "async readPublic(id)",
               "lines": [
-                150
+                204
               ]
             }
           ]
@@ -1377,7 +1377,7 @@
             {
               "anchor": "url.pathname === '/api/v1/billing/stripe/webhook'",
               "lines": [
-                915
+                917
               ]
             }
           ]
@@ -1583,19 +1583,19 @@
             {
               "anchor": "url.pathname === '/api/v1/plugins'",
               "lines": [
-                1983
+                1985
               ]
             },
             {
               "anchor": "url.pathname === '/api/v1/plugins/register'",
               "lines": [
-                1989
+                1991
               ]
             },
             {
               "anchor": "const pluginActionMatch",
               "lines": [
-                2026
+                2028
               ]
             }
           ]
@@ -1802,14 +1802,14 @@
             {
               "anchor": "const menuCollectionMatch",
               "lines": [
-                1599
+                1601
               ]
             },
             {
               "anchor": "withIdentityAuditTransaction(",
               "lines": [
-                1606,
-                1642
+                1608,
+                1644
               ]
             }
           ]
@@ -1862,13 +1862,13 @@
             {
               "anchor": "url.pathname === '/api/v1/billing/stripe/webhook'",
               "lines": [
-                915
+                917
               ]
             },
             {
               "anchor": "verifyStripeSignature(",
               "lines": [
-                918
+                920
               ]
             }
           ]
@@ -1922,25 +1922,25 @@
             {
               "anchor": "const presenceMatch",
               "lines": [
-                1269
+                1271
               ]
             },
             {
               "anchor": "const realtimeEventsMatch",
               "lines": [
-                1271
+                1273
               ]
             },
             {
               "anchor": "upgradePath = url.pathname",
               "lines": [
-                2158
+                2160
               ]
             },
             {
               "anchor": "async function reconcileRouteSiteContext(routeSiteId, body = {})",
               "lines": [
-                1265
+                1267
               ]
             }
           ]
