@@ -13,7 +13,7 @@ const { randomUUID } = require('node:crypto');
 // 3. An attacker could register many large plugins and exhaust resources
 //
 // Mitigations:
-// 1. GET /api/v1/plugins now supports limit/offset pagination (default limit: 50, max: 100)
+// 1. GET /api/v1/plugins now supports limit/offset pagination (default limit: 100, max: 100)
 // 2. POST /api/v1/plugins/register enforces a 100-plugin per-site quota
 // 3. Re-registration of existing plugin names doesn't count against quota
 
@@ -124,7 +124,7 @@ test(
     assert.ok('limit' in listData, 'Response should contain limit');
     assert.ok('offset' in listData, 'Response should contain offset');
     assert.ok('hasMore' in listData, 'Response should contain hasMore flag');
-    assert.equal(listData.limit, 50, 'Default limit should be 50');
+    assert.equal(listData.limit, 100, 'Default limit should preserve the 100-plugin site quota.');
     assert.equal(listData.offset, 0, 'Default offset should be 0');
 
     // Test 2: Verify custom pagination parameters work

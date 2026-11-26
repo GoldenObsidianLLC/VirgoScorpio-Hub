@@ -2053,7 +2053,7 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
           if (value < min || value > max) throw fail(400, 'ERR_VIRGOSCORPIO_HUB_PLUGIN_PAGINATION_INVALID', `${name} must be an integer between ${min} and ${max}.`);
           return value;
         };
-        const listLimit = parseListParam('limit', 50, 1, 100);
+        const listLimit = parseListParam('limit', 100, 1, 100);
         const listOffset = parseListParam('offset', 0, 0, 1_000_000);
         const result = await localPool.query('SELECT id,name,version,api_version,status,source_type,package_sha256,image_digest,artifact_digest,sbom_reference,provenance,signature_verified,security_reviewed_at,security_reviewed_by,manifest,requested_capabilities,approved_capabilities,created_at,updated_at FROM plugin_installs WHERE site_id=$1 ORDER BY name,id LIMIT $2 OFFSET $3', [siteId, listLimit + 1, listOffset]);
         const hasMore = result.rows.length > listLimit;
