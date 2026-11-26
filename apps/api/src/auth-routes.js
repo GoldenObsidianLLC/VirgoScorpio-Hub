@@ -178,6 +178,15 @@ function createAuthRouteHandlers(dependencies = {}) {
       }
       if (!identity) return sendJson(res, 503, { error: 'Authentication requires PostgreSQL.', code: 'ERR_VIRGOSCORPIO_HUB_IDENTITY_DISABLED', requestId });
       const body = await readJson(req, Math.min(maxBody, MAX_AUTH_BODY_BYTES));
+      const targetEmail = typeof body?.email === 'string' ? body.email.trim().toLowerCase().slice(0, 320) : '';
+      if (targetEmail && !allowRequest('password-reset-target:' + targetEmail).allowed) {
+        // Respond identically to an accepted request so throttling does not reveal account existence.
+        return sendJson(res, 202, {
+          accepted: true,
+          message: 'If an active account matches that address, password reset instructions will be sent.',
+          requestId
+        });
+      }
       const result = await identity.requestPasswordReset({ email: body.email });
       return sendJson(res, 202, {
         ...result,

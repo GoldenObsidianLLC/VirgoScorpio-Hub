@@ -4,7 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { validatePluginManifest } = require('../packages/plugins/src/manifest');
 
-// Security test: verify that the pentest finding "Unbounded plugin manifest metadata 
+// Security test: verify that the pentest finding "Unbounded plugin manifest metadata
 // and registry output enable site-scoped resource exhaustion" is mitigated.
 //
 // The vulnerability had three components:
@@ -31,11 +31,11 @@ test('manifest validator rejects oversized widget name fields', () => {
       { name: 'valid-name', title: 'Valid Title' }
     ]
   };
-  
+
   // Valid manifest should pass
   const validResult = validatePluginManifest(validManifest);
   assert.equal(validResult.valid, true, 'Valid manifest should be accepted');
-  
+
   // Widget name exceeding 120 characters should be rejected
   const oversizedName = {
     ...validManifest,
@@ -63,7 +63,7 @@ test('manifest validator rejects oversized widget title fields', () => {
       { name: 'valid-name', title: 'Valid Title' }
     ]
   };
-  
+
   // Widget title exceeding 120 characters should be rejected
   const oversizedTitle = {
     ...validManifest,
@@ -88,28 +88,28 @@ test('manifest validator rejects empty widget name or title', () => {
     description: 'A test widget',
     capabilities: ['render:widget']
   };
-  
+
   // Empty name should be rejected
   const emptyName = {
     ...baseManifest,
     widgets: [{ name: '', title: 'Valid Title' }]
   };
   assert.equal(validatePluginManifest(emptyName).valid, false, 'Empty widget name should be rejected');
-  
+
   // Whitespace-only name should be rejected
   const whitespaceName = {
     ...baseManifest,
     widgets: [{ name: '   ', title: 'Valid Title' }]
   };
   assert.equal(validatePluginManifest(whitespaceName).valid, false, 'Whitespace-only widget name should be rejected');
-  
+
   // Empty title should be rejected
   const emptyTitle = {
     ...baseManifest,
     widgets: [{ name: 'valid-name', title: '' }]
   };
   assert.equal(validatePluginManifest(emptyTitle).valid, false, 'Empty widget title should be rejected');
-  
+
   // Whitespace-only title should be rejected
   const whitespaceTitle = {
     ...baseManifest,
@@ -128,7 +128,7 @@ test('manifest validator enforces maximum serialized JSON size', () => {
     capabilities: ['render:widget'],
     widgets: []
   };
-  
+
   // Create a manifest that serializes to just under 16,000 characters
   // Each widget with 120-char name and title adds roughly 250 chars
   const validLargeManifest = {
@@ -138,13 +138,13 @@ test('manifest validator enforces maximum serialized JSON size', () => {
       title: `Title ${i} ${'y'.repeat(100)}`
     }))
   };
-  
+
   const validLargeSize = JSON.stringify(validLargeManifest).length;
   assert.ok(validLargeSize < 16_000, `Valid large manifest should be under 16k (was ${validLargeSize})`);
-  
+
   const validLargeResult = validatePluginManifest(validLargeManifest);
   assert.equal(validLargeResult.valid, true, 'Large but valid manifest should be accepted');
-  
+
   // Create a manifest that exceeds 16,000 characters
   // Use a large description to push it over the limit
   const oversizedManifest = {
@@ -152,10 +152,10 @@ test('manifest validator enforces maximum serialized JSON size', () => {
     description: 'x'.repeat(16_500), // Definitely over the limit
     widgets: []
   };
-  
+
   const oversizedSize = JSON.stringify(oversizedManifest).length;
   assert.ok(oversizedSize > 16_000, `Oversized manifest should exceed 16k (was ${oversizedSize})`);
-  
+
   const oversizedResult = validatePluginManifest(oversizedManifest);
   assert.equal(oversizedResult.valid, false, 'Oversized manifest should be rejected');
   assert.ok(
@@ -173,7 +173,7 @@ test('manifest validator enforces optional field length limits', () => {
     description: 'A test widget',
     capabilities: ['render:widget']
   };
-  
+
   // Valid optional fields
   const validOptional = {
     ...baseManifest,
@@ -182,7 +182,7 @@ test('manifest validator enforces optional field length limits', () => {
     publisher: 'Example Corp'
   };
   assert.equal(validatePluginManifest(validOptional).valid, true, 'Valid optional fields should be accepted');
-  
+
   // Homepage exceeding 2048 characters
   const oversizedHomepage = {
     ...baseManifest,
@@ -194,7 +194,7 @@ test('manifest validator enforces optional field length limits', () => {
     homepageResult.errors.some(e => e.includes('homepage') && e.includes('2048')),
     'Error should mention homepage 2048 character limit'
   );
-  
+
   // License exceeding 200 characters
   const oversizedLicense = {
     ...baseManifest,
@@ -206,7 +206,7 @@ test('manifest validator enforces optional field length limits', () => {
     licenseResult.errors.some(e => e.includes('license') && e.includes('200')),
     'Error should mention license 200 character limit'
   );
-  
+
   // Publisher exceeding 200 characters
   const oversizedPublisher = {
     ...baseManifest,
@@ -224,7 +224,7 @@ test('manifest validator rejects manifests designed for resource exhaustion', ()
   // This test simulates the pentest attack scenario:
   // Attempting to create a manifest with maximum allowed widgets,
   // each with maximum allowed field sizes, to exhaust resources
-  
+
   const attackManifest = {
     apiVersion: 1,
     name: 'vendor.attack-widget',
@@ -240,12 +240,12 @@ test('manifest validator rejects manifests designed for resource exhaustion', ()
       title: `Title-${i}-${'y'.repeat(100)}` // 120 chars
     }))
   };
-  
+
   const attackSize = JSON.stringify(attackManifest).length;
-  
+
   // The manifest should be rejected because it exceeds 16,000 characters
   assert.ok(attackSize > 16_000, `Attack manifest should exceed 16k (was ${attackSize})`);
-  
+
   const attackResult = validatePluginManifest(attackManifest);
   assert.equal(attackResult.valid, false, 'Resource exhaustion manifest should be rejected');
   assert.ok(
@@ -274,10 +274,10 @@ test('manifest validator accepts reasonable multi-widget manifests', () => {
       { name: 'map-widget', title: 'Map Display' }
     ]
   };
-  
+
   const legitimateSize = JSON.stringify(legitimateManifest).length;
   assert.ok(legitimateSize < 16_000, `Legitimate manifest should be under 16k (was ${legitimateSize})`);
-  
+
   const legitimateResult = validatePluginManifest(legitimateManifest);
   assert.equal(legitimateResult.valid, true, 'Legitimate multi-widget manifest should be accepted');
   assert.equal(legitimateResult.errors.length, 0, 'Should have no validation errors');
@@ -292,7 +292,7 @@ test('manifest validator boundary conditions for widget count', () => {
     description: 'A test widget',
     capabilities: ['render:widget']
   };
-  
+
   // Exactly 100 widgets should be accepted (if under size limit)
   const exactly100 = {
     ...baseManifest,
@@ -303,7 +303,7 @@ test('manifest validator boundary conditions for widget count', () => {
   };
   const result100 = validatePluginManifest(exactly100);
   assert.equal(result100.valid, true, 'Exactly 100 widgets should be accepted');
-  
+
   // 101 widgets should be rejected
   const over100 = {
     ...baseManifest,
@@ -329,28 +329,28 @@ test('manifest validator enforces type safety for widget fields', () => {
     description: 'A test widget',
     capabilities: ['render:widget']
   };
-  
+
   // Widget name must be a string
   const nonStringName = {
     ...baseManifest,
     widgets: [{ name: 123, title: 'Valid Title' }]
   };
   assert.equal(validatePluginManifest(nonStringName).valid, false, 'Non-string widget name should be rejected');
-  
+
   // Widget title must be a string
   const nonStringTitle = {
     ...baseManifest,
     widgets: [{ name: 'valid-name', title: 123 }]
   };
   assert.equal(validatePluginManifest(nonStringTitle).valid, false, 'Non-string widget title should be rejected');
-  
+
   // Widget must be an object
   const nonObjectWidget = {
     ...baseManifest,
     widgets: ['not-an-object']
   };
   assert.equal(validatePluginManifest(nonObjectWidget).valid, false, 'Non-object widget should be rejected');
-  
+
   // Widget cannot be an array
   const arrayWidget = {
     ...baseManifest,

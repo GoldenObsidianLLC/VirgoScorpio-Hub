@@ -162,7 +162,7 @@ if (enabled) test(
       const pluginName = `test-plugin-${i}-${randomUUID().slice(0, 8)}`;
       const manifest = { ...validManifest, name: pluginName };
       const imageDigest = `registry.example/plugin-${i}@sha256:${'a'.repeat(64)}`;
-      
+
       const registerResponse = await fetch(base + '/api/v1/plugins/register', {
         method: 'POST',
         headers,
@@ -172,7 +172,7 @@ if (enabled) test(
           imageDigest
         })
       });
-      
+
       assert.equal(registerResponse.status, 201, `Plugin ${i} should register successfully`);
       const registerData = await registerResponse.json();
       registeredPlugins.push(registerData.plugin);
@@ -184,7 +184,7 @@ if (enabled) test(
       name: `quota-exceeded-${randomUUID().slice(0, 8)}`
     };
     const quotaExceededDigest = `registry.example/quota-exceeded@sha256:${'b'.repeat(64)}`;
-    
+
     const quotaExceededResponse = await fetch(base + '/api/v1/plugins/register', {
       method: 'POST',
       headers,
@@ -194,7 +194,7 @@ if (enabled) test(
         imageDigest: quotaExceededDigest
       })
     });
-    
+
     assert.equal(quotaExceededResponse.status, 409, '101st plugin should be rejected');
     const quotaExceededData = await quotaExceededResponse.json();
     assert.equal(quotaExceededData.code, 'ERR_VIRGOSCORPIO_HUB_PLUGIN_QUOTA_EXCEEDED');
@@ -210,7 +210,7 @@ if (enabled) test(
       version: '2.0.0' // New version
     };
     const reregisterDigest = `registry.example/reregister@sha256:${'c'.repeat(64)}`;
-    
+
     const reregisterResponse = await fetch(base + '/api/v1/plugins/register', {
       method: 'POST',
       headers,
@@ -220,7 +220,7 @@ if (enabled) test(
         imageDigest: reregisterDigest
       })
     });
-    
+
     assert.equal(reregisterResponse.status, 201, 'Re-registration should succeed');
     const reregisterData = await reregisterResponse.json();
     assert.equal(reregisterData.plugin.version, '2.0.0', 'Version should be updated');
@@ -356,13 +356,13 @@ if (enabled) test(
         capabilities: ['render:widget']
       };
       const imageDigest = `registry.example/site-a-${i}@sha256:${'a'.repeat(64)}`;
-      
+
       const response = await fetch(base + '/api/v1/plugins/register', {
         method: 'POST',
         headers: { ...authHeader, 'x-virgoscorpio-hub-site-id': siteA },
         body: JSON.stringify({ manifest, sourceType: 'oci-image', imageDigest })
       });
-      
+
       assert.equal(response.status, 201, `Site A plugin ${i} should register`);
     }
 
