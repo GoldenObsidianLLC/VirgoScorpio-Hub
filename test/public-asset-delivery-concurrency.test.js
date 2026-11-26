@@ -36,6 +36,18 @@ async function withServer(fn, envExtra = {}, serverOptions = {}) {
   }
 }
 
+async function waitForCondition(predicate, description, timeoutMs = 5_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (!predicate()) {
+    if (Date.now() >= deadline) throw new Error('Timed out waiting for ' + description + '.');
+    await new Promise(resolve => setTimeout(resolve, 10));
+  }
+}
+
+function fetchWithTimeout(url) {
+  return fetch(url, { signal: AbortSignal.timeout(10_000) });
+}
+
 test('public media delivery respects concurrency limit and returns 503 when exhausted', async () => {
   const assetId = '11111111-1111-4111-8111-111111111111';
   const largeAsset = Buffer.alloc(1024 * 1024); // 1 MiB asset
@@ -43,6 +55,7 @@ test('public media delivery respects concurrency limit and returns 503 when exha
   let activeReads = 0;
   let maxConcurrentReads = 0;
   const readPromises = [];
+  let completeReadsImmediately = false;
   
   const mediaStore = {
     async readPublic(id) {
@@ -51,64 +64,76 @@ test('public media delivery respects concurrency limit and returns 503 when exha
       activeReads++;
       maxConcurrentReads = Math.max(maxConcurrentReads, activeReads);
       
-      // Create a promise that we can control externally
-      const promise = new Promise(resolve => {
-        readPromises.push(() => {
+      // Create a promise that can be completed after the overflow responses arrive.
+      return new Promise(resolve => {
+        const complete = () => {
           activeReads--;
-          resolve({ 
-            id: assetId, 
-            mime_type: 'image/png', 
-            data: largeAsset 
-          });
-        });
+          resolve({ id: assetId, mime_type: 'image/png', data: largeAsset });
+        };
+        if (completeReadsImmediately) complete();
+        else readPromises.push(complete);
       });
-      
-      return promise;
     }
   };
 
   await withServer(async base => {
-    // Set concurrency limit to 2
-    const requests = [];
-    
-    // Start 5 concurrent requests
-    for (let i = 0; i < 5; i++) {
-      requests.push(fetch(`${base}/media/${assetId}`));
-    }
-    
-    // Give requests time to hit the server
-    await new Promise(resolve => setTimeout(resolve, 50));
-    
-    // At this point, we should have 2 requests in flight (the limit)
-    // and 3 requests that should have been rejected with 503
-    assert.equal(readPromises.length, 2, 'Only 2 requests should be reading from storage');
-    
-    // Complete the first two requests
-    readPromises[0]();
-    readPromises[1]();
-    
-    const responses = await Promise.all(requests);
-    
-    // Count successful and rejected responses
-    let successCount = 0;
+    const requests = Array.from({ length: 5 }, () =>
+      fetchWithTimeout(base + '/media/' + assetId).then(response => {
+        return response;
+      })
+    );
     let rejectedCount = 0;
-    
-    for (const res of responses) {
-      if (res.status === 200) {
-        successCount++;
-        const buffer = await res.arrayBuffer();
-        assert.equal(buffer.byteLength, largeAsset.length);
-      } else if (res.status === 503) {
-        rejectedCount++;
-        const json = await res.json();
-        assert.equal(json.code, 'ERR_VIRGOSCORPIO_HUB_PUBLIC_ASSET_BUSY');
-        assert.equal(res.headers.get('retry-after'), '1');
+    const requestErrors = [];
+    const observedRequests = requests.map((request, index) => request.then(response => {
+      if (response.status === 503) rejectedCount += 1;
+      return response;
+    }, error => {
+      requestErrors.push({ index, error });
+      return null;
+    }));
+
+    try {
+      // Wait until all overflow requests have actually received 503. A fixed
+      // sleep can release the successful reads before every request is accepted,
+      // allowing late requests to occupy slots that the test never completes.
+      await waitForCondition(
+        () => rejectedCount === 3 || requestErrors.length > 0,
+        'three public media overflow responses'
+      );
+      assert.equal(requestErrors.length, 0, requestErrors.map(entry =>
+        'request ' + entry.index + ': ' + entry.error.message
+      ).join('; '));
+      assert.equal(rejectedCount, 3, 'Exactly 3 requests should be rejected with 503');
+      assert.equal(readPromises.length, 2, 'Only 2 requests should be reading from storage');
+
+      for (const complete of readPromises.splice(0)) complete();
+      const responses = await Promise.all(observedRequests);
+
+      let successCount = 0;
+      let rejectedCountFromResponses = 0;
+      for (const res of responses) {
+        if (res.status === 200) {
+          successCount++;
+          const buffer = await res.arrayBuffer();
+          assert.equal(buffer.byteLength, largeAsset.length);
+        } else if (res.status === 503) {
+          rejectedCountFromResponses++;
+          const json = await res.json();
+          assert.equal(json.code, 'ERR_VIRGOSCORPIO_HUB_PUBLIC_ASSET_BUSY');
+          assert.equal(res.headers.get('retry-after'), '1');
+        }
       }
+
+      assert.equal(successCount, 2, 'Exactly 2 requests should succeed');
+      assert.equal(rejectedCountFromResponses, 3, 'Exactly 3 requests should be rejected with 503');
+      assert.equal(maxConcurrentReads, 2, 'Maximum concurrent reads should not exceed limit');
+    } finally {
+      // Ensure a failed assertion cannot leave the test server waiting on a
+      // deferred read; any request arriving during teardown completes at once.
+      completeReadsImmediately = true;
+      for (const complete of readPromises.splice(0)) complete();
+      await Promise.allSettled(observedRequests);
     }
-    
-    assert.equal(successCount, 2, 'Exactly 2 requests should succeed');
-    assert.equal(rejectedCount, 3, 'Exactly 3 requests should be rejected with 503');
-    assert.equal(maxConcurrentReads, 2, 'Maximum concurrent reads should not exceed limit');
   }, { PUBLIC_ASSET_MAX_CONCURRENCY: '2' }, { mediaStore });
 });
 

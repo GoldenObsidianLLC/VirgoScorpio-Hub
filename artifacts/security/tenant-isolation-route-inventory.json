@@ -8,7 +8,7 @@
   "generatedBy": "scripts/generate-tenant-isolation-route-inventory.js",
   "sourceTree": {
     "fileCount": 22,
-    "sha256": "583cb55d1f8834208df41e1d09ae116de4766574a837d144bf37d439b203cd3d",
+    "sha256": "9aa165f8e9848fd09a591f21e86b2064572c5a829a14e0c459d70ff6364b72c5",
     "files": [
       "apps/api/src/ai-task-routes.js",
       "apps/api/src/auth-routes.js",
@@ -36,7 +36,7 @@
   },
   "testTree": {
     "fileCount": 61,
-    "sha256": "a5b05d92430ed7f637337a58df100573aae425eaf890baf5b13ff84035e9d0a5",
+    "sha256": "82c2eb634bccdb2f2b2a6d97d0a04add2dd56d1c81673b9a24cee18c3b848a6b",
     "files": [
       "test/ai-queue-worker.test.js",
       "test/ai-task-queue.test.js",
@@ -1279,25 +1279,25 @@
             {
               "anchor": "const products=",
               "lines": [
-                31
+                43
               ]
             },
             {
               "anchor": "const orders=",
               "lines": [
-                44
+                56
               ]
             },
             {
               "anchor": "const orderCheckout =",
               "lines": [
-                272
+                284
               ]
             },
             {
               "anchor": "const orderRefunds",
               "lines": [
-                51
+                63
               ]
             }
           ]
@@ -1354,19 +1354,19 @@
             {
               "anchor": "const planCollection=",
               "lines": [
-                455
+                501
               ]
             },
             {
               "anchor": "const membershipCheckout=",
               "lines": [
-                462
+                508
               ]
             },
             {
               "anchor": "const memberships=",
               "lines": [
-                464
+                510
               ]
             }
           ]
