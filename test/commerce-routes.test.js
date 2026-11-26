@@ -229,7 +229,7 @@ test('checkout enforces per-customer pending checkout limit to prevent inventory
     events
   });
   ctx.actor = { user: { id: customerId, email } };
-  ctx.env = { COMMERCE_MAX_PENDING_CHECKOUTS: 3 };
+  ctx.env = { COMMERCE_MAX_PENDING_CHECKOUTS: 101 };
 
   await assert.rejects(
     handleCommerceRoute(ctx),
@@ -316,7 +316,7 @@ test('checkout enforces per-product held units limit to prevent single-product e
   ctx.actor = { user: { id: customerId, email } };
   ctx.env = { 
     COMMERCE_MAX_PENDING_CHECKOUTS: 3,
-    COMMERCE_MAX_HELD_UNITS_PER_PRODUCT: 25
+    COMMERCE_MAX_HELD_UNITS_PER_PRODUCT: 1_001
   };
 
   await assert.rejects(
@@ -592,7 +592,7 @@ test('checkout limits apply per-customer using customer_id for authenticated use
           
           // Verify customer_id is used in the query
           if (sql.includes('SELECT count(DISTINCT o.id)::int AS count') && sql.includes('pending_payment')) {
-            queryUsedCustomerId = values.includes(customerId);
+            queryUsedCustomerId = values[1] === customerId && values[2] === email.toLowerCase() && sql.includes('o.customer_id::text=$2::text');
             return { rows: [{ count: 3 }] };
           }
           
@@ -664,7 +664,7 @@ test('checkout limits apply per-email for unauthenticated/guest checkouts', asyn
           
           // Verify email is used in the query when customer_id is null
           if (sql.includes('SELECT count(DISTINCT o.id)::int AS count') && sql.includes('pending_payment')) {
-            queryUsedEmail = values.includes(email.toLowerCase());
+            queryUsedEmail = values[1] === null && values[2] === email.toLowerCase() && sql.includes('lower(o.email)=$3::text');
             return { rows: [{ count: 3 }] };
           }
           

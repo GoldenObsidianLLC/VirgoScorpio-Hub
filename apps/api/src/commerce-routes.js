@@ -10,9 +10,16 @@ function productInput(body) {
   return { slug: body.slug, name: body.name, description: body.description || '', productType: body.productType || 'simple', status: body.status || 'draft', currency: body.currency || 'USD', priceMinor: body.priceMinor, compareAtPriceMinor: body.compareAtPriceMinor ?? null, sku: body.sku || null, inventoryQuantity: body.inventoryQuantity === undefined ? null : body.inventoryQuantity, stockStatus: body.stockStatus || (body.inventoryQuantity === 0 ? 'out_of_stock' : 'in_stock'), requiresShipping: body.requiresShipping === true, weightGrams: body.weightGrams ?? null, images: body.images || [], attributes: body.attributes || {}, metadata: body.metadata || {} };
 }
 
-function positiveLimit(value, fallback) {
+const MAX_PENDING_CHECKOUTS_PER_CUSTOMER = 100;
+const MAX_HELD_UNITS_PER_PRODUCT_PER_CUSTOMER = 1_000;
+
+function positiveLimit(value, fallback, maximum) {
   const parsed = Number(value);
-  return Number.isSafeInteger(parsed) && parsed >= 1 ? parsed : fallback;
+  return Number.isSafeInteger(parsed) && parsed >= 1 && parsed <= maximum ? parsed : fallback;
+}
+
+function customerOrderHolderPredicate(customerParam, emailParam) {
+  return `((${customerParam}::text IS NOT NULL AND o.customer_id::text=${customerParam}::text) OR (${customerParam}::text IS NULL AND lower(o.email)=${emailParam}::text))`;
 }
 
 function checkoutOrderResponse(row) {
@@ -370,9 +377,8 @@ async function handleCommerceRoute(ctx) {
       // customer so parallel requests cannot race past the quota.
       const customerRef = actor?.user?.id ? String(actor.user.id) : null;
       const holderEmail = email.toLowerCase();
-      const holderPredicate = '(($3::text IS NOT NULL AND o.customer_id::text=$3::text) OR ($3::text IS NULL AND lower(o.email)=$4::text))';
-      const maxPendingCheckouts = positiveLimit(env?.COMMERCE_MAX_PENDING_CHECKOUTS, 3);
-      const maxHeldUnitsPerProduct = positiveLimit(env?.COMMERCE_MAX_HELD_UNITS_PER_PRODUCT, 25);
+      const maxPendingCheckouts = positiveLimit(env?.COMMERCE_MAX_PENDING_CHECKOUTS, 3, MAX_PENDING_CHECKOUTS_PER_CUSTOMER);
+      const maxHeldUnitsPerProduct = positiveLimit(env?.COMMERCE_MAX_HELD_UNITS_PER_PRODUCT, 25, MAX_HELD_UNITS_PER_PRODUCT_PER_CUSTOMER);
       if (rows.rows.some(row => row.inventory_quantity !== null)) {
         await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`commerce-checkout:${siteId}:${customerRef || holderEmail}`]);
         const pending = await client.query(
@@ -380,9 +386,8 @@ async function handleCommerceRoute(ctx) {
              FROM commerce_orders o
              JOIN commerce_stock_reservations r ON r.order_id=o.id AND r.site_id=o.site_id
             WHERE o.site_id=$1 AND o.status='pending_payment' AND r.status='reserved' AND r.expires_at>now()
-              AND $2::text='holder'
-              AND ${holderPredicate}`,
-          [siteId, 'holder', customerRef, holderEmail]
+              AND ${customerOrderHolderPredicate('$2', '$3')}`,
+          [siteId, customerRef, holderEmail]
         );
         if (Number(pending.rows[0]?.count || 0) >= maxPendingCheckouts) {
           throw fail(429, 'ERR_VIRGOSCORPIO_HUB_CHECKOUT_PENDING_LIMIT', 'Too many unpaid checkouts hold inventory. Complete or wait for expiry of an existing checkout.');
@@ -398,7 +403,7 @@ async function handleCommerceRoute(ctx) {
                FROM commerce_stock_reservations r
                JOIN commerce_orders o ON o.id=r.order_id AND o.site_id=r.site_id
               WHERE r.site_id=$1 AND r.product_id=$2 AND r.status='reserved' AND r.expires_at>now()
-                AND o.status='pending_payment' AND ${holderPredicate}`,
+                AND o.status='pending_payment' AND ${customerOrderHolderPredicate('$3', '$4')}`,
             [siteId, product.id, customerRef, holderEmail]
           );
           if (Number(held.rows[0]?.units || 0) + line.quantity > maxHeldUnitsPerProduct) {
