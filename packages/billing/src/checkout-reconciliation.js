@@ -8,12 +8,8 @@ const { withTransaction } = require('../../db/src/transaction');
 
 const MAX_BATCH_SIZE = 1_000;
 const DEFAULT_BATCH_SIZE = 100;
+const RECONCILIATION_RETRY_DELAY_MINUTES = 15;
 const STRIPE_API_BASE = 'https://api.stripe.com/v1';
-// Checkout Sessions are created with an expiry equal to the local reservation expiry
-// and Stripe never lets a session live beyond 24 hours. A hold that has been overdue
-// for longer than this and still cannot be resolved with the provider is released.
-const MAX_UNRESOLVED_HOLD_SECONDS = 24 * 60 * 60;
-
 function validateBatchSize(batchSize) {
   if (!Number.isInteger(batchSize) || batchSize < 1 || batchSize > MAX_BATCH_SIZE) {
     const error = new TypeError(`batchSize must be an integer between 1 and ${MAX_BATCH_SIZE}.`);
@@ -61,15 +57,27 @@ function expireStripeSession(options) {
   return stripeSessionRequest({ ...options, method: 'POST', action: '/expire' });
 }
 
+// Keep unresolved reservations out of the next scheduler tick. Reuse the
+// reservation expiry as a durable retry-after timestamp across worker restarts.
+async function deferReservationReconciliation(pool, order) {
+  await pool.query(
+    `UPDATE commerce_stock_reservations
+        SET expires_at=GREATEST(expires_at, now() + ($3::integer * INTERVAL '1 minute'))
+      WHERE site_id=$1 AND order_id=$2 AND status='reserved'`,
+    [order.site_id, order.order_id, RECONCILIATION_RETRY_DELAY_MINUTES]
+  );
+}
+
 /**
  * Reconcile expired local inventory holds against Stripe's current session state.
- * A local timer is never sufficient evidence to release stock: sessions without a
- * provider ID and unpaid completed sessions (delayed payment methods) keep their
- * holds until a definitive webhook or subsequent reconciliation resolves them. Open
- * sessions past the hold period are expired at Stripe and then released. Provider
- * errors retain the hold only for a bounded period (MAX_UNRESOLVED_HOLD_SECONDS past
- * expiry), after which the order is failed and the stock released so that finite
- * inventory cannot be retained indefinitely by abandoned checkouts.
+ * A local timer is never sufficient evidence to release stock. Sessions without a
+ * provider ID, provider lookup/expiry failures, sessions that remain open after an
+ * expiry request, and unpaid completed sessions (including delayed payment methods)
+ * retain their holds until Stripe or a definitive webhook establishes the outcome.
+ * Only a provider-confirmed expired session releases inventory; a completed paid
+ * session commits the reservation. Unknown provider state is an operational exception,
+ * not evidence that the payment cannot still settle.
+ * Unresolved outcomes advance reservation expiry as a durable 15-minute retry-after.
  */
 async function reconcileExpiredStripeCheckouts(pool, {
   secretKey = process.env.STRIPE_SECRET_KEY,
@@ -86,11 +94,7 @@ async function reconcileExpiredStripeCheckouts(pool, {
   }
 
   const candidates = await pool.query(
-    `SELECT o.id AS order_id,o.site_id,o.provider_session_id,
-            (SELECT EXTRACT(EPOCH FROM (now() - min(r2.expires_at)))::bigint
-               FROM commerce_stock_reservations r2
-              WHERE r2.site_id=o.site_id AND r2.order_id=o.id
-                AND r2.status='reserved' AND r2.expires_at<=now()) AS overdue_seconds
+    `SELECT o.id AS order_id,o.site_id,o.provider_session_id
        FROM commerce_orders o
       WHERE o.provider='stripe' AND o.status='pending_payment'
         AND EXISTS (
@@ -109,44 +113,41 @@ async function reconcileExpiredStripeCheckouts(pool, {
     if (typeof order.provider_session_id !== 'string' || !order.provider_session_id) {
       // An absent ID can represent an ambiguous provider outcome. Never guess that
       // Stripe failed; retain the reservation for same-key recovery/manual review.
+      await deferReservationReconciliation(pool, order);
       summary.unlinked += 1;
       summary.held += 1;
       continue;
     }
 
-    const overdueSeconds = Number(order.overdue_seconds);
-    const holdLimitReached = Number.isFinite(overdueSeconds) && overdueSeconds >= MAX_UNRESOLVED_HOLD_SECONDS;
     const sessionOptions = { secretKey, sessionId: order.provider_session_id, fetchImpl };
 
-    let session = null;
-    let forceRelease = false;
+    let session;
     try {
       session = await getStripeSession(sessionOptions);
       if (session.status === 'open') {
-        // The hold period has elapsed, so the session must no longer be payable.
+        // Ask Stripe to close the session, but release stock only if Stripe confirms it
+        // is expired. A 2xx response that remains open is not terminal evidence.
         session = await expireStripeSession(sessionOptions);
       }
     } catch {
+      // Network errors, timeouts, rate limits, provider 5xx responses, and malformed
+      // responses all leave the provider outcome unknown. Preserve stock for recovery.
       summary.errors += 1;
-      if (!holdLimitReached) {
-        summary.held += 1;
-        continue;
-      }
-      forceRelease = true;
+      await deferReservationReconciliation(pool, order);
+      summary.held += 1;
+      continue;
     }
 
-    if (!forceRelease && session.status === 'open') {
-      // Stripe did not confirm expiry; keep the hold unless the bounded limit is reached.
-      if (!holdLimitReached) {
-        summary.held += 1;
-        continue;
-      }
-      forceRelease = true;
+    if (session.status === 'open') {
+      await deferReservationReconciliation(pool, order);
+      summary.held += 1;
+      continue;
     }
 
-    const isExpired = forceRelease || (session.status === 'expired' && session.payment_status !== 'paid');
-    const isPaid = !forceRelease && session.status === 'complete' && ['paid', 'no_payment_required'].includes(session.payment_status);
+    const isExpired = session.status === 'expired' && session.payment_status !== 'paid';
+    const isPaid = session.status === 'complete' && ['paid', 'no_payment_required'].includes(session.payment_status);
     if (!isExpired && !isPaid) {
+      await deferReservationReconciliation(pool, order);
       summary.held += 1;
       continue;
     }

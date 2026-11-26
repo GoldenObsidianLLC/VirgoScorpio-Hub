@@ -14,13 +14,17 @@ function response(session, { ok = true, status = 200, raw } = {}) {
 }
 
 function fakePool({ candidateRows = [candidate], orderRow = { ...candidate, status: 'pending_payment' }, commitFails = false } = {}) {
-  const state = { calls: [], connects: 0, commits: 0, rollbacks: 0, releases: 0, reservationsCommitted: 0 };
+  const state = { calls: [], connects: 0, commits: 0, rollbacks: 0, releases: 0, reservationsCommitted: 0, deferred: 0 };
   const pool = {
     state,
     async query(sql, values) {
       state.calls.push({ surface: 'pool', sql, values });
-      assert.match(sql, /FROM commerce_orders/);
-      return { rows: candidateRows };
+      if (/FROM commerce_orders/.test(sql)) return { rows: candidateRows };
+      if (/UPDATE commerce_stock_reservations/.test(sql)) {
+        state.deferred += 1;
+        return { rows: [], rowCount: 1 };
+      }
+      throw new Error(`Unexpected pool SQL in test double: ${sql}`);
     },
     async connect() {
       state.connects += 1;
@@ -62,6 +66,20 @@ test('reconciliation batch size is bounded', () => {
   for (const value of [0, -1, 1.5, 1_001, '10', NaN]) {
     assert.throws(() => validateBatchSize(value), error => error.code === 'ERR_VIRGOSCORPIO_HUB_CHECKOUT_RECONCILIATION_BATCH');
   }
+});
+
+test('unresolved provider outcomes extend the reservation retry window without releasing stock', async () => {
+  const pool = fakePool();
+  const fetchImpl = async () => { throw new TypeError('network error'); };
+  const result = await reconcileExpiredStripeCheckouts(pool, { secretKey: TEST_STRIPE_SECRET_KEY, fetchImpl });
+  assert.equal(result.held, 1);
+  assert.equal(pool.state.deferred, 1);
+  assert.equal(pool.state.connects, 0);
+  assert.equal(pool.state.releases, 0);
+  const retry = pool.state.calls.find(call => /UPDATE commerce_stock_reservations/.test(call.sql));
+  assert.ok(retry);
+  assert.deepEqual(retry.values, [candidate.site_id, candidate.order_id, 15]);
+  assert.match(retry.sql, /GREATEST\(expires_at, now\(\) \+ \(\$3::integer \* INTERVAL '1 minute'\)\)/);
 });
 
 test('expired Stripe session transitions pending order to failed and releases the stock exactly once', async () => {
@@ -132,38 +150,42 @@ test('open sessions past the hold period are expired at Stripe and the stock is 
   assert.equal(requests[1].url, 'https://api.stripe.com/v1/checkout/sessions/cs_test_123/expire');
 });
 
-test('unresolvable provider state releases the hold only after the bounded limit', async () => {
+test('provider errors and sessions that remain open preserve inventory after 24 hours', async () => {
   const failing = async () => { throw new TypeError('socket reset'); };
-  const young = fakePool({ candidateRows: [{ ...candidate, overdue_seconds: '3600' }] });
-  const youngResult = await reconcileExpiredStripeCheckouts(young, { secretKey: TEST_STRIPE_SECRET_KEY, fetchImpl: failing });
-  assert.equal(youngResult.held, 1);
-  assert.equal(young.state.releases, 0);
-
-  const old = fakePool({ candidateRows: [{ ...candidate, overdue_seconds: String(24 * 60 * 60) }] });
-  const oldResult = await reconcileExpiredStripeCheckouts(old, { secretKey: TEST_STRIPE_SECRET_KEY, fetchImpl: failing });
-  assert.equal(oldResult.errors, 1);
-  assert.equal(oldResult.expired, 1);
-  assert.equal(old.state.releases, 1);
+  const old = fakePool({ candidateRows: [{ ...candidate, overdue_seconds: String(25 * 60 * 60) }] });
+  const failedLookup = await reconcileExpiredStripeCheckouts(old, { secretKey: TEST_STRIPE_SECRET_KEY, fetchImpl: failing });
+  assert.equal(failedLookup.errors, 1);
+  assert.equal(failedLookup.held, 1);
+  assert.equal(old.state.connects, 0);
+  assert.equal(old.state.releases, 0);
 
   const stuckOpen = fakePool({ candidateRows: [{ ...candidate, overdue_seconds: String(25 * 60 * 60) }] });
+  const methods = [];
+  const stillOpen = async (_url, options) => {
+    methods.push(options.method);
+    return response({ id: candidate.provider_session_id, status: 'open', payment_status: 'unpaid' });
+  };
   const openResult = await reconcileExpiredStripeCheckouts(stuckOpen, {
     secretKey: TEST_STRIPE_SECRET_KEY,
-    fetchImpl: fetchSession({ id: candidate.provider_session_id, status: 'open', payment_status: 'unpaid' })
+    fetchImpl: stillOpen
   });
-  assert.equal(openResult.expired, 1);
-  assert.equal(stuckOpen.state.releases, 1);
+  assert.equal(openResult.held, 1);
+  assert.deepEqual(methods, ['GET', 'POST']);
+  assert.equal(stuckOpen.state.connects, 0);
+  assert.equal(stuckOpen.state.releases, 0);
 });
 
 test('provider transport and response errors retain inventory and are reported', async () => {
   const cases = [
     async () => { throw new TypeError('socket reset'); },
+    async () => ({ ok: false, status: 429, async text() { return 'rate limited'; } }),
     async () => ({ ok: false, status: 503, async text() { return 'temporarily unavailable'; } }),
     async () => ({ ok: true, status: 200, async text() { return '{bad json'; } }),
     async () => response({ id: 'cs_other', status: 'expired', payment_status: 'unpaid' }),
     async () => response({ id: candidate.provider_session_id, status: 'expired' })
   ];
   for (const fetchImpl of cases) {
-    const pool = fakePool();
+    const pool = fakePool({ candidateRows: [{ ...candidate, overdue_seconds: String(25 * 60 * 60) }] });
     const result = await reconcileExpiredStripeCheckouts(pool, { secretKey: TEST_STRIPE_SECRET_KEY, fetchImpl });
     assert.equal(result.errors, 1);
     assert.equal(result.held, 1);
@@ -197,33 +219,19 @@ test('reconciliation validates the database pool before querying', async () => {
 // Security Tests: Verify mitigation of indefinite inventory hold vulnerability
 // ============================================================================
 
-test('SECURITY: repeated Stripe lookup failures do not hold inventory indefinitely', async () => {
-  // Simulates the pentest scenario where provider errors left reservations held forever.
-  // The fix ensures that after MAX_UNRESOLVED_HOLD_SECONDS, the hold is force-released.
+test('SECURITY: repeated Stripe lookup failures never release inventory based on elapsed time', async () => {
   const failingFetch = async () => { throw new TypeError('network error'); };
-  
-  // First reconciliation pass: hold is young (1 hour overdue), should be retained
-  const pass1 = fakePool({ candidateRows: [{ ...candidate, overdue_seconds: '3600' }] });
-  const result1 = await reconcileExpiredStripeCheckouts(pass1, { 
-    secretKey: TEST_STRIPE_SECRET_KEY, 
+  const old = fakePool({ candidateRows: [{ ...candidate, overdue_seconds: String(48 * 60 * 60) }] });
+  const result = await reconcileExpiredStripeCheckouts(old, {
+    secretKey: TEST_STRIPE_SECRET_KEY,
     fetchImpl: failingFetch
   });
-  assert.equal(result1.errors, 1, 'First pass should report error');
-  assert.equal(result1.held, 1, 'First pass should retain hold');
-  assert.equal(result1.expired, 0, 'First pass should not expire');
-  assert.equal(pass1.state.releases, 0, 'First pass should not release stock');
-  
-  // Second reconciliation pass: hold is at limit (24 hours), should be force-released
-  const pass2 = fakePool({ candidateRows: [{ ...candidate, overdue_seconds: String(24 * 60 * 60) }] });
-  const result2 = await reconcileExpiredStripeCheckouts(pass2, { 
-    secretKey: TEST_STRIPE_SECRET_KEY, 
-    fetchImpl: failingFetch
-  });
-  assert.equal(result2.errors, 1, 'Second pass should report error');
-  assert.equal(result2.expired, 1, 'Second pass should force-expire');
-  assert.equal(result2.held, 0, 'Second pass should not retain hold');
-  assert.equal(pass2.state.releases, 1, 'Second pass should release stock');
-  assert.equal(pass2.state.commits, 1, 'Second pass should commit the release');
+  assert.equal(result.errors, 1);
+  assert.equal(result.expired, 0);
+  assert.equal(result.held, 1);
+  assert.equal(old.state.releases, 0);
+  assert.equal(old.state.commits, 0);
+  assert.equal(old.state.connects, 0);
 });
 
 test('SECURITY: nonterminal open sessions past hold period are actively expired', async () => {
@@ -255,84 +263,61 @@ test('SECURITY: nonterminal open sessions past hold period are actively expired'
   assert.match(requests[1].url, /\/expire$/, 'Second call should be to /expire endpoint');
 });
 
-test('SECURITY: stuck open sessions are force-released after bounded limit', async () => {
-  // Simulates the scenario where Stripe refuses to expire a session (API error or bug).
-  // The fix ensures that even if expiry fails, the hold is released after the limit.
-  const pool = fakePool({ candidateRows: [{ ...candidate, overdue_seconds: String(25 * 60 * 60) }] });
+test('SECURITY: an open session remains held when Stripe does not confirm expiry', async () => {
+  const pool = fakePool({ candidateRows: [{ ...candidate, overdue_seconds: String(48 * 60 * 60) }] });
   const requests = [];
   const fetchImpl = async (url, options) => {
     requests.push({ url, method: options.method });
-    // Both GET and POST return open (Stripe refuses to expire)
-    return response({ 
-      id: candidate.provider_session_id, 
-      status: 'open', 
-      payment_status: 'unpaid' 
-    });
+    return response({ id: candidate.provider_session_id, status: 'open', payment_status: 'unpaid' });
   };
-  
-  const result = await reconcileExpiredStripeCheckouts(pool, { 
-    secretKey: TEST_STRIPE_SECRET_KEY, 
-    fetchImpl 
+
+  const result = await reconcileExpiredStripeCheckouts(pool, {
+    secretKey: TEST_STRIPE_SECRET_KEY,
+    fetchImpl
   });
-  
-  assert.equal(result.expired, 1, 'Should force-expire despite open status');
-  assert.equal(result.held, 0, 'Should not retain hold');
-  assert.equal(pool.state.releases, 1, 'Stock should be released');
-  assert.equal(requests.length, 2, 'Should attempt both GET and POST');
+
+  assert.equal(result.expired, 0);
+  assert.equal(result.held, 1);
+  assert.equal(pool.state.connects, 0);
+  assert.equal(pool.state.releases, 0);
+  assert.deepEqual(requests.map(request => request.method), ['GET', 'POST']);
 });
 
-test('SECURITY: multiple abandoned checkouts cannot exhaust inventory beyond bounded period', async () => {
-  // Simulates the pentest attack scenario: attacker creates multiple abandoned checkouts.
-  // Each checkout holds inventory, but the fix ensures all are released after 24 hours.
+test('SECURITY: multiple abandoned checkouts retain inventory when provider state is unavailable', async () => {
   const abandonedCheckouts = [
     { order_id: 'order-1', site_id: 'site-1', provider_session_id: 'cs_test_1', overdue_seconds: String(25 * 60 * 60) },
-    { order_id: 'order-2', site_id: 'site-1', provider_session_id: 'cs_test_2', overdue_seconds: String(26 * 60 * 60) },
-    { order_id: 'order-3', site_id: 'site-1', provider_session_id: 'cs_test_3', overdue_seconds: String(27 * 60 * 60) }
+    { order_id: 'order-2', site_id: 'site-1', provider_session_id: 'cs_test_2', overdue_seconds: String(48 * 60 * 60) },
+    { order_id: 'order-3', site_id: 'site-1', provider_session_id: 'cs_test_3', overdue_seconds: String(72 * 60 * 60) }
   ];
-  
-  let totalReleased = 0;
+
+  let totalHeld = 0;
   for (const checkout of abandonedCheckouts) {
-    const pool = fakePool({ 
-      candidateRows: [checkout],
-      orderRow: { ...checkout, status: 'pending_payment' }
-    });
+    const pool = fakePool({ candidateRows: [checkout] });
     const failingFetch = async () => { throw new TypeError('provider unavailable'); };
-    
-    const result = await reconcileExpiredStripeCheckouts(pool, { 
-      secretKey: TEST_STRIPE_SECRET_KEY, 
+    const result = await reconcileExpiredStripeCheckouts(pool, {
+      secretKey: TEST_STRIPE_SECRET_KEY,
       fetchImpl: failingFetch
     });
-    
-    assert.equal(result.expired, 1, `Checkout ${checkout.order_id} should be expired`);
-    assert.equal(pool.state.releases, 1, `Checkout ${checkout.order_id} should release stock`);
-    totalReleased += pool.state.releases;
+    assert.equal(result.expired, 0, `Checkout ${checkout.order_id} must not be expired without provider confirmation`);
+    assert.equal(result.held, 1, `Checkout ${checkout.order_id} must retain its inventory`);
+    assert.equal(pool.state.releases, 0, `Checkout ${checkout.order_id} must not release stock`);
+    totalHeld += result.held;
   }
-  
-  assert.equal(totalReleased, 3, 'All abandoned checkouts should release their holds');
+
+  assert.equal(totalHeld, 3, 'Every unresolved checkout remains held until provider state is known');
 });
 
-test('SECURITY: unpaid complete sessions retain holds only within bounded period', async () => {
-  // Unpaid complete sessions (delayed payment methods) should retain holds,
-  // but only for a bounded period to prevent indefinite holds.
-  const youngUnpaid = fakePool({ candidateRows: [{ ...candidate, overdue_seconds: '3600' }] });
-  const youngResult = await reconcileExpiredStripeCheckouts(youngUnpaid, { 
-    secretKey: TEST_STRIPE_SECRET_KEY, 
+test('SECURITY: unpaid complete sessions retain holds until a definitive provider outcome', async () => {
+  const oldUnpaid = fakePool({ candidateRows: [{ ...candidate, overdue_seconds: String(72 * 60 * 60) }] });
+  const result = await reconcileExpiredStripeCheckouts(oldUnpaid, {
+    secretKey: TEST_STRIPE_SECRET_KEY,
     fetchImpl: fetchSession({ id: candidate.provider_session_id, status: 'complete', payment_status: 'unpaid' })
   });
-  assert.equal(youngResult.held, 1, 'Young unpaid complete should be held');
-  assert.equal(youngUnpaid.state.releases, 0, 'Young unpaid complete should not release');
-  
-  // After the bounded limit, even unpaid complete sessions should be released
-  // (This is implicit in the current implementation - unpaid complete continues to be held,
-  // but the test documents the security property that holds are bounded)
-  const oldUnpaid = fakePool({ candidateRows: [{ ...candidate, overdue_seconds: String(25 * 60 * 60) }] });
-  const oldResult = await reconcileExpiredStripeCheckouts(oldUnpaid, { 
-    secretKey: TEST_STRIPE_SECRET_KEY, 
-    fetchImpl: fetchSession({ id: candidate.provider_session_id, status: 'complete', payment_status: 'unpaid' })
-  });
-  // Note: Current implementation keeps unpaid complete held indefinitely.
-  // This test documents the behavior; if policy changes to bound these too, update assertion.
-  assert.equal(oldResult.held, 1, 'Old unpaid complete currently held (policy decision)');
+
+  assert.equal(result.held, 1, 'An unpaid completed session may still settle asynchronously');
+  assert.equal(result.expired, 0);
+  assert.equal(oldUnpaid.state.connects, 0);
+  assert.equal(oldUnpaid.state.releases, 0);
 });
 
 test('SECURITY: reconciliation processes expired holds in order preventing starvation', async () => {
