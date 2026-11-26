@@ -8,7 +8,7 @@
   "generatedBy": "scripts/generate-tenant-isolation-route-inventory.js",
   "sourceTree": {
     "fileCount": 22,
-    "sha256": "9aa165f8e9848fd09a591f21e86b2064572c5a829a14e0c459d70ff6364b72c5",
+    "sha256": "542fefb1ff03ba97e2befad37cd352eecaa2efc6eaa52aad60e21b778b39f38d",
     "files": [
       "apps/api/src/ai-task-routes.js",
       "apps/api/src/auth-routes.js",
@@ -1589,13 +1589,13 @@
             {
               "anchor": "url.pathname === '/api/v1/plugins/register'",
               "lines": [
-                2072
+                2083
               ]
             },
             {
               "anchor": "const pluginActionMatch",
               "lines": [
-                2109
+                2125
               ]
             }
           ]
@@ -1934,7 +1934,7 @@
             {
               "anchor": "upgradePath = url.pathname",
               "lines": [
-                2242
+                2258
               ]
             },
             {

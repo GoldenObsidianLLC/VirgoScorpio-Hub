@@ -2066,8 +2066,19 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
       if (req.method === 'GET' && url.pathname === '/api/v1/plugins') {
         if (!localPool) return sendJson(res, 503, { error: 'Plugin registry requires PostgreSQL.', code: 'ERR_VIRGOSCORPIO_HUB_DATABASE_DISABLED', requestId });
         const siteId = await siteIdFor({ req, url, actor }); await requireCapability(actor, siteId, 'plugins:read');
-        const result = await localPool.query('SELECT id,name,version,api_version,status,source_type,package_sha256,image_digest,artifact_digest,sbom_reference,provenance,signature_verified,security_reviewed_at,security_reviewed_by,manifest,requested_capabilities,approved_capabilities,created_at,updated_at FROM plugin_installs WHERE site_id=$1 ORDER BY name', [siteId]);
-        return sendJson(res, 200, { plugins: result.rows, requestId });
+        const parseListParam = (name, fallback, min, max) => {
+          const raw = url.searchParams.get(name);
+          if (raw === null || raw === '') return fallback;
+          if (!/^\d{1,9}$/.test(raw)) throw fail(400, 'ERR_VIRGOSCORPIO_HUB_PLUGIN_PAGINATION_INVALID', `${name} must be an integer between ${min} and ${max}.`);
+          const value = Number(raw);
+          if (value < min || value > max) throw fail(400, 'ERR_VIRGOSCORPIO_HUB_PLUGIN_PAGINATION_INVALID', `${name} must be an integer between ${min} and ${max}.`);
+          return value;
+        };
+        const listLimit = parseListParam('limit', 100, 1, 100);
+        const listOffset = parseListParam('offset', 0, 0, 1_000_000);
+        const result = await localPool.query('SELECT id,name,version,api_version,status,source_type,package_sha256,image_digest,artifact_digest,sbom_reference,provenance,signature_verified,security_reviewed_at,security_reviewed_by,manifest,requested_capabilities,approved_capabilities,created_at,updated_at FROM plugin_installs WHERE site_id=$1 ORDER BY name,id LIMIT $2 OFFSET $3', [siteId, listLimit + 1, listOffset]);
+        const hasMore = result.rows.length > listLimit;
+        return sendJson(res, 200, { plugins: hasMore ? result.rows.slice(0, listLimit) : result.rows, limit: listLimit, offset: listOffset, hasMore, requestId });
       }
       if (req.method === 'POST' && url.pathname === '/api/v1/plugins/register') {
         const body = await readJson(req, Math.min(maxBody, 256_000)); const siteId = await siteIdFor({ req, url, body, actor }); await requireCapability(actor, siteId, 'plugins:manage');
@@ -2089,6 +2100,11 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
         if (signatureResult.valid && (!body.sbomReference || !body.sbomDigest)) throw fail(400, 'ERR_VIRGOSCORPIO_HUB_PLUGIN_SBOM_REQUIRED', 'Signed plugin registration must include a verifiable SBOM reference and SHA-256 digest.');
         const provenance = { ...(body.provenance || {}), signingKeyId: signatureResult.valid ? body.keyId : null, signatureVerification: signatureResult.valid ? 'verified' : 'not-verified', signatureReason: signatureResult.valid ? null : signatureResult.reason };
         const plugin = await withTransaction(localPool, async client => {
+          // Cumulative per-site quota: serialize concurrent registrations for the site, then
+          // refuse new plugin names once the quota is reached. Re-registration of an existing name is unaffected.
+          await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`plugin_installs:${siteId}`]);
+          const quota = await client.query('SELECT count(*)::int AS total, COALESCE(bool_or(name=$2), false) AS present FROM plugin_installs WHERE site_id=$1', [siteId, body.manifest.name]);
+          if (!quota.rows[0].present && quota.rows[0].total >= 100) throw fail(409, 'ERR_VIRGOSCORPIO_HUB_PLUGIN_QUOTA_EXCEEDED', 'This site has reached the maximum of 100 registered plugins.');
           const result = await client.query(
             `INSERT INTO plugin_installs(site_id,name,version,api_version,status,source_type,package_sha256,image_digest,artifact_digest,sbom_reference,sbom_digest,provenance,signature_verified,security_reviewed_at,security_reviewed_by,manifest,requested_capabilities,installed_by)
              VALUES($1,$2,$3,$4,'pending',$5,$6,$7,$8,$9,$10,$11::jsonb,$12,NULL,NULL,$13::jsonb,$14::jsonb,$15)
