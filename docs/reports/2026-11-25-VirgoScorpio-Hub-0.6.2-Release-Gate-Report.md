@@ -131,7 +131,7 @@ GitHub reported ten open implementation/security pull requests at the time of th
 
 | PR | Area | Recommended next review |
 |---:|---|---|
-| [#304](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/304) | F1.73 retained library quotas | Complete hosted live integration, review the transaction/retention semantics, then decide whether to mark ready and merge. |
+| [#304](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/304) | F1.73 retained library quotas | Exact-head local/hosted validation passes; keep draft pending maintainer review of migration, lease lifecycle, strict retained-object accounting and ambiguous-commit behavior. |
 | [#246](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/246) | Older per-site library quota proposal | Stale base and superseded by #304; leave open until #304 passes and merges, then close as superseded without merge. |
 | [#257](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/257) | Tenant-scoped firewall policy, quotas and cache safety | Rebase/compare to current main; verify policy generation, cache invalidation and tenant isolation. |
 | [#264](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/264) | Stripe webhook unauthenticated resource consumption | Inspect signature verification, bounded parsing, request admission and retry semantics. |
@@ -148,8 +148,8 @@ Issue #277 remains an umbrella triage record; its older PR inventory must not be
 
 ## Recommended execution sequence
 
-1. Finish PR #304 hosted PostgreSQL/Memgraph and Node checks; inspect the exact test output and review threads before promoting the draft.
-2. After #304 is accepted and merged, close stale PR #246 as superseded without merge. Do not merge its old-base patch separately.
+1. Request maintainer review for PR #304 now that exact-head local and hosted validation passes. Review migration 0020, reservation expiry/cleanup, strict retained-byte/object accounting, same-site concurrency, immutable replacement keys, stale-source behavior and ambiguous COMMIT compensation. Resolve blocking feedback before promotion.
+2. Merge #304 only after maintainer approval; then close stale PR #246 as superseded without merge. Do not combine its old-base patch with the new implementation.
 3. Review #257 and the payment/media/plugin/authentication proposals individually against current main, reproducing the specific behavior and rejecting unsafe or redundant portions.
 4. Progress independent evidence issues #14, #23 and #25, then provider-specific acceptance, full browser/accessibility, load/soak/recovery and production OTLP/deployment evidence.
 5. Regenerate canonical readiness and supply-chain evidence from the exact release candidate only after the source is stable. Keep release-owner approval as a separate explicit gate.
