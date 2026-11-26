@@ -81,12 +81,52 @@ function parseBearer(req) { const header = req.headers.authorization; return typ
 function normalizeSlug(value) {
   return String(value || '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 180);
 }
-async function readRawBody(req, maxBytes) {
+// Read bounded request bytes by events so timeout/overflow errors can be returned before closing the connection.
+async function readRawBody(req, maxBytes, { timeoutMs = 0 } = {}) {
   const declared = Number(req.headers['content-length'] || 0);
-  if (declared > maxBytes) throw fail(413, 'ERR_VIRGOSCORPIO_HUB_BODY_TOO_LARGE', `Request body exceeds ${maxBytes} bytes.`);
-  const chunks = []; let size = 0;
-  for await (const chunk of req) { size += chunk.length; if (size > maxBytes) throw fail(413, 'ERR_VIRGOSCORPIO_HUB_BODY_TOO_LARGE', `Request body exceeds ${maxBytes} bytes.`); chunks.push(chunk); }
-  return Buffer.concat(chunks);
+  if (declared > maxBytes) {
+    req.pause();
+    // The response closes the connection while the oversized request may still be
+    // draining. Keep an error listener until close so the socket teardown cannot emit
+    // an unhandled IncomingMessage error after the response path has settled.
+    const ignoreRequestError = () => {};
+    req.on('error', ignoreRequestError);
+    req.once('close', () => req.off('error', ignoreRequestError));
+    const error = fail(413, 'ERR_VIRGOSCORPIO_HUB_BODY_TOO_LARGE', `Request body exceeds ${maxBytes} bytes.`);
+    error.closeConnection = true;
+    throw error;
+  }
+  return new Promise((resolve, reject) => {
+    const chunks = []; let size = 0; let settled = false; let timer = null;
+    const cleanup = ({ preserveError = false } = {}) => {
+      if (timer) clearTimeout(timer);
+      req.off('data', onData); req.off('end', onEnd); req.off('aborted', onAborted);
+      if (preserveError) req.once('close', () => req.off('error', onError));
+      else req.off('error', onError);
+    };
+    const finish = (callback, value, options) => { if (settled) return; settled = true; cleanup(options); callback(value); };
+    const onData = chunk => {
+      size += chunk.length;
+      if (size > maxBytes) {
+        req.pause();
+        const error = fail(413, 'ERR_VIRGOSCORPIO_HUB_BODY_TOO_LARGE', `Request body exceeds ${maxBytes} bytes.`);
+        error.closeConnection = true; finish(reject, error, { preserveError: true }); return;
+      }
+      chunks.push(chunk);
+    };
+    const onEnd = () => finish(resolve, Buffer.concat(chunks));
+    const onError = error => finish(reject, error, { preserveError: true });
+    const onAborted = () => {
+      const error = fail(408, 'ERR_VIRGOSCORPIO_HUB_BODY_ABORTED', 'Request body was interrupted before it was received.');
+      error.closeConnection = true; finish(reject, error, { preserveError: true });
+    };
+    req.on('data', onData); req.once('end', onEnd); req.once('error', onError); req.once('aborted', onAborted);
+    if (timeoutMs > 0) timer = setTimeout(() => {
+      req.pause();
+      const error = fail(408, 'ERR_VIRGOSCORPIO_HUB_BODY_TIMEOUT', 'Request body was not received before the deadline.');
+      error.closeConnection = true; finish(reject, error, { preserveError: true });
+    }, timeoutMs);
+  });
 }
 async function readForm(req, maxBytes) {
   if (!String(req.headers['content-type'] || '').toLowerCase().startsWith('application/x-www-form-urlencoded')) throw fail(415, 'ERR_VIRGOSCORPIO_HUB_FORM_CONTENT_TYPE', 'Expected application/x-www-form-urlencoded.');
@@ -109,10 +149,10 @@ async function readJson(req, maxBytes) {
   try { return JSON.parse(Buffer.concat(chunks).toString('utf8')); }
   catch { const error = new Error('Request body must be valid JSON.'); error.statusCode = 400; error.code = 'ERR_VIRGOSCORPIO_HUB_INVALID_JSON'; throw error; }
 }
-function createRateLimiter(env) {
+function createRateLimiter(env, { maxKey = 'RATE_LIMIT_MAX_REQUESTS', defaultMax = 60 } = {}) {
   const buckets = new Map();
   const windowMs = boundedInt(env.RATE_LIMIT_WINDOW_MS, 60_000, 1_000, 3_600_000, 'RATE_LIMIT_WINDOW_MS');
-  const maxRequests = boundedInt(env.RATE_LIMIT_MAX_REQUESTS, 60, 1, 10_000, 'RATE_LIMIT_MAX_REQUESTS');
+  const maxRequests = boundedInt(env[maxKey], defaultMax, 1, 10_000, maxKey);
   let lastSweep = 0;
   return function allow(key) {
     const now = Date.now();
@@ -196,6 +236,9 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
   const maxBody = boundedInt(env.MAX_REQUEST_BYTES, MAX_BODY_DEFAULT, 1_024, 16 * 1024 * 1024, 'MAX_REQUEST_BYTES');
   const maxMediaBody = Math.max(maxBody, MAX_MEDIA_BODY);
   const allowRequest = createRateLimiter(env);
+  // Dedicated per-IP budget for the unauthenticated Stripe webhook, enforced before its body is buffered.
+  const allowWebhookRequest = createRateLimiter(env, { maxKey: 'STRIPE_WEBHOOK_RATE_LIMIT_MAX_REQUESTS', defaultMax: 300 });
+  const webhookBodyTimeoutMs = boundedInt(env.STRIPE_WEBHOOK_BODY_TIMEOUT_MS, 10_000, 1_000, 60_000, 'STRIPE_WEBHOOK_BODY_TIMEOUT_MS');
   const ai = aiService || createAIService({
     env,
     audit: event => structuredLogger.emit(event.succeeded ? 'info' : 'warn', 'virgoscorpio_hub.ai.audit', {
@@ -930,7 +973,10 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
       }
       if (req.method === 'POST' && url.pathname === '/api/v1/billing/stripe/webhook') {
         if (!localPool || !env.STRIPE_WEBHOOK_SECRET) return sendJson(res, 503, { error: 'Payment webhook is not configured.', code: 'ERR_VIRGOSCORPIO_HUB_BILLING_DISABLED', requestId });
-        const rawBody = await readRawBody(req, 2 * 1024 * 1024);
+        if (typeof req.headers['stripe-signature'] !== 'string' || !req.headers['stripe-signature']) return sendJson(res, 400, { error: 'Stripe signature is invalid or outside its timestamp tolerance.', code: 'ERR_VIRGOSCORPIO_HUB_BILLING_SIGNATURE', requestId });
+        const webhookLimit = allowWebhookRequest(req.socket.remoteAddress || 'unknown');
+        if (!webhookLimit.allowed) { res.setHeader('retry-after', String(webhookLimit.retryAfterSeconds)); return sendJson(res, 429, { error: 'Request rate limit exceeded.', code: 'ERR_VIRGOSCORPIO_HUB_RATE_LIMIT', requestId }); }
+        const rawBody = await readRawBody(req, 2 * 1024 * 1024, { timeoutMs: webhookBodyTimeoutMs });
         if (!verifyStripeSignature(rawBody, req.headers['stripe-signature'], env.STRIPE_WEBHOOK_SECRET)) return sendJson(res, 400, { error: 'Stripe signature is invalid or outside its timestamp tolerance.', code: 'ERR_VIRGOSCORPIO_HUB_BILLING_SIGNATURE', requestId });
         let event; try { event = JSON.parse(rawBody.toString('utf8')); } catch { return sendJson(res, 400, { error: 'Webhook body must be JSON.', code: 'ERR_VIRGOSCORPIO_HUB_BILLING_WEBHOOK_JSON', requestId }); }
         if (typeof event.id !== 'string' || typeof event.type !== 'string' || !event.data?.object) return sendJson(res, 400, { error: 'Webhook event structure is invalid.', code: 'ERR_VIRGOSCORPIO_HUB_BILLING_WEBHOOK_INVALID', requestId });
@@ -2119,6 +2165,7 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
       const status = Number.isInteger(error.statusCode) ? error.statusCode : error.code === 'ERR_VIRGOSCORPIO_HUB_INVALID_DOCUMENT' ? 422 : 500;
       const errorPath = (() => { try { return new URL(req.url, 'http://localhost').pathname; } catch { return '/other'; } })();
       setHttpStatus(requestSpan, status);
+      if (error.closeConnection) { res.shouldKeepAlive = false; res.setHeader('connection', 'close'); }
       structuredLogger.emit('error', 'virgoscorpio_hub.http.error', {
         requestId,
         method: req.method,
