@@ -64,6 +64,7 @@ For realtime presence, SSE/WebSocket, Redis relay, and collaborative-document sy
 - Set `LIBRARY_STORAGE_PROVIDER=local` for development; multi-instance deployments must configure a durable shared object store. Set strict object access policies and avoid CDN caching for private assets.
 - Install and test optional `katex`, `sharp`, and FFmpeg only in controlled builds. Keep optimization bounded and move expensive conversions to workers. Derivatives are separate from originals.
 - Use Stripe test-mode credentials, register the webhook, test duplicate/out-of-order/failed events and inventory recovery, and only then consider live mode. Never store cardholder data in VirgoScorpio Hub.
+  Checkout reconciliation releases inventory only after Stripe confirms a matching session is expired; provider errors and unpaid completed sessions retain their holds until a definitive provider outcome. Monitor `virgoscorpio_hub.scheduler.checkout_reconciliation` for repeated `errors`/`held`/`unlinked` counts and follow the [commerce reconciliation runbook](COMMERCE-AND-MEMBERSHIPS.md#checkout-reservation-reconciliation) before any manual order or inventory correction.
 - Cloud connection metadata records references; provider connectivity, role grants, encryption, retention and delete behavior need an actual deployment probe. Do not interpret `configured` as `healthy`.
 - The built-in firewall is application-level only. Put VirgoScorpio Hub behind a correctly configured TLS reverse proxy and managed edge/WAF/DDoS controls where exposure requires it.
 
