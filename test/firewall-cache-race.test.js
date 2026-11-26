@@ -115,31 +115,32 @@ test('firewall cache refresh with generation check prevents stale policy enforce
   assert.ok(queryCount >= 2, 'Multiple queries should be made after clearCache');
 });
 
-test('firewall ensureFresh retries until cache is valid', async () => {
+test('firewall ensureFresh fails closed after refresh error and recovers on the next evaluation', async () => {
   let queryCount = 0;
-  let shouldFail = true;
 
   const pool = {
     query: async () => {
       queryCount++;
-      if (shouldFail && queryCount < 3) {
-        // Simulate query that gets invalidated
-        await new Promise(resolve => setTimeout(resolve, 10));
-        throw new Error('simulated query failure');
-      }
+      if (queryCount === 1) throw new Error('simulated query failure');
       return { rows: [{ id: 1, site_id: null, action: 'deny', scope: 'ip', pattern: '192.0.2.1', reason: 'valid-rule', enabled: true }] };
     }
   };
 
   const firewall = createFirewall({ pool, cacheTtlMs: 5000 });
+  const request = { ip: '192.0.2.1', path: '/', userAgent: 'test', siteId: null };
 
-  // Trigger evaluation which should retry
-  shouldFail = false;
-  const result = await firewall.evaluate({ ip: '192.0.2.1', path: '/', userAgent: 'test', siteId: null });
+  const unavailable = await firewall.evaluate(request);
+  assert.deepEqual(unavailable, {
+    action: 'deny',
+    reason: 'firewall-policy-unavailable',
+    ruleId: null
+  });
+  assert.equal(queryCount, 1, 'the failed refresh must not be silently retried in the same generation');
 
-  // Should eventually succeed
-  assert.equal(result.action, 'deny');
-  assert.ok(queryCount >= 1, 'At least one query should be made');
+  const recovered = await firewall.evaluate(request);
+  assert.equal(recovered.action, 'deny');
+  assert.equal(recovered.reason, 'valid-rule');
+  assert.equal(queryCount, 2, 'a later evaluation must retry and publish the recovered policy');
 });
 
 test('firewall clearCache increments generation and nullifies refreshing', async () => {
