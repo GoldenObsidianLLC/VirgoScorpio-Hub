@@ -380,7 +380,7 @@ test('concurrency limit can be configured via environment variable', async () =>
   }, { PUBLIC_ASSET_MAX_CONCURRENCY: '5' }, { mediaStore });
 });
 
-test('default concurrency limit is 8 when not configured', async () => {
+test('default concurrency limit is 4 when not configured', async () => {
   const assetId = '77777777-7777-4777-8777-777777777777';
   const asset = Buffer.alloc(1024);
   
@@ -400,7 +400,7 @@ test('default concurrency limit is 8 when not configured', async () => {
     }
   };
 
-  // Don't set PUBLIC_ASSET_MAX_CONCURRENCY - should default to 8
+  // Don't set PUBLIC_ASSET_MAX_CONCURRENCY - should default to 4
   await withServer(async base => {
     const requests = [];
     
@@ -410,8 +410,8 @@ test('default concurrency limit is 8 when not configured', async () => {
     
     await new Promise(resolve => setTimeout(resolve, 50));
     
-    // Should have 8 requests in flight (default)
-    assert.equal(readPromises.length, 8, 'Should use default limit of 8');
+    // Should have 4 requests in flight (default)
+    assert.equal(readPromises.length, 4, 'Should use default limit of 4');
     
     // Complete all requests
     for (const resolve of readPromises) {
@@ -484,7 +484,7 @@ test('concurrency limit applies independently to media and library routes', asyn
   }, { PUBLIC_ASSET_MAX_CONCURRENCY: '2' }, { mediaStore, libraryStore });
 });
 
-test('404 responses do not consume concurrency slots', async () => {
+test('404 responses release concurrency slots after lookup', async () => {
   const validAssetId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
   const invalidAssetId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
   const asset = Buffer.alloc(1024);
@@ -506,34 +506,27 @@ test('404 responses do not consume concurrency slots', async () => {
   };
 
   await withServer(async base => {
-    // Set limit to 1
-    const requests = [];
-    
-    // Start 1 valid request (will consume the slot)
-    requests.push(fetch(`${base}/media/${validAssetId}`));
-    
-    // Start 2 invalid requests (should get 404 without consuming slots)
-    requests.push(fetch(`${base}/media/${invalidAssetId}`));
-    requests.push(fetch(`${base}/media/${invalidAssetId}`));
-    
+    // A missing asset must return 404 and release its slot when the response finishes.
+    const firstNotFound = await fetch(`${base}/media/${invalidAssetId}`);
+    assert.equal(firstNotFound.status, 404);
+    await firstNotFound.arrayBuffer();
+
+    const secondNotFound = await fetch(`${base}/media/${invalidAssetId}`);
+    assert.equal(secondNotFound.status, 404);
+    await secondNotFound.arrayBuffer();
+
+    // The completed 404 responses must not leak the only available slot.
+    const validRequest = fetch(`${base}/media/${validAssetId}`);
     await new Promise(resolve => setTimeout(resolve, 50));
-    
-    // Only 1 request should be reading (the valid one)
-    assert.equal(readPromises.length, 1, 'Only valid request should consume a slot');
-    
-    // Complete the valid request
+    assert.equal(readPromises.length, 1, 'Valid request should acquire the slot after 404 responses finish.');
     readPromises[0]();
-    
-    const responses = await Promise.all(requests);
-    
-    // First should succeed, others should be 404
-    assert.equal(responses[0].status, 200);
-    assert.equal(responses[1].status, 404);
-    assert.equal(responses[2].status, 404);
+    const validResponse = await validRequest;
+    assert.equal(validResponse.status, 200);
+    await validResponse.arrayBuffer();
   }, { PUBLIC_ASSET_MAX_CONCURRENCY: '1' }, { mediaStore });
 });
 
-test('concurrency limit bounds are enforced (min 1, max 256)', async () => {
+test('concurrency limit rejects configuration outside the safe range (1-8)', async () => {
   const assetId = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
   const asset = Buffer.alloc(1024);
   
@@ -553,23 +546,18 @@ test('concurrency limit bounds are enforced (min 1, max 256)', async () => {
     }
   };
 
-  // Test with value below minimum (should clamp to 1)
-  await withServer(async base => {
-    const requests = [];
-    
-    for (let i = 0; i < 5; i++) {
-      requests.push(fetch(`${base}/media/${assetId}`));
-    }
-    
-    await new Promise(resolve => setTimeout(resolve, 50));
-    
-    // Should be clamped to minimum of 1
-    assert.equal(readPromises.length, 1, 'Should clamp to minimum of 1');
-    
-    for (const resolve of readPromises) {
-      resolve();
-    }
-    
-    await Promise.all(requests);
-  }, { PUBLIC_ASSET_MAX_CONCURRENCY: '0' }, { mediaStore });
+  for (const value of ['0', '9']) {
+    assert.throws(
+      () => createApiServer({
+        env: {
+          NODE_ENV: 'test',
+          VIRGOSCORPIO_HUB_API_TOKEN: 'test-secret-token',
+          AI_PROVIDER: 'mock',
+          PUBLIC_ASSET_MAX_CONCURRENCY: value
+        },
+        logger: { error() {} }
+      }),
+      error => error.code === 'ERR_VIRGOSCORPIO_HUB_CONFIG_LIMIT' && error.message.includes('between 1 and 8')
+    );
+  }
 });

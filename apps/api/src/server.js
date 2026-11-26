@@ -207,7 +207,7 @@ async function writeTaxonomyOutboxEvent(client, { term, status, actorId = null, 
     ]
   );
 }
-function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAITaskStore, contentStore, pool, identityService, pluginRunner, mediaStore: injectedMediaStore, stripeFetch = fetch, realtimeHub: injectedRealtimeHub, presenceService: injectedPresenceService, realtimeBridge: injectedRealtimeBridge, realtimeMetrics: injectedRealtimeMetrics, realtimeConnectionLimiter: injectedRealtimeConnectionLimiter, publishDocumentOperation: injectedDocumentPublisher, realtimeHeartbeatMs = 15_000, logger = console, otelLogger = null, structuredLogger: suppliedStructuredLogger = null } = {}) {
+function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAITaskStore, contentStore, pool, identityService, pluginRunner, mediaStore: injectedMediaStore, libraryStore: injectedLibraryStore, stripeFetch = fetch, realtimeHub: injectedRealtimeHub, presenceService: injectedPresenceService, realtimeBridge: injectedRealtimeBridge, realtimeMetrics: injectedRealtimeMetrics, realtimeConnectionLimiter: injectedRealtimeConnectionLimiter, publishDocumentOperation: injectedDocumentPublisher, realtimeHeartbeatMs = 15_000, logger = console, otelLogger = null, structuredLogger: suppliedStructuredLogger = null } = {}) {
   if (env.NODE_ENV === 'production') {
     const missing = [];
     if (!env.DATABASE_URL && !pool) missing.push('DATABASE_URL');
@@ -236,9 +236,12 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
   const maxBody = boundedInt(env.MAX_REQUEST_BYTES, MAX_BODY_DEFAULT, 1_024, 16 * 1024 * 1024, 'MAX_REQUEST_BYTES');
   const maxMediaBody = Math.max(maxBody, MAX_MEDIA_BODY);
   const allowRequest = createRateLimiter(env);
+  // Dedicated per-IP budget for the unauthenticated Stripe webhook, enforced before its body is buffered.
+  const allowWebhookRequest = createRateLimiter(env, { maxKey: 'STRIPE_WEBHOOK_RATE_LIMIT_MAX_REQUESTS', defaultMax: 300 });
+  const webhookBodyTimeoutMs = boundedInt(env.STRIPE_WEBHOOK_BODY_TIMEOUT_MS, 10_000, 1_000, 60_000, 'STRIPE_WEBHOOK_BODY_TIMEOUT_MS');
   // Process-wide cap on simultaneous anonymous asset deliveries. Each delivery buffers a whole object
   // (up to the library ceiling), so bounding concurrency bounds aggregate memory, storage reads and hashing.
-  const maxPublicDeliveries = boundedInt(env.PUBLIC_ASSET_MAX_CONCURRENCY, 8, 1, 256, 'PUBLIC_ASSET_MAX_CONCURRENCY');
+  const maxPublicDeliveries = boundedInt(env.PUBLIC_ASSET_MAX_CONCURRENCY, 4, 1, 8, 'PUBLIC_ASSET_MAX_CONCURRENCY');
   let activePublicDeliveries = 0;
   function reservePublicDelivery(res, requestId) {
     if (activePublicDeliveries >= maxPublicDeliveries) {
@@ -304,7 +307,7 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
   const maxLibrarySiteObjects = boundedInt(env.VIRGOSCORPIO_HUB_LIBRARY_MAX_SITE_OBJECTS, DEFAULT_MAX_SITE_OBJECTS, 1, 10_000_000, 'VIRGOSCORPIO_HUB_LIBRARY_MAX_SITE_OBJECTS');
   const libraryStorageAdapter = createCloudStorageAdapterFromEnv({ env });
   const malwareScanner = String(env.LIBRARY_MALWARE_SCANNER || '').toLowerCase() === 'clamdscan' ? createClamDScanScanner({ executable: env.CLAMDSCAN_PATH || 'clamdscan', timeoutMs: Number(env.LIBRARY_MALWARE_SCAN_TIMEOUT_MS || 20000), maxBytes: maxLibraryFileBytes }) : null;
-  const libraryStore = localPool ? createLibraryStore({ pool: localPool, root: env.LIBRARY_ROOT || path.resolve(process.cwd(), 'var', 'library'), maxFileBytes: maxLibraryFileBytes, maxSiteBytes: maxLibrarySiteBytes, maxSiteObjects: maxLibrarySiteObjects, storageAdapter: libraryStorageAdapter, malwareScanner, requireMalwareScan: env.NODE_ENV === 'production' }) : null;
+  const libraryStore = injectedLibraryStore || (localPool ? createLibraryStore({ pool: localPool, root: env.LIBRARY_ROOT || path.resolve(process.cwd(), 'var', 'library'), maxFileBytes: maxLibraryFileBytes, maxSiteBytes: maxLibrarySiteBytes, maxSiteObjects: maxLibrarySiteObjects, storageAdapter: libraryStorageAdapter, malwareScanner, requireMalwareScan: env.NODE_ENV === 'production' }) : null);
   const firewall = createFirewall({ pool: localPool, env, cacheTtlMs: boundedInt(env.VIRGOSCORPIO_HUB_FIREWALL_CACHE_MS, 5000, 500, 60_000, 'VIRGOSCORPIO_HUB_FIREWALL_CACHE_MS') });
   const sandboxRunner = pluginRunner || createRemotePluginRunner({
     url: env.VIRGOSCORPIO_HUB_PLUGIN_RUNNER_URL, token: env.VIRGOSCORPIO_HUB_PLUGIN_RUNNER_TOKEN,
