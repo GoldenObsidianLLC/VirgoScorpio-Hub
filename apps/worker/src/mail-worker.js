@@ -7,6 +7,10 @@ const { initializeTracing } = require('../../../packages/observability/src/traci
 const { initializeLogExport } = require('../../../packages/observability/src/otel-logs');
 const { createStructuredLogger } = require('../../../packages/observability/src/structured-logger');
 
+const MAIL_OUTBOX_MAX_ATTEMPTS = 8;
+const MAIL_OUTBOX_LOCK_TIMEOUT_MINUTES = 5;
+const MAIL_OUTBOX_INTERRUPTED_ERROR = 'ERR_VIRGOSCORPIO_HUB_MAIL_WORKER_INTERRUPTED';
+
 async function processBatch(pool, {
   limit = 10,
   logger = console,
@@ -23,8 +27,37 @@ async function processBatch(pool, {
   const client = await pool.connect(); let rows = [];
   try {
     await client.query('BEGIN');
+    // Provider requests time out after 10 seconds and the worker sends its default
+    // 10-row batch serially, so five minutes is beyond a healthy batch lifetime.
+    // Recovery is intentionally at-least-once: a crash after provider acceptance
+    // but before the sent-state update can cause the same persisted email to be resent.
+    const stale = await client.query(`SELECT id,attempts FROM mail_outbox
+      WHERE status='processing'
+        AND locked_at <= now() - interval '${MAIL_OUTBOX_LOCK_TIMEOUT_MINUTES} minutes'
+      ORDER BY locked_at,created_at FOR UPDATE SKIP LOCKED LIMIT $1`, [limit]);
+    for (const row of stale.rows) {
+      const attempts = Number(row.attempts || 0) + 1;
+      const terminal = attempts >= MAIL_OUTBOX_MAX_ATTEMPTS;
+      const delayMs = terminal
+        ? 0
+        : Math.min(6 * 60 * 60_000, 1_000 * (2 ** Math.min(attempts, 14)));
+      await client.query(
+        `UPDATE mail_outbox SET status=$2,attempts=$3,
+          available_at=CASE WHEN $2='pending' THEN now()+($4 * interval '1 millisecond') ELSE available_at END,
+          last_error_code=$5,locked_at=NULL WHERE id=$1`,
+        [row.id, terminal ? 'failed' : 'pending', attempts, delayMs, MAIL_OUTBOX_INTERRUPTED_ERROR]
+      );
+      log.emit('warn', 'virgoscorpio_hub.mail.interrupted_claim_recovered', {
+        component: 'mail',
+        operation: 'claim_recovery',
+        code: MAIL_OUTBOX_INTERRUPTED_ERROR,
+        attempts,
+        terminal,
+        outcome: terminal ? 'failed' : 'retry'
+      });
+    }
     const result = await client.query(`SELECT id,recipient,template,payload,attempts
-      FROM mail_outbox WHERE status='pending' AND attempts<8 AND available_at<=now()
+      FROM mail_outbox WHERE status='pending' AND attempts<${MAIL_OUTBOX_MAX_ATTEMPTS} AND available_at<=now()
       ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT $1`, [limit]);
     rows = result.rows;
     if (rows.length) await client.query("UPDATE mail_outbox SET status='processing',locked_at=now() WHERE id=ANY($1::uuid[])", [rows.map(row => row.id)]);
@@ -40,7 +73,7 @@ async function processBatch(pool, {
       results.push({ id: row.id, status: 'sent' });
     } catch (error) {
       const attempts = Number(row.attempts || 0) + 1;
-      const terminal = attempts >= 8 ||
+      const terminal = attempts >= MAIL_OUTBOX_MAX_ATTEMPTS ||
         error.code === 'ERR_VIRGOSCORPIO_HUB_MAIL_REJECTED' ||
         error.code === 'ERR_VIRGOSCORPIO_HUB_MAIL_PROVIDER' ||
         error.code === 'ERR_VIRGOSCORPIO_HUB_MAIL_CONFIG' ||
