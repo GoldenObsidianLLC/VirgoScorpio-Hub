@@ -18,7 +18,7 @@ The current mainline is healthy under its hosted CI evidence, but the canonical 
 
 All seven exact-main workflow jobs passed. The Node 22/24 test and dependency checks, live PostgreSQL/Memgraph integration, migration replay, browser smoke, CodeQL, signed dependency/SBOM provenance, and evidence aggregation are green. These results establish a strong maintainer/CI baseline; they do not replace independent assessment, external-provider validation, operational recovery evidence, or release-owner approval.
 
-F1.72 / PR #253 is now merged into main. The next implementation increment is F1.73 / draft PR #304, which enforces per-site retained library-storage quotas and preserves the already-merged source-version-bound media-variant lifecycle. Its hosted retest is in progress after the first live-integration attempts hit the test-runner timeout; it is not mainline and is not included in the main readiness artifact.
+F1.72 / PR #253 is now merged into main. F1.73 / draft PR #304 is the current next implementation candidate: per-site retained-library quotas with 30-minute database-backed reservation leases. Local full tests pass 988/988 non-skipped tests (3 conditional skips); fresh/idempotent PostgreSQL migrations pass 20/20 twice; focused live PostgreSQL audit/quota/source-version tests pass 11/11 with zero skips. Exact-head hosted PR and push workflows both pass on 5e9235223cb4712d3f07f2e8c7b6888b06631afe; hosted PostgreSQL/Memgraph passes 199/199 with zero skips, and exact-source candidate evidence aggregation passes. This does not change mainline release readiness or the NO-GO production decision.
 
 **No release tag, GitHub Release, package publication, SemVer increment, production deployment, or promotion is authorized.** Keep package version 0.6.2 unchanged and unreleased.
 
@@ -92,36 +92,39 @@ F1.72 is no longer an active PR candidate. It is part of main SHA bc80a3389fd6d6
 
 ## F1.73 candidate — retained library quotas and derivative lifecycle
 
-**PR:** [#304](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/304) — draft, not merged
+**PR:** [#304](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/304) — draft, not merged; awaiting maintainer review
 **Branch:** security/f1-73-library-storage-quota-variant-2026-11-25
-**Head:** d33f565059a54b25ff52d0e61e8715ec0bde6669
+**Exact head:** 5e9235223cb4712d3f07f2e8c7b6888b06631afe
 **Base:** main at bc80a3389fd6d61ef951dd15b019a5d235539d42
 
 The candidate implements:
 
 - Default per-site ceilings of 5 GiB retained object bytes and 10,000 distinct retained storage objects. The existing 50 MiB per-file default remains independent.
-- Accounting across distinct storage keys referenced by current assets, historical version snapshots and media variants. Soft-deleted/quarantined references continue to count while retained; legacy snapshots without byteSize are conservatively charged at the configured per-file maximum.
-- A common transaction-scoped site advisory lock for upload, source replacement and derivative allocation, so competing allocations for one site cannot all consume the same remaining quota. Usage/lock verification fails closed.
-- Transactional retirement of stale variant rows on source replacement, with storage-object deletion after commit. Metadata-only versions carry forward only source-version-bound derivatives.
-- Conservative handling of ambiguous COMMIT acknowledgements: potentially referenced objects are preserved for reconciliation rather than deleted based on an uncertain transaction outcome.
-- Documentation and deterministic plus opt-in live-PostgreSQL regression coverage.
+- Accounting across distinct storage keys referenced by current assets, historical version snapshots, media variants and unexpired allocation reservations. Soft-deleted/quarantined references continue to count while retained; legacy snapshots without byteSize are conservatively charged at the configured per-file maximum.
+- Migration 0020_library_storage_reservations.sql introduces a site-scoped reservation table with a 30-minute lease. Upload, source replacement and derivative creation reserve quota under the per-site advisory lock, commit the lease, and then perform storage I/O outside database transactions and row/advisory locks. Finalization reacquires the site lock, revalidates source versions where applicable, writes database references and consumes the reservation atomically.
+- All still-retained source/history/derivative objects remain in usage while a replacement is pending. Replacing source bytes or overwriting a derivative requires temporary quota headroom for the new object; old storage is not discounted until the replacement transaction commits. Same-asset concurrent replacement cannot borrow the same future-to-be-freed derivative capacity.
+- Source replacement transactionally retires stale derivative rows and deletes corresponding objects only after commit. A derivative whose source changes during object writing is rejected with the existing 409 conflict contract and its unreferenced object is compensated.
+- Immutable randomized replacement keys avoid concurrent writers colliding on a fixed version path. Ambiguous COMMIT acknowledgements preserve potentially referenced objects; orphan reconciliation remains required.
 
 Local validation in the isolated feature worktree:
 
 | Check | Result |
 |---|---|
-| npm run security:tenant-inventory | Passed; source-anchored inventory regenerated |
-| npm run check | **Passed: 991 tests, 988 passed, 0 failed, 3 conditional skips** |
-| git diff --check | Passed |
-| Live PostgreSQL integration | Not run locally; environment did not provide the opt-in database. The new tests are enabled by the repository's hosted live-integration workflow. |
+| NODE_OPTIONS=--max-old-space-size=4096 npm run check | **991 tests, 988 passed, 0 failed, 3 conditional skips** (Node.js 26.12.1, Windows host) |
+| Fresh migrations | **20/20 applied**, then **20/20 idempotent skips**; disposable PostgreSQL database dropped |
+| Focused live PostgreSQL | **11/11 passed, zero failures/skips**: audit rollback/retry, concurrent quota allocation, slow derivative vs. source replacement, same-asset concurrent replacement with retained derivative, history/derivative accounting, metadata-only carry-forward and source-version enforcement |
+| npm run security:tenant-inventory | PASS; 28 families / 80 route patterns / 22 source files / 61 test files |
+| git diff --check | PASS |
 
-Hosted F1.73 CI status at report capture (25 November 2026):
+Hosted exact-head validation on 5e9235223cb4712d3f07f2e8c7b6888b06631afe:
 
-- Initial push run #45709778051 and PR run #45709943564 both reached the new quota integration cases; the test log records both quota scenarios passing. The overall live-integration child process then exceeded the runner 240-second spawnSync timeout (ETIMEDOUT), so neither run produced a successful full PostgreSQL/Memgraph result.
-- F1.73 corrects the bounded live-test harness timeout from 240 to 360 seconds in follow-up commit d33f565059a54b25ff52d0e61e8715ec0bde6669 (test(ci): extend live integration timeout). The hang guard remains finite; the timeout is not removed and no test was waived.
-- Replacement push run #45711333570 and PR run #45711343166 both passed Node.js 22, Node.js 24, CodeQL and browser/accessibility jobs. Their live PostgreSQL/Memgraph jobs were still in progress at report capture. Mainline-only signed lockfile/SBOM attestation was skipped by design on PR branch/push events and remains a post-merge mainline check.
+- PR workflow [#45726544069](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45726544069) **completed successfully**. Node.js 22/24, live PostgreSQL/Memgraph, browser/accessibility, CodeQL and candidate evidence consolidation all passed. The PR-context lockfile/SBOM attestation job was skipped by design.
+- Push workflow [#45726537305](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45726537305) **completed successfully**, with all producer jobs and candidate evidence consolidation passing. Mainline signed provenance remains a post-merge check.
+- Hosted Node.js 22 and 24 each passed **991/991 tests with zero skips**; both npm audit scopes reported **0 vulnerabilities**; the syntax/artifact checker covered 241 required paths and 296 JavaScript files.
+- Hosted PostgreSQL/Memgraph integration passed **199/199 tests, zero failures/skips**. Fresh migration pass applied **20/20**, idempotent second pass skipped **20/20**, and disposable database cleanup passed. Collaboration Playwright passed 4/4; browser/accessibility smoke and CodeQL passed.
+- The exact-source candidate canonical artifact reports ciStatus PASS. It independently retains service-less diagnostics as PARTIAL (1 pass / 53 skips per runtime) and production certification as BLOCKED pending independent evidence.
 
-**Do not promote draft PR #304 or claim full hosted acceptance until both replacement PostgreSQL/Memgraph jobs complete successfully and the PR has received review.** Candidate CI is not mainline release evidence and does not change the canonical main readiness result.
+**Gate interpretation:** F1.73 has passed focused local and hosted CI on the exact PR head. It remains an unmerged draft pending maintainer review. Candidate CI does not constitute independent tenant/security approval or alter the canonical main release decision.
 ## Current open implementation/security pull-request inventory
 
 GitHub reported ten open implementation/security pull requests at the time of this review. The inventory is a triage queue, not a recommendation to merge bot proposals in bulk. A subsequent documentation-only draft PR #305 carries this report and the aligned status-document refresh; it is intentionally excluded from this implementation/security triage inventory.
@@ -153,4 +156,4 @@ Issue #277 remains an umbrella triage record; its older PR inventory must not be
 
 ## SemVer and release controls
 
-Package.json and RELEASE-MANIFEST remain at 0.6.2. The package remains private and unreleased. F1.73 introduces no public API, migration, dependency or compatibility contract change and does not justify a version bump on its own. Do not create a tag, publish a package, create a GitHub Release, deploy, or promote until all 14 missing evidence records and both partial gates are resolved and canonical readiness explicitly reports readyForProduction=true.
+Package.json and RELEASE-MANIFEST remain at 0.6.2. The package remains private and unreleased. F1.73 introduces one internal database migration, but no public API or dependency change; it does not justify a version bump on its own. Do not create a tag, publish a package, create a GitHub Release, deploy, or promote until all 14 missing evidence records and both partial gates are resolved and canonical readiness explicitly reports readyForProduction=true.
