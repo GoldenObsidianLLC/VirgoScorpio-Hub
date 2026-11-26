@@ -174,12 +174,12 @@ test('checkout enforces per-customer pending checkout limit to prevent inventory
       return {
         async query(sql, values) {
           events.push({ type: 'query', sql, values });
-          
+
           // BEGIN transaction
           if (sql === 'BEGIN') {
             return { rows: [] };
           }
-          
+
           // Product lookup with FOR UPDATE - return a valid product with inventory
           if (sql.includes('SELECT * FROM commerce_products') && sql.includes('FOR UPDATE')) {
             return {
@@ -196,20 +196,20 @@ test('checkout enforces per-customer pending checkout limit to prevent inventory
               }]
             };
           }
-          
+
           // Advisory lock for serializing concurrent checkouts
           if (sql.includes('pg_advisory_xact_lock')) {
             advisoryLockCalled = true;
             return { rows: [] };
           }
-          
+
           // Check for existing pending checkouts
           if (sql.includes('SELECT count(DISTINCT o.id)::int AS count') && sql.includes('pending_payment')) {
             pendingCheckoutQueryCalled = true;
             // Simulate 3 existing pending checkouts (default limit)
             return { rows: [{ count: 3 }] };
           }
-          
+
           return { rows: [] };
         },
         async release() {}
@@ -255,17 +255,17 @@ test('checkout enforces per-product held units limit to prevent single-product e
       return {
         async query(sql, values) {
           events.push({ type: 'query', sql, values });
-          
+
           // Advisory lock
           if (sql.includes('pg_advisory_xact_lock')) {
             return { rows: [] };
           }
-          
+
           // BEGIN transaction
           if (sql === 'BEGIN') {
             return { rows: [] };
           }
-          
+
           // Product lookup with FOR UPDATE
           if (sql.includes('SELECT * FROM commerce_products') && sql.includes('FOR UPDATE')) {
             return {
@@ -282,19 +282,19 @@ test('checkout enforces per-product held units limit to prevent single-product e
               }]
             };
           }
-          
+
           // Check for existing pending checkouts (pass this check)
           if (sql.includes('SELECT count(DISTINCT o.id)::int AS count') && sql.includes('pending_payment')) {
             return { rows: [{ count: 0 }] };
           }
-          
+
           // Check for held units for this product
           if (sql.includes('SELECT COALESCE(SUM(r.quantity),0)::int AS units') && sql.includes('commerce_stock_reservations')) {
             heldUnitsQueryCalled = true;
             // Simulate 20 units already held, requesting 10 more would exceed limit of 25
             return { rows: [{ units: 20 }] };
           }
-          
+
           return { rows: [] };
         },
         async release() {}
@@ -314,7 +314,7 @@ test('checkout enforces per-product held units limit to prevent single-product e
     events
   });
   ctx.actor = { user: { id: customerId, email } };
-  ctx.env = { 
+  ctx.env = {
     COMMERCE_MAX_PENDING_CHECKOUTS: 3,
     COMMERCE_MAX_HELD_UNITS_PER_PRODUCT: 1_001
   };
@@ -346,17 +346,17 @@ test('checkout allows valid request within both pending checkout and held units 
       return {
         async query(sql, values) {
           events.push({ type: 'query', sql, values });
-          
+
           // Advisory lock
           if (sql.includes('pg_advisory_xact_lock')) {
             return { rows: [] };
           }
-          
+
           // BEGIN transaction
           if (sql === 'BEGIN') {
             return { rows: [] };
           }
-          
+
           // Product lookup with FOR UPDATE
           if (sql.includes('SELECT * FROM commerce_products') && sql.includes('FOR UPDATE')) {
             return {
@@ -374,23 +374,23 @@ test('checkout allows valid request within both pending checkout and held units 
               }]
             };
           }
-          
+
           // Check for existing pending checkouts (within limit)
           if (sql.includes('SELECT count(DISTINCT o.id)::int AS count') && sql.includes('pending_payment')) {
             return { rows: [{ count: 1 }] };
           }
-          
+
           // Check for held units (within limit)
           if (sql.includes('SELECT COALESCE(SUM(r.quantity),0)::int AS units')) {
             return { rows: [{ units: 10 }] };
           }
-          
+
           // Inventory decrement
           if (sql.includes('UPDATE commerce_products SET inventory_quantity=inventory_quantity-')) {
             inventoryDecremented = true;
             return { rows: [{ id: productId }] };
           }
-          
+
           // Order insertion
           if (sql.includes('INSERT INTO commerce_orders')) {
             orderInserted = true;
@@ -410,23 +410,23 @@ test('checkout allows valid request within both pending checkout and held units 
               }]
             };
           }
-          
+
           // Order items insertion
           if (sql.includes('INSERT INTO commerce_order_items')) {
             return { rows: [] };
           }
-          
+
           // Stock reservation insertion
           if (sql.includes('INSERT INTO commerce_stock_reservations')) {
             reservationInserted = true;
             return { rows: [] };
           }
-          
+
           // COMMIT
           if (sql === 'COMMIT') {
             return { rows: [] };
           }
-          
+
           return { rows: [] };
         },
         async release() {}
@@ -453,7 +453,7 @@ test('checkout allows valid request within both pending checkout and held units 
     events
   });
   ctx.actor = { user: { id: customerId, email } };
-  ctx.env = { 
+  ctx.env = {
     COMMERCE_MAX_PENDING_CHECKOUTS: 3,
     COMMERCE_MAX_HELD_UNITS_PER_PRODUCT: 25,
     STRIPE_SECRET_KEY: 'sk_test_mock',
@@ -487,20 +487,20 @@ test('checkout uses advisory lock to serialize concurrent requests from same cus
       return {
         async query(sql, values) {
           events.push({ type: 'query', sql, values });
-          
+
           // Capture advisory lock key
           if (sql.includes('pg_advisory_xact_lock')) {
             lockKey = values[0];
-            assert.ok(lockKey.includes(`commerce-checkout:${siteId}:${customerId}`), 
+            assert.ok(lockKey.includes(`commerce-checkout:${siteId}:${customerId}`),
               'Lock key should include site and customer ID');
             return { rows: [] };
           }
-          
+
           // BEGIN transaction
           if (sql === 'BEGIN') {
             return { rows: [] };
           }
-          
+
           // Product lookup
           if (sql.includes('SELECT * FROM commerce_products')) {
             return {
@@ -517,12 +517,12 @@ test('checkout uses advisory lock to serialize concurrent requests from same cus
               }]
             };
           }
-          
+
           // Pending checkout check - simulate at limit
           if (sql.includes('SELECT count(DISTINCT o.id)::int AS count')) {
             return { rows: [{ count: 3 }] };
           }
-          
+
           return { rows: [] };
         },
         async release() {}
@@ -565,15 +565,15 @@ test('checkout limits apply per-customer using customer_id for authenticated use
       return {
         async query(sql, values) {
           events.push({ type: 'query', sql, values });
-          
+
           if (sql.includes('pg_advisory_xact_lock')) {
             return { rows: [] };
           }
-          
+
           if (sql === 'BEGIN') {
             return { rows: [] };
           }
-          
+
           if (sql.includes('SELECT * FROM commerce_products')) {
             return {
               rows: [{
@@ -589,13 +589,13 @@ test('checkout limits apply per-customer using customer_id for authenticated use
               }]
             };
           }
-          
+
           // Verify customer_id is used in the query
           if (sql.includes('SELECT count(DISTINCT o.id)::int AS count') && sql.includes('pending_payment')) {
             queryUsedCustomerId = values[1] === customerId && values[2] === email.toLowerCase() && sql.includes('o.customer_id::text=$2::text');
             return { rows: [{ count: 3 }] };
           }
-          
+
           return { rows: [] };
         },
         async release() {}
@@ -635,17 +635,17 @@ test('checkout limits apply per-email for unauthenticated/guest checkouts', asyn
       return {
         async query(sql, values) {
           events.push({ type: 'query', sql, values });
-          
+
           if (sql.includes('pg_advisory_xact_lock')) {
             // Lock key should use email when no customer ID
             assert.ok(values[0].includes(email.toLowerCase()), 'Lock should use email for guest');
             return { rows: [] };
           }
-          
+
           if (sql === 'BEGIN') {
             return { rows: [] };
           }
-          
+
           if (sql.includes('SELECT * FROM commerce_products')) {
             return {
               rows: [{
@@ -661,13 +661,13 @@ test('checkout limits apply per-email for unauthenticated/guest checkouts', asyn
               }]
             };
           }
-          
+
           // Verify email is used in the query when customer_id is null
           if (sql.includes('SELECT count(DISTINCT o.id)::int AS count') && sql.includes('pending_payment')) {
             queryUsedEmail = values[1] === null && values[2] === email.toLowerCase() && sql.includes('lower(o.email)=$3::text');
             return { rows: [{ count: 3 }] };
           }
-          
+
           return { rows: [] };
         },
         async release() {}

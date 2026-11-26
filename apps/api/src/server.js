@@ -207,7 +207,7 @@ async function writeTaxonomyOutboxEvent(client, { term, status, actorId = null, 
     ]
   );
 }
-function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAITaskStore, contentStore, pool, identityService, pluginRunner, mediaStore: injectedMediaStore, stripeFetch = fetch, realtimeHub: injectedRealtimeHub, presenceService: injectedPresenceService, realtimeBridge: injectedRealtimeBridge, realtimeMetrics: injectedRealtimeMetrics, realtimeConnectionLimiter: injectedRealtimeConnectionLimiter, publishDocumentOperation: injectedDocumentPublisher, realtimeHeartbeatMs = 15_000, logger = console, otelLogger = null, structuredLogger: suppliedStructuredLogger = null } = {}) {
+function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAITaskStore, contentStore, pool, identityService, pluginRunner, mediaStore: injectedMediaStore, libraryStore: injectedLibraryStore, stripeFetch = fetch, realtimeHub: injectedRealtimeHub, presenceService: injectedPresenceService, realtimeBridge: injectedRealtimeBridge, realtimeMetrics: injectedRealtimeMetrics, realtimeConnectionLimiter: injectedRealtimeConnectionLimiter, publishDocumentOperation: injectedDocumentPublisher, realtimeHeartbeatMs = 15_000, logger = console, otelLogger = null, structuredLogger: suppliedStructuredLogger = null } = {}) {
   if (env.NODE_ENV === 'production') {
     const missing = [];
     if (!env.DATABASE_URL && !pool) missing.push('DATABASE_URL');
@@ -239,6 +239,24 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
   // Dedicated per-IP budget for the unauthenticated Stripe webhook, enforced before its body is buffered.
   const allowWebhookRequest = createRateLimiter(env, { maxKey: 'STRIPE_WEBHOOK_RATE_LIMIT_MAX_REQUESTS', defaultMax: 300 });
   const webhookBodyTimeoutMs = boundedInt(env.STRIPE_WEBHOOK_BODY_TIMEOUT_MS, 10_000, 1_000, 60_000, 'STRIPE_WEBHOOK_BODY_TIMEOUT_MS');
+  // Process-wide cap on simultaneous anonymous asset deliveries. Each delivery buffers a whole object
+  // (up to the library ceiling), so bounding concurrency bounds aggregate memory, storage reads and hashing.
+  const maxPublicDeliveries = boundedInt(env.PUBLIC_ASSET_MAX_CONCURRENCY, 4, 1, 8, 'PUBLIC_ASSET_MAX_CONCURRENCY');
+  let activePublicDeliveries = 0;
+  function reservePublicDelivery(res, requestId) {
+    if (activePublicDeliveries >= maxPublicDeliveries) {
+      res.setHeader('retry-after', '1');
+      sendJson(res, 503, { error: 'Public asset delivery capacity is exhausted. Retry shortly.', code: 'ERR_VIRGOSCORPIO_HUB_PUBLIC_ASSET_BUSY', requestId });
+      return false;
+    }
+    activePublicDeliveries += 1;
+    let released = false;
+    // The slot is held until the response is fully flushed or the connection is closed, because the buffer is retained until then.
+    const release = () => { if (!released) { released = true; activePublicDeliveries -= 1; } };
+    res.once('close', release);
+    res.once('finish', release);
+    return true;
+  }
   const ai = aiService || createAIService({
     env,
     audit: event => structuredLogger.emit(event.succeeded ? 'info' : 'warn', 'virgoscorpio_hub.ai.audit', {
@@ -289,7 +307,7 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
   const maxLibrarySiteObjects = boundedInt(env.VIRGOSCORPIO_HUB_LIBRARY_MAX_SITE_OBJECTS, DEFAULT_MAX_SITE_OBJECTS, 1, 10_000_000, 'VIRGOSCORPIO_HUB_LIBRARY_MAX_SITE_OBJECTS');
   const libraryStorageAdapter = createCloudStorageAdapterFromEnv({ env });
   const malwareScanner = String(env.LIBRARY_MALWARE_SCANNER || '').toLowerCase() === 'clamdscan' ? createClamDScanScanner({ executable: env.CLAMDSCAN_PATH || 'clamdscan', timeoutMs: Number(env.LIBRARY_MALWARE_SCAN_TIMEOUT_MS || 20000), maxBytes: maxLibraryFileBytes }) : null;
-  const libraryStore = localPool ? createLibraryStore({ pool: localPool, root: env.LIBRARY_ROOT || path.resolve(process.cwd(), 'var', 'library'), maxFileBytes: maxLibraryFileBytes, maxSiteBytes: maxLibrarySiteBytes, maxSiteObjects: maxLibrarySiteObjects, storageAdapter: libraryStorageAdapter, malwareScanner, requireMalwareScan: env.NODE_ENV === 'production' }) : null;
+  const libraryStore = injectedLibraryStore || (localPool ? createLibraryStore({ pool: localPool, root: env.LIBRARY_ROOT || path.resolve(process.cwd(), 'var', 'library'), maxFileBytes: maxLibraryFileBytes, maxSiteBytes: maxLibrarySiteBytes, maxSiteObjects: maxLibrarySiteObjects, storageAdapter: libraryStorageAdapter, malwareScanner, requireMalwareScan: env.NODE_ENV === 'production' }) : null);
   const firewall = createFirewall({ pool: localPool, env, cacheTtlMs: boundedInt(env.VIRGOSCORPIO_HUB_FIREWALL_CACHE_MS, 5000, 500, 60_000, 'VIRGOSCORPIO_HUB_FIREWALL_CACHE_MS') });
   const sandboxRunner = pluginRunner || createRemotePluginRunner({
     url: env.VIRGOSCORPIO_HUB_PLUGIN_RUNNER_URL, token: env.VIRGOSCORPIO_HUB_PLUGIN_RUNNER_TOKEN,
@@ -923,6 +941,7 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
       const mediaPublicMatch = url.pathname.match(/^\/media\/([0-9a-f-]{36})$/i);
       if (req.method === 'GET' && mediaPublicMatch) {
         if (!mediaStore) return sendJson(res, 404, { error: 'Media not found.', requestId });
+        if (!reservePublicDelivery(res, requestId)) return;
         const asset = await mediaStore.readPublic(mediaPublicMatch[1]);
         if (!asset) return sendJson(res, 404, { error: 'Media not found.', requestId });
         res.writeHead(200, { 'content-type': asset.mime_type, 'content-length': asset.data.length, 'cache-control': 'private, no-store', 'x-content-type-options': 'nosniff', 'content-security-policy': "default-src 'none'; sandbox", 'cross-origin-resource-policy': 'same-site', 'content-disposition': 'inline' });
@@ -940,6 +959,7 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
       const libraryVariantMatch = url.pathname.match(/^\/library\/public\/([0-9a-f-]{36})\/variants\/([a-z0-9][a-z0-9_-]{0,60})$/i);
       if (req.method === 'GET' && libraryVariantMatch) {
         if (!libraryStore) return sendJson(res, 404, { error: 'Asset variant not found.', code: 'ERR_VIRGOSCORPIO_HUB_LIBRARY_NOT_FOUND', requestId });
+        if (!reservePublicDelivery(res, requestId)) return;
         const variant = await libraryStore.readPublicVariant({ assetId: libraryVariantMatch[1], variantKey: libraryVariantMatch[2] });
         if (!variant) return sendJson(res, 404, { error: 'Asset variant not found.', code: 'ERR_VIRGOSCORPIO_HUB_LIBRARY_NOT_FOUND', requestId });
         res.writeHead(200, { 'content-type': variant.mime_type, 'content-length': variant.data.length, 'cache-control': 'private, no-store', 'x-content-type-options': 'nosniff', 'content-security-policy': "default-src 'none'; sandbox", 'cross-origin-resource-policy': 'same-site', 'content-disposition': 'inline' });
@@ -948,6 +968,7 @@ function createApiServer({ env = process.env, aiService, aiTaskStore: injectedAI
       const libraryPublicMatch = url.pathname.match(/^\/library\/public\/([0-9a-f-]{36})$/i);
       if (req.method === 'GET' && libraryPublicMatch) {
         if (!libraryStore) return sendJson(res, 404, { error: 'Asset not found.', code: 'ERR_VIRGOSCORPIO_HUB_LIBRARY_NOT_FOUND', requestId });
+        if (!reservePublicDelivery(res, requestId)) return;
         const asset = await libraryStore.readPublic(libraryPublicMatch[1]);
         if (!asset) return sendJson(res, 404, { error: 'Asset not found.', code: 'ERR_VIRGOSCORPIO_HUB_LIBRARY_NOT_FOUND', requestId });
         const disposition = /^(?:image|video|audio|font)\//.test(asset.mime_type) ? 'inline' : 'attachment';
