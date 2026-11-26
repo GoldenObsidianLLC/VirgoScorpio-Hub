@@ -3,7 +3,7 @@
 const { listIcons, renderIcon } = require('../../../packages/icons/src/catalog');
 const { renderMath } = require('../../../packages/math/src/renderer');
 const { validateProfile, validateGroup, cleanText } = require('../../../packages/community/src/validation');
-const { validateIpPattern } = require('../../../packages/security/src/firewall');
+const { validateIpPattern, MAX_FIREWALL_RULES_PER_SITE, MAX_FIREWALL_RULES_TOTAL } = require('../../../packages/security/src/firewall');
 const { cloudConfigStatus, createCloudStorageAdapterFromEnv, probeCloudStorageAdapter, resolveCloudCredentialReference, cloudEndpointAllowed } = require('../../../packages/cloud/src/storage-adapters');
 const { validateMenuItems } = require('../../../packages/domain/src/navigation');
 const { handleCommunityWorkflowRoute } = require('../../../packages/community/src/workflows');
@@ -765,6 +765,19 @@ async function handlePlatformRoute(ctx) {
       }
 
       const rule = await withTransaction(localPool, async client => {
+        // Serialize quota checks so concurrent requests cannot exceed the bounds.
+        await client.query("SELECT pg_advisory_xact_lock(hashtext('firewall_rules_quota'))");
+        const usage = await client.query(
+          'SELECT (SELECT count(*) FROM firewall_rules WHERE site_id=$1) AS site_count, (SELECT count(*) FROM firewall_rules) AS total_count, EXISTS(SELECT 1 FROM firewall_rules WHERE site_id=$1 AND action=$2 AND scope=$3 AND pattern=$4) AS duplicate',
+          [siteId, body.action, body.scope, body.pattern]
+        );
+        const counts = usage.rows[0] || {};
+        if (counts.duplicate === true) {
+          throw fail(409, 'ERR_VIRGOSCORPIO_HUB_FIREWALL_RULE_DUPLICATE', 'An identical firewall rule already exists for this site.');
+        }
+        if (Number(counts.site_count || 0) >= MAX_FIREWALL_RULES_PER_SITE || Number(counts.total_count || 0) >= MAX_FIREWALL_RULES_TOTAL) {
+          throw fail(409, 'ERR_VIRGOSCORPIO_HUB_FIREWALL_RULE_QUOTA', 'Firewall rule quota reached; delete unused rules before adding more.');
+        }
         const q = await client.query(
           'INSERT INTO firewall_rules(site_id,action,scope,pattern,reason,enabled,created_by) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id,site_id,action,scope,pattern,reason,enabled,created_by,created_at,updated_at',
           [siteId, body.action, body.scope, body.pattern, body.reason, body.enabled !== false, actor.user.id || null]
