@@ -184,8 +184,8 @@ test('submit-review requires a site capability and same-site ownership for edit-
   const ownContentId = '33333333-3333-4333-8333-333333333333';
   const otherContentId = '44444444-4444-4444-8444-444444444444';
   const records = new Map([
-    [ownContentId, { id: ownContentId, site_id: siteId, created_by: authorId, version: 1 }],
-    [otherContentId, { id: otherContentId, site_id: siteId, created_by: '55555555-5555-4555-8555-555555555555', version: 1 }],
+    [ownContentId, { id: ownContentId, site_id: siteId, created_by: authorId, content_type: 'page', version: 1 }],
+    [otherContentId, { id: otherContentId, site_id: siteId, created_by: '55555555-5555-4555-8555-555555555555', content_type: 'page', version: 1 }],
   ]);
   const transitions = [];
   const audits = [];
@@ -444,6 +444,72 @@ test('public commerce catalog paths are reachable without API credentials and fa
   });
 });
 
+
+test('public page query loops batch duplicate content types and cap legacy pages at five queries', async () => {
+  const siteId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const pageId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+  const calls = [];
+  const loops = [
+    ['loop-alpha-small', 'alpha', 2],
+    ['loop-beta', 'beta', 4],
+    ['loop-alpha-large', 'alpha', 5],
+    ['loop-gamma', 'gamma', 1],
+    ['loop-delta', 'delta', 8],
+    ['loop-epsilon', 'epsilon', 12],
+    ['loop-zeta-over-budget', 'zeta', 3],
+    ['loop-beta-repeat', 'beta', 1],
+  ].map(([id, contentType, limit]) => ({
+    id,
+    type: 'widget.query-loop',
+    props: { source: 'latest-published', contentType, limit, columns: 1, emptyText: 'No content.' },
+    children: [],
+  }));
+  const contentStore = {
+    async getSiteBySlug(slug) {
+      assert.equal(slug, 'query-loop-site');
+      return { id: siteId, slug, default_locale: 'en' };
+    },
+    async getPublishedBySlug(input) {
+      assert.deepEqual(input, { siteId, slug: 'legacy-page', locale: 'en' });
+      return {
+        id: pageId,
+        body: { schemaVersion: 1, documentId: 'legacy-page', type: 'page', title: 'Legacy published page', children: loops },
+      };
+    },
+    async listPublished(input) {
+      calls.push(input);
+      return Array.from({ length: input.limit }, (_, index) => ({
+        title: input.contentType.toUpperCase() + '_ROW_' + (index + 1),
+        excerpt: 'Published excerpt',
+        slug: input.contentType + '-row-' + (index + 1),
+      }));
+    },
+  };
+
+  await withServer(async base => {
+    const response = await fetch(base + '/public/query-loop-site/pages/legacy-page');
+    const html = await response.text();
+    assert.equal(response.status, 200, html);
+    assert.equal(calls.length, 5, 'legacy page delivery must not execute more than five content queries');
+    assert.deepEqual(calls.map(call => [call.contentType, call.limit]), [
+      ['alpha', 5],
+      ['beta', 4],
+      ['gamma', 1],
+      ['delta', 8],
+      ['epsilon', 12],
+    ], 'duplicate content types share one query at their maximum loop limit and later distinct types are skipped');
+    for (const call of calls) {
+      assert.equal(call.siteId, siteId, 'every grouped query stays within the selected site');
+      assert.equal(call.locale, 'en');
+      assert.equal(call.excludeId, pageId);
+    }
+    assert.match(html, /ALPHA_ROW_1/);
+    assert.match(html, /ALPHA_ROW_5/, 'the widest alpha loop receives its full requested prefix');
+    assert.match(html, /BETA_ROW_4/);
+    assert.match(html, /EPSILON_ROW_12/);
+    assert.doesNotMatch(html, /ZETA_ROW_/, 'the sixth distinct content type does not issue a database query or render data');
+  }, {}, { contentStore });
+});
 
 test('governed AI generation returns a tenant-scoped task ID and status endpoint hides other sites', async () => {
   const siteA = '11111111-1111-4111-8111-111111111111';
@@ -817,4 +883,347 @@ test('legacy page revision reads retain the shared content-read policy after con
   }, {}, { pool, contentStore, identityService });
 
   assert.deepEqual(lookups, [{ siteId, id: contentId }]);
+});
+
+
+const PAGE_TYPE_ISOLATION_SITE_ID = '11111111-1111-4111-8111-111111111111';
+const PAGE_TYPE_ISOLATION_ACTOR_ID = '22222222-2222-4222-8222-222222222222';
+const PAGE_TYPE_ISOLATION_RECORD_ID = '33333333-3333-4333-8333-333333333333';
+const PAGE_TYPE_ISOLATION_SESSION = 'page-type-isolation-session';
+
+function createPageTypeIsolationIdentity({ ownerOnly = false } = {}) {
+  return {
+    async authenticate(token) {
+      if (token !== PAGE_TYPE_ISOLATION_SESSION) return null;
+      return {
+        sessionId: PAGE_TYPE_ISOLATION_SESSION,
+        user: {
+          id: PAGE_TYPE_ISOLATION_ACTOR_ID,
+          email: 'page-type-isolation@example.test',
+          displayName: 'Page Type Isolation',
+          status: 'active',
+        },
+        memberships: [{
+          siteId: PAGE_TYPE_ISOLATION_SITE_ID,
+          siteSlug: 'page-type-isolation',
+          siteName: 'Page Type Isolation',
+          role: 'editor',
+          roles: ['editor'],
+          capabilities: ownerOnly ? ['content:read:own'] : ['*'],
+        }],
+      };
+    },
+    async authorizeSite(userId, siteId, capability) {
+      if (userId !== PAGE_TYPE_ISOLATION_ACTOR_ID || siteId !== PAGE_TYPE_ISOLATION_SITE_ID) return false;
+      return !ownerOnly || capability === 'content:read:own';
+    },
+  };
+}
+
+test('page-scoped endpoints reject custom records before persistence and workflow side effects', async () => {
+  const sideEffects = [];
+  const listContentFilters = [];
+  const customRecord = {
+    id: PAGE_TYPE_ISOLATION_RECORD_ID,
+    site_id: PAGE_TYPE_ISOLATION_SITE_ID,
+    created_by: PAGE_TYPE_ISOLATION_ACTOR_ID,
+    content_type: 'product',
+    status: 'draft',
+    version: 1,
+  };
+  const contentStore = {
+    async getById({ siteId, id }) {
+      assert.equal(siteId, PAGE_TYPE_ISOLATION_SITE_ID);
+      assert.equal(id, PAGE_TYPE_ISOLATION_RECORD_ID);
+      return customRecord;
+    },
+    async listContent(input) {
+      listContentFilters.push(input.contentType);
+      return input.contentType === 'page' ? [] : [customRecord];
+    },
+    async getRevision() {
+      sideEffects.push('getRevision');
+      return { version: 1, snapshot: { contentType: 'product', document: {} } };
+    },
+    async listRevisions() {
+      sideEffects.push('listRevisions');
+      return [];
+    },
+    async saveDraft() {
+      sideEffects.push('saveDraft');
+      return customRecord;
+    },
+    async submitForReview() { sideEffects.push('submitForReview'); return customRecord; },
+    async approve() { sideEffects.push('approve'); return customRecord; },
+    async rejectReview() { sideEffects.push('rejectReview'); return customRecord; },
+    async publishContent() { sideEffects.push('publishContent'); return customRecord; },
+    async scheduleContent() { sideEffects.push('scheduleContent'); return customRecord; },
+    async archiveContent() { sideEffects.push('archiveContent'); return customRecord; },
+    async unpublishContent() { sideEffects.push('unpublishContent'); return customRecord; },
+  };
+  const headers = {
+    authorization: `Bearer ${PAGE_TYPE_ISOLATION_SESSION}`,
+    'x-virgoscorpio-hub-site-id': PAGE_TYPE_ISOLATION_SITE_ID,
+  };
+
+  await withServer(async base => {
+    const requests = [
+      {
+        name: 'page list',
+        method: 'GET',
+        path: '/api/v1/pages',
+        expectedStatus: 200,
+        expectedBody: payload => assert.deepEqual(payload.items, []),
+      },
+      {
+        name: 'page drafts list',
+        method: 'GET',
+        path: '/api/v1/pages/drafts',
+        expectedStatus: 200,
+        expectedBody: payload => assert.deepEqual(payload.drafts, []),
+      },
+      {
+        name: 'page draft update',
+        method: 'POST',
+        path: '/api/v1/pages/drafts',
+        body: {
+          id: PAGE_TYPE_ISOLATION_RECORD_ID,
+          document: {
+            schemaVersion: 1,
+            documentId: 'page-type-isolation-test',
+            type: 'page',
+            title: 'Must not convert a custom record',
+            children: [],
+          },
+        },
+      },
+      { name: 'page detail', method: 'GET', path: `/api/v1/pages/${PAGE_TYPE_ISOLATION_RECORD_ID}` },
+      { name: 'page revisions', method: 'GET', path: `/api/v1/pages/${PAGE_TYPE_ISOLATION_RECORD_ID}/revisions` },
+      {
+        name: 'page restore',
+        method: 'POST',
+        path: `/api/v1/pages/${PAGE_TYPE_ISOLATION_RECORD_ID}/restore/1`,
+        body: { expectedVersion: 1 },
+      },
+      ...['submit-review', 'approve', 'reject', 'publish', 'schedule', 'archive', 'unpublish'].map(action => ({
+        name: `page workflow ${action}`,
+        method: 'POST',
+        path: `/api/v1/pages/${PAGE_TYPE_ISOLATION_RECORD_ID}/${action}`,
+        body: { expectedVersion: 1, scheduledAt: '2030-01-01T00:00:00.000Z' },
+      })),
+      {
+        name: 'page workflow uppercase route prefix',
+        method: 'POST',
+        path: `/API/V1/PAGES/${PAGE_TYPE_ISOLATION_RECORD_ID}/publish`,
+        body: { expectedVersion: 1 },
+      },
+    ];
+
+    for (const request of requests) {
+      const requestHeaders = { ...headers };
+      const options = { method: request.method, headers: requestHeaders };
+      if (request.body) {
+        requestHeaders['content-type'] = 'application/json';
+        options.body = JSON.stringify(request.body);
+      }
+
+      const response = await fetch(base + request.path, options);
+      const payload = await response.json();
+      assert.equal(response.status, request.expectedStatus || 404, `${request.name}: ${JSON.stringify(payload)}`);
+
+      if (request.expectedBody) request.expectedBody(payload);
+      else {
+        assert.equal(payload.code, 'ERR_VIRGOSCORPIO_HUB_CONTENT_NOT_FOUND', request.name);
+        assert.match(payload.error, /page not found/i, request.name);
+      }
+    }
+  }, {}, {
+    identityService: createPageTypeIsolationIdentity(),
+    contentStore,
+  });
+
+  assert.deepEqual(listContentFilters, ['page', 'page'], 'page collection handlers must constrain store reads to pages');
+  assert.deepEqual(sideEffects, [], 'custom records must never reach revision reads, draft writes, or workflow transitions through page routes');
+});
+
+test('page detail owner-only access preserves forbidden responses without revealing a custom record type', async () => {
+  for (const { createdBy, expectedStatus } of [
+    { createdBy: PAGE_TYPE_ISOLATION_ACTOR_ID, expectedStatus: 404 },
+    { createdBy: '44444444-4444-4444-8444-444444444444', expectedStatus: 403 },
+  ]) {
+    const contentStore = {
+      async getById({ siteId, id }) {
+        assert.equal(siteId, PAGE_TYPE_ISOLATION_SITE_ID);
+        assert.equal(id, PAGE_TYPE_ISOLATION_RECORD_ID);
+        return {
+          id: PAGE_TYPE_ISOLATION_RECORD_ID,
+          site_id: PAGE_TYPE_ISOLATION_SITE_ID,
+          created_by: createdBy,
+          content_type: 'product',
+          status: 'draft',
+        };
+      },
+    };
+
+    await withServer(async base => {
+      const response = await fetch(`${base}/api/v1/pages/${PAGE_TYPE_ISOLATION_RECORD_ID}`, {
+        headers: {
+          authorization: `Bearer ${PAGE_TYPE_ISOLATION_SESSION}`,
+          'x-virgoscorpio-hub-site-id': PAGE_TYPE_ISOLATION_SITE_ID,
+        },
+      });
+      const payload = await response.json();
+      assert.equal(response.status, expectedStatus, JSON.stringify(payload));
+      if (expectedStatus === 404) {
+        assert.equal(payload.code, 'ERR_VIRGOSCORPIO_HUB_CONTENT_NOT_FOUND');
+        assert.match(payload.error, /page not found/i);
+      } else {
+        assert.equal(payload.code, 'ERR_VIRGOSCORPIO_HUB_FORBIDDEN');
+      }
+    }, {}, {
+      identityService: createPageTypeIsolationIdentity({ ownerOnly: true }),
+      contentStore,
+    });
+  }
+});
+
+test('page endpoints preserve valid page operations and bind writes and revisions to page type', async () => {
+  const observed = {
+    saves: [],
+    revisionLists: [],
+    revisionReads: [],
+    transitions: [],
+  };
+  const page = {
+    id: PAGE_TYPE_ISOLATION_RECORD_ID,
+    site_id: PAGE_TYPE_ISOLATION_SITE_ID,
+    created_by: PAGE_TYPE_ISOLATION_ACTOR_ID,
+    content_type: 'page',
+    status: 'draft',
+    title: 'Page Type Isolation',
+    slug: 'page-type-isolation',
+    locale: 'en',
+    version: 1,
+    body: {
+      schemaVersion: 1,
+      documentId: 'page-type-isolation',
+      type: 'page',
+      title: 'Page Type Isolation',
+      children: [],
+    },
+  };
+  const contentStore = {
+    async getById({ siteId, id }) {
+      assert.equal(siteId, PAGE_TYPE_ISOLATION_SITE_ID);
+      assert.equal(id, PAGE_TYPE_ISOLATION_RECORD_ID);
+      return page;
+    },
+    async saveDraft(input) {
+      observed.saves.push(input);
+      return { ...page, version: observed.saves.length + 1, body: input.document };
+    },
+    async listRevisions(input) {
+      observed.revisionLists.push(input);
+      return [{ version: 1 }];
+    },
+    async getRevision(input) {
+      observed.revisionReads.push(input);
+      return {
+        version: 1,
+        snapshot: {
+          title: page.title,
+          slug: page.slug,
+          locale: page.locale,
+          contentType: 'page',
+          document: page.body,
+        },
+      };
+    },
+    async submitForReview(input) {
+      observed.transitions.push({ action: 'submit-review', input });
+      return { status: 'in_review' };
+    },
+    async approve(input) {
+      observed.transitions.push({ action: 'approve', input });
+      return { status: 'approved' };
+    },
+    async rejectReview(input) {
+      observed.transitions.push({ action: 'reject', input });
+      return { status: 'draft' };
+    },
+    async publishContent(input) {
+      observed.transitions.push({ action: 'publish', input });
+      return { status: 'published' };
+    },
+    async scheduleContent(input) {
+      observed.transitions.push({ action: 'schedule', input });
+      return { status: 'scheduled' };
+    },
+    async archiveContent(input) {
+      observed.transitions.push({ action: 'archive', input });
+      return { status: 'archived' };
+    },
+    async unpublishContent(input) {
+      observed.transitions.push({ action: 'unpublish', input });
+      return { status: 'draft' };
+    },
+  };
+  const headers = {
+    authorization: `Bearer ${PAGE_TYPE_ISOLATION_SESSION}`,
+    'x-virgoscorpio-hub-site-id': PAGE_TYPE_ISOLATION_SITE_ID,
+  };
+
+  await withServer(async base => {
+    const detail = await fetch(`${base}/api/v1/pages/${PAGE_TYPE_ISOLATION_RECORD_ID}`, { headers });
+    assert.equal(detail.status, 200);
+    assert.equal((await detail.json()).content.content_type, 'page');
+
+    const revisions = await fetch(`${base}/api/v1/pages/${PAGE_TYPE_ISOLATION_RECORD_ID}/revisions`, { headers });
+    assert.equal(revisions.status, 200);
+    assert.deepEqual((await revisions.json()).revisions, [{ version: 1 }]);
+
+    const draft = await fetch(`${base}/api/v1/pages/drafts`, {
+      method: 'POST',
+      headers: { ...headers, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        id: PAGE_TYPE_ISOLATION_RECORD_ID,
+        document: page.body,
+      }),
+    });
+    assert.equal(draft.status, 201);
+
+    const restore = await fetch(`${base}/api/v1/pages/${PAGE_TYPE_ISOLATION_RECORD_ID}/restore/1`, {
+      method: 'POST',
+      headers: { ...headers, 'content-type': 'application/json' },
+      body: JSON.stringify({ expectedVersion: 1 }),
+    });
+    assert.equal(restore.status, 200);
+
+    const actions = [
+      'submit-review', 'approve', 'reject', 'publish', 'schedule', 'archive', 'unpublish',
+    ];
+    for (const action of actions) {
+      const response = await fetch(`${base}/api/v1/pages/${PAGE_TYPE_ISOLATION_RECORD_ID}/${action}`, {
+        method: 'POST',
+        headers: { ...headers, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          expectedVersion: 1,
+          scheduledAt: '2030-01-01T00:00:00.000Z',
+        }),
+      });
+      assert.equal(response.status, 200, `page workflow ${action}`);
+    }
+  }, {}, {
+    identityService: createPageTypeIsolationIdentity(),
+    contentStore,
+  });
+
+  assert.equal(observed.saves.length, 2, 'page draft update and restore should save');
+  assert.ok(observed.saves.every(input => input.expectedContentType === 'page'));
+  assert.deepEqual(observed.revisionLists.map(input => input.contentType), ['page']);
+  assert.deepEqual(observed.revisionReads.map(input => input.contentType), ['page']);
+  assert.deepEqual(observed.transitions.map(({ action }) => action), [
+    'submit-review', 'approve', 'reject', 'publish', 'schedule', 'archive', 'unpublish',
+  ]);
+  assert.ok(observed.transitions.every(({ input }) => input.expectedContentType === 'page'));
 });
