@@ -164,10 +164,63 @@ test(
   }
 );
 test(
+  'concurrent source replacements count the still-retained derivatives in both quota reservations',
+  { skip: !enabled },
+  async t => {
+    let releaseFirstPut;
+    let notifyFirstPut;
+    let replacementPutCount = 0;
+    const firstPutGate = new Promise(resolve => { releaseFirstPut = resolve; });
+    const firstPutStarted = new Promise(resolve => { notifyFirstPut = resolve; });
+    const { pool, siteId, store, objects } = await createFixture(t, {
+      maxSiteBytes: png.length * 3,
+      maxSiteObjects: 3,
+      onPutObject: async ({ key }) => {
+        if (/\/v[0-9]+-/.test(key)) {
+          replacementPutCount += 1;
+          if (replacementPutCount === 1) { notifyFirstPut(); await firstPutGate; }
+        }
+      },
+    });
+    const asset = await store.upload(uploadArgs(siteId, 'concurrent-source.png'));
+    const variant = await store.createVariant({
+      siteId, id: asset.id, variantKey: 'retained-preview', data: png, mimeType: 'image/png', expectedVersion: 1,
+    });
+    const first = store.replaceVersion({
+      siteId, id: asset.id, expectedVersion: 1, dataBase64: png.toString('base64'),
+      mimeType: 'image/png', fileName: 'first-replacement.png',
+    });
+    const firstOutcome = first.then(value => ({ value }), error => ({ error }));
+    let timeout;
+    try {
+      await Promise.race([firstPutStarted, new Promise((_, reject) => {
+        timeout = setTimeout(() => reject(new Error('First replacement did not reach object storage.')), 5000);
+      })]);
+      clearTimeout(timeout);
+      await assert.rejects(
+        store.replaceVersion({
+          siteId, id: asset.id, expectedVersion: 1, dataBase64: png.toString('base64'),
+          mimeType: 'image/png', fileName: 'second-replacement.png',
+        }),
+        error => error.code === 'ERR_VIRGOSCORPIO_HUB_LIBRARY_QUOTA_EXCEEDED' && error.statusCode === 413,
+        'the second pending replacement must count the first lease and every still-retained derivative'
+      );
+    } finally {
+      clearTimeout(timeout);
+      releaseFirstPut();
+    }
+    const result = await firstOutcome;
+    assert.equal(result.value?.version, 2, result.error?.message || 'the first replacement should commit');
+    assert.equal(objects.has(variant.storage_key), false, 'the derivative remains retained until the winning source replacement commits');
+    const reservations = await pool.query('SELECT id FROM library_storage_reservations WHERE site_id=$1', [siteId]);
+    assert.equal(reservations.rowCount, 0, 'the successful lease is consumed and the rejected lease is never persisted');
+  }
+);
+test(
   'library quota counts history and derivatives, carries valid variants across metadata versions, and releases replaced derivatives',
   { skip: !enabled },
   async t => {
-    const { pool, siteId, store, objects } = await createFixture(t, { maxSiteBytes: png.length * 2, maxSiteObjects: 2 });
+    const { pool, siteId, store, objects } = await createFixture(t, { maxSiteBytes: png.length * 3, maxSiteObjects: 3 });
     const asset = await store.upload(uploadArgs(siteId, 'source.png'));
     const variant = await store.createVariant({
       siteId,
@@ -191,11 +244,6 @@ test(
     assert.equal(Number(readableVariant.source_version), 2, 'metadata-only update must carry the variant binding forward');
     assert.deepEqual(readableVariant.data, png);
 
-    await assert.rejects(
-      store.createVariant({ siteId, id: asset.id, variantKey: 'second-preview', data: png, mimeType: 'image/png', expectedVersion: 2 }),
-      error => error.code === 'ERR_VIRGOSCORPIO_HUB_LIBRARY_QUOTA_EXCEEDED' && error.statusCode === 413,
-      'the current asset plus its retained derivative must consume both configured object slots'
-    );
 
     const replacement = await store.replaceVersion({
       siteId,
@@ -210,6 +258,14 @@ test(
     assert.equal(await store.readPublicVariant({ assetId: asset.id, variantKey: 'preview' }), null);
     const variants = await pool.query('SELECT id FROM media_variants WHERE asset_id=$1', [asset.id]);
     assert.equal(variants.rowCount, 0, 'source replacement must remove stale derivative references transactionally');
+    const replacementVariant = await store.createVariant({ siteId, id: asset.id, variantKey: 'replacement-preview', data: png, mimeType: 'image/png', expectedVersion: 3 });
+    assert.ok(objects.has(replacementVariant.storage_key));
+    await assert.rejects(
+      store.createVariant({ siteId, id: asset.id, variantKey: 'overflow-preview', data: png, mimeType: 'image/png', expectedVersion: 3 }),
+      error => error.code === 'ERR_VIRGOSCORPIO_HUB_LIBRARY_QUOTA_EXCEEDED' && error.statusCode === 413,
+      'retained history, current source, and current derivative must all consume quota'
+    );
+
     const history = await store.history({ siteId, id: asset.id });
     assert.equal(history.length, 3);
     assert.deepEqual(history.map(row => Number(row.snapshot.byteSize)), [png.length, png.length, png.length]);

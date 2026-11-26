@@ -87,24 +87,24 @@ function createLibraryStore({ pool, root = path.resolve(process.env.LIBRARY_ROOT
   }
   // Count distinct retained objects, including active reservations for external storage writes.
   // Legacy snapshots with missing/invalid byteSize are conservatively charged at maxFileBytes.
-  async function assertSiteQuota(queryable, siteId, additionalBytes, replacementVariantStorageKey = null, excludeVariantAssetId = null) {
+  async function assertSiteQuota(queryable, siteId, additionalBytes) {
     if (!Number.isSafeInteger(additionalBytes) || additionalBytes < 0) throw new TypeError('Additional library storage bytes must be a non-negative safe integer.');
     const sql = [
       'WITH retained AS (',
-      '  SELECT a.storage_key, COALESCE(a.byte_size::bigint, $3::bigint) AS size FROM library_assets a WHERE a.site_id=$1',
+      '  SELECT a.storage_key, COALESCE(a.byte_size::bigint, $2::bigint) AS size FROM library_assets a WHERE a.site_id=$1',
       '  UNION ALL',
-      "  SELECT v.storage_key, CASE WHEN v.snapshot->>'byteSize' ~ '^[0-9]{1,15}$' THEN (v.snapshot->>'byteSize')::bigint ELSE $3::bigint END AS size",
+      "  SELECT v.storage_key, CASE WHEN v.snapshot->>'byteSize' ~ '^[0-9]{1,15}$' THEN (v.snapshot->>'byteSize')::bigint ELSE $2::bigint END AS size",
       '  FROM library_asset_versions v JOIN library_assets a ON a.id=v.asset_id WHERE a.site_id=$1',
       '  UNION ALL',
       '  SELECT mv.storage_key, mv.byte_size::bigint AS size FROM media_variants mv JOIN library_assets a ON a.id=mv.asset_id',
-      '  WHERE a.site_id=$1 AND ($2::text IS NULL OR mv.storage_key <> $2) AND ($4::uuid IS NULL OR mv.asset_id <> $4)',
+      '  WHERE a.site_id=$1',
       '  UNION ALL',
       '  SELECT r.storage_key, r.byte_size::bigint AS size FROM library_storage_reservations r WHERE r.site_id=$1 AND r.expires_at > now()',
       '), distinct_objects AS (SELECT storage_key, MAX(size) AS size FROM retained WHERE storage_key IS NOT NULL GROUP BY storage_key)',
       'SELECT COALESCE(SUM(size),0)::text AS bytes, COUNT(*)::text AS objects FROM distinct_objects'
     ].join('\n');
     let row;
-    try { const usage = await queryable.query(sql, [siteId, replacementVariantStorageKey, maxFileBytes, excludeVariantAssetId]); row = usage && usage.rows && usage.rows[0]; }
+    try { const usage = await queryable.query(sql, [siteId, maxFileBytes]); row = usage && usage.rows && usage.rows[0]; }
     catch { throw libraryError('Library storage quota could not be verified.', 'ERR_VIRGOSCORPIO_HUB_LIBRARY_QUOTA_CHECK_FAILED', 503); }
     let usedBytes; let usedObjects;
     try { usedBytes = BigInt(row && row.bytes); usedObjects = BigInt(row && row.objects); }
@@ -114,15 +114,13 @@ function createLibraryStore({ pool, root = path.resolve(process.env.LIBRARY_ROOT
     if (usedObjects + 1n > BigInt(maxSiteObjects)) throw libraryError('The site library object quota of ' + maxSiteObjects + ' objects would be exceeded.', 'ERR_VIRGOSCORPIO_HUB_LIBRARY_QUOTA_EXCEEDED', 413);
   }
   // Reserve quota and commit before storage I/O; no database lock spans external latency.
-  async function reserveSiteStorage({ siteId, storageKey, byteSize, operation, validate = null, excludeVariantAssetId = null }) {
+  async function reserveSiteStorage({ siteId, storageKey, byteSize, operation, validate = null }) {
     const reservationId = randomUUID(); const client = await pool.connect();
     try {
       await client.query('BEGIN'); await lockSiteQuota(client, siteId);
       await client.query('DELETE FROM library_storage_reservations WHERE site_id=$1 AND expires_at <= now()', [siteId]);
       const context = typeof validate === 'function' ? await validate(client) : null;
-      const replacementKey = context && context.replacementVariantStorageKey || null;
-      const excludedAsset = context && context.excludeVariantAssetId || excludeVariantAssetId;
-      await assertSiteQuota(client, siteId, byteSize, replacementKey, excludedAsset);
+      await assertSiteQuota(client, siteId, byteSize);
       const inserted = await client.query("INSERT INTO library_storage_reservations(id,site_id,storage_key,byte_size,operation,expires_at) VALUES($1,$2,$3,$4,$5,now()+($6::integer * interval '1 minute')) RETURNING id", [reservationId, siteId, storageKey, byteSize, operation, DEFAULT_STORAGE_RESERVATION_TTL_MINUTES]);
       if (!inserted.rows[0]) throw libraryError('Library storage reservation could not be created.', 'ERR_VIRGOSCORPIO_HUB_LIBRARY_QUOTA_CHECK_FAILED', 503);
       await client.query('COMMIT'); return { reservationId, context };
@@ -252,14 +250,14 @@ function createLibraryStore({ pool, root = path.resolve(process.env.LIBRARY_ROOT
       let reservation = null; let storageWriteAttempted = false; let commitAttempted = false; let client = null; let staleVariantKeys = [];
       try {
         reservation = await reserveSiteStorage({
-          siteId, storageKey, byteSize: data.length, operation: 'replacement', excludeVariantAssetId: id,
+          siteId, storageKey, byteSize: data.length, operation: 'replacement',
           validate: async queryable => {
             const selected = await queryable.query("SELECT * FROM library_assets WHERE site_id=$1 AND id=$2 AND deleted_at IS NULL AND status='active' FOR SHARE", [siteId, id]);
             const old = selected.rows[0];
             if (!old) throw libraryError('Library asset not found.', 'ERR_VIRGOSCORPIO_HUB_LIBRARY_NOT_FOUND', 404);
             if (old.version !== requestedVersion) throw libraryError('Asset version is stale.', 'ERR_VIRGOSCORPIO_HUB_VERSION_CONFLICT', 409);
             if (!KIND_MIMES[old.asset_kind]?.has(detected)) throw libraryError('A new asset version must keep the same library category.', 'ERR_VIRGOSCORPIO_HUB_LIBRARY_TYPE');
-            return { excludeVariantAssetId: id };
+            return null;
           },
         });
         storageWriteAttempted = true; await put(storageKey, data, detected);
@@ -322,8 +320,7 @@ function createLibraryStore({ pool, root = path.resolve(process.env.LIBRARY_ROOT
             if (!KIND_MIMES[asset.asset_kind]?.has(detected)) throw libraryError('Variant MIME type does not match the parent library category.', 'ERR_VIRGOSCORPIO_HUB_LIBRARY_TYPE');
             const sourceVersion = expectedVersion === null || expectedVersion === undefined ? Number(asset.version) : Number(expectedVersion);
             if (!Number.isSafeInteger(sourceVersion) || sourceVersion !== Number(asset.version)) throw libraryError('Asset version is stale.', 'ERR_VIRGOSCORPIO_HUB_VERSION_CONFLICT', 409);
-            const existing = await queryable.query('SELECT storage_key FROM media_variants WHERE asset_id=$1 AND variant_key=$2', [id, variantKey]);
-            return { sourceVersion, replacementVariantStorageKey: existing.rows[0]?.storage_key || null };
+            return { sourceVersion };
           },
         });
         storageWriteAttempted = true; await put(storageKey, data, mimeType);
