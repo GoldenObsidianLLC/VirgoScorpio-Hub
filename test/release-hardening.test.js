@@ -21,8 +21,6 @@ function poolForInsert(capture = {}) {
           capture.calls ||= []; capture.calls.push({ sql, args });
           if (/INSERT INTO library_storage_reservations/.test(sql)) return { rows: [{ id: args[0] }], rowCount: 1 };
           if (/DELETE FROM library_storage_reservations/.test(sql)) return { rows: [{ id: args[0] }], rowCount: 1 };
-          if (/INSERT INTO library_storage_reservations/.test(sql)) return { rows: [{ id: args[0] }], rowCount: 1 };
-          if (/DELETE FROM library_storage_reservations/.test(sql)) return { rows: [{ id: args[0] }], rowCount: 1 };
           if (sql.includes('COALESCE(SUM(size),0)::text AS bytes')) return { rows: [{ bytes: '0', objects: '0' }] };
           if (/INSERT INTO library_assets/.test(sql)) return { rows: [{ id: args[0], site_id: args[1], storage_key: args[6], is_public: args[13], status: args[16], malware_scan_status: args[17], malware_scan_engine: args[18], metadata: JSON.parse(args[14]) }] };
           return { rows: [], rowCount: 1 };
@@ -355,12 +353,12 @@ test('library media variants validate file signatures and parent asset categorie
   const pool = {
     async query(sql, args) {
       calls.push({ sql, args });
-          if (/INSERT INTO library_storage_reservations/.test(sql)) return { rows: [{ id: args[0] }], rowCount: 1 };
-          if (/DELETE FROM library_storage_reservations/.test(sql)) return { rows: [{ id: args[0] }], rowCount: 1 };
-          if (/pg_advisory_xact_lock/.test(sql)) return { rows: [] };
-          if (sql.includes('COALESCE(SUM(size),0)::text AS bytes')) return { rows: [{ bytes: '0', objects: '0' }] };
-          if (sql.includes('DELETE FROM media_variants WHERE asset_id=$1 RETURNING storage_key')) return { rows: [] };
-          if (sql.includes('SELECT storage_key FROM media_variants WHERE asset_id=')) return { rows: [] };
+      if (/INSERT INTO library_storage_reservations/.test(sql)) return { rows: [{ id: args[0] }], rowCount: 1 };
+      if (/DELETE FROM library_storage_reservations/.test(sql)) return { rows: [{ id: args[0] }], rowCount: 1 };
+      if (/pg_advisory_xact_lock/.test(sql)) return { rows: [] };
+      if (sql.includes('COALESCE(SUM(size),0)::text AS bytes')) return { rows: [{ bytes: '0', objects: '0' }] };
+      if (sql.includes('DELETE FROM media_variants WHERE asset_id=$1 RETURNING storage_key')) return { rows: [] };
+      if (sql.includes('SELECT storage_key FROM media_variants WHERE asset_id=')) return { rows: [] };
       if (/SELECT id,asset_kind,version FROM library_assets/.test(sql)) return { rows: [{ id: 'asset-one', asset_kind: 'image', version: 1 }] };
       if (/INSERT INTO media_variants/.test(sql)) {
         insertCount += 1;
@@ -375,8 +373,6 @@ test('library media variants validate file signatures and parent asset categorie
         async query(sql, args) {
           if (['BEGIN', 'COMMIT', 'ROLLBACK'].includes(sql)) {
             calls.push({ sql, args });
-          if (/INSERT INTO library_storage_reservations/.test(sql)) return { rows: [{ id: args[0] }], rowCount: 1 };
-          if (/DELETE FROM library_storage_reservations/.test(sql)) return { rows: [{ id: args[0] }], rowCount: 1 };
             return { rows: [] };
           }
           return pool.query(sql, args);
@@ -415,9 +411,7 @@ test('library media variants validate file signatures and parent asset categorie
 test('library optimization status updates can be guarded by the source asset version', async () => {
   const calls = [];
   const pool = {
-    async query(sql, args) { calls.push({ sql, args });
-          if (/INSERT INTO library_storage_reservations/.test(sql)) return { rows: [{ id: args[0] }], rowCount: 1 };
-          if (/DELETE FROM library_storage_reservations/.test(sql)) return { rows: [{ id: args[0] }], rowCount: 1 }; return { rows: [] }; },
+    async query(sql, args) { calls.push({ sql, args }); return { rows: [] }; },
   };
   const store = createLibraryStore({ pool, requireMalwareScan: false });
   const stale = await store.markOptimization({
@@ -444,8 +438,6 @@ test('metadata-only library versions advance only already-bound derivative sourc
       return {
         async query(sql, args) {
           calls.push({ sql, args });
-          if (/INSERT INTO library_storage_reservations/.test(sql)) return { rows: [{ id: args[0] }], rowCount: 1 };
-          if (/DELETE FROM library_storage_reservations/.test(sql)) return { rows: [{ id: args[0] }], rowCount: 1 };
           if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') return { rows: [] };
           if (/SELECT \* FROM library_assets/.test(sql)) return { rows: [{ ...oldAsset }] };
           if (/UPDATE library_assets SET/.test(sql)) return { rows: [{ ...updatedAsset }] };
