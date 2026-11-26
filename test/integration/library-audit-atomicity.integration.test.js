@@ -196,8 +196,6 @@ test(
       );
       const oldRow = initialRow.rows[0];
       const oldPath = path.join(libraryRoot, ...oldRow.storage_key.split('/'));
-      const nextObjectKey = siteId + '/' + initial.id + '/v2.txt';
-      const nextPath = path.join(libraryRoot, ...nextObjectKey.split('/'));
       const filesBefore = await filesBelow(libraryRoot);
       const requestId = 'library-version-' + randomUUID();
 
@@ -234,7 +232,6 @@ test(
       `, [siteId, initial.id]);
       assert.deepEqual(rolledBack.rows[0], { current_version: 1, version_count: 1, audit_count: 0 });
       assert.equal(await fileExists(oldPath), true, 'the previous version object must remain');
-      assert.equal(await fileExists(nextPath), false, 'the failed replacement object must be removed');
       assert.deepEqual(await filesBelow(libraryRoot), filesBefore);
 
       await removeAuditFailure();
@@ -242,7 +239,14 @@ test(
       assert.equal(replaced.version, 2);
       assert.equal(replaced.status, 'active');
       assert.equal(await fileExists(oldPath), true);
-      assert.equal(await fileExists(nextPath), true);
+      const committedAsset = await pool.query(
+        'SELECT storage_key FROM library_assets WHERE site_id=$1 AND id=$2',
+        [siteId, initial.id],
+      );
+      assert.equal(committedAsset.rows[0].storage_key.startsWith(siteId + '/' + initial.id + '/v2-'), true,
+        'replacement writes use immutable randomized version keys');
+      const committedPath = path.join(libraryRoot, ...committedAsset.rows[0].storage_key.split('/'));
+      assert.equal(await fileExists(committedPath), true, 'the committed version object must exist at its persisted key');
       const committed = await pool.query(`
         SELECT
           (SELECT version FROM library_assets WHERE site_id=$1 AND id=$2) AS current_version,

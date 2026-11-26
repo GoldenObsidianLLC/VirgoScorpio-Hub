@@ -39,7 +39,7 @@ async function handleSiteMembershipRoute(ctx) {
     const siteId = await resolveRouteSite(membersMatch[1]);
     await requireCapability(actor, siteId, 'site:manage');
 
-    const members = await identity.listMembers({ siteId });
+    const members = await identity.listMembers({ siteId, actorId: actor.user.id });
     return sendJson(res, 200, { members, requestId });
   }
 

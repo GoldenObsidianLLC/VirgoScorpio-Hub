@@ -21,7 +21,10 @@ function createRecordingPool({ existing = null, failContentWrite = null } = {}) 
       const normalized = String(sql).replace(/\s+/g, ' ').trim();
       calls.push({ sql: normalized, values });
       if (normalized === 'BEGIN' || normalized === 'COMMIT' || normalized === 'ROLLBACK') return { rows: [] };
-      if (normalized.startsWith('SELECT id,version,status FROM content_items')) return { rows: existing ? [{ ...existing }] : [] };
+      if (normalized.startsWith('SELECT id,version,status,content_type FROM content_items')) {
+        const matchesContentType = !values[2] || existing?.content_type === values[2];
+        return { rows: existing && matchesContentType ? [{ ...existing }] : [] };
+      }
       if (normalized.startsWith('INSERT INTO content_items') || normalized.startsWith('UPDATE content_items SET title=')) {
         if (failContentWrite) throw failContentWrite;
         return { rows: [{ ...row }] };
@@ -58,7 +61,7 @@ test('saveDraft awaits onDraftSaved with the exact transaction client before com
 });
 
 test('saveDraft passes the locked previous row to onDraftSaved for updates', async () => {
-  const previous = { id: CONTENT_ID, version: 7, status: 'in_review' };
+  const previous = { id: CONTENT_ID, version: 7, status: 'in_review', content_type: 'page' };
   const recording = createRecordingPool({ existing: previous });
   const store = createPostgresStore({ pool: recording.pool });
   let context;
@@ -67,6 +70,23 @@ test('saveDraft passes the locked previous row to onDraftSaved for updates', asy
   assert.deepEqual(context.previous, previous);
   assert.equal(context.queryable, recording.client);
   assert.equal(context.result, saved);
+});
+
+test('saveDraft enforces the expected content type in its locked update query', async () => {
+  const customRecord = { id: CONTENT_ID, version: 7, status: 'draft', content_type: 'product' };
+  const recording = createRecordingPool({ existing: customRecord });
+  const store = createPostgresStore({ pool: recording.pool });
+
+  await assert.rejects(
+    store.saveDraft(input({ id: CONTENT_ID, expectedVersion: 7, expectedContentType: 'page' })),
+    error => error.statusCode === 404 && error.code === 'ERR_VIRGOSCORPIO_HUB_CONTENT_NOT_FOUND',
+  );
+
+  const lockQuery = recording.calls.find(call => call.sql.startsWith('SELECT id,version,status,content_type FROM content_items'));
+  assert.equal(lockQuery.values[2], 'page');
+  assert.equal(recording.calls.some(call => call.sql.startsWith('UPDATE content_items SET title=')), false);
+  assert.ok(recording.calls.some(call => call.sql === 'ROLLBACK'));
+  assert.equal(recording.calls.some(call => call.sql === 'COMMIT'), false);
 });
 
 test('saveDraft remains backwards compatible when onDraftSaved is omitted', async () => {
