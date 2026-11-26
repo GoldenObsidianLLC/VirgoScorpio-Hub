@@ -19,6 +19,9 @@ function poolForInsert(capture = {}) {
       return {
         async query(sql, args) {
           capture.calls ||= []; capture.calls.push({ sql, args });
+          if (/INSERT INTO library_storage_reservations/.test(sql)) return { rows: [{ id: args[0] }], rowCount: 1 };
+          if (/DELETE FROM library_storage_reservations/.test(sql)) return { rows: [{ id: args[0] }], rowCount: 1 };
+          if (sql.includes('COALESCE(SUM(size),0)::text AS bytes')) return { rows: [{ bytes: '0', objects: '0' }] };
           if (/INSERT INTO library_assets/.test(sql)) return { rows: [{ id: args[0], site_id: args[1], storage_key: args[6], is_public: args[13], status: args[16], malware_scan_status: args[17], malware_scan_engine: args[18], metadata: JSON.parse(args[14]) }] };
           return { rows: [], rowCount: 1 };
         },
@@ -93,6 +96,9 @@ test('library upload persists its audit callback on the store transaction before
       client = {
         async query(sql, args) {
           calls.push({ sql, args });
+          if (/INSERT INTO library_storage_reservations/.test(sql)) return { rows: [{ id: args[0] }], rowCount: 1 };
+          if (/DELETE FROM library_storage_reservations/.test(sql)) return { rows: [{ id: args[0] }], rowCount: 1 };
+          if (sql.includes('COALESCE(SUM(size),0)::text AS bytes')) return { rows: [{ bytes: '0', objects: '0' }] };
           if (/INSERT INTO library_assets/.test(sql)) {
             return { rows: [{
               id: args[0], site_id: args[1], asset_kind: args[2], storage_key: args[6],
@@ -120,10 +126,10 @@ test('library upload persists its audit callback on the store transaction before
 
   assert.equal(callbackResult, asset);
   const auditIndex = calls.findIndex(call => /INSERT INTO audit_events/.test(call.sql));
-  const commitIndex = calls.findIndex(call => call.sql === 'COMMIT');
+  const commitIndex = calls.findLastIndex(call => call.sql === 'COMMIT');
   assert.ok(auditIndex >= 0);
-  assert.ok(commitIndex > auditIndex, 'the audit insert must precede COMMIT');
-  assert.equal(calls.filter(call => call.sql === 'COMMIT').length, 1);
+  assert.ok(commitIndex > auditIndex, 'the audit insert must precede the asset transaction COMMIT');
+  assert.equal(calls.filter(call => call.sql === 'COMMIT').length, 2, 'reservation and asset finalization are separate short transactions');
   assert.equal(calls.some(call => call.sql === 'ROLLBACK'), false);
   assert.equal(fs.existsSync(path.join(root, asset.storage_key)), true);
 });
@@ -138,6 +144,11 @@ test('library upload rolls back and removes its object when the in-transaction a
       return {
         async query(sql, args) {
           calls.push({ sql, args });
+          if (/INSERT INTO library_storage_reservations/.test(sql)) return { rows: [{ id: args[0] }], rowCount: 1 };
+          if (/DELETE FROM library_storage_reservations/.test(sql)) return { rows: [{ id: args[0] }], rowCount: 1 };
+          if (/pg_advisory_xact_lock/.test(sql)) return { rows: [] };
+          if (sql.includes('COALESCE(SUM(size),0)::text AS bytes')) return { rows: [{ bytes: '0', objects: '0' }] };
+          if (sql.includes('DELETE FROM media_variants WHERE asset_id=$1 RETURNING storage_key')) return { rows: [] };
           if (/INSERT INTO library_assets/.test(sql)) {
             return { rows: [{ id: args[0], site_id: args[1], storage_key: args[6] }] };
           }
@@ -164,7 +175,7 @@ test('library upload rolls back and removes its object when the in-transaction a
 
   assert.ok(calls.some(call => call.sql === 'AUDIT_CALLBACK'));
   assert.ok(calls.some(call => call.sql === 'ROLLBACK'));
-  assert.equal(calls.some(call => call.sql === 'COMMIT'), false);
+  assert.equal(calls.filter(call => call.sql === 'COMMIT').length, 1, 'only the quota reservation commits; the asset/audit transaction rolls back');
   assert.deepEqual(await filesBelow(root), [], 'the newly written object must be compensated');
 });
 
@@ -196,7 +207,7 @@ test('library version replacement rolls back and removes the new object when aud
   const oldBytes = Buffer.from('original library file');
   const newBytes = Buffer.from('replacement library file');
   const oldKey = siteId + '/' + assetId + '/v1.txt';
-  const newKey = siteId + '/' + assetId + '/v2.txt';
+  const nextVersionPrefix = path.join(siteId, assetId, 'v2-');
   await fs.promises.mkdir(path.dirname(path.join(root, oldKey)), { recursive: true });
   await fs.promises.writeFile(path.join(root, oldKey), oldBytes);
   const calls = [];
@@ -207,6 +218,11 @@ test('library version replacement rolls back and removes the new object when aud
       client = {
         async query(sql, args) {
           calls.push({ sql, args });
+          if (/INSERT INTO library_storage_reservations/.test(sql)) return { rows: [{ id: args[0] }], rowCount: 1 };
+          if (/DELETE FROM library_storage_reservations/.test(sql)) return { rows: [{ id: args[0] }], rowCount: 1 };
+          if (/pg_advisory_xact_lock/.test(sql)) return { rows: [] };
+          if (sql.includes('COALESCE(SUM(size),0)::text AS bytes')) return { rows: [{ bytes: '0', objects: '0' }] };
+          if (sql.includes('DELETE FROM media_variants WHERE asset_id=$1 RETURNING storage_key')) return { rows: [] };
           if (/SELECT \* FROM library_assets/.test(sql)) {
             return { rows: [{
               id: assetId, site_id: siteId, version: 1, status: 'active',
@@ -249,11 +265,82 @@ test('library version replacement rolls back and removes the new object when aud
 
   assert.ok(calls.some(call => call.sql === 'AUDIT_CALLBACK'));
   assert.ok(calls.some(call => call.sql === 'ROLLBACK'));
-  assert.equal(calls.some(call => call.sql === 'COMMIT'), false);
+  assert.equal(calls.filter(call => call.sql === 'COMMIT').length, 1, 'only the quota reservation commits; the asset/audit transaction rolls back');
   assert.equal(fs.existsSync(path.join(root, oldKey)), true, 'the previous object must remain');
-  assert.equal(fs.existsSync(path.join(root, newKey)), false, 'the replacement object must be removed');
+  assert.deepEqual(await filesBelow(root), [path.join(siteId, assetId, 'v1.txt')], 'the failed replacement object must be removed while the old source remains');
 });
 
+test('library version replacement preserves the new object when COMMIT acknowledgement is ambiguous', async t => {
+  const root = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'vsh-library-replace-commit-ambiguous-'));
+  t.after(() => fs.promises.rm(root, { recursive: true, force: true }));
+  const siteId = 'site-one';
+  const assetId = 'asset-one';
+  const oldBytes = Buffer.from('original library file');
+  const newBytes = Buffer.from('replacement library file');
+  const oldKey = siteId + '/' + assetId + '/v1.txt';
+  const nextVersionPrefix = path.join(siteId, assetId, 'v2-');
+  await fs.promises.mkdir(path.dirname(path.join(root, oldKey)), { recursive: true });
+  await fs.promises.writeFile(path.join(root, oldKey), oldBytes);
+  const calls = [];
+  const commitError = new Error('connection dropped after PostgreSQL committed');
+  let commitApplied = false;
+  let commitCount = 0;
+  const pool = {
+    async connect() {
+      return {
+        async query(sql, args) {
+          calls.push({ sql, args });
+          if (/INSERT INTO library_storage_reservations/.test(sql)) return { rows: [{ id: args[0] }], rowCount: 1 };
+          if (/DELETE FROM library_storage_reservations/.test(sql)) return { rows: [{ id: args[0] }], rowCount: 1 };
+          if (/pg_advisory_xact_lock/.test(sql)) return { rows: [] };
+          if (sql.includes('COALESCE(SUM(size),0)::text AS bytes')) return { rows: [{ bytes: '0', objects: '0' }] };
+          if (sql.includes('DELETE FROM media_variants WHERE asset_id=$1 RETURNING storage_key')) return { rows: [] };
+          if (/SELECT \* FROM library_assets/.test(sql)) {
+            return { rows: [{
+              id: assetId, site_id: siteId, version: 1, status: 'active',
+              asset_kind: 'document', storage_key: oldKey, sha256: 'a'.repeat(64),
+              display_name: 'original.txt', original_name: 'original.txt',
+              alt_text: '', caption: '', description: '', is_public: false, metadata: {},
+              mime_type: 'text/plain', byte_size: oldBytes.length, updated_by: 'actor-one',
+            }] };
+          }
+          if (/UPDATE library_assets SET original_name/.test(sql)) {
+            return { rows: [{
+              id: assetId, site_id: siteId, version: 2, status: 'quarantined',
+              asset_kind: 'document', display_name: 'original.txt', original_name: 'replacement.txt',
+              mime_type: 'text/plain', byte_size: newBytes.length, sha256: args[6],
+              alt_text: '', caption: '', description: '', is_public: false, metadata: {},
+            }] };
+          }
+          if (sql === 'COMMIT') {
+            commitCount += 1;
+            if (commitCount === 2) { commitApplied = true; throw commitError; }
+            return { rows: [] };
+          }
+          return { rows: [], rowCount: 1 };
+        },
+        release() { calls.push({ sql: 'RELEASE' }); },
+      };
+    },
+  };
+  const store = createLibraryStore({ pool, root, requireMalwareScan: false });
+
+  await assert.rejects(
+    store.replaceVersion({
+      siteId, id: assetId, actorId: 'actor-one', expectedVersion: 1,
+      dataBase64: newBytes.toString('base64'), mimeType: 'text/plain', fileName: 'replacement.txt',
+    }),
+    error => error === commitError,
+  );
+
+  assert.equal(commitApplied, true, 'the simulated database commit completed before its acknowledgement was lost');
+  assert.ok(calls.some(call => call.sql === 'ROLLBACK'), 'cleanup still attempts to close the client transaction');
+  assert.equal(fs.existsSync(path.join(root, oldKey)), true, 'the previous object remains available to the version history');
+  const retainedFiles = await filesBelow(root);
+  assert.equal(retainedFiles.length, 2, 'the old source and ambiguously committed replacement must both remain');
+  assert.ok(retainedFiles.some(key => key.startsWith(nextVersionPrefix)),
+    'the replacement object must remain because the committed row may reference it');
+});
 test('library media variants validate file signatures and parent asset categories before storage', async t => {
   const root = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'vsh-library-variants-'));
   t.after(() => fs.promises.rm(root, { recursive: true, force: true }));
@@ -262,17 +349,37 @@ test('library media variants validate file signatures and parent asset categorie
   webp.write('WEBP', 8, 'ascii');
   let variantRow = null;
   let insertCount = 0;
+  const calls = [];
   const pool = {
     async query(sql, args) {
+      calls.push({ sql, args });
+      if (/INSERT INTO library_storage_reservations/.test(sql)) return { rows: [{ id: args[0] }], rowCount: 1 };
+      if (/DELETE FROM library_storage_reservations/.test(sql)) return { rows: [{ id: args[0] }], rowCount: 1 };
+      if (/pg_advisory_xact_lock/.test(sql)) return { rows: [] };
+      if (sql.includes('COALESCE(SUM(size),0)::text AS bytes')) return { rows: [{ bytes: '0', objects: '0' }] };
+      if (sql.includes('DELETE FROM media_variants WHERE asset_id=$1 RETURNING storage_key')) return { rows: [] };
+      if (sql.includes('SELECT storage_key FROM media_variants WHERE asset_id=')) return { rows: [] };
       if (/SELECT id,asset_kind,version FROM library_assets/.test(sql)) return { rows: [{ id: 'asset-one', asset_kind: 'image', version: 1 }] };
       if (/INSERT INTO media_variants/.test(sql)) {
         insertCount += 1;
-        variantRow = { id: 'variant-one', asset_id: args[0], variant_key: args[1], storage_key: args[2], mime_type: args[3], byte_size: args[4], sha256: args[7], asset_kind: 'image' };
+        variantRow = { id: 'variant-one', asset_id: args[0], variant_key: args[1], storage_key: args[2], mime_type: args[3], byte_size: args[4], sha256: args[7], source_version: args[8], asset_kind: 'image' };
         return { rows: [{ ...variantRow }] };
       }
-      if (/FROM media_variants v JOIN library_assets a/.test(sql)) return { rows: variantRow ? [{ ...variantRow }] : [] };
+      if (/FROM media_variants v JOIN library_assets a/.test(sql)) return { rows: variantRow?.source_version === 1 ? [{ ...variantRow }] : [] };
       throw new Error('Unexpected library variant query.');
-    }
+    },
+    async connect() {
+      return {
+        async query(sql, args) {
+          if (['BEGIN', 'COMMIT', 'ROLLBACK'].includes(sql)) {
+            calls.push({ sql, args });
+            return { rows: [] };
+          }
+          return pool.query(sql, args);
+        },
+        release() { calls.push({ sql: 'RELEASE' }); },
+      };
+    },
   };
   const store = createLibraryStore({ pool, root, requireMalwareScan: false });
   await assert.rejects(() => store.createVariant({ siteId: 'site-one', id: 'asset-one', variantKey: 'webp-optimized', data: Buffer.from('not a WebP image'), mimeType: 'image/webp' }), { code: 'ERR_VIRGOSCORPIO_HUB_LIBRARY_TYPE' });
@@ -281,14 +388,76 @@ test('library media variants validate file signatures and parent asset categorie
   assert.deepEqual(await fs.promises.readdir(root), [], 'invalid variants must be rejected before writing object bytes');
   const created = await store.createVariant({ siteId: 'site-one', id: 'asset-one', variantKey: 'webp-optimized', data: webp, mimeType: 'image/webp' });
   assert.equal(created.mime_type, 'image/webp');
+  assert.equal(created.source_version, 1);
+  const variantInsert = calls.find(call => /INSERT INTO media_variants/.test(call.sql));
+  assert.match(variantInsert.sql, /RETURNING[^;]*storage_key/i, 'the store returns the derivative object key for lifecycle cleanup');
   assert.equal(insertCount, 1);
+  assert.equal(calls.find(call => /INSERT INTO media_variants/.test(call.sql))?.args[8], 1);
+  assert.ok(calls.some(call => typeof call.sql === 'string' && /FOR SHARE/.test(call.sql)), 'variant insertion holds a shared lock on the expected parent version');
   const readable = await store.readPublicVariant({ assetId: 'asset-one', variantKey: 'webp-optimized' });
   assert.deepEqual(readable.data, webp);
+  const publicReadQuery = calls.find(call => typeof call.sql === 'string' && /FROM media_variants v JOIN library_assets a/.test(call.sql));
+  assert.match(publicReadQuery.sql, /v\.source_version=a\.version/, 'public derivative lookup binds the stored variant to the current source version');
+  variantRow.source_version = null;
+  assert.equal(await store.readPublicVariant({ assetId: 'asset-one', variantKey: 'webp-optimized' }), null, 'legacy/unbound derivative rows fail closed');
+  variantRow.source_version = 1;
   const corrupted = Buffer.from('not a WebP image');
   await fs.promises.writeFile(path.join(root, variantRow.storage_key), corrupted);
   variantRow.byte_size = corrupted.length;
   variantRow.sha256 = require('node:crypto').createHash('sha256').update(corrupted).digest('hex');
   assert.equal(await store.readPublicVariant({ assetId: 'asset-one', variantKey: 'webp-optimized' }), null, 'a matching stored hash must not override a MIME signature mismatch');
+});
+
+test('library optimization status updates can be guarded by the source asset version', async () => {
+  const calls = [];
+  const pool = {
+    async query(sql, args) { calls.push({ sql, args }); return { rows: [] }; },
+  };
+  const store = createLibraryStore({ pool, requireMalwareScan: false });
+  const stale = await store.markOptimization({
+    siteId: 'site-one', id: 'asset-one', status: 'failed', details: { reason: 'stale' }, expectedVersion: 7,
+  });
+  assert.equal(stale, null, 'an update for a replaced asset version affects no rows');
+  assert.match(calls[0].sql, /AND \(\$5::integer IS NULL OR version=\$5\)/);
+  assert.equal(calls[0].args[4], 7);
+
+  await store.markOptimization({ siteId: 'site-one', id: 'asset-one', status: 'pending' });
+  assert.equal(calls[1].args[4], null, 'legacy callers remain compatible when no version is supplied');
+});
+test('metadata-only library versions advance only already-bound derivative source versions transactionally', async () => {
+  const calls = [];
+  const oldAsset = {
+    id: 'asset-one', site_id: 'site-one', version: 4, display_name: 'Private image',
+    original_name: 'image.png', alt_text: '', caption: '', description: '',
+    is_public: false, metadata: {}, storage_key: 'site-one/asset-one/v4.png',
+    sha256: 'a'.repeat(64), updated_by: 'user-one',
+  };
+  const updatedAsset = { ...oldAsset, version: 5, is_public: true, updated_at: new Date().toISOString() };
+  const pool = {
+    async connect() {
+      return {
+        async query(sql, args) {
+          calls.push({ sql, args });
+          if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') return { rows: [] };
+          if (/SELECT \* FROM library_assets/.test(sql)) return { rows: [{ ...oldAsset }] };
+          if (/UPDATE library_assets SET/.test(sql)) return { rows: [{ ...updatedAsset }] };
+          return { rows: [] };
+        },
+        release() { calls.push({ sql: 'RELEASE' }); },
+      };
+    },
+  };
+  const store = createLibraryStore({ pool, requireMalwareScan: false });
+  const result = await store.updateMetadata({
+    siteId: 'site-one', id: 'asset-one', expectedVersion: 4, patch: { isPublic: true },
+  });
+  assert.equal(result.version, 5);
+  assert.equal(result.is_public, true);
+  const binding = calls.find(call => /UPDATE media_variants SET source_version/.test(call.sql));
+  assert.ok(binding, 'the same-byte derivative binding is advanced as part of the version transaction');
+  assert.match(binding.sql, /WHERE asset_id=\$1 AND source_version=\$2/);
+  assert.deepEqual(binding.args, ['asset-one', 4, 5]);
+  assert.ok(calls.indexOf(binding) < calls.findIndex(call => call.sql === 'COMMIT'), 'binding update precedes commit');
 });
 
 test('production library uploads fail closed when scanner is missing, detects malware, or times out', async t => {

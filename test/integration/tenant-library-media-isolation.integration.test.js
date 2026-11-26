@@ -203,8 +203,8 @@ test(
     await fs.mkdir(path.dirname(variantPath), { recursive: true });
     await fs.writeFile(variantPath, variantBytes, { flag: 'wx' });
     await pool.query(
-      `INSERT INTO media_variants(asset_id,variant_key,storage_key,mime_type,byte_size,sha256)
-       VALUES($1,'private-preview',$2,'text/plain',$3,$4)`,
+      `INSERT INTO media_variants(asset_id,variant_key,storage_key,mime_type,byte_size,sha256,source_version)
+       VALUES($1,'private-preview',$2,'text/plain',$3,$4,1)`,
       [assetAId, variantKey, variantBytes.length, createHash('sha256').update(variantBytes).digest('hex')]
     );
 
@@ -218,8 +218,8 @@ test(
     await fs.mkdir(path.dirname(publicVariantPath), { recursive: true });
     await fs.writeFile(publicVariantPath, publicVariantBytes, { flag: 'wx' });
     await pool.query(
-      'INSERT INTO media_variants(asset_id,variant_key,storage_key,mime_type,byte_size,sha256) ' +
-      "VALUES($1,'public-preview',$2,'text/plain',$3,$4)",
+      'INSERT INTO media_variants(asset_id,variant_key,storage_key,mime_type,byte_size,sha256,source_version) ' +
+      "VALUES($1,'public-preview',$2,'text/plain',$3,$4,1)",
       [assetBId, publicVariantKey, publicVariantBytes.length, createHash('sha256').update(publicVariantBytes).digest('hex')]
     );
 

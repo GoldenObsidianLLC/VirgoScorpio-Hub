@@ -91,6 +91,48 @@ async function createDirectConversation(ctx, siteId, body) {
   const { conversation, created } = await withTransaction(localPool, async client => {
     const pair = [actor.user.id, recipientId].sort();
     await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`virgoscorpio_hub:direct:${siteId}:${pair.join(':')}`]);
+
+    // Serialize against site membership removal before revalidating either
+    // participant. Membership administration takes this site row FOR UPDATE.
+    const site = await client.query(
+      'SELECT id FROM sites WHERE id=$1 FOR KEY SHARE',
+      [siteId],
+    );
+    if (!site.rows[0]) {
+      routeError(ctx, 404, 'ERR_VIRGOSCORPIO_HUB_SITE_NOT_FOUND', 'Site not found.');
+    }
+
+    const participantIds = [actor.user.id, recipientId];
+    const participants = await client.query(
+      'SELECT id,status FROM users WHERE id=ANY($1::uuid[]) ORDER BY id FOR UPDATE',
+      [participantIds],
+    );
+    const memberships = await client.query(
+      `SELECT user_id
+         FROM site_memberships
+        WHERE site_id=$1 AND user_id=ANY($2::uuid[])
+        ORDER BY user_id,role_id
+        FOR UPDATE`,
+      [siteId, participantIds],
+    );
+    const activeParticipantIds = new Set(
+      participants.rows
+        .filter(participant => participant.status === 'active')
+        .map(participant => participant.id),
+    );
+    const siteMemberIds = new Set(memberships.rows.map(membership => membership.user_id));
+    if (participantIds.some(userId => (
+      !activeParticipantIds.has(userId) || !siteMemberIds.has(userId)
+    ))) {
+      // Keep the same generic contract for actor and recipient revocation.
+      routeError(
+        ctx,
+        404,
+        'ERR_VIRGOSCORPIO_HUB_COMMUNITY_USER_NOT_FOUND',
+        'User is not an active member of this site.',
+      );
+    }
+
     if (await hasBlockBetween(client, siteId, actor.user.id, recipientId)) {
       routeError(ctx, 403, 'ERR_VIRGOSCORPIO_HUB_COMMUNITY_BLOCKED', 'A conversation cannot be created between these users.');
     }
@@ -324,6 +366,30 @@ async function handleModeration(ctx, siteId) {
   }
   const reason = cleanRequiredText(body.reason, MAX_MODERATION_REASON_LENGTH);
   const target = await withTransaction(ctx.localPool, async client => {
+    // Revalidate the moderator inside the mutation transaction. The
+    // capability check may be stale after body parsing; the site lock is
+    // acquired before user/membership/role locks, matching the member-removal
+    // path; shared row locks make concurrent account, membership, and role changes
+    // wait until the moderation transaction completes.
+    if (!ctx.actor.isDeveloper) {
+      await client.query('SELECT id FROM sites WHERE id=$1 FOR KEY SHARE', [siteId]);
+      const authorization = await client.query(
+        `SELECT r.capabilities
+           FROM users u
+           JOIN site_memberships m ON m.user_id=u.id AND m.site_id=$1
+           JOIN roles r ON r.id=m.role_id
+          WHERE u.id=$2 AND u.status='active'
+          ORDER BY u.id, m.role_id, r.id
+            FOR SHARE OF u, m, r`,
+        [siteId, ctx.actor.user.id]
+      );
+      const stillAuthorized = authorization.rows.some(row => Array.isArray(row.capabilities) && (
+        row.capabilities.includes('community:moderate') || row.capabilities.includes('site:manage') || row.capabilities.includes('*')
+      ));
+      if (!stillAuthorized) {
+        routeError(ctx, 403, 'ERR_VIRGOSCORPIO_HUB_FORBIDDEN', 'The community:moderate capability is required for this site.');
+      }
+    }
     let result;
     if (body.targetType === 'activity') {
       result = await client.query(

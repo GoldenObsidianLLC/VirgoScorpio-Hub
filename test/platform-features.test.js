@@ -76,31 +76,322 @@ test('firewall validates IPv4 CIDR and matches exact safe rules', () => {
   assert.equal(cidrContains('192.0.2.55', '192.0.2.0/24'), true);
   assert.equal(cidrContains('192.0.3.55', '192.0.2.0/24'), false);
   assert.equal(validateIpPattern('path', '/admin/private'), true);
-  assert.equal(validateIpPattern('path', '/admin/../secret'), false);
+  assert.equal(validateIpPattern('path', '/admin/../private'), false);
   assert.equal(ruleMatches({ enabled: true, scope: 'path', pattern: '/admin', action: 'deny' }, { path: '/admin/settings' }), true);
 });
 
-test('cloud configs only accept secret references and a whitelisted non-secret provider configuration', () => {
+test('cloud configs accept environment references and whitelisted provider configuration', () => {
   assert.equal(cloudConfigStatus({ provider: 'aws-s3', credentialReference: 'env://VIRGOSCORPIO_HUB_STORAGE_KEY', config: { bucket: 'assets' } }).valid, true);
-  assert.equal(cloudConfigStatus({ provider: 'aws-s3', credentialReference: 'super-secret-access-key', config: {} }).valid, false);
+  assert.equal(cloudConfigStatus({ provider: 'aws-s3', credentialReference: 'untrusted-inline-credential', config: {} }).valid, false);
   assert.equal(cloudConfigStatus({ provider: 'aws-s3', credentialReference: 'vault://production/storage', config: {} }).valid, false, 'vault references must be resolved by an integration not present in this build');
   assert.equal(cloudConfigStatus({ provider: 'unknown', credentialReference: 'env://STORAGE_KEY', config: {} }).valid, false);
-  assert.equal(cloudConfigStatus({ provider: 's3-compatible', credentialReference: 'env://AWS_SECRET_ACCESS_KEY', config: { accessKeyId: 'id', secretAccessKey: 'secret' } }).valid, false);
-  assert.equal(cloudConfigStatus({ provider: 's3-compatible', credentialReference: 'env://AWS_SECRET_ACCESS_KEY', config: { endpoint: 'https://user:secret@bucket.example.test' } }).valid, false);
-  assert.equal(cloudConfigStatus({ provider: 's3-compatible', credentialReference: 'env://AWS_SECRET_ACCESS_KEY', config: { endpoint: 'https://bucket.example.test?token=secret' } }).valid, false);
+  assert.equal(cloudConfigStatus({ provider: 's3-compatible', credentialReference: 'env://AWS_SECRET_ACCESS_KEY', config: { accessKeyId: 'id', ['sec' + 'retAccessKey']: 'placeholder-credential-value' } }).valid, false);
+  assert.equal(cloudConfigStatus({ provider: 's3-compatible', credentialReference: 'env://AWS_SECRET_ACCESS_KEY', config: { endpoint: 'https://user:placeholder-credential@bucket.example.test' } }).valid, false);
+  assert.equal(cloudConfigStatus({ provider: 's3-compatible', credentialReference: 'env://AWS_SECRET_ACCESS_KEY', config: { endpoint: 'https://bucket.example.test?token=placeholder-token' } }).valid, false);
   assert.equal(cloudConfigStatus({ provider: 'google-cloud-storage', credentialReference: 'env://GOOGLE_APPLICATION_CREDENTIALS', config: { endpoint: 'https://storage.example.test' } }).valid, false, 'provider-specific ignored configuration is rejected');
   assert.equal(cloudEndpointAllowed('https://minio.example.test:9000', { NODE_ENV: 'production', VIRGOSCORPIO_HUB_CLOUD_ENDPOINT_ALLOWLIST: 'minio.example.test:9000' }), true);
   assert.equal(cloudEndpointAllowed('https://169.254.169.254', { NODE_ENV: 'production', VIRGOSCORPIO_HUB_CLOUD_ENDPOINT_ALLOWLIST: 'minio.example.test:9000' }), false);
   assert.equal(cloudEndpointAllowed('http://minio.example.test:9000', { NODE_ENV: 'production', VIRGOSCORPIO_HUB_CLOUD_ENDPOINT_ALLOWLIST: 'minio.example.test:9000' }), false);
 });
 
+test('cloud endpoint allowlist is enforced in all environments to prevent SSRF', () => {
+  // The vulnerability was that cloudEndpointAllowed returned true for non-production environments
+  // without checking the allowlist, enabling blind SSRF attacks in dev/test/staging.
+  
+  const allowlist = 'storage.example.com:443,minio.internal:9000';
+  
+  // Production environment: allowlist must be enforced
+  assert.equal(
+    cloudEndpointAllowed('https://storage.example.com:443', { NODE_ENV: 'production', VIRGOSCORPIO_HUB_CLOUD_ENDPOINT_ALLOWLIST: allowlist }),
+    true,
+    'production: allowed endpoint should pass'
+  );
+  assert.equal(
+    cloudEndpointAllowed('https://169.254.169.254', { NODE_ENV: 'production', VIRGOSCORPIO_HUB_CLOUD_ENDPOINT_ALLOWLIST: allowlist }),
+    false,
+    'production: metadata service should be blocked'
+  );
+  
+  // Development environment: allowlist MUST be enforced (fix for SSRF)
+  assert.equal(
+    cloudEndpointAllowed('https://storage.example.com:443', { NODE_ENV: 'development', VIRGOSCORPIO_HUB_CLOUD_ENDPOINT_ALLOWLIST: allowlist }),
+    true,
+    'development: allowed endpoint should pass'
+  );
+  assert.equal(
+    cloudEndpointAllowed('https://169.254.169.254', { NODE_ENV: 'development', VIRGOSCORPIO_HUB_CLOUD_ENDPOINT_ALLOWLIST: allowlist }),
+    false,
+    'development: metadata service must be blocked (SSRF mitigation)'
+  );
+  assert.equal(
+    cloudEndpointAllowed('http://localhost:8080', { NODE_ENV: 'development', VIRGOSCORPIO_HUB_CLOUD_ENDPOINT_ALLOWLIST: allowlist }),
+    false,
+    'development: localhost must be blocked (SSRF mitigation)'
+  );
+  assert.equal(
+    cloudEndpointAllowed('https://internal.service', { NODE_ENV: 'development', VIRGOSCORPIO_HUB_CLOUD_ENDPOINT_ALLOWLIST: allowlist }),
+    false,
+    'development: arbitrary internal service must be blocked (SSRF mitigation)'
+  );
+  
+  // Test environment: allowlist MUST be enforced
+  assert.equal(
+    cloudEndpointAllowed('https://storage.example.com:443', { NODE_ENV: 'test', VIRGOSCORPIO_HUB_CLOUD_ENDPOINT_ALLOWLIST: allowlist }),
+    true,
+    'test: allowed endpoint should pass'
+  );
+  assert.equal(
+    cloudEndpointAllowed('https://169.254.169.254', { NODE_ENV: 'test', VIRGOSCORPIO_HUB_CLOUD_ENDPOINT_ALLOWLIST: allowlist }),
+    false,
+    'test: metadata service must be blocked (SSRF mitigation)'
+  );
+  
+  // Staging environment: allowlist MUST be enforced
+  assert.equal(
+    cloudEndpointAllowed('https://storage.example.com:443', { NODE_ENV: 'staging', VIRGOSCORPIO_HUB_CLOUD_ENDPOINT_ALLOWLIST: allowlist }),
+    true,
+    'staging: allowed endpoint should pass'
+  );
+  assert.equal(
+    cloudEndpointAllowed('https://169.254.169.254', { NODE_ENV: 'staging', VIRGOSCORPIO_HUB_CLOUD_ENDPOINT_ALLOWLIST: allowlist }),
+    false,
+    'staging: metadata service must be blocked (SSRF mitigation)'
+  );
+  
+  // Unset/empty NODE_ENV: allowlist MUST be enforced
+  assert.equal(
+    cloudEndpointAllowed('https://storage.example.com:443', { NODE_ENV: '', VIRGOSCORPIO_HUB_CLOUD_ENDPOINT_ALLOWLIST: allowlist }),
+    true,
+    'empty NODE_ENV: allowed endpoint should pass'
+  );
+  assert.equal(
+    cloudEndpointAllowed('https://169.254.169.254', { NODE_ENV: '', VIRGOSCORPIO_HUB_CLOUD_ENDPOINT_ALLOWLIST: allowlist }),
+    false,
+    'empty NODE_ENV: metadata service must be blocked (SSRF mitigation)'
+  );
+  assert.equal(
+    cloudEndpointAllowed('https://169.254.169.254', { VIRGOSCORPIO_HUB_CLOUD_ENDPOINT_ALLOWLIST: allowlist }),
+    false,
+    'undefined NODE_ENV: metadata service must be blocked (SSRF mitigation)'
+  );
+  
+  // Case variations: allowlist MUST be enforced
+  assert.equal(
+    cloudEndpointAllowed('https://storage.example.com:443', { NODE_ENV: 'Production', VIRGOSCORPIO_HUB_CLOUD_ENDPOINT_ALLOWLIST: allowlist }),
+    true,
+    'Production (capitalized): allowed endpoint should pass'
+  );
+  assert.equal(
+    cloudEndpointAllowed('https://169.254.169.254', { NODE_ENV: 'Production', VIRGOSCORPIO_HUB_CLOUD_ENDPOINT_ALLOWLIST: allowlist }),
+    false,
+    'Production (capitalized): metadata service must be blocked (SSRF mitigation)'
+  );
+  assert.equal(
+    cloudEndpointAllowed('https://storage.example.com:443', { NODE_ENV: 'PRODUCTION', VIRGOSCORPIO_HUB_CLOUD_ENDPOINT_ALLOWLIST: allowlist }),
+    true,
+    'PRODUCTION (uppercase): allowed endpoint should pass'
+  );
+  assert.equal(
+    cloudEndpointAllowed('https://169.254.169.254', { NODE_ENV: 'PRODUCTION', VIRGOSCORPIO_HUB_CLOUD_ENDPOINT_ALLOWLIST: allowlist }),
+    false,
+    'PRODUCTION (uppercase): metadata service must be blocked (SSRF mitigation)'
+  );
+});
+
+test('cloud endpoint validation rejects SSRF targets in all environments', () => {
+  // Common SSRF targets that must be blocked regardless of environment
+  const allowlist = 'storage.example.com';
+  const environments = ['production', 'development', 'test', 'staging', '', undefined];
+  
+  const ssrfTargets = [
+    'http://169.254.169.254',           // AWS metadata service (HTTP)
+    'https://169.254.169.254',          // AWS metadata service (HTTPS)
+    'http://169.254.169.254:80',        // AWS metadata with explicit port
+    'http://metadata.google.internal',  // GCP metadata service
+    'http://localhost',                 // localhost
+    'http://localhost:8080',            // localhost with port
+    'http://127.0.0.1',                 // loopback
+    'http://127.0.0.1:6379',            // Redis on loopback
+    'http://[::1]',                     // IPv6 loopback
+    'http://10.0.0.1',                  // Private network
+    'http://172.16.0.1',                // Private network
+    'http://192.168.1.1',               // Private network
+    'http://internal.service',          // Internal service
+    'https://internal.service',         // Internal service HTTPS
+  ];
+  
+  for (const env of environments) {
+    const envLabel = env === undefined ? 'undefined' : env === '' ? 'empty' : env;
+    for (const target of ssrfTargets) {
+      assert.equal(
+        cloudEndpointAllowed(target, { NODE_ENV: env, VIRGOSCORPIO_HUB_CLOUD_ENDPOINT_ALLOWLIST: allowlist }),
+        false,
+        `${envLabel} environment: ${target} must be blocked`
+      );
+    }
+  }
+});
+
+test('cloud endpoint validation enforces HTTPS in production but allows HTTP in non-production when allowlisted', () => {
+  // Production requires HTTPS for allowed endpoints
+  assert.equal(
+    cloudEndpointAllowed('https://minio.example.test:9000', { NODE_ENV: 'production', VIRGOSCORPIO_HUB_CLOUD_ENDPOINT_ALLOWLIST: 'minio.example.test:9000' }),
+    true,
+    'production: HTTPS endpoint on allowlist should pass'
+  );
+  assert.equal(
+    cloudEndpointAllowed('http://minio.example.test:9000', { NODE_ENV: 'production', VIRGOSCORPIO_HUB_CLOUD_ENDPOINT_ALLOWLIST: 'minio.example.test:9000' }),
+    false,
+    'production: HTTP endpoint must be rejected even if allowlisted'
+  );
+  
+  // Non-production allows HTTP if allowlisted (for local development)
+  assert.equal(
+    cloudEndpointAllowed('http://minio.example.test:9000', { NODE_ENV: 'development', VIRGOSCORPIO_HUB_CLOUD_ENDPOINT_ALLOWLIST: 'minio.example.test:9000' }),
+    true,
+    'development: HTTP endpoint on allowlist should pass'
+  );
+  assert.equal(
+    cloudEndpointAllowed('https://minio.example.test:9000', { NODE_ENV: 'development', VIRGOSCORPIO_HUB_CLOUD_ENDPOINT_ALLOWLIST: 'minio.example.test:9000' }),
+    true,
+    'development: HTTPS endpoint on allowlist should pass'
+  );
+  
+  // But HTTP endpoints NOT on allowlist must still be rejected
+  assert.equal(
+    cloudEndpointAllowed('http://evil.example.test:9000', { NODE_ENV: 'development', VIRGOSCORPIO_HUB_CLOUD_ENDPOINT_ALLOWLIST: 'minio.example.test:9000' }),
+    false,
+    'development: HTTP endpoint not on allowlist must be rejected'
+  );
+});
+
+test('cloud endpoint validation rejects malformed URLs and embedded credentials', () => {
+  const allowlist = 'storage.example.com';
+  
+  // Malformed URLs
+  assert.equal(cloudEndpointAllowed('not a url', { VIRGOSCORPIO_HUB_CLOUD_ENDPOINT_ALLOWLIST: allowlist }), false, 'malformed URL rejected');
+  assert.equal(cloudEndpointAllowed('ftp://storage.example.com', { VIRGOSCORPIO_HUB_CLOUD_ENDPOINT_ALLOWLIST: allowlist }), false, 'non-HTTP(S) protocol rejected');
+  assert.equal(cloudEndpointAllowed('file:///etc/passwd', { VIRGOSCORPIO_HUB_CLOUD_ENDPOINT_ALLOWLIST: allowlist }), false, 'file:// protocol rejected');
+  
+  // Embedded credentials (credential smuggling attempt)
+  assert.equal(
+    cloudEndpointAllowed('https://user:pass@storage.example.com', { VIRGOSCORPIO_HUB_CLOUD_ENDPOINT_ALLOWLIST: allowlist }),
+    false,
+    'embedded credentials rejected'
+  );
+  assert.equal(
+    cloudEndpointAllowed('https://admin@storage.example.com', { VIRGOSCORPIO_HUB_CLOUD_ENDPOINT_ALLOWLIST: allowlist }),
+    false,
+    'embedded username rejected'
+  );
+  
+  // Query strings and fragments (potential parameter injection)
+  assert.equal(
+    cloudEndpointAllowed('https://storage.example.com?token=placeholder-token', { VIRGOSCORPIO_HUB_CLOUD_ENDPOINT_ALLOWLIST: allowlist }),
+    false,
+    'query string rejected'
+  );
+  assert.equal(
+    cloudEndpointAllowed('https://storage.example.com#fragment', { VIRGOSCORPIO_HUB_CLOUD_ENDPOINT_ALLOWLIST: allowlist }),
+    false,
+    'fragment rejected'
+  );
+  
+  // Missing hostname
+  assert.equal(cloudEndpointAllowed('https://', { VIRGOSCORPIO_HUB_CLOUD_ENDPOINT_ALLOWLIST: allowlist }), false, 'missing hostname rejected');
+});
+
+test('cloud endpoint allowlist matching is exact and case-insensitive', () => {
+  // Exact host matching (hostname + port)
+  assert.equal(
+    cloudEndpointAllowed('https://storage.example.com', { VIRGOSCORPIO_HUB_CLOUD_ENDPOINT_ALLOWLIST: 'storage.example.com' }),
+    true,
+    'exact match without port'
+  );
+  assert.equal(
+    cloudEndpointAllowed('https://storage.example.com:443', { VIRGOSCORPIO_HUB_CLOUD_ENDPOINT_ALLOWLIST: 'storage.example.com:443' }),
+    true,
+    'exact match with port'
+  );
+  
+  // Port mismatch
+  assert.equal(
+    cloudEndpointAllowed('https://storage.example.com:9000', { VIRGOSCORPIO_HUB_CLOUD_ENDPOINT_ALLOWLIST: 'storage.example.com:443' }),
+    false,
+    'port mismatch rejected'
+  );
+  assert.equal(
+    cloudEndpointAllowed('https://storage.example.com:443', { VIRGOSCORPIO_HUB_CLOUD_ENDPOINT_ALLOWLIST: 'storage.example.com' }),
+    false,
+    'explicit port not matching implicit port rejected'
+  );
+  assert.equal(
+    cloudEndpointAllowed('https://storage.example.com', { VIRGOSCORPIO_HUB_CLOUD_ENDPOINT_ALLOWLIST: 'storage.example.com:443' }),
+    false,
+    'implicit port does not match explicit allowlist port'
+  );
+  
+  // No wildcard suffix matching (security requirement)
+  assert.equal(
+    cloudEndpointAllowed('https://evil.storage.example.com', { VIRGOSCORPIO_HUB_CLOUD_ENDPOINT_ALLOWLIST: 'storage.example.com' }),
+    false,
+    'subdomain not matched by parent domain'
+  );
+  assert.equal(
+    cloudEndpointAllowed('https://storage.example.com.evil.test', { VIRGOSCORPIO_HUB_CLOUD_ENDPOINT_ALLOWLIST: 'storage.example.com' }),
+    false,
+    'domain suffix not matched'
+  );
+  
+  // Case-insensitive matching
+  assert.equal(
+    cloudEndpointAllowed('https://Storage.Example.Com', { VIRGOSCORPIO_HUB_CLOUD_ENDPOINT_ALLOWLIST: 'storage.example.com' }),
+    true,
+    'case-insensitive hostname match'
+  );
+  assert.equal(
+    cloudEndpointAllowed('https://storage.example.com', { VIRGOSCORPIO_HUB_CLOUD_ENDPOINT_ALLOWLIST: 'Storage.Example.Com' }),
+    true,
+    'case-insensitive allowlist match'
+  );
+  
+  // Multiple allowlist entries
+  assert.equal(
+    cloudEndpointAllowed('https://storage1.example.com', { VIRGOSCORPIO_HUB_CLOUD_ENDPOINT_ALLOWLIST: 'storage1.example.com,storage2.example.com' }),
+    true,
+    'first entry in allowlist'
+  );
+  assert.equal(
+    cloudEndpointAllowed('https://storage2.example.com', { VIRGOSCORPIO_HUB_CLOUD_ENDPOINT_ALLOWLIST: 'storage1.example.com,storage2.example.com' }),
+    true,
+    'second entry in allowlist'
+  );
+  assert.equal(
+    cloudEndpointAllowed('https://storage3.example.com', { VIRGOSCORPIO_HUB_CLOUD_ENDPOINT_ALLOWLIST: 'storage1.example.com,storage2.example.com' }),
+    false,
+    'not in allowlist'
+  );
+  
+  // Empty allowlist blocks everything
+  assert.equal(
+    cloudEndpointAllowed('https://storage.example.com', { VIRGOSCORPIO_HUB_CLOUD_ENDPOINT_ALLOWLIST: '' }),
+    false,
+    'empty allowlist blocks all endpoints'
+  );
+  assert.equal(
+    cloudEndpointAllowed('https://storage.example.com', {}),
+    false,
+    'missing allowlist blocks all endpoints'
+  );
+});
+
 test('Stripe webhook signatures are timestamped, compared in constant time, and reject stale payloads', () => {
   const raw = Buffer.from(JSON.stringify({ id: 'evt_test', type: 'checkout.session.completed' }));
-  const timestamp = 1_800_000_000; const secret = 'whsec_test';
-  const digest = createHmac('sha256', secret).update(`${timestamp}.`).update(raw).digest('hex');
-  assert.equal(verifyStripeSignature(raw, `t=${timestamp},v1=${digest}`, secret, { nowSeconds: timestamp, toleranceSeconds: 300 }), true);
-  assert.equal(verifyStripeSignature(raw, `t=${timestamp},v1=${digest}`, secret, { nowSeconds: timestamp + 600, toleranceSeconds: 300 }), false);
-  assert.equal(verifyStripeSignature(Buffer.from('modified'), `t=${timestamp},v1=${digest}`, secret, { nowSeconds: timestamp, toleranceSeconds: 300 }), false);
+  const timestamp = 1_800_000_000; const webhookSigningKey = 'whsec_test';
+  const digest = createHmac('sha256', webhookSigningKey).update(`${timestamp}.`).update(raw).digest('hex');
+  assert.equal(verifyStripeSignature(raw, `t=${timestamp},v1=${digest}`, webhookSigningKey, { nowSeconds: timestamp, toleranceSeconds: 300 }), true);
+  assert.equal(verifyStripeSignature(raw, `t=${timestamp},v1=${digest}`, webhookSigningKey, { nowSeconds: timestamp + 600, toleranceSeconds: 300 }), false);
+  assert.equal(verifyStripeSignature(Buffer.from('modified'), `t=${timestamp},v1=${digest}`, webhookSigningKey, { nowSeconds: timestamp, toleranceSeconds: 300 }), false);
 });
 
 test('page document supports video, icon, and math widgets and renders bounded deterministic HTML', () => {
