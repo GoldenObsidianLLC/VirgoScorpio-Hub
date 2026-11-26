@@ -22,9 +22,10 @@ const enabled = Boolean(
   process.env.VIRGOSCORPIO_HUB_RUN_POSTGRES_INTEGRATION === 'true'
 );
 
-test(
+// Register database-backed tests only in the live integration job. The service-less
+// Node matrix must not count intentionally unavailable database scenarios as skips.
+if (enabled) test(
   'plugin registry enforces per-site quota and pagination',
-  { skip: !enabled },
   async t => {
     const { createPostgresPool } = require('../packages/db/src/postgres-store');
     const { createIdentityService, hashPassword } = require('../packages/auth/src/service');
@@ -249,9 +250,8 @@ test(
   }
 );
 
-test(
+if (enabled) test(
   'plugin registry quota is site-scoped',
-  { skip: !enabled },
   async t => {
     const { createPostgresPool } = require('../packages/db/src/postgres-store');
     const { createIdentityService, hashPassword } = require('../packages/auth/src/service');
