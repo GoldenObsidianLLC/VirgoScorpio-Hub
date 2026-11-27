@@ -409,7 +409,7 @@ test('moderation action is rejected when membership is revoked during request pr
       );
 
       await preflight;
-      const lockObserved = await waitForDatabaseWriteLock(revocationClient, 'FOR KEY SHARE');
+      const lockObserved = await waitForDatabaseWriteLock(revocationClient, 'FOR KEY SHARE', 5000, { relationName: 'sites' });
 
       await revocationClient.query(lockObserved ? 'COMMIT' : 'ROLLBACK');
       revocationOpen = false;
