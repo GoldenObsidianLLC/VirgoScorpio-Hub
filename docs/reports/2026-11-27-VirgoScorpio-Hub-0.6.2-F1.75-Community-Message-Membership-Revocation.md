@@ -1,8 +1,11 @@
-# VirgoScorpio Hub 0.6.2 — F1.75 Community Message Membership-Revalidation Candidate
+# VirgoScorpio Hub 0.6.2 — F1.75 Community Message Membership-Revalidation Implementation Report
 
 **Review date:** 27 November 2026
 **Parent tracking:** [issue #124](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/124), still OPEN
-**Candidate:** [PR #308](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/308), open and ready for review
+**Merged implementation:** [PR #308](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/308), merged 27 November 2026
+**Main merge commit:** `4389d05864b0113e7198bbd86eed23d192ec224c`
+**Final PR head:** `18e9ff2be151c70feb2fa06b57f4890f4df98893`
+**Exact-main validation:** [workflow #45962276960](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45962276960)
 **Base:** `main` at `5eb906efdd3413cfd8851506f6863daa8afa0dfc` (PR #307 merged)
 **Rebased implementation commit:** `c9b52f4b805891715359a485cf79df196a892d10`
 **Implementation branch:** `security/community-message-membership-revocation-race-2026-11-27`
@@ -32,14 +35,14 @@ The removal path in `packages/auth/src/service.js` locks the site row `FOR UPDAT
 - Workflow and integration-test JavaScript syntax checks: passed.
 - `node scripts/verify.js`: passed.
 - Tenant route inventory regenerated and `node scripts/generate-tenant-isolation-route-inventory.js --check`: passed.
-- Full top-level unit test glob completed with exit code 0 on the pre-rebase candidate. The code-only rebase changes its parent/base, not the F1.75 implementation; fresh exact-head hosted CI is still required on the rebased SHA.
+- Full top-level unit test glob on the final local implementation worktree: **1,140 total; 1,137 passed; 0 failed; 3 Windows-specific skips**. Exact-main CI passed all 1,140 Hub unit/security tests with zero skips on Node.js 22.23.4 and 24.22.1.
 - `git diff --check`: passed.
-- The local PostgreSQL environment was not configured. The new lock-contention integration regression was therefore not executed locally; hosted PostgreSQL CI must run it with zero skips before review/merge.
+- The local PostgreSQL environment was not configured. The new lock-contention integration regression was therefore not executed locally; post-merge exact-main workflow #45962276960 passed the live PostgreSQL/Memgraph suite 203/203 with zero skips, including this regression.
 
 ## Scope and release boundary
 
-This candidate covers community message creation and the existing moderation write path only. It does not close issue #124, certify all community mutations, or satisfy independent tenant review #14 or independent platform security assessment #25.
+This merged increment covers community message creation and the existing moderation write path only. It does not close issue #124, certify all community mutations, or satisfy independent tenant review #14 or independent platform security assessment #25.
 
 No migration, database schema, API response contract, dependency, lockfile, package version or SemVer change is included. Package 0.6.2 remains private and unreleased. Production readiness remains NO-GO / NOT_PRODUCTION_CERTIFIED. No tag, publication, deployment or promotion is authorized.
 
-PR #308 is open and ready for review, based directly on `main` after PR #307 merged. The rebased implementation commit is `c9b52f4b805891715359a485cf79df196a892d10`; the current pushed documentation-sync head is `bd6ff3972b190c9fef5531f2121e49fd7e584431`. Earlier exact-head runs #45941295364 and #45941331264 validated the old source SHA `239d26270e6c58d3a50ea2d87dd192c400a629f4` and are historical after rebase. Fresh push [#45960983827](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45960983827) passed on `bd6ff39`, including Node 22/24, browser/accessibility smoke, CodeQL, PostgreSQL/Memgraph with zero skips and execution of the forced membership-revocation race, plus candidate evidence consolidation. A PR-context run on the final documentation-sync head is still required. The complete rebased diff, lock ordering, integration evidence and remaining route-review scope require maintainer review.
+PR #308 merged from final PR head `18e9ff2be151c70feb2fa06b57f4890f4df98893` to main commit `4389d05864b0113e7198bbd86eed23d192ec224c`. Earlier exact-head runs #45941295364/#45941331264 validated the original pre-rebase source SHA `239d26270e6c58d3a50ea2d87dd192c400a629f4` and remain historical. After the rebase, push workflow [#45960983827](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45960983827) passed on code-bearing SHA `bd6ff39`; final push [#45961720288](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45961720288) and PR-context [#45961729096](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45961729096) both passed on `18e9ff2`. Post-merge exact-main workflow [#45962276960](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45962276960) passed 203/203 live PostgreSQL/Memgraph tests with zero skips, including the forced membership-revocation race, plus 22/22 fresh/idempotent migrations, Node 22/24, browser 9/9, CodeQL, signed supply-chain attestations and evidence consolidation. Maintainer review is recorded in the repository; issue #124 and independent assessments #14/#25 remain open.
