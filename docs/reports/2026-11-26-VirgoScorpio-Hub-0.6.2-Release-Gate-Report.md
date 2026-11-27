@@ -114,7 +114,7 @@ These increments are in current main and covered by the exact-main CI result in 
 
 ## 6. Recommended next development increment — F1.74 durable password-reset queue
 
-F1.74 is an isolated local worktree and a draft candidate in [PR #306](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/306), not mainline code and not part of the exact-main readiness artifact.
+F1.74 is an isolated candidate in draft PR #306, not mainline code and not part of the exact-main readiness artifact.
 
 ### Scope implemented in the candidate worktree
 
@@ -128,9 +128,9 @@ F1.74 is an isolated local worktree and a draft candidate in [PR #306](https://g
 
 ### Candidate validation and remaining work
 
-The broader queue/route/worker/tenant-inventory focused suite passed 58/58 before the final shared-helper deduplication; the post-refactor focused regression subset passed 33/33. The complete top-level test glob passes 1,128/1,131 (3 platform skips, 0 failures) on local Node v26.12.1. scripts/verify.js passes (241 required paths; 314 JavaScript files syntax-checked), and git diff --check passes. Two PostgreSQL integration tests cover multi-replica deduplication/capacity, concurrent SKIP LOCKED workers, hashed token storage, outbox payload scrubbing, and stale-claim recovery; both skip locally because TEST_DATABASE_URL is not configured and passed in the previous hosted PR integration run. Fresh hosted CI is required for the shared-worker-helper refactor.
+The broader queue/route/worker/tenant-inventory focused suite passed 58/58 before the final shared-helper deduplication; the post-refactor focused regression subset passed 33/33. The complete top-level test glob passes 1,128/1,131 (3 platform skips, 0 failures) on local Node v26.12.1. scripts/verify.js passes (241 required paths; 314 JavaScript files syntax-checked), and git diff --check passes. The latest exact-head hosted workflows on c9a53ba4cd9aa9392fa9f65f9de77451113068a9 passed: push #45923708982 and PR #45923712800, each 7/7 jobs. Node 22.23.4 and Node 24.22.1 each passed 1,131/1,131 Hub tests and 94/94 EnginEx tests. Hosted PostgreSQL/Memgraph passed 202/202 tests with zero skips; the TAP log confirms the two new queue tests passed (tests 20 and 21). Fresh PostgreSQL migration validation applied 22/22 migrations and the idempotent pass skipped 22/22. Browser smoke, CodeQL and evidence consolidation passed. The maintainer self-review is pending; target-host systemd/secret/OTLP/alert qualification remains an operational task.
 
-Next steps: (1) maintainer completes and attests the repository-required full-diff self-review; (2) qualify the systemd mail-worker service, secret permissions, OTLP routing, queue alerts and ownership on the target deployment host; (3) address remaining release-evidence gaps #14/#23/#24/#25/#26/#13 and external provider/product acceptance; (4) make a deliberate supersession decision for PR #274 after #306 is accepted. Do not close #274 or issue #13 prematurely.
+Next steps: (1) maintainer completes and records the repository-required full-diff self-review before marking PR #306 ready; (2) qualify the systemd mail-worker service, secret permissions, OTLP routing, queue alert thresholds and ownership on the target deployment host; (3) address remaining release-evidence gaps #14/#23/#24/#25/#26/#13 and external provider/product acceptance; (4) make a deliberate supersession decision for PR #274 after #306 is accepted. Do not close #274 or issue #13 prematurely.
 
 ## 7. Stability, security and architecture notes
 
