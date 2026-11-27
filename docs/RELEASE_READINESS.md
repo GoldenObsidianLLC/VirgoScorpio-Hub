@@ -1,4 +1,4 @@
-# VirgoScorpio Hub 0.6.2 — current release-readiness snapshot (26 November 2026; main 4c1052988a8db57d16ca17c267ffb903907c9f69; run #45935558396)
+# VirgoScorpio Hub 0.6.2 — current release-readiness snapshot (27 November 2026; main 4c1052988a8db57d16ca17c267ffb903907c9f69; run #45935558396)
 
 ## Current exact-main readiness — 26 November 2026 (America/Chicago; Actions completed 27 November UTC)
 
@@ -38,7 +38,11 @@ F1.74 adds migration 0022 and a PostgreSQL-backed durable password-reset queue. 
 
 ## Readiness-inventory correction in progress
 
-The exact-main readiness artifact reports 19 migration files because the pre-fix validator had a hard-coded 0001–0019 array. This static count is stale: the exact same mainline workflow applied 22 migrations on a fresh database and verified all 22 as already applied on a second run. The runtime inventory fix is under [draft PR #307](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/307) on branch `fix/release-readiness-dynamic-migrations-2026-11-27`; it derives the contiguous sequence from `database/migrations` and fails closed on gaps, duplicate version numbers, invalid `.sql` filenames and non-regular SQL entries. Focused tests currently pass 4/4 and syntax checks pass; exact-head CI is pending. Do not treat the current artifact's 19-file row as the live migration test result, and do not retroactively alter its source-bound evidence.
+The exact-main readiness artifact reports 19 migration files because the pre-fix validator had a hard-coded 0001–0019 array. This static count is stale: the exact same mainline workflow applied 22 migrations on a fresh database and verified all 22 as already applied on a second run. The runtime inventory fix is under [draft PR #307](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/307) on branch `fix/release-readiness-dynamic-migrations-2026-11-27`; it derives the contiguous sequence from `database/migrations`, shares the helper between static readiness and fresh-migration evidence validation, and fails closed on gaps, duplicate versions, invalid `.sql` filenames and non-regular SQL entries.
+
+Final local validation of the candidate test worktree passes 5/5 focused migration-inventory tests, 1,136 top-level unit tests (1,133 passed, 3 platform-specific skips, zero failures), and `node scripts/verify.js` (241 required paths / 316 JavaScript files). The prior PR-context hosted run passed its functional jobs. The push rerun's Node 22/24, browser, CodeQL and PostgreSQL/Memgraph producer jobs passed, but final aggregation correctly rejected producer manifests from attempt 1 when workflow attempt 2 was being consolidated. A fresh push/PR CI run is required after the final test refinement; formal maintainer review is also still required.
+
+[Draft PR #308](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/308) is stacked on #307 and hardens the community-message transaction by revalidating active site membership under the site-first lock before writes/notifications. Its current exact-head push and PR functional/security jobs passed. Keep #308 stacked until #307 merges, then rebase it onto main and rerun full exact-head CI. Neither PR has a formal review submission. Do not treat the current artifact's 19-file row as the live migration test result, and do not retroactively alter its source-bound evidence.
 
 ## Release policy
 
