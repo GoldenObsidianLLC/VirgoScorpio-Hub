@@ -10,7 +10,7 @@ Readiness remains **8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT
 
 **Open PR:** #274 remains open with Changes requested. Do not merge it: duplicate handler declaration, non-durable detached acceptance before generic 202, and mock-only tests leave parse/runtime/durability gaps.
 
-**F1.74 local candidate:** an isolated worktree contains a proposed bounded durable reset-request queue, migration 0022, durable-before-202 acceptance, same-transaction token-hash/mail-outbox/queue completion, worker retry/recovery/PII controls and route/service/worker tests. Focused tests pass 21/21 locally. The candidate is not on main, not represented by the exact-main readiness artifact and has not passed full supported-Node, real-PostgreSQL, full-CI or independent-review gates.
+**F1.74 candidate:** branch `security/f1-74-password-reset-durable-queue-2026-11-26` is committed at `b60218aa93b6d6db8b103d66e93ace593a362186` and pushed as draft [PR #306](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/306). It contains a bounded durable reset-request queue, migration 0022, durable-before-202 acceptance, same-transaction token-hash/mail-outbox/queue completion, worker retry/recovery/PII controls and route/service/worker tests. Targeted tests pass 40/40; the full local top-level suite passes 1,123/1,126 with three platform skips and no failures on Node 26.12.1. The candidate is not on main and is not represented by the exact-main readiness artifact. PR CI, supported Node 22/24, real PostgreSQL migration/queue integration and independent review remain outstanding.
 
 Package 0.6.2 remains private/unreleased. No tag, publication, GitHub Release, SemVer bump, production deployment or promotion is authorized until every evidence gate is accepted.
 
