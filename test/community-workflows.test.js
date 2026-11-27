@@ -296,3 +296,166 @@ test('direct conversation policy denial rolls back and releases its transaction 
   assert.equal(pool.state.rollbacks, 1);
   assert.equal(pool.state.releases, 1);
 });
+
+
+function transactionalBlockPool({
+  actorMember = true,
+  targetMember = true,
+  preflightTargetMember = true,
+  actorStatus = 'active',
+  targetStatus = 'active',
+  blockExists = true,
+} = {}) {
+  const state = { poolQueries: [], statements: [], commits: 0, rollbacks: 0, releases: 0 };
+  const block = {
+    site_id: siteId,
+    blocker_id: actorId,
+    blocked_id: recipientId,
+    reason: 'test block',
+    created_at: new Date(0).toISOString(),
+  };
+  const client = {
+    async query(sql, params) {
+      const statement = sql.replace(/\\s+/g, ' ').trim();
+      state.statements.push({ statement, params });
+      if (statement === 'BEGIN') return { rows: [] };
+      if (statement === 'COMMIT') { state.commits += 1; return { rows: [] }; }
+      if (statement === 'ROLLBACK') { state.rollbacks += 1; return { rows: [] }; }
+      if (statement.includes('SELECT id FROM sites WHERE id=$1 FOR KEY SHARE')) return { rows: [{ id: siteId }] };
+      if (statement.startsWith('SELECT r.capabilities FROM users u')) {
+        return { rows: actorMember && actorStatus === 'active' ? [{ capabilities: ['community:moderate'] }] : [] };
+      }
+      if (statement.startsWith('SELECT id,status FROM users')) {
+        return {
+          rows: [
+            { id: actorId, status: actorStatus },
+            { id: recipientId, status: targetStatus },
+          ],
+        };
+      }
+      if (statement.startsWith('SELECT user_id FROM site_memberships')) {
+        return {
+          rows: [
+            ...(actorMember ? [{ user_id: actorId }] : []),
+            ...(targetMember ? [{ user_id: recipientId }] : []),
+          ],
+        };
+      }
+      if (statement.startsWith('INSERT INTO social_blocks')) return { rows: [block] };
+      if (statement.startsWith('DELETE FROM social_blocks')) return { rows: blockExists ? [{ blocked_id: recipientId }] : [] };
+      throw new Error('Unexpected block transaction query: ' + statement);
+    },
+    release() { state.releases += 1; },
+  };
+  return {
+    state,
+    async query(sql, params) {
+      state.poolQueries.push({ sql: sql.replace(/\\s+/g, ' ').trim(), params });
+      if (sql.includes('FROM site_memberships sm JOIN users u ON u.id=sm.user_id')) {
+        return { rows: preflightTargetMember ? [{ present: 1 }] : [] };
+      }
+      throw new Error('Unexpected block pool query: ' + sql);
+    },
+    async connect() { return client; },
+  };
+}
+
+test('block creation revalidates both participants inside a deterministic transaction before upsert', async () => {
+  const pool = transactionalBlockPool();
+  const ctx = createContext({
+    method: 'POST',
+    path: '/api/v1/sites/' + siteId + '/community/blocks',
+    body: { userId: recipientId, reason: 'test block' },
+    pool,
+  });
+
+  assert.equal(await handleCommunityWorkflowRoute(ctx), true);
+  assert.equal(ctx.res.statusCode, 201);
+  assert.equal(ctx.res.payload.block.blocker_id, actorId);
+  assert.equal(pool.state.commits, 1);
+  assert.equal(pool.state.rollbacks, 0);
+  assert.equal(pool.state.releases, 1);
+  const siteLock = pool.state.statements.findIndex(x => x.statement.includes('SELECT id FROM sites WHERE id=$1 FOR KEY SHARE'));
+  const usersLock = pool.state.statements.findIndex(x => x.statement.startsWith('SELECT id,status FROM users'));
+  const membershipsLock = pool.state.statements.findIndex(x => x.statement.startsWith('SELECT user_id FROM site_memberships'));
+  const blockInsert = pool.state.statements.findIndex(x => x.statement.startsWith('INSERT INTO social_blocks'));
+  assert.ok(siteLock >= 0 && siteLock < usersLock && usersLock < membershipsLock && membershipsLock < blockInsert);
+  assert.equal(pool.state.statements[usersLock].statement.includes('ORDER BY id FOR SHARE'), true);
+  assert.equal(pool.state.statements[membershipsLock].statement.includes('ORDER BY user_id,role_id FOR SHARE'), true);
+});
+
+test('block creation rolls back if actor membership was revoked after request preflight', async () => {
+  const pool = transactionalBlockPool({ actorMember: false });
+  const ctx = createContext({
+    method: 'POST',
+    path: '/api/v1/sites/' + siteId + '/community/blocks',
+    body: { userId: recipientId, reason: 'must not persist' },
+    pool,
+  });
+
+  await assert.rejects(
+    handleCommunityWorkflowRoute(ctx),
+    error => error.code === 'ERR_VIRGOSCORPIO_HUB_TENANT_FORBIDDEN' && error.statusCode === 403,
+  );
+  assert.equal(pool.state.commits, 0);
+  assert.equal(pool.state.rollbacks, 1);
+  assert.equal(pool.state.releases, 1);
+  assert.equal(pool.state.statements.some(x => x.statement.startsWith('INSERT INTO social_blocks')), false);
+});
+
+test('block creation preserves generic target-not-found when target membership disappears before transaction', async () => {
+  const pool = transactionalBlockPool({ targetMember: false, preflightTargetMember: true });
+  const ctx = createContext({
+    method: 'POST',
+    path: '/api/v1/sites/' + siteId + '/community/blocks',
+    body: { userId: recipientId, reason: 'must not persist' },
+    pool,
+  });
+
+  await assert.rejects(
+    handleCommunityWorkflowRoute(ctx),
+    error => error.code === 'ERR_VIRGOSCORPIO_HUB_COMMUNITY_USER_NOT_FOUND' && error.statusCode === 404,
+  );
+  assert.equal(pool.state.commits, 0);
+  assert.equal(pool.state.rollbacks, 1);
+  assert.equal(pool.state.releases, 1);
+  assert.equal(pool.state.statements.some(x => x.statement.startsWith('INSERT INTO social_blocks')), false);
+});
+
+test('unblock revalidates actor membership inside its transaction before delete', async () => {
+  const pool = transactionalBlockPool({ actorMember: false, blockExists: true });
+  const ctx = createContext({
+    method: 'DELETE',
+    path: '/api/v1/sites/' + siteId + '/community/blocks/' + recipientId,
+    pool,
+  });
+
+  await assert.rejects(
+    handleCommunityWorkflowRoute(ctx),
+    error => error.code === 'ERR_VIRGOSCORPIO_HUB_TENANT_FORBIDDEN' && error.statusCode === 403,
+  );
+  assert.equal(pool.state.commits, 0);
+  assert.equal(pool.state.rollbacks, 1);
+  assert.equal(pool.state.releases, 1);
+  assert.equal(pool.state.statements.some(x => x.statement.startsWith('DELETE FROM social_blocks')), false);
+});
+
+test('unblock commits its site-scoped delete only after actor authorization succeeds', async () => {
+  const pool = transactionalBlockPool({ actorMember: true, blockExists: true });
+  const ctx = createContext({
+    method: 'DELETE',
+    path: '/api/v1/sites/' + siteId + '/community/blocks/' + recipientId,
+    pool,
+  });
+
+  assert.equal(await handleCommunityWorkflowRoute(ctx), true);
+  assert.equal(ctx.res.statusCode, 200);
+  assert.equal(ctx.res.payload.unblocked, true);
+  assert.equal(ctx.res.payload.userId, recipientId);
+  assert.equal(pool.state.commits, 1);
+  assert.equal(pool.state.rollbacks, 0);
+  assert.equal(pool.state.releases, 1);
+  const membershipCheck = pool.state.statements.findIndex(x => x.statement.includes('SELECT r.capabilities FROM users u'));
+  const blockDelete = pool.state.statements.findIndex(x => x.statement.startsWith('DELETE FROM social_blocks'));
+  assert.ok(membershipCheck >= 0 && membershipCheck < blockDelete);
+});

@@ -58,6 +58,29 @@ async function loadActiveSiteAuthorization(client, ctx, siteId, userId) {
   return result.rows;
 }
 
+/**
+ * Lock a site's participants in a deterministic site -> users -> memberships order.
+ * The returned IDs have an active account and at least one membership in this site.
+ * Shared locks serialize block writes with membership/account revocation; direct
+ * conversation creation retains its existing stronger FOR UPDATE mode.
+ */
+async function lockActiveSiteParticipants(client, ctx, siteId, userIds, { forUpdate = false } = {}) {
+  const participantIds = [...new Set(userIds.map(userId => userId.toLowerCase()))].sort();
+  const site = await client.query('SELECT id FROM sites WHERE id=$1 FOR KEY SHARE', [siteId]);
+  if (!site.rows[0]) routeError(ctx, 404, 'ERR_VIRGOSCORPIO_HUB_SITE_NOT_FOUND', 'Site not found.');
+  const lockClause = forUpdate ? 'FOR UPDATE' : 'FOR SHARE';
+  const users = await client.query(
+    `SELECT id,status FROM users WHERE id=ANY($1::uuid[]) ORDER BY id ${lockClause}`,
+    [participantIds],
+  );
+  const memberships = await client.query(
+    `SELECT user_id FROM site_memberships WHERE site_id=$1 AND user_id=ANY($2::uuid[]) ORDER BY user_id,role_id ${lockClause}`,
+    [siteId, participantIds],
+  );
+  const activeUsers = new Set(users.rows.filter(user => user.status === 'active').map(user => user.id));
+  const memberIds = new Set(memberships.rows.map(membership => membership.user_id));
+  return new Set(participantIds.filter(userId => activeUsers.has(userId) && memberIds.has(userId)));
+}
 async function assertActiveSiteMembership(client, ctx, siteId, userId) {
   const authorization = await loadActiveSiteAuthorization(client, ctx, siteId, userId);
   if (authorization === null) return;
@@ -126,40 +149,13 @@ async function createDirectConversation(ctx, siteId, body) {
   if (!recipient.rows[0]) routeError(ctx, 404, 'ERR_VIRGOSCORPIO_HUB_COMMUNITY_USER_NOT_FOUND', 'Recipient is not an active member of this site.');
 
   const { conversation, created } = await withTransaction(localPool, async client => {
-    const pair = [actor.user.id, recipientId].sort();
+    const pair = [actor.user.id, recipientId].map(userId => userId.toLowerCase()).sort();
     await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`virgoscorpio_hub:direct:${siteId}:${pair.join(':')}`]);
 
-    // Serialize against site membership removal before revalidating either
-    // participant. Membership administration takes this site row FOR UPDATE.
-    const site = await client.query(
-      'SELECT id FROM sites WHERE id=$1 FOR KEY SHARE',
-      [siteId],
-    );
-    if (!site.rows[0]) {
-      routeError(ctx, 404, 'ERR_VIRGOSCORPIO_HUB_SITE_NOT_FOUND', 'Site not found.');
-    }
-
-    const participantIds = [actor.user.id, recipientId];
-    const participants = await client.query(
-      'SELECT id,status FROM users WHERE id=ANY($1::uuid[]) ORDER BY id FOR UPDATE',
-      [participantIds],
-    );
-    const memberships = await client.query(
-      `SELECT user_id
-         FROM site_memberships
-        WHERE site_id=$1 AND user_id=ANY($2::uuid[])
-        ORDER BY user_id,role_id
-        FOR UPDATE`,
-      [siteId, participantIds],
-    );
-    const activeParticipantIds = new Set(
-      participants.rows
-        .filter(participant => participant.status === 'active')
-        .map(participant => participant.id),
-    );
-    const siteMemberIds = new Set(memberships.rows.map(membership => membership.user_id));
+    const participantIds = [actor.user.id, recipientId].map(userId => userId.toLowerCase());
+    const activeParticipantIds = await lockActiveSiteParticipants(client, ctx, siteId, participantIds, { forUpdate: true });
     if (participantIds.some(userId => (
-      !activeParticipantIds.has(userId) || !siteMemberIds.has(userId)
+      !activeParticipantIds.has(userId)
     ))) {
       // Keep the same generic contract for actor and recipient revocation.
       routeError(
@@ -296,19 +292,38 @@ async function handleBlocks(ctx, siteId, targetId, method) {
     );
     if (!exists.rows[0]) routeError(ctx, 404, 'ERR_VIRGOSCORPIO_HUB_COMMUNITY_USER_NOT_FOUND', 'User is not an active member of this site.');
     const reason = cleanRequiredText(body.reason, 500);
-    const result = await ctx.localPool.query(
-      `INSERT INTO social_blocks(site_id,blocker_id,blocked_id,reason) VALUES($1,$2,$3,$4)
-       ON CONFLICT(site_id,blocker_id,blocked_id) DO UPDATE SET reason=EXCLUDED.reason
-       RETURNING site_id,blocker_id,blocked_id,reason,created_at`,
-      [siteId, actorId, blockedId, reason]
-    );
-    return ctx.sendJson(ctx.res, 201, { block: result.rows[0], requestId: ctx.requestId });
+    const block = await withTransaction(ctx.localPool, async client => {
+      // Revalidate both participants under deterministic row locks. The actor's
+      // preflight is not authority to write after membership/account revocation.
+      const activeParticipants = await lockActiveSiteParticipants(client, ctx, siteId, [actorId, blockedId]);
+      if (!ctx.actor.isDeveloper && !activeParticipants.has(actorId.toLowerCase())) {
+        routeError(ctx, 403, 'ERR_VIRGOSCORPIO_HUB_TENANT_FORBIDDEN', 'You are not an active member of this site.');
+      }
+      if (!activeParticipants.has(blockedId.toLowerCase())) {
+        routeError(ctx, 404, 'ERR_VIRGOSCORPIO_HUB_COMMUNITY_USER_NOT_FOUND', 'User is not an active member of this site.');
+      }
+      const result = await client.query(
+        `INSERT INTO social_blocks(site_id,blocker_id,blocked_id,reason) VALUES($1,$2,$3,$4)
+         ON CONFLICT(site_id,blocker_id,blocked_id) DO UPDATE SET reason=EXCLUDED.reason
+         RETURNING site_id,blocker_id,blocked_id,reason,created_at`,
+        [siteId, actorId, blockedId, reason],
+      );
+      return result.rows[0];
+    });
+    return ctx.sendJson(ctx.res, 201, { block, requestId: ctx.requestId });
   }
   if (method === 'DELETE' && targetId) {
     if (!isUuid(targetId) || targetId === actorId) routeError(ctx, 400, 'ERR_VIRGOSCORPIO_HUB_BLOCK_INVALID', 'Blocked user ID is invalid.');
-    const result = await ctx.localPool.query('DELETE FROM social_blocks WHERE site_id=$1 AND blocker_id=$2 AND blocked_id=$3 RETURNING blocked_id', [siteId, actorId, targetId]);
-    if (!result.rows[0]) routeError(ctx, 404, 'ERR_VIRGOSCORPIO_HUB_BLOCK_NOT_FOUND', 'Block record not found.');
-    return ctx.sendJson(ctx.res, 200, { unblocked: true, userId: targetId, requestId: ctx.requestId });
+    const removed = await withTransaction(ctx.localPool, async client => {
+      await assertActiveSiteMembership(client, ctx, siteId, actorId);
+      const result = await client.query(
+        'DELETE FROM social_blocks WHERE site_id=$1 AND blocker_id=$2 AND blocked_id=$3 RETURNING blocked_id',
+        [siteId, actorId, targetId],
+      );
+      if (!result.rows[0]) routeError(ctx, 404, 'ERR_VIRGOSCORPIO_HUB_BLOCK_NOT_FOUND', 'Block record not found.');
+      return result.rows[0];
+    });
+    return ctx.sendJson(ctx.res, 200, { unblocked: true, userId: removed.blocked_id, requestId: ctx.requestId });
   }
   return false;
 }
