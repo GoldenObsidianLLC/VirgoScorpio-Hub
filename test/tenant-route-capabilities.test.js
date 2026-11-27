@@ -123,6 +123,7 @@ test('community group member listing is reachable only with the site moderation 
   const GROUP_ID = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
   const authorizationCalls = [];
   const dataQueries = [];
+  const transactionQueries = [];
   const identity = {
     async authenticate(token) {
       assert.equal(token, 'site-a-moderator-session');
@@ -149,14 +150,32 @@ test('community group member listing is reachable only with the site moderation 
     status: 'active'
   }];
   const pool = {
-    async query(sql, params) {
+    async query(sql) {
       if (sql.includes('FROM firewall_rules WHERE enabled=true')) return { rows: [] };
-      dataQueries.push({ sql, params });
-      if (sql.includes('FROM social_group_memberships gm JOIN users u')) {
-        assert.deepEqual(params, [SITE_A, GROUP_ID], 'member listing query must be constrained by both site and group');
-        return { rows: expectedMembers };
-      }
-      throw new Error('Unexpected tenant data query: ' + sql);
+      throw new Error('Unexpected pool-level query: ' + sql);
+    },
+    async connect() {
+      return {
+        async query(sql, params) {
+          transactionQueries.push({ sql, params });
+          if (['BEGIN', 'COMMIT', 'ROLLBACK'].includes(sql.trim().toUpperCase())) return { rows: [] };
+          if (sql.includes('SELECT id FROM sites WHERE id=$1 FOR KEY SHARE')) {
+            assert.deepEqual(params, [SITE_A], 'site authorization lock must use the route site');
+            return { rows: [{ id: SITE_A }] };
+          }
+          if (sql.includes('SELECT r.capabilities FROM users u')) {
+            assert.deepEqual(params, [SITE_A, USER_A, 'active'], 'current role lookup must bind site, actor, and active status');
+            return { rows: [{ capabilities: ['content:read', 'community:moderate'] }] };
+          }
+          if (sql.includes('FROM social_group_memberships gm JOIN users u')) {
+            dataQueries.push({ sql, params });
+            assert.deepEqual(params, [SITE_A, GROUP_ID], 'member listing query must be constrained by both site and group');
+            return { rows: expectedMembers };
+          }
+          throw new Error('Unexpected transaction query: ' + sql);
+        },
+        release() {}
+      };
     },
     async end() {}
   };
@@ -186,4 +205,7 @@ test('community group member listing is reachable only with the site moderation 
   assert.deepEqual((await response.json()).members, expectedMembers);
   assert.ok(authorizationCalls.some(call => call.siteId === SITE_A && call.capability === 'community:moderate'));
   assert.equal(dataQueries.length, 1);
+  const capabilityQueryIndex = transactionQueries.findIndex(query => query.sql.includes('SELECT r.capabilities FROM users u'));
+  const memberQueryIndex = transactionQueries.findIndex(query => query.sql.includes('FROM social_group_memberships gm JOIN users u'));
+  assert.ok(capabilityQueryIndex >= 0 && capabilityQueryIndex < memberQueryIndex, 'the current site capability must be locked before member details are selected');
 });
