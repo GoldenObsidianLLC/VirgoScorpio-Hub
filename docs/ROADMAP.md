@@ -1,23 +1,22 @@
 ## Historical mainline baseline before F1.72 merge — 25 November 2026 (America/Chicago)
 
-## Current authoritative status — 26 November 2026 (reconciled after PR #305 merge)
+## Current authoritative status — 26 November 2026 (F1.74 merged; exact-main workflow completed 27 November UTC)
 
-- Main: 5be81f7388c2c32484377b918010ac399cafd574. Exact-main Actions run [#45904695214](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45904695214) completed successfully with all seven jobs. Source-bound readiness artifact [#15157402047](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45904695214/artifacts/15157402047).
-- Exact-main evidence: Node 22/24 each passed 1,113/1,113 Hub and 94/94 EnginEx tests; PostgreSQL/Memgraph passed 200/200; 21 migrations passed fresh and idempotent passes; browser smoke, CodeQL, signed supply-chain attestation and evidence consolidation passed. Dependency audits reported zero vulnerabilities.
-- Readiness remains 8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN; readyForProduction=false, NOT_PRODUCTION_CERTIFIED / NO-GO. Partials: qualified human dependency/lockfile review and service-less diagnostics (1 pass / 54 skips), not the hosted integration.
-- PR #305 is merged. PR #274 remains open with Changes requested: duplicate handler declaration, generic 202 before durable work, and mock-only tests that do not cover the actual route/service/outbox boundary. Do not merge #274 as submitted.
-- F1.74 remains a draft in PR #306, not in main. It includes durable reset requests, migration 0022, expired-link rejection, terminal payload cleanup, low-cardinality queue snapshots, a systemd reference, PostgreSQL integration tests, shared retry/error-code helpers and a threat model. Local full suite 1,128/1,131 (3 skips/0 failures), post-dedup focused tests 33/33, verify.js 241 paths/314 JS files, and diff check pass. Latest exact-head checks passed on c9a53ba4cd9aa9392fa9f65f9de77451113068a9: push run #45923708982 and PR run #45923712800 each completed successfully (7/7 jobs). Node 22.23.4 and 24.22.1 each passed 1,131/1,131 Hub tests and 94/94 EnginEx tests; hosted PostgreSQL/Memgraph passed 202/202 integration tests with zero skips; all 22 migrations applied fresh and the second pass skipped 22/22; browser smoke, CodeQL and evidence consolidation passed. The lockfile/SBOM attestation job is intentionally mainline-only and was skipped on push/PR. The maintainer self-review attestation is pending; PR #274 and issue #13 remain open.
-- Production gaps remain #14 tenant review, #23 human dependency/SBOM review, #25 independent security assessment, #24 load/backup/restore, #26 operations/release-owner sign-off, #13 scope/provider acceptance, plus live identity/email, malware, cloud, Stripe, commerce, community, accessibility, plugin isolation and production observability evidence.
+- Main: `4c1052988a8db57d16ca17c267ffb903907c9f69`. F1.74 / [PR #306](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/306) is merged; exact-main [Actions run #45935558396](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45935558396) passed all seven jobs, including Node 22/24, browser/accessibility smoke, PostgreSQL/Memgraph, CodeQL, signed lockfile/SBOM attestation and evidence consolidation.
+- Exact-main tests: Node 22 and 24 each 1,131/1,131 Hub and 94/94 EnginEx; hosted PostgreSQL/Memgraph 202/202 with zero skips; 22/22 fresh migrations and 22/22 idempotent second-pass skips.
+- Canonical readiness [artifact #15169989179](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45935558396/artifacts/15169989179) remains 8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN, `readyForProduction=false`, NOT_PRODUCTION_CERTIFIED / NO-GO. The two partials are qualified human dependency/lockfile review and the service-less diagnostic (1 pass / 56 skips), not the hosted live suite.
+- F1.74 durably accepts password-reset requests only after the queue transaction commits; it coordinates target cooldown/capacity across replicas, atomically issues hashed-token/outbox/queue state, bounds retries and stale recovery, validates expiry, scrubs terminal delivery payloads, emits low-cardinality queue telemetry and runs mail delivery in a separately supervised worker.
+- PR #274 is CLOSED without merge as superseded by #306. PRs #237–#276 have a final disposition: 27 merged, 13 closed unmerged, zero open. This inventory does not establish Aikido fingerprint resolution; issues #234, #235 and #277 remain open.
+- Readiness static inventory discrepancy: the exact-main artifact says 19 migration files because the old validator hard-coded 0001–0019, while the same source revision passed 22/22 live fresh/idempotent migrations. Follow-up branch `fix/release-readiness-dynamic-migrations-2026-11-27` discovers the directory at runtime and fails closed on gaps/duplicates/invalid SQL entries; focused tests pass 4/4. Exact-head CI is pending.
+- Remaining production gaps include #14 tenant review, #23 human dependency/SBOM review, #25 independent security assessment, #24 load/backup/restore, #26 operations/release-owner approval, #13 preview/provider acceptance, and live identity/email, malware, cloud, Stripe, commerce, community, accessibility, plugin isolation and production observability evidence.
 
 ### Execution order
 
-1. Complete the maintainer full-diff self-review and decide whether to mark draft PR #306 ready; its exact-head CI is green. Keep #274 blocked until the replacement is accepted and superseded deliberately.
-2. Complete independent tenant-isolation, dependency/SBOM and platform-security reviews.
-3. Complete external identity/email/MFA, malware, cloud, Stripe, commerce, community and full accessibility/product-parity acceptance.
-4. Complete load/soak, fault injection, backup/restore, production OTLP, deployment runbooks, secrets/rollback and monitoring evidence.
-5. Regenerate exact-source readiness after implementation is stable and obtain release-owner sign-off only after all required gates pass.
-
-This snapshot is authoritative; older entries below are historical planning context. Package 0.6.2 remains private/unreleased. Do not tag, publish, deploy or promote while readiness is NO-GO.
+1. Complete exact-head CI and maintainer review for the dynamic migration-inventory follow-up; confirm the generated readiness report agrees with all 22 migrations and preserves the independent evidence gates.
+2. Resume parent issue #124 with a source-anchored tenant/site authorization review; prioritize any proven missing authorization boundary over speculative feature work.
+3. Complete independent tenant, dependency/SBOM and platform-security reviews (#14, #23, #25), then load/restore, provider, product-parity, observability and release-owner gates (#24, #26, #13, #32).
+4. Continue mapping individual scanner fingerprints and source evidence under #234, #235 and #277. PR closure counts alone are not scanner remediation evidence.
+5. Keep package 0.6.2 private/unreleased and production NO-GO until every required gate is accepted; do not change SemVer or publish/deploy.
 
 ### Merged - F1.71 MFA enrollment step-up reauthentication ([PR #256](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/256); main SHA de16a4275828fa6411800bbaf20c16b51186dc05)
 
