@@ -209,19 +209,26 @@ async function createDirectConversation(ctx, siteId, body) {
 
 async function listMessages(ctx, siteId, conversationId) {
   const userId = ctx.actor.user.id;
-  await assertConversationMember(ctx.localPool, ctx, siteId, conversationId, userId);
-  await ctx.localPool.query(
-    'UPDATE social_conversation_members SET last_read_at=now() WHERE site_id=$1 AND conversation_id=$2 AND user_id=$3 AND left_at IS NULL',
-    [siteId, conversationId, userId]
-  );
-  const result = await ctx.localPool.query(
-    `SELECT m.id,m.conversation_id,m.sender_id,u.display_name AS sender_name,m.body,m.status,m.created_at,m.updated_at
-       FROM social_messages m LEFT JOIN users u ON u.id=m.sender_id
-      WHERE m.site_id=$1 AND m.conversation_id=$2 AND m.deleted_at IS NULL
-      ORDER BY m.created_at DESC LIMIT $3`,
-    [siteId, conversationId, Math.min(100, Math.max(1, Number(ctx.url.searchParams.get('limit')) || 50))]
-  );
-  return ctx.sendJson(ctx.res, 200, { messages: result.rows.reverse(), requestId: ctx.requestId });
+  const messages = await withTransaction(ctx.localPool, async client => {
+    // Revalidate tenant access before locking the conversation. A conversation
+    // member row may outlive site membership, so request-entry preflight is not
+    // sufficient for either the read-marker write or message disclosure.
+    await assertActiveSiteMembership(client, ctx, siteId, userId);
+    await assertConversationMember(client, ctx, siteId, conversationId, userId, { lock: true });
+    await client.query(
+      'UPDATE social_conversation_members SET last_read_at=now() WHERE site_id=$1 AND conversation_id=$2 AND user_id=$3 AND left_at IS NULL',
+      [siteId, conversationId, userId]
+    );
+    const result = await client.query(
+      'SELECT m.id,m.conversation_id,m.sender_id,u.display_name AS sender_name,m.body,m.status,m.created_at,m.updated_at ' +
+      'FROM social_messages m LEFT JOIN users u ON u.id=m.sender_id ' +
+      'WHERE m.site_id=$1 AND m.conversation_id=$2 AND m.deleted_at IS NULL ' +
+      'ORDER BY m.created_at DESC LIMIT $3',
+      [siteId, conversationId, Math.min(100, Math.max(1, Number(ctx.url.searchParams.get('limit')) || 50))]
+    );
+    return result.rows.reverse();
+  });
+  return ctx.sendJson(ctx.res, 200, { messages, requestId: ctx.requestId });
 }
 
 async function createMessage(ctx, siteId, conversationId, body) {
@@ -476,12 +483,24 @@ async function handleNotifications(ctx, siteId, notificationId, action, method) 
     return ctx.sendJson(ctx.res, 200, { notifications: result.rows, unreadCount: Number(unread.rows[0]?.count || 0), requestId: ctx.requestId });
   }
   if (method === 'POST' && action === 'read-all' && !notificationId) {
-    const result = await ctx.localPool.query('UPDATE social_notifications SET read_at=now() WHERE site_id=$1 AND user_id=$2 AND read_at IS NULL RETURNING id', [siteId, userId]);
+    const result = await withTransaction(ctx.localPool, async client => {
+      await assertActiveSiteMembership(client, ctx, siteId, userId);
+      return client.query(
+        'UPDATE social_notifications SET read_at=now() WHERE site_id=$1 AND user_id=$2 AND read_at IS NULL RETURNING id',
+        [siteId, userId]
+      );
+    });
     return ctx.sendJson(ctx.res, 200, { markedRead: result.rows.length, requestId: ctx.requestId });
   }
   if (method === 'POST' && action === 'read' && notificationId) {
     if (!isUuid(notificationId)) routeError(ctx, 400, 'ERR_VIRGOSCORPIO_HUB_NOTIFICATION_ID', 'Notification ID is invalid.');
-    const result = await ctx.localPool.query('UPDATE social_notifications SET read_at=COALESCE(read_at,now()) WHERE site_id=$1 AND user_id=$2 AND id=$3 RETURNING id,read_at', [siteId, userId, notificationId]);
+    const result = await withTransaction(ctx.localPool, async client => {
+      await assertActiveSiteMembership(client, ctx, siteId, userId);
+      return client.query(
+        'UPDATE social_notifications SET read_at=COALESCE(read_at,now()) WHERE site_id=$1 AND user_id=$2 AND id=$3 RETURNING id,read_at',
+        [siteId, userId, notificationId]
+      );
+    });
     if (!result.rows[0]) routeError(ctx, 404, 'ERR_VIRGOSCORPIO_HUB_NOTIFICATION_NOT_FOUND', 'Notification not found.');
     return ctx.sendJson(ctx.res, 200, { notification: result.rows[0], requestId: ctx.requestId });
   }
@@ -502,10 +521,23 @@ async function handleCommunityWorkflowRoute(ctx) {
     if (itemId && subaction === 'messages' && method === 'GET') return listMessages(ctx, siteId, itemId);
     if (itemId && subaction === 'messages' && method === 'POST') return createMessage(ctx, siteId, itemId, await ctx.readJson(ctx.req, Math.min(ctx.maxBody || 64_000, 16_000)));
     if (itemId && subaction === 'read' && method === 'POST') {
-      const result = await ctx.localPool.query('UPDATE social_conversation_members SET last_read_at=now() WHERE site_id=$1 AND conversation_id=$2 AND user_id=$3 AND left_at IS NULL RETURNING conversation_id,last_read_at', [siteId, itemId, ctx.actor.user.id]);
-      if (!result.rows[0]) routeError(ctx, 404, 'ERR_VIRGOSCORPIO_HUB_CONVERSATION_NOT_FOUND', 'Conversation not found.');
-      await ctx.localPool.query("UPDATE social_notifications SET read_at=COALESCE(read_at,now()) WHERE site_id=$1 AND user_id=$2 AND read_at IS NULL AND payload->>'conversationId'=$3", [siteId, ctx.actor.user.id, itemId]);
-      return ctx.sendJson(ctx.res, 200, { conversationRead: result.rows[0], requestId: ctx.requestId });
+      const conversationRead = await withTransaction(ctx.localPool, async client => {
+        // Keep the established site-first authorization order and commit both
+        // read markers atomically under the same transaction.
+        await assertActiveSiteMembership(client, ctx, siteId, ctx.actor.user.id);
+        await assertConversationMember(client, ctx, siteId, itemId, ctx.actor.user.id, { lock: true });
+        const result = await client.query(
+          'UPDATE social_conversation_members SET last_read_at=now() WHERE site_id=$1 AND conversation_id=$2 AND user_id=$3 AND left_at IS NULL RETURNING conversation_id,last_read_at',
+          [siteId, itemId, ctx.actor.user.id]
+        );
+        if (!result.rows[0]) routeError(ctx, 404, 'ERR_VIRGOSCORPIO_HUB_CONVERSATION_NOT_FOUND', 'Conversation not found.');
+        await client.query(
+          "UPDATE social_notifications SET read_at=COALESCE(read_at,now()) WHERE site_id=$1 AND user_id=$2 AND read_at IS NULL AND payload->>'conversationId'=$3",
+          [siteId, ctx.actor.user.id, itemId]
+        );
+        return result.rows[0];
+      });
+      return ctx.sendJson(ctx.res, 200, { conversationRead, requestId: ctx.requestId });
     }
     return false;
   }
@@ -515,7 +547,13 @@ async function handleCommunityWorkflowRoute(ctx) {
     const action = ctx.url.pathname.endsWith('/read-all') ? 'read-all' : subaction;
     if (action === 'read-all') {
       if (method !== 'POST') return false;
-      const result = await ctx.localPool.query('UPDATE social_notifications SET read_at=now() WHERE site_id=$1 AND user_id=$2 AND read_at IS NULL RETURNING id', [siteId, ctx.actor.user.id]);
+      const result = await withTransaction(ctx.localPool, async client => {
+        await assertActiveSiteMembership(client, ctx, siteId, ctx.actor.user.id);
+        return client.query(
+          'UPDATE social_notifications SET read_at=now() WHERE site_id=$1 AND user_id=$2 AND read_at IS NULL RETURNING id',
+          [siteId, ctx.actor.user.id]
+        );
+      });
       return ctx.sendJson(ctx.res, 200, { markedRead: result.rows.length, requestId: ctx.requestId });
     }
     return handleNotifications(ctx, siteId, itemId, action, method);
