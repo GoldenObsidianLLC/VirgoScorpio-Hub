@@ -1,63 +1,47 @@
-# VirgoScorpio Hub 0.6.2 — F1.77 Community Block-Write Authorization Candidate
+# VirgoScorpio Hub 0.6.2 — F1.77 Community Block-Write Authorization Implementation Report
 
-**Tracking issue:** [#312](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/312)
-**Branch:** `security/f1-77-community-block-write-authorization`
-**Base:** `main` at `f823dca404ce38d66aeab170b7f889503adba6f4`
-**Status:** exact-head hosted CI passed; single-maintainer review completed; merge decision pending
-**Package:** `virgoscorpio-hub@0.6.2` — private, unreleased
+**Tracking issue:** [#312](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/312) — closed as completed
+**Pull request:** [#313](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/313) — merged
+**Final PR head:** 6aaf9e13d99893fcfc51f3c9f5e256dbc6ca190c
+**Merge / exact main SHA:** 06b91c2d3e57120882294679bc1569d6b2a47f0c
+**Exact-main CI:** [workflow #46050954042](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/46050954042) — success, 7/7 jobs
+**Package:** virgoscorpio-hub@0.6.2 — private, unreleased
 
 ## Finding
 
-The community block create/delete endpoints checked site membership at request entry, but their final writes used direct pool queries rather than transaction-scoped authorization:
-
-- `POST /api/v1/sites/:siteId/community/blocks` parsed the request, queried target active membership through the pool, and then inserted/upserted `social_blocks` through a separate pool query. The actor's membership/account status and the target's membership/account status could become stale between preflight and the write.
-- `DELETE /api/v1/sites/:siteId/community/blocks/:userId` deleted a block through a direct pool query without revalidating the blocker's current active membership/account status in the mutation transaction.
-
-This is the same preflight-to-mutation authorization gap closed in F1.75 / PR #308 and F1.76 / PR #311 for adjacent community workflows.
+Community block create/delete checked authorization at request entry, but their final mutations used direct pool writes. Block create checked target membership before a separate upsert, and unblock deleted directly after route-entry authorization. A site-membership or account revocation could commit after preflight and before the mutation.
 
 ## Implementation
 
-The candidate reuses the existing site-first authorization helpers and `withTransaction`; no second authorization SQL implementation is introduced.
-
-- Added `lockActiveSiteParticipants`, which locks the site first, then participant users and site memberships in deterministic UUID order. It can use shared locks for community block writes and retains the stronger `FOR UPDATE` mode for direct-conversation creation.
-- Block creation revalidates both the actor and target inside one PostgreSQL transaction before the `social_blocks` upsert. Actor revocation returns the existing 403 tenant-forbidden contract; target revocation keeps the generic 404 community-user-not-found contract.
-- Unblock executes in one PostgreSQL transaction and calls the existing `assertActiveSiteMembership` before the delete.
-- Existing non-production developer bypass behavior is preserved for the actor; target membership/account validation remains required.
-- The direct-conversation path now calls the shared deterministic participant-lock helper, preserving its prior advisory lock and stronger row-lock mode.
-
-The new integration-fixture callbacks are test-only synchronization seams. They pause after request-time site or target preflight so hosted PostgreSQL can commit revocation before the mutation transaction proceeds.
+- Added lockActiveSiteParticipants, which locks the site, then participant users and memberships in deterministic UUID order.
+- Block creation revalidates actor and target active account/site membership inside the same transaction as the social_blocks upsert.
+- Unblock revalidates actor active site membership inside its delete transaction using the existing helper.
+- Direct-conversation creation reuses the participant-lock helper while preserving its advisory pair lock and stronger FOR UPDATE row locks.
+- Existing 403 actor-denial and generic 404 target-denial behavior remains; no schema, migration, API response, dependency, lockfile or SemVer change.
 
 ## Regression coverage
 
-Five focused unit tests cover block create success/lock order, actor membership revocation rollback, generic target-not-found rollback, unblock authorization rollback, and successful site-scoped unblock.
-
-Four hosted PostgreSQL race scenarios plus a reciprocal-request lock-order test are added:
-
-1. Actor membership removal after POST body parsing: expect 403 and no block row.
-2. Actor account disablement after POST body parsing: expect 403 and no block row.
-3. Target membership removal after target preflight but before the transaction: expect generic 404 and no block row.
-4. Actor membership removal after DELETE route preflight: expect 403 and the existing block row remains.
-5. Concurrent reciprocal block requests acquire participants in deterministic order and both complete without deadlock.
-
-The test restores fixture membership and the original reverse-block reason after the concurrency probe, so later community race tests retain their baseline state.
+Hosted PostgreSQL covers five deterministic scenarios: actor membership removal after POST body parsing (403/no block row); actor account disablement after POST body parsing (403/no block row); target membership removal after target preflight (generic 404/no block row); actor membership removal before unblock (403/existing block remains); and reciprocal concurrent block requests (both complete without deadlock). Tests reuse createGate() and restore fixture state.
 
 ## Local validation
 
-| Check | Result |
-|---|---|
-| `node --check packages/community/src/workflows.js` | Pass |
-| `node --check test/integration/community-workflows.integration.test.js` | Pass |
-| `node --test test/community-workflows.test.js` | **18/18 passed; zero failures/skips** |
-| Full top-level unit suite | **1,145 total; 1,142 passed; 0 failed; 3 Windows-specific skips** |
-| `node scripts/verify.js` | Pass; 241 required paths / 316 JavaScript files syntax-checked |
-| Tenant inventory generator/check | Pass; 28 families / 80 route patterns / 22 source files / 61 test references |
-| `git diff --check origin/main` | Pass |
-| Hosted PostgreSQL revocation races | Passed on exact final head in push and PR-context workflows: 203/203, zero failures/skips in both; local PostgreSQL is not configured |
+- Focused community suite: 18/18 passed; zero failures/skips.
+- Full top-level suite: 1,145 total; 1,142 passed; zero failures; three Windows-specific skips.
+- node scripts/verify.js: 241 required paths / 316 JavaScript files syntax-checked.
+- Tenant inventory: 28 families / 80 route patterns / 22 source files / 61 referenced test files.
+- Source/integration syntax and git diff --check passed.
+- Local PostgreSQL was not configured; hosted CI supplies live race evidence.
 
-The full top-level unit suite passed on Windows/Node 26.12.1 after initializing the pinned EnginEx submodule at `d99e021f55664f006b5e65b4a58202f9c7bc4f4b`. The three skips are existing platform-conditional tests. The live PostgreSQL races in the nested integration fixture have not been run on the workstation; hosted CI remains the acceptance source for those tests.
+## Hosted validation
 
-## Compatibility and release boundary
+Final PR head 6aaf9e13d99893fcfc51f3c9f5e256dbc6ca190c passed push [#46050444314](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/46050444314) and PR-context [#46050450685](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/46050450685). Both passed Node 22/24 (1,145/1,145 Hub tests each), PostgreSQL/Memgraph (203/203, zero failures/skips), browser smoke (9/9), CodeQL and candidate evidence consolidation.
 
-No database schema/migration, public API response shape, dependency, lockfile, package-version or SemVer change is intended. No SemVer increment is warranted. The work covers only community block create/delete mutation authorization and deterministic participant locking; it does not certify all community workflows.
+Exact-main workflow [#46050954042](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/46050954042) passed all seven jobs on merge SHA 06b91c2d3e57120882294679bc1569d6b2a47f0c. It passed 22/22 fresh/idempotent migrations, signed mainline lockfile/SBOM attestations, SBOM parity and source-bound evidence finalization.
 
-Package 0.6.2 remains private/unreleased and production remains **NO-GO / NOT_PRODUCTION_CERTIFIED**. Final candidate head passed both push [#46049493631](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/46049493631) and PR-context [#46049550731](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/46049550731): Node 22/24 (1,145/1,145 each), PostgreSQL/Memgraph (203/203 with zero failures/skips), browser smoke (9/9), CodeQL and evidence consolidation. Feature-event signed lockfile/SBOM attestation was skipped by design; exact-main attestation remains a post-merge gate. Independent reviews #14/#25 and parent issue #124 remain separate open obligations.
+Canonical readiness artifact [#15224526916](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/46050954042/artifacts/15224526916) is bound to 06b91c2d3e57120882294679bc1569d6b2a47f0c; archive SHA-256 8a9c0bdf1dc62b6ae246aa809ea272810420c520901d7291200b5c3b882f605fe; readiness JSON SHA-256 65338e67128bf3f884a89f511eb7eabacef5e3b02f1f7e04ac3396117eff0a21. It remains 8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN, readyForProduction=false, NOT_PRODUCTION_CERTIFIED / NO-GO.
+
+## Review and release boundary
+
+PR #313 recorded one repository-owner COMMENTED self-review under the single-maintainer ruleset. This is maintainer evidence, not independent approval. Parent issue #124 and independent reviews #14/#25 remain open / NOT PERFORMED.
+
+Issue #312 was closed after merge. This report covers only block creation and unblock; it does not certify all community workflows. Package 0.6.2 remains private/unreleased. No SemVer bump, tag, GitHub Release, publication, deployment or production promotion is authorized.
