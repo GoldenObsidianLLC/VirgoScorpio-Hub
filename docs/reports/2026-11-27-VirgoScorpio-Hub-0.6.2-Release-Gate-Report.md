@@ -1,19 +1,21 @@
 # VirgoScorpio Hub 0.6.2 — Release Gate and Development Status Report
 
-**Report date:** 27 November 2026 (America/Chicago)  
-**Repository:** https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub  
-**Verified main:** `4c1052988a8db57d16ca17c267ffb903907c9f69`  
-**Exact-main workflow:** [#45935558396](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45935558396) — success, 7/7 jobs  
-**Canonical readiness artifact:** [#15169989179](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45935558396/artifacts/15169989179)  
-**Readiness artifact digest:** `sha256:2dabbadcb68f4eba3466b3133e2b0f4afbf5eac92528bef8c5a46b25d20cd1fd9`  
-**Package:** `virgoscorpio-hub@0.6.2` — private, unreleased  
+**Report date:** 27 November 2026 (America/Chicago)
+**Repository:** https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub
+
+> **Post-merge status addendum — 27 November 2026:** PR #307 merged to `main` at `5eb906efdd3413cfd8851506f6863daa8afa0dfc`. Exact-main workflow [#45958544633](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45958544633) passed 7/7 jobs: Node 22/24 each 1,137 Hub and 94 EnginEx tests; PostgreSQL/Memgraph 202/202 with zero skips; 22/22 fresh migrations and 22/22 idempotent skips; browser/accessibility smoke; CodeQL; signed lockfile/SBOM attestation; exact-source evidence consolidation. Current source-bound readiness/evidence [artifact #15180165662](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45958544633/artifacts/15180165662) (archive SHA-256 `0993a57018aa8a29f335bc78cce45883047510e78572b642710433214e5d3a4c`) reports 8 PASS / 2 PARTIAL / 14 MISSING_EVIDENCE / NO-GO. The original report below records the pre-PR #307 baseline; artifact #15169989179 remains bound to that prior source SHA. PR #308 has been rebased and pushed to mainline base. Fresh push [#45960983827](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45960983827) passed on `bd6ff39`, including hosted PostgreSQL execution of the membership-revocation race with zero skips; final PR-context validation after the documentation sync remains pending.
+**Original report baseline main (pre-PR #307):** `4c1052988a8db57d16ca17c267ffb903907c9f69`
+**Exact-main workflow:** [#45935558396](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45935558396) — success, 7/7 jobs
+**Canonical readiness artifact:** [#15169989179](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45935558396/artifacts/15169989179)
+**Readiness artifact digest:** `sha256:2dabbadcb68f4eba3466b3133e2b0f4afbf5eac92528bef8c5a46b25d20cd1fd9`
+**Package:** `virgoscorpio-hub@0.6.2` — private, unreleased
 **Release decision:** **NO-GO — NOT_PRODUCTION_CERTIFIED**
 
 > This report distinguishes source-bound mainline evidence from unmerged PR candidates and local maintainer validation. Passing CI does not establish independent security assurance, provider acceptance, product parity, operational recovery, governance or release-owner approval. Do not tag, publish, deploy or promote 0.6.2.
 
 ## 1. Executive decision
 
-The current mainline revision `4c1052988a8db57d16ca17c267ffb903907c9f69` includes F1.74 / PR #306, which replaced process-local password-reset request handling with a PostgreSQL-backed durable queue. The exact-main workflow #45935558396 completed all seven jobs successfully.
+At the original report baseline, main revision `4c1052988a8db57d16ca17c267ffb903907c9f69` included F1.74 / PR #306, which replaced process-local password-reset request handling with a PostgreSQL-backed durable queue. Exact-main workflow #45935558396 completed all seven jobs successfully. The later PR #307 merge and exact-main revalidation are recorded in the post-merge addendum above.
 
 The canonical source-bound readiness artifact remains:
 
@@ -29,13 +31,13 @@ It records `readyForProduction=false` and `NOT_PRODUCTION_CERTIFIED`. Production
 
 The two PARTIAL gates are qualified human dependency/lockfile review and the service-less integration diagnostic (1 pass / 56 skipped). Those skipped diagnostic tests are not live integration evidence. The hosted PostgreSQL/Memgraph suite separately passed 202/202 with zero failures or skips.
 
-A readiness-reporting defect was identified: the same mainline workflow applied all 22 migrations to a fresh disposable PostgreSQL database and verified all 22 on the idempotent second pass, while the static migration-artifact row in the generated readiness report still counted 19. The readiness script's manually maintained 0001–0019 allow-list had fallen behind the migration directory. Open PR #307 corrects the discrepancy by sharing one filesystem-derived inventory contract across static readiness, actual migration execution and supplemental fresh-migration evidence generation; its exact-head push and PR workflows pass on code head `5085695b5fa938e4036bd2a81f4194a41b4c4160`. PR #308 separately hardens a community-message authorization race and remains intentionally stacked on #307.
+A readiness-reporting defect was identified: the original mainline workflow applied all 22 migrations to a fresh disposable PostgreSQL database and verified all 22 on the idempotent second pass, while its static migration-artifact row counted 19. PR #307 has since merged at `5eb906efdd3413cfd8851506f6863daa8afa0dfc`; one filesystem-derived inventory contract now governs static readiness, actual migration execution and fresh-migration evidence generation. Post-merge exact-main workflow #45958544633 passed and its readiness artifact #15180165662 confirms the corrected 22-migration inventory. PR #308 separately hardens a community-message authorization race and has been rebased onto the new main.
 
 ## 2. Exact-main source and CI evidence
 
 | Evidence | Exact-main result |
 |---|---|
-| Main SHA | `4c1052988a8db57d16ca17c267ffb903907c9f69` |
+| Original report baseline main SHA (pre-PR #307) | `4c1052988a8db57d16ca17c267ffb903907c9f69` |
 | F1.74 | Merged via PR #306 |
 | Node.js 22.23.4 | 1,131/1,131 Hub tests; 94/94 EnginEx tests |
 | Node.js 24.22.1 | 1,131/1,131 Hub tests; 94/94 EnginEx tests |
@@ -58,7 +60,7 @@ The 26 November exact-main readiness JSON/Markdown reports 19 migration files be
 - The 19-file static count is stale and must not be represented as the live migration result.
 - The hosted live migration evidence remains valid for its exact main SHA.
 - The prior source-bound readiness artifact is retained unchanged.
-- PR #307 supplies the static inventory correction for future source revisions; its new code must pass fresh exact-head CI before it becomes authoritative mainline behavior.
+- PR #307 merged the static inventory correction. Current mainline behavior and source-bound validation are confirmed by exact-main workflow #45958544633 and artifact #15180165662; the earlier pre-merge artifact remains historical.
 
 ## 3. Formal production evidence gates
 
@@ -92,9 +94,9 @@ Each gate must be tied to the exact candidate version and full source SHA. Any r
 
 ## 4. Current GitHub pull requests
 
-### PR #307 — dynamic migration-readiness inventory
+### PR #307 — merged dynamic migration-readiness inventory
 
-[PR #307](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/307) is **OPEN / READY FOR REVIEW**, based directly on main. Branch: `fix/release-readiness-dynamic-migrations-2026-11-27`; current code-bearing head: `5085695b5fa938e4036bd2a81f4194a41b4c4160`.
+[PR #307](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/307) is **MERGED** to `main` at `5eb906efdd3413cfd8851506f6863daa8afa0dfc`. Final pre-merge code-bearing head: `40a363ab2dbe3effcf8f72a5d1756b2288b037e9`; squash merge is now validated by exact-main workflow #45958544633.
 
 The implementation extracts `scripts/migration-inventory.js` as the single migration-inventory contract shared by three consumers: static release-readiness reporting (`scripts/release-readiness.js`), actual database execution (`scripts/migrate.js`), and supplemental fresh-migration evidence generation (`scripts/test-fresh-migrations.js`). The helper validates four-digit, non-zero migration versions and the repository's suffix naming convention; it fails closed on malformed SQL filenames, duplicate versions, sequence gaps and SQL-named non-regular entries. Both the executor and evidence runner validate the inventory before opening a database connection or creating a disposable database, preventing readiness/execution drift and avoiding database side effects for an invalid migration directory. Live application and idempotency remain separate evidence gates. Regression tests cover the 0022 migration, gaps, duplicates, malformed names (including dotted and non-four-digit names), SQL-named directories and non-SQL entries.
 
@@ -120,11 +122,11 @@ Hosted CI history on the original PR #307 head `94bebce5e6672220202d8c6d06808505
 - On the immediately preceding head `4cff048fe25e7f058fd5b1640b5d337c88483618`, push [#45951332722](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45951332722) passed, but PR [#45951338234](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45951338234) exposed a flaky existing moderation/revocation concurrency test: its query-fragment-only lock observer failed to detect a site-row wait within five seconds. The migration inventory and Node matrices passed; the failure was in test lock observation, not readiness inventory behavior.
 - The final candidate fixes this test-only observation using the already-supported relation-aware lock observer (`relationName: 'sites'`), matching the site-lock evidence used in PR #308. Both fresh final-head workflows passed on `5c3c5a482feffab674b3098bd565eebadb5ca9a3`: push [#45951846382](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45951846382) and PR [#45951852778](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45951852778). Each passed Node 22/24, PostgreSQL/Memgraph with zero skips, browser smoke, CodeQL and candidate evidence consolidation. The mainline-only attestation was skipped as expected for candidate events.
 
-GitHub lists PR #307 as ready for review and records one repository-owner `COMMENTED` self-review, zero `APPROVED` reviews and zero inline review threads. The complete current three-consumer inventory contract and both passing code-head CI runs have been inspected. The active single-maintainer ruleset [#27803491](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/rules/27803491) requires zero approving reviews; after the final documentation-head required checks pass and no review threads are unresolved, the maintainer may merge under that policy. The COMMENTED self-review is maintainer evidence only, not independent assurance; issues #14 and #25 remain separate open production gates.
+GitHub recorded one repository-owner `COMMENTED` self-review, zero `APPROVED` reviews and zero inline review threads on PR #307. The active single-maintainer ruleset [#27803491](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/rules/27803491) requires zero approving reviews; the PR merged under that policy after the exact-head checks passed. The COMMENTED checklist is maintainer evidence only, not independent assurance; issues #14 and #25 remain separate open production gates.
 
 ### PR #308 — community message membership revalidation
 
-[PR #308](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/308) is **OPEN / READY FOR REVIEW**, intentionally stacked on PR #307 through base branch `fix/release-readiness-dynamic-migrations-2026-11-27`. Candidate head: `239d26270e6c58d3a50ea2d87dd192c400a629f4`.
+[PR #308](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/308) is **OPEN / READY FOR REVIEW** and has been rebased locally onto `main` at `5eb906efdd3413cfd8851506f6863daa8afa0dfc`. Rebased code-bearing commit: `c9b52f4b805891715359a485cf79df196a892d10`; old source head `239d26270e6c58d3a50ea2d87dd192c400a629f4` is superseded.
 
 The request preflight membership check can become stale while a message request is parsed/routed. Conversation membership alone does not prove the sender remains an active site member. The candidate introduces shared transaction-scoped helpers in `packages/community/src/workflows.js`; the lock order is:
 
@@ -132,9 +134,9 @@ The request preflight membership check can become stale while a message request 
 
 Message creation revalidates the active site membership within the same transaction before persistence or notification side effects. The same helper replaces duplicated inline lock/authorization code in the existing moderation flow, preserving capability semantics and the non-production developer bypass. Regression coverage includes positive membership, revoked membership rollback, developer bypass and a PostgreSQL concurrency test that commits member revocation before the pending message mutation proceeds.
 
-Exact-head push [#45941295364](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45941295364) and PR [#45941331264](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45941331264) passed their applicable functional/security/evidence jobs. PostgreSQL/Memgraph integration, both Node matrices, browser smoke, CodeQL and evidence consolidation passed. Mainline-only signed attestation was skipped by design. GitHub records one repository-owner `COMMENTED` self-review, zero `APPROVED` reviews and zero inline review threads; this is maintainer evidence, not independent assurance.
+Pre-rebase exact-head push [#45941295364](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45941295364) and PR [#45941331264](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45941331264) passed their applicable functional/security/evidence jobs on old SHA `239d262`; these results are historical after the rebase. Fresh push [#45960983827](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45960983827) passed on rebased code-bearing SHA `bd6ff3972b190c9fef5531f2121e49fd7e584431`, including the forced PostgreSQL membership-revocation race with zero skips. The final documentation-sync head still requires PR-context validation before merge. GitHub records one repository-owner `COMMENTED` self-review, zero `APPROVED` reviews and zero inline review threads; this is maintainer evidence, not independent assurance.
 
-PR #308 must not merge before #307. After #307 merges, rebase #308 onto the new main, change its base to `main`, review the rebased diff, and rerun exact-head CI. The change addresses one concrete community messaging race only; parent issue #124 and independent review #14 remain open.
+PR #307 has merged. PR #308 must now update its remote branch and PR base to `main`, complete fresh exact-head CI and a final diff review before merge. The change addresses one concrete community messaging race only; parent issue #124 and independent reviews #14/#25 remain open.
 
 ## 5. Merged F1.74 baseline
 

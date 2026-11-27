@@ -32,7 +32,7 @@ const enabled = Boolean(process.env.DATABASE_URL && process.env.VIRGOSCORPIO_HUB
  * - The moderation transaction must detect the revocation and reject the action
  */
 
-function createContext({ method = 'GET', path, body = {}, pool, actor, siteId, afterCapability }) {
+function createContext({ method = 'GET', path, body = {}, pool, actor, siteId, afterCapability, afterSiteId }) {
   const url = new URL(`http://virgoscorpio-hub.integration${path}`);
   const res = {};
   return {
@@ -57,6 +57,7 @@ function createContext({ method = 'GET', path, body = {}, pool, actor, siteId, a
           statusCode: 403
         });
       }
+      if (afterSiteId) await afterSiteId({ siteId: requestedSiteId, actor: requestingActor });
       return requestedSiteId;
     },
     async requireCapability(actorObj, requestedSiteId, capability) {
@@ -440,6 +441,100 @@ test('moderation action is rejected when membership is revoked during request pr
       revocationClient.release();
     }
   });
+  await t.test('message creation waits for site-member revocation and revalidates access', async () => {
+    const conversation = await pool.query(
+      "INSERT INTO social_conversations(site_id,conversation_type,created_by) VALUES($1,'direct',$2) RETURNING id",
+      [siteId, moderatorUser.id]
+    );
+    const conversationId = conversation.rows[0].id;
+    await pool.query(
+      'INSERT INTO social_conversation_members(site_id,conversation_id,user_id) VALUES($1,$2,$3)',
+      [siteId, conversationId, moderatorUser.id]
+    );
+    await pool.query(
+      'INSERT INTO social_conversation_members(site_id,conversation_id,user_id) VALUES($1,$2,$3)',
+      [siteId, conversationId, authorUser.id]
+    );
+
+    const revocationClient = await pool.connect();
+    let revocationOpen = false;
+    let messagePromise;
+    let messageOutcome;
+    try {
+      await revocationClient.query('BEGIN');
+      revocationOpen = true;
+      await revocationClient.query('SELECT id FROM sites WHERE id=$1 FOR UPDATE', [siteId]);
+      await revocationClient.query(
+        'DELETE FROM site_memberships WHERE site_id=$1 AND user_id=$2',
+        [siteId, moderatorUser.id]
+      );
+
+      let preflightCompleted;
+      const preflight = new Promise(resolve => { preflightCompleted = resolve; });
+      const ctx = createContext({
+        method: 'POST',
+        path: '/api/v1/sites/' + siteId + '/community/conversations/' + conversationId + '/messages',
+        body: { body: 'Message attempted while site membership is being revoked.' },
+        pool,
+        actor: moderatorUser,
+        siteId,
+        afterSiteId: async () => preflightCompleted()
+      });
+      messagePromise = handleCommunityWorkflowRoute(ctx).then(
+        value => ({ kind: 'resolved', value }),
+        error => ({ kind: 'rejected', error })
+      );
+      await preflight;
+
+      // A missing transaction-scoped site lock lets the message commit while the
+      // concurrent revocation is still uncommitted. Detect that unsafe early
+      // completion before waiting for the expected PostgreSQL row-lock evidence.
+      const earlyOutcome = await Promise.race([
+        messagePromise,
+        new Promise(resolve => setTimeout(() => resolve(null), 100))
+      ]);
+      const lockObserved = earlyOutcome ? false : await waitForDatabaseWriteLock(
+        revocationClient,
+        'FOR KEY SHARE',
+        5000,
+        { relationName: 'sites' }
+      );
+
+      await revocationClient.query(lockObserved ? 'COMMIT' : 'ROLLBACK');
+      revocationOpen = false;
+      messageOutcome = earlyOutcome || await messagePromise;
+
+      assert.equal(lockObserved, true, 'message creation must wait on the site lock held by member revocation');
+      assert.equal(messageOutcome.kind, 'rejected', 'message creation must re-read site membership after revocation commits');
+      assert.equal(messageOutcome.error.statusCode, 403);
+      assert.equal(messageOutcome.error.code, 'ERR_VIRGOSCORPIO_HUB_TENANT_FORBIDDEN');
+
+      const messages = await pool.query(
+        'SELECT count(*)::int AS count FROM social_messages WHERE site_id=$1 AND conversation_id=$2',
+        [siteId, conversationId]
+      );
+      assert.equal(messages.rows[0].count, 0, 'revoked site member must not persist a conversation message');
+      const notifications = await pool.query(
+        "SELECT count(*)::int AS count FROM social_notifications WHERE site_id=$1 AND notification_type='community.message.new' AND payload->>'conversationId'=$2",
+        [siteId, conversationId]
+      );
+      assert.equal(notifications.rows[0].count, 0, 'rejected message must not notify conversation participants');
+    } finally {
+      if (revocationOpen) await revocationClient.query('ROLLBACK').catch(() => {});
+      if (messagePromise && !messageOutcome) messageOutcome = await messagePromise;
+      revocationClient.release();
+      await pool.query(
+        "DELETE FROM social_notifications WHERE site_id=$1 AND notification_type='community.message.new' AND payload->>'conversationId'=$2",
+        [siteId, conversationId]
+      ).catch(() => {});
+      await pool.query('DELETE FROM social_conversations WHERE site_id=$1 AND id=$2', [siteId, conversationId]).catch(() => {});
+      await pool.query(
+        'INSERT INTO site_memberships(site_id,user_id,role_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING',
+        [siteId, moderatorUser.id, moderatorRoleId]
+      ).catch(() => {});
+    }
+  });
+
   await t.test('developer actor bypasses transaction-scoped revalidation', async () => {
     // Remove membership to ensure developer bypass works
     await pool.query('DELETE FROM site_memberships WHERE site_id=$1 AND user_id=$2', [siteId, moderatorUser.id]);
