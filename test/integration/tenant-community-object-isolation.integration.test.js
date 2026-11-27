@@ -133,7 +133,7 @@ test(
       [
         `tenant-community-${randomUUID().slice(0, 10)}`,
         'Tenant Community Integration Moderator',
-        JSON.stringify(['community:moderate', 'content:create', 'content:edit']),
+        JSON.stringify(['community:moderate', 'content:create', 'content:edit', 'content:read']),
       ]
     );
     roleId = roleResult.rows[0].id;
@@ -2404,6 +2404,114 @@ test(
       assert.equal(bState.site_id, siteB);
       assert.ok(bState.read_at, 'site B read-all should acknowledge the site B control notification');
       await assertSiteAUnchanged();
+    });
+
+    await t.test('community profile mutation waits for site-member revocation and revalidates access', async () => {
+      const profileBefore = await pool.query(
+        'SELECT display_name,bio,avatar_asset_id,website_url,visibility,metadata,version FROM social_profiles WHERE site_id=$1 AND user_id=$2',
+        [siteB, actorB.id]
+      );
+      assert.equal(profileBefore.rowCount, 0, 'the new fixture user must not already have a profile');
+
+      const revocationClient = await pool.connect();
+      let revocationOpen = false;
+      let profilePromise;
+      let profileOutcome;
+      let preflightCompleted;
+      let resumePreflight;
+      let preflightIntercepted = false;
+      const preflight = new Promise(resolve => { preflightCompleted = resolve; });
+      const preflightBarrier = new Promise(resolve => { resumePreflight = resolve; });
+      const originalAuthorizeSite = identity.authorizeSite;
+
+      identity.authorizeSite = async (...args) => {
+        const allowed = await originalAuthorizeSite.apply(identity, args);
+        if (
+          !preflightIntercepted &&
+          args[0] === actorB.id &&
+          args[1] === siteB &&
+          args[2] === 'content:read'
+        ) {
+          preflightIntercepted = true;
+          preflightCompleted();
+          await preflightBarrier;
+        }
+        return allowed;
+      };
+
+      try {
+        await revocationClient.query('BEGIN');
+        revocationOpen = true;
+        await revocationClient.query('SELECT id FROM sites WHERE id=$1 FOR UPDATE', [siteB]);
+        await revocationClient.query(
+          'DELETE FROM site_memberships WHERE site_id=$1 AND user_id=$2',
+          [siteB, actorB.id]
+        );
+
+        profilePromise = fetch(`${base}/api/v1/sites/${siteB}/community/profile`, {
+          method: 'PUT',
+          headers: { ...headers, 'content-type': 'application/json' },
+          body: JSON.stringify({
+            displayName: 'Revoked Profile Mutation',
+            bio: 'This write must not survive a committed membership revocation.',
+            visibility: 'members',
+          }),
+        }).then(async response => ({
+          status: response.status,
+          payload: await response.json(),
+        }));
+
+        const preflightObserved = await Promise.race([
+          preflight.then(() => true),
+          new Promise(resolve => setTimeout(() => resolve(false), 5000)),
+        ]);
+        assert.equal(preflightObserved, true, 'profile request must reach the existing site authorization preflight');
+
+        // Let the real route proceed while the site-row lock and membership
+        // deletion remain uncommitted on the independent revocation connection.
+        resumePreflight();
+        const earlyOutcome = await Promise.race([
+          profilePromise,
+          new Promise(resolve => setTimeout(() => resolve(null), 100)),
+        ]);
+        const lockObserved = earlyOutcome
+          ? false
+          : await waitForDatabaseWriteLock(
+            revocationClient,
+            'FOR KEY SHARE',
+            5000,
+            { relationName: 'sites' },
+          );
+
+        await revocationClient.query(lockObserved ? 'COMMIT' : 'ROLLBACK');
+        revocationOpen = false;
+        profileOutcome = earlyOutcome || await profilePromise;
+
+        assert.equal(lockObserved, true, 'profile mutation must serialize against site-membership removal');
+        assert.equal(profileOutcome.status, 403, 'a revoked site member must not update their profile');
+        assert.equal(
+          profileOutcome.payload.code,
+          'ERR_VIRGOSCORPIO_HUB_TENANT_FORBIDDEN',
+          'the existing tenant-denial contract must be preserved',
+        );
+
+        const profileAfter = await pool.query(
+          'SELECT display_name,bio,avatar_asset_id,website_url,visibility,metadata,version FROM social_profiles WHERE site_id=$1 AND user_id=$2',
+          [siteB, actorB.id]
+        );
+        assert.deepEqual(profileAfter.rows, profileBefore.rows, 'denied profile mutation must leave the profile row unchanged');
+        await assertSiteAUnchanged();
+      } finally {
+        resumePreflight();
+        identity.authorizeSite = originalAuthorizeSite;
+        if (revocationOpen) await revocationClient.query('ROLLBACK').catch(() => {});
+        if (profilePromise && !profileOutcome) profileOutcome = await profilePromise.catch(() => null);
+        revocationClient.release();
+        await pool.query(
+          'INSERT INTO site_memberships(site_id,user_id,role_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING',
+          [siteB, actorB.id, roleId],
+        ).catch(() => {});
+      }
     });
 
     const ownMessage = await fetch(`${base}/api/v1/sites/${siteB}/community/conversations/${conversationB}/messages`, { headers });
