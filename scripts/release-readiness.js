@@ -20,6 +20,7 @@ const { validateObservabilityDeploymentManifest } = require('../packages/observa
 const { readRegularFile } = require('./configure-otel-dev');
 const { renderReleaseReadinessMarkdown } = require('./release-readiness-report');
 const { REQUIRED_EVIDENCE_GATES } = require('./release-readiness-gates');
+const { inspectMigrationDirectory, describeMigrationInventory } = require('./migration-inventory');
 
 const root = path.resolve(__dirname, '..');
 loadEnvFile(path.join(root, '.env'));
@@ -202,20 +203,23 @@ addCheck('reviewed-lockfile', 'Reviewed and committed npm lockfile', lockExists 
     : !lockTracked ? 'package-lock.json exists but this checkout cannot verify it is tracked/committed in Git.'
       : 'package-lock.json is present and tracked; fresh isolated npm ci passed, but human dependency review remains required.');
 
-const requiredMigrations = [
-  '0001_initial.sql', '0002_identity_workflows_plugins.sql', '0003_identity_editor_ai.sql',
-  '0004_governance_taxonomy_release.sql', '0005_saml_shared_cache.sql',
-  '0006_platform_libraries_commerce_social_billing.sql', '0007_release_hardening.sql',
-  '0008_checkout_stock_reservation_lifecycle.sql', '0009_fix_content_item_slug_constraint.sql',
-  '0010_outbox_event_contract.sql', '0011_outbox_legacy_classification_backfill.sql',
-  '0012_durable_consumer_group_deliveries.sql', '0013_consumer_group_event_filters.sql',
-  '0014_collaborative_document_operations.sql', '0015_commerce_refund_idempotency.sql',
-  '0016_paid_membership_paused_status.sql', '0017_ai_task_lifecycle.sql', '0018_ai_task_durable_queue.sql',
-  '0019_library_variant_source_version.sql'
-];
-const missingMigrations = requiredMigrations.filter(file => !fs.existsSync(path.join(root, 'database/migrations', file)));
-addCheck('migration-artifacts', 'Versioned migration files', missingMigrations.length ? 'BLOCKED' : 'PASS',
-  missingMigrations.length ? `Missing: ${missingMigrations.join(', ')}` : `${requiredMigrations.length} migration files are present; live fresh/upgrade execution is a separate gate.`);
+let migrationInventory = { migrationFiles: [] };
+try {
+  migrationInventory = inspectMigrationDirectory(path.join(root, 'database/migrations'));
+  addCheck(
+    'migration-artifacts',
+    'Versioned migration files',
+    migrationInventory.valid ? 'PASS' : 'BLOCKED',
+    describeMigrationInventory(migrationInventory)
+  );
+} catch (error) {
+  addCheck(
+    'migration-artifacts',
+    'Versioned migration files',
+    'BLOCKED',
+    'Could not inspect database/migrations: ' + error.message
+  );
+}
 
 if (!skipTests) {
   const verify = runNode(['scripts/verify.js']);
@@ -364,7 +368,7 @@ function supplementalFile(id, title, filename, validator, successDetails) {
 supplementalFile('clean-npm-ci', 'Fresh clean npm ci installation', 'clean-npm-ci.json',
   raw => { const value = JSON.parse(raw); return value.status === 'passed' && value.result?.exitCode === 0 && value.result?.packagesAdded === 167 && value.environment?.node === 'v26.12.1'; },
   'Fresh isolated npm ci completed on Windows x64 / Node.js 26.12.1, installed 167 packages and ran the KaTeX postinstall; maintainer review and CI matrix evidence remain open.');
-supplementalFile('fresh-migrations', 'Fresh PostgreSQL migrations and idempotency', 'fresh-migrations.json', raw => isFreshMigrationEvidence(JSON.parse(raw), requiredMigrations.length, pkg.version, gitHead), `All ${requiredMigrations.length} migrations applied to a disposable fresh local PostgreSQL database, all ${requiredMigrations.length} skipped on a second pass, then only that disposable database was dropped.`);
+supplementalFile('fresh-migrations', 'Fresh PostgreSQL migrations and idempotency', 'fresh-migrations.json', raw => isFreshMigrationEvidence(JSON.parse(raw), migrationInventory.migrationFiles.length, pkg.version, gitHead), `All ${migrationInventory.migrationFiles.length} migrations applied to a disposable fresh local PostgreSQL database, all ${migrationInventory.migrationFiles.length} skipped on a second pass, then only that disposable database was dropped.`);
 supplementalFile('playwright-smoke', 'Playwright Chromium smoke tests (not full accessibility acceptance)', 'browser-smoke.log',
   raw => hasSuccessfulPlaywrightSummary(raw),
   'The configured Chromium Playwright suite passed with zero failed tests; manual screen-reader and broader WCAG review remain open.');

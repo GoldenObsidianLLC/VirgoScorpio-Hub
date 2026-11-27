@@ -6,6 +6,7 @@ const path = require('node:path');
 const { loadEnvFile } = require('./load-env');
 const { createPostgresPool } = require('../packages/db/src/postgres-store');
 const { normalizeMigrationSql, migrationChecksum } = require('./migration-checksum');
+const { inspectMigrationDirectory, describeMigrationInventory } = require('./migration-inventory');
 
 const MIGRATION_DIR = path.resolve(__dirname, '../database/migrations');
 const LOCK_KEY_A = 57_493_100;
@@ -32,8 +33,11 @@ async function assertFreshDatabaseForIdentity(client) {
 async function main() {
   loadEnvFile(path.resolve(process.cwd(), '.env'));
   if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL must be set before running migrations.');
-  const files = fs.readdirSync(MIGRATION_DIR).filter(file => /^\d+_[a-z0-9_-]+\.sql$/i.test(file)).sort();
-  if (files.length === 0) throw new Error(`No SQL migrations found in ${MIGRATION_DIR}.`);
+  const migrationInventory = inspectMigrationDirectory(MIGRATION_DIR);
+  if (!migrationInventory.valid) {
+    throw new Error('Refusing to run migrations: ' + describeMigrationInventory(migrationInventory));
+  }
+  const files = migrationInventory.migrationFiles;
   const pool = createPostgresPool(process.env);
   const client = await pool.connect();
   try {

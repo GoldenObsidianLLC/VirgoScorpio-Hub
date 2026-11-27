@@ -7,6 +7,7 @@ const { randomUUID } = require('node:crypto');
 const { Pool } = require('pg');
 const { loadEnvFile } = require('./load-env');
 const { PRODUCT_VERSION } = require('../packages/domain/src/version');
+const { inspectMigrationDirectory, describeMigrationInventory } = require('./migration-inventory');
 
 const root = path.resolve(__dirname, '..');
 const evidenceDir = path.join(root, 'artifacts', 'evidence');
@@ -54,6 +55,13 @@ async function main() {
   if (!/(?:^|[_-])test$/i.test(baseDatabaseName)) throw new Error('Safety stop: TEST_DATABASE_URL database name must end in "test".');
   if (!/^[A-Za-z0-9_]+$/.test(username)) throw new Error('Safety stop: PostgreSQL test role name contains unsupported characters.');
 
+  const migrationInventory = inspectMigrationDirectory(path.join(root, 'database', 'migrations'));
+  if (!migrationInventory.valid) {
+    throw new Error('Refusing fresh migration evidence: ' + describeMigrationInventory(migrationInventory));
+  }
+  const migrationFiles = migrationInventory.migrationFiles;
+  const migrationCount = migrationFiles.length;
+
   const targetDatabaseName = 'virgoscorpio_hub_fresh_' + randomUUID().replaceAll('-', '').slice(0, 12) + '_test';
   const targetUrl = new URL(testDatabaseUrl);
   targetUrl.pathname = '/' + targetDatabaseName;
@@ -68,10 +76,6 @@ async function main() {
     await adminPool.query('CREATE DATABASE "' + targetDatabaseName + '" OWNER "' + username + '"');
     created = true;
 
-    const migrationFiles = fs.readdirSync(path.join(root, 'database', 'migrations'))
-      .filter(file => /^\d+_[a-z0-9_-]+\.sql$/i.test(file)).sort();
-    if (migrationFiles.length < 1) throw new Error('No versioned database migrations were found.');
-    const migrationCount = migrationFiles.length;
     evidence.migrationCount = migrationCount;
 
     const firstOutput = runMigrations(targetUrl.toString(), 'Fresh database migration pass');
