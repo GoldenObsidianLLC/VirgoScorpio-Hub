@@ -439,7 +439,7 @@ function createIdentityService({ pool, env = process.env, clock = () => Date.now
       return withTransaction(pool, async client => {
         // Serialize capacity and per-target cooldown checks across API replicas.
         await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', ['virgoscorpio_hub-password-reset-queue-capacity']);
-        const recent = await client.query("SELECT 1 FROM password_reset_requests WHERE target_email=$1 AND status IN ('pending','processing','completed') AND created_at > now() - interval '120 seconds' LIMIT 1", [email]);
+        const recent = await client.query("SELECT 1 FROM password_reset_requests WHERE target_email=$1 AND status IN ('pending','processing','completed','failed') AND created_at > now() - interval '120 seconds' LIMIT 1", [email]);
         if (recent.rows[0]) return { accepted: true };
         const count = await client.query("SELECT count(*)::integer AS pending FROM password_reset_requests WHERE status IN ('pending','processing')");
         if (Number(count.rows[0]?.pending || 0) >= maxPending) {

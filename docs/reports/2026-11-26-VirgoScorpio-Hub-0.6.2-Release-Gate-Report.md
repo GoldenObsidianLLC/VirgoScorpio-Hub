@@ -112,7 +112,7 @@ These increments are in current main and covered by the exact-main CI result in 
 
 ## 6. Recommended next development increment — F1.74 durable password-reset queue
 
-The latest implementation work is isolated from the user-modified primary checkout in local branch security/f1-74-password-reset-durable-queue-2026-11-26. It is a candidate worktree, not mainline code, not yet a reviewed PR and not included in the exact-main readiness artifact.
+F1.74 is an isolated local worktree and a draft candidate in [PR #306](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/306), not mainline code and not part of the exact-main readiness artifact.
 
 ### Scope implemented in the candidate worktree
 
@@ -120,24 +120,24 @@ The latest implementation work is isolated from the user-modified primary checko
 - Production request handling preserves a generic response and the existing per-IP throttle, but now awaits PostgreSQL queue commit before returning 202. The in-memory target-email short-circuit was removed so every production 202 passes the durable database boundary.
 - A global transaction-scoped advisory lock serializes pending-capacity and 120-second target-cooldown checks across API replicas. Default pending + processing capacity is 5,000; allowed configuration range is 1–100,000.
 - Shared identity helper performs user lookup, reset-token hashing, token persistence and mail-outbox insertion through the same transaction. Queue completion commits in that transaction, avoiding a reset token/outbox message without corresponding queue acknowledgement.
-- Existing mail worker processes reset requests using SKIP LOCKED, bounded exponential retry, five-minute stale-claim recovery, terminalization after eight attempts, error-code-only logs and target-email PII scrubbing after cooldown. Completed/failed queue rows are pruned after 24 hours. Added the explicit `npm run start:mail-worker` entry point: the existing `npm run start:worker` command starts graph projection, not mail delivery; supervise the mail worker as a separate process.
+- Existing mail worker processes reset requests using SKIP LOCKED, bounded exponential retry, five-minute stale-claim recovery, terminalization after eight attempts, validated error-code-only logs and target-email PII scrubbing after cooldown. Mail reset links are suppressed when expiry is missing/invalid or elapsed; pending/retry payloads remain available for delivery but clear after successful send, expiry or terminal failure. Added a low-cardinality 30-second queue depth/age snapshot through structured OTLP logs, an explicit `npm run start:mail-worker` entry point, and a systemd reference unit/host guide under deploy/systemd/ (not deployed or target-host validated).
 - Non-production developer-token output remains an explicit opt-in; it bypasses the durable queue and is not permitted in production.
 - Added route/service and worker tests cover durable-before-202 ordering, fail-closed queue absence/capacity, normalized target cooldown, retry/recovery, exhaustion, sanitized logs and PII cleanup.
 
 ### Candidate validation and remaining work
 
-Focused queue/route/worker and tenant-inventory tests pass **40/40**. The official top-level test glob passes **1,123/1,126** (3 platform skips, 0 failures) on local Node **v26.12.1**. `node scripts/verify.js` passes (241 required paths; 310 JavaScript files syntax-checked). The workstation has no TEST_DATABASE_URL, so fresh/idempotent migration 0022 and live PostgreSQL worker/queue integration were not run locally; the supported Node 22/24 matrix and hosted database CI for this candidate remain required. Local checks are not release certification. Syntax checks passed for the changed API route, auth service and mail worker. PostgreSQL integration must include concurrent claims, restart recovery, idempotency and retry exhaustion. The candidate is committed at `b60218aa93b6d6db8b103d66e93ace593a362186` and pushed as draft [PR #306](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/306). It is not merged; PR CI, supported Node 22/24 and PostgreSQL-backed migration/queue integration checks remain outstanding.
+Focused queue/route/worker tests pass **58/58**. The complete top-level test glob passes **1,128/1,131** (3 platform skips, 0 failures) on local Node **v26.12.1**. `node scripts/verify.js` passes (241 required paths; 314 JavaScript files syntax-checked), and `git diff --check` passes. Two new PostgreSQL integration tests cover multi-replica deduplication/capacity, concurrent SKIP LOCKED workers, hashed token storage, outbox payload scrubbing, and stale-claim recovery; both skip locally because TEST_DATABASE_URL is not configured and must execute in hosted PR CI. Supported Node 22/24 and a live PostgreSQL migration 0022 run are required before merge. The candidate is not merged; independent code/security review is still pending.
 
-Next steps: (1) complete migration/queue integration validation on the hosted PR CI and add explicit DB tests if coverage is insufficient; (2) add or verify queue depth/oldest-age low-cardinality monitoring and supervised mail-worker deployment wiring; (3) advance draft PR #306 with exact-head evidence and code/security review; (4) reconcile PR #274 only after the replacement is accepted. Do not close #274 or issue #13 prematurely.
+Next steps: (1) complete hosted PostgreSQL migration 0022 fresh/idempotent and queue-integration CI; (2) review exact-head Node 22/24, CodeQL, browser and evidence workflows; (3) obtain independent code/security review and resolve all findings; (4) qualify the systemd mail-worker service, OTLP routing and alert thresholds on the target deployment host; (5) reconcile PR #274 only after #306 is accepted. Do not close #274 or issue #13 prematurely.
 
 ## 7. Stability, security and architecture notes
 
 - Keep PostgreSQL authoritative for queue state; do not replace it with process-local maps or fire-and-forget promises.
 - Preserve transaction reuse and the existing mail-worker retry/claim patterns; avoid a second queue framework or duplicate worker service.
-- Never persist reset tokens in plaintext or include target email, reset URL, token or provider payload in logs.
+- Store only the token digest in identity_action_tokens. The delivery URL necessarily carries the raw token inside mail_outbox.payload while pending/retrying; clear that payload after successful send, expiry or terminal failure. Never put target email, reset URL, token or provider payload in logs.
 - Keep response content and status generic for unknown or known accounts; target cooldown is enforced in PostgreSQL, not by an API-process map.
 - Retain per-IP ingress limiting; bound queue depth and retention to prevent unbounded PII or resource growth.
-- Mail-provider delivery, bounce handling, sender verification and live identity E2E remain independent production evidence gates.
+- The worker emits low-cardinality queue depth/oldest-age snapshots through its structured OTLP log pipeline. A reference systemd unit and host guide exist under deploy/systemd/, but have not been installed or validated on a target host. Mail-provider delivery, bounce handling, sender verification and live identity E2E remain independent production evidence gates.
 - No package/dependency/lockfile change or SemVer change is proposed by F1.74. Version 0.6.2 remains private/unreleased.
 
 ## 8. Final release disposition

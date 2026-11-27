@@ -13,7 +13,7 @@ const SAFE_FIELD_NAMES = new Set([
   'code', 'errorType', 'component', 'operation', 'outcome',
   'count', 'checked', 'errors', 'unlinked', 'intervalMs',
   'batchSize', 'dispatchBatchSize', 'leaseMs', 'maxAttempts',
-  'pollMs', 'attempts', 'terminal', 'processed', 'durationMs'
+  'pollMs', 'attempts', 'terminal', 'processed', 'durationMs', 'pending', 'processing', 'failedLast24h', 'oldestPendingAgeSeconds', 'queueCapacity'
 ]);
 const TOKEN_RE = /^[A-Za-z0-9_.:-]{1,120}$/;
 const ROUTE_RE = /^\/[A-Za-z0-9_/:.-]{0,119}$/;
@@ -23,7 +23,7 @@ const STATUS_CLASS_RE = /^[1-5]xx$/;
 const NUMERIC_FIELDS = new Set([
   'count', 'checked', 'errors', 'unlinked', 'intervalMs',
   'batchSize', 'dispatchBatchSize', 'leaseMs', 'maxAttempts',
-  'pollMs', 'attempts', 'processed', 'durationMs'
+  'pollMs', 'attempts', 'processed', 'durationMs', 'pending', 'processing', 'failedLast24h', 'oldestPendingAgeSeconds', 'queueCapacity'
 ]);
 const OTEL_ATTRIBUTE_NAMES = Object.freeze({
   requestId: 'virgoscorpio_hub.request_id',
@@ -53,7 +53,12 @@ const OTEL_ATTRIBUTE_NAMES = Object.freeze({
   attempts: 'virgoscorpio_hub.attempts',
   terminal: 'virgoscorpio_hub.terminal',
   processed: 'virgoscorpio_hub.processed',
-  durationMs: 'virgoscorpio_hub.duration_ms'
+  durationMs: 'virgoscorpio_hub.duration_ms',
+  pending: 'virgoscorpio_hub.queue.pending',
+  processing: 'virgoscorpio_hub.queue.processing',
+  failedLast24h: 'virgoscorpio_hub.queue.failed_last_24h',
+  oldestPendingAgeSeconds: 'virgoscorpio_hub.queue.oldest_pending_age_seconds',
+  queueCapacity: 'virgoscorpio_hub.queue.capacity'
 });
 const SEVERITY_NUMBERS = Object.freeze({
   debug: 5,

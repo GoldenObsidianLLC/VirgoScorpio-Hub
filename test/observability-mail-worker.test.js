@@ -22,6 +22,7 @@ try {
 }
 
 function createPool(row) {
+  row = { ...row, payload: { ...(row.payload || {}), expiresAt: new Date(1_800_000_060_000).toISOString() } };
   const clientCalls = [];
   const poolCalls = [];
   return {

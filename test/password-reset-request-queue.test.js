@@ -71,6 +71,8 @@ test('queue enqueue normalizes email and commits a durable row under the shared 
 test('queue enqueue coalesces a recent target without adding another row',async()=>{
   const pool=fakeQueuePool({recent:true});const identity=createIdentityService({pool,env:{NODE_ENV:'production'}});
   assert.deepEqual(await identity.enqueuePasswordResetRequest({email:'person@example.com'}),{accepted:true});
+  const cooldown = pool.calls.find(call => call.sql.includes('FROM password_reset_requests WHERE target_email'));
+  assert.ok(cooldown.sql.includes("status IN ('pending','processing','completed','failed')"));
   assert.equal(pool.calls.some(call=>call.sql.includes('INSERT INTO password_reset_requests')),false);
   assert.equal(pool.calls.at(-1).sql,'COMMIT');
 });
