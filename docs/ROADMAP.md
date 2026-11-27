@@ -11,7 +11,7 @@
 
 ### Execution order
 
-1. Complete and review F1.74; run full supported-Node tests, fresh/idempotent PostgreSQL migration checks and queue-worker integration; open a reviewable PR. Keep #274 blocked until a reviewed replacement is ready.
+1. Complete draft PR #306: run supported-Node tests, fresh/idempotent PostgreSQL migration checks and queue-worker integration; obtain code/security review and resolve all CI findings. Keep #274 blocked until the replacement is accepted.
 2. Complete independent tenant-isolation, dependency/SBOM and platform-security reviews.
 3. Complete external identity/email/MFA, malware, cloud, Stripe, commerce, community and full accessibility/product-parity acceptance.
 4. Complete load/soak, fault injection, backup/restore, production OTLP, deployment runbooks, secrets/rollback and monitoring evidence.

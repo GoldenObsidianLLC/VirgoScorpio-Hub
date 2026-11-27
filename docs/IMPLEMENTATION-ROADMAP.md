@@ -20,7 +20,7 @@
 
 1. Run the full repository test/check suite on supported Node versions, fresh/idempotent migration 0022 tests and PostgreSQL worker integration for restart recovery, concurrent claims, idempotency and failure exhaustion.
 2. Add queue depth/oldest-age telemetry and operator guidance if the existing low-cardinality metric/log contracts do not cover this queue adequately.
-3. Open a focused F1.74 PR, bind evidence to its exact head, obtain code/security review and reconcile #274 only after the replacement is accepted.
+3. Advance draft PR #306: bind all evidence to its latest exact head, obtain code/security review, complete CI and reconcile #274 only after the replacement is accepted.
 4. Complete independent tenant, dependency/SBOM and platform-security reviews; then close provider, product parity, backup/restore, load/soak, observability and release-owner gates.
 
 Package 0.6.2 remains private/unreleased. No SemVer increment, tag, publication, deployment or production promotion is authorized while readiness is NO-GO.
