@@ -18,17 +18,37 @@ function apiContext({
   query = '',
   afterReadJson = null,
   afterCapabilityCheck = null,
+  afterSiteCheck = null,
+  afterBlockTargetCheck = null,
+  blockTargetId = null,
 }) {
   const url = new URL(`http://virgoscorpio-hub.integration${pathname}${query}`);
   const res = {};
+  const localPool = typeof afterBlockTargetCheck === 'function'
+    ? {
+      async query(sql, params) {
+        const result = await pool.query(sql, params);
+        if (
+          typeof sql === 'string' &&
+          sql.includes('FROM site_memberships sm JOIN users u ON u.id=sm.user_id') &&
+          params?.[1] === blockTargetId
+        ) {
+          await afterBlockTargetCheck({ sql, params, result });
+        }
+        return result;
+      },
+      connect: pool.connect.bind(pool),
+    }
+    : pool;
   return {
     req: { method, headers: {} }, res, url,
     actor: { user: { id: user.id, email: user.email, displayName: user.displayName } },
-    localPool: pool, maxBody: 64_000, requestId: randomUUID(),
+    localPool, maxBody: 64_000, requestId: randomUUID(),
     async siteIdFor({ body: requested }) {
       const requestedSiteId = requested.siteId;
       const member = await pool.query('SELECT 1 FROM site_memberships WHERE site_id=$1 AND user_id=$2 LIMIT 1', [requestedSiteId, user.id]);
       if (!member.rows[0]) throw Object.assign(new Error('Site membership required.'), { code: 'ERR_VIRGOSCORPIO_HUB_SITE_ACCESS', statusCode: 403 });
+      if (typeof afterSiteCheck === 'function') await afterSiteCheck();
       return requestedSiteId;
     },
     async requireCapability(actor, requestedSiteId, capability) {
@@ -162,6 +182,187 @@ test('community direct messages, blocks, reports, notifications, and moderation 
   assert.ok(readAll.payload.markedRead >= 1);
   const moderationAudit = await pool.query("SELECT count(*)::int AS count FROM virgoscorpio_hub_moderation_actions WHERE site_id=$1 AND target_id=$2", [siteId, fixtures.reportId]);
   assert.equal(moderationAudit.rows[0].count, 1);
+
+
+  // Block writes must be serialized with actor and target membership/account revocation.
+  const aliceBlockRowsBefore = await pool.query(
+    'SELECT count(*)::int AS count FROM social_blocks WHERE site_id=$1 AND blocker_id=$2 AND blocked_id=$3',
+    [siteId, alice.id, bob.id],
+  );
+  assert.equal(aliceBlockRowsBefore.rows[0].count, 0);
+
+  const blockMembershipGate = createGate();
+  const staleBlockAfterMembershipRevocation = invoke({
+    pool,
+    siteId,
+    user: alice,
+    method: 'POST',
+    pathname: '/api/v1/sites/' + siteId + '/community/blocks',
+    body: { userId: bob.id, reason: 'Must not persist after blocker membership revocation.' },
+    afterReadJson: async () => {
+      blockMembershipGate.signal();
+      await blockMembershipGate.wait;
+    },
+  });
+  await blockMembershipGate.entered;
+  const removedBlockerMembership = await pool.query(
+    'DELETE FROM site_memberships WHERE site_id=$1 AND user_id=$2 RETURNING user_id',
+    [siteId, alice.id],
+  );
+  assert.equal(removedBlockerMembership.rowCount, 1);
+  blockMembershipGate.release();
+  await assert.rejects(
+    staleBlockAfterMembershipRevocation,
+    error => error.statusCode === 403 && error.code === 'ERR_VIRGOSCORPIO_HUB_TENANT_FORBIDDEN',
+  );
+  const blockRowsAfterMembershipRevocation = await pool.query(
+    'SELECT count(*)::int AS count FROM social_blocks WHERE site_id=$1 AND blocker_id=$2 AND blocked_id=$3',
+    [siteId, alice.id, bob.id],
+  );
+  assert.equal(blockRowsAfterMembershipRevocation.rows[0].count, 0);
+  await pool.query(
+    'INSERT INTO site_memberships(site_id,user_id,role_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING',
+    [siteId, alice.id, roleId],
+  );
+
+  const blockAccountGate = createGate();
+  const staleBlockAfterAccountDisable = invoke({
+    pool,
+    siteId,
+    user: alice,
+    method: 'POST',
+    pathname: '/api/v1/sites/' + siteId + '/community/blocks',
+    body: { userId: bob.id, reason: 'Must not persist after blocker account disablement.' },
+    afterReadJson: async () => {
+      blockAccountGate.signal();
+      await blockAccountGate.wait;
+    },
+  });
+  await blockAccountGate.entered;
+  await pool.query("UPDATE users SET status='disabled' WHERE id=$1", [alice.id]);
+  blockAccountGate.release();
+  await assert.rejects(
+    staleBlockAfterAccountDisable,
+    error => error.statusCode === 403 && error.code === 'ERR_VIRGOSCORPIO_HUB_TENANT_FORBIDDEN',
+  );
+  const blockRowsAfterAccountDisable = await pool.query(
+    'SELECT count(*)::int AS count FROM social_blocks WHERE site_id=$1 AND blocker_id=$2 AND blocked_id=$3',
+    [siteId, alice.id, bob.id],
+  );
+  assert.equal(blockRowsAfterAccountDisable.rows[0].count, 0);
+  await pool.query("UPDATE users SET status='active' WHERE id=$1", [alice.id]);
+
+  const blockTargetGate = createGate();
+  const staleBlockAfterTargetRevocation = invoke({
+    pool,
+    siteId,
+    user: alice,
+    method: 'POST',
+    pathname: '/api/v1/sites/' + siteId + '/community/blocks',
+    body: { userId: bob.id, reason: 'Must not persist after target membership revocation.' },
+    blockTargetId: bob.id,
+    afterBlockTargetCheck: async () => {
+      blockTargetGate.signal();
+      await blockTargetGate.wait;
+    },
+  });
+  await blockTargetGate.entered;
+  const removedBlockTargetMembership = await pool.query(
+    'DELETE FROM site_memberships WHERE site_id=$1 AND user_id=$2 RETURNING user_id',
+    [siteId, bob.id],
+  );
+  assert.equal(removedBlockTargetMembership.rowCount, 1);
+  blockTargetGate.release();
+  await assert.rejects(
+    staleBlockAfterTargetRevocation,
+    error => error.statusCode === 404 && error.code === 'ERR_VIRGOSCORPIO_HUB_COMMUNITY_USER_NOT_FOUND',
+  );
+  const blockRowsAfterTargetRevocation = await pool.query(
+    'SELECT count(*)::int AS count FROM social_blocks WHERE site_id=$1 AND blocker_id=$2 AND blocked_id=$3',
+    [siteId, alice.id, bob.id],
+  );
+  assert.equal(blockRowsAfterTargetRevocation.rows[0].count, 0);
+  await pool.query(
+    'INSERT INTO site_memberships(site_id,user_id,role_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING',
+    [siteId, bob.id, roleId],
+  );
+
+  // DELETE must not remove an existing block once the actor loses site access.
+  const blockRowBeforeRevokedUnblock = await pool.query(
+    'SELECT count(*)::int AS count FROM social_blocks WHERE site_id=$1 AND blocker_id=$2 AND blocked_id=$3',
+    [siteId, bob.id, alice.id],
+  );
+  assert.equal(blockRowBeforeRevokedUnblock.rows[0].count, 1);
+  const unblockGate = createGate();
+  const staleUnblockAfterMembershipRevocation = invoke({
+    pool,
+    siteId,
+    user: bob,
+    method: 'DELETE',
+    pathname: '/api/v1/sites/' + siteId + '/community/blocks/' + alice.id,
+    afterSiteCheck: async () => {
+      unblockGate.signal();
+      await unblockGate.wait;
+    },
+  });
+  await unblockGate.entered;
+  const removedUnblockerMembership = await pool.query(
+    'DELETE FROM site_memberships WHERE site_id=$1 AND user_id=$2 RETURNING user_id',
+    [siteId, bob.id],
+  );
+  assert.equal(removedUnblockerMembership.rowCount, 1);
+  unblockGate.release();
+  await assert.rejects(
+    staleUnblockAfterMembershipRevocation,
+    error => error.statusCode === 403 && error.code === 'ERR_VIRGOSCORPIO_HUB_TENANT_FORBIDDEN',
+  );
+  const blockRowAfterRevokedUnblock = await pool.query(
+    'SELECT count(*)::int AS count FROM social_blocks WHERE site_id=$1 AND blocker_id=$2 AND blocked_id=$3',
+    [siteId, bob.id, alice.id],
+  );
+  assert.equal(blockRowAfterRevokedUnblock.rows[0].count, 1);
+  await pool.query(
+    'INSERT INTO site_memberships(site_id,user_id,role_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING',
+    [siteId, bob.id, roleId],
+  );
+
+  // Preserve the earlier block fixture; the concurrency probe mutates both directions.
+  const originalReverseBlock = await pool.query(
+    'SELECT reason FROM social_blocks WHERE site_id=$1 AND blocker_id=$2 AND blocked_id=$3',
+    [siteId, bob.id, alice.id],
+  );
+  assert.equal(originalReverseBlock.rowCount, 1);
+  const originalReverseBlockReason = originalReverseBlock.rows[0].reason;
+
+  // Reciprocal requests lock both participant sets in the same sorted order.
+  const reciprocalBlocks = await Promise.all([
+    invoke({
+      pool,
+      siteId,
+      user: alice,
+      method: 'POST',
+      pathname: '/api/v1/sites/' + siteId + '/community/blocks',
+      body: { userId: bob.id, reason: 'Reciprocal lock-order check A.' },
+    }),
+    invoke({
+      pool,
+      siteId,
+      user: bob,
+      method: 'POST',
+      pathname: '/api/v1/sites/' + siteId + '/community/blocks',
+      body: { userId: alice.id, reason: 'Reciprocal lock-order check B.' },
+    }),
+  ]);
+  assert.deepEqual(reciprocalBlocks.map(result => result.statusCode), [201, 201]);
+  const reciprocalBlockCount = await pool.query(
+    'SELECT count(*)::int AS count FROM social_blocks WHERE site_id=$1 AND ((blocker_id=$2 AND blocked_id=$3) OR (blocker_id=$3 AND blocked_id=$2))',
+    [siteId, alice.id, bob.id],
+  );
+  assert.equal(reciprocalBlockCount.rows[0].count, 2);
+
+  // Remove only the probe's new Alice -> Bob block and restore Bob -> Alice.
+  await pool.query('DELETE FROM social_blocks WHERE site_id=$1 AND blocker_id=$2 AND blocked_id=$3', [siteId, alice.id, bob.id]);
+  await pool.query('UPDATE social_blocks SET reason=$4 WHERE site_id=$1 AND blocker_id=$2 AND blocked_id=$3', [siteId, bob.id, alice.id, originalReverseBlockReason]);
 
   // A successful request-time membership check is not permission to mutate
   // after a site administrator has committed the actor's revocation.
