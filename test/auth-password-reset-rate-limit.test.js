@@ -114,7 +114,7 @@ function createHandlers(identity, allowRequest) {
 test('password-reset request applies per-IP rate limiting before processing', async () => {
   const allowRequest = createRateLimiter();
   const identity = {
-    async requestPasswordReset({ email }) {
+    async enqueuePasswordResetRequest({ email }) {
       return { accepted: true };
     }
   };
@@ -150,11 +150,11 @@ test('password-reset request applies per-IP rate limiting before processing', as
   assert.match(body.error, /too many password reset requests/i);
 });
 
-test('password-reset request applies per-target-email rate limiting', async () => {
+test('password-reset routes every target through durable deduplication without revealing account existence', async () => {
   const allowRequest = createRateLimiter();
   let resetCallCount = 0;
   const identity = {
-    async requestPasswordReset({ email }) {
+    async enqueuePasswordResetRequest({ email }) {
       resetCallCount++;
       return { accepted: true };
     }
@@ -164,7 +164,7 @@ test('password-reset request applies per-target-email rate limiting', async () =
 
   const targetEmail = 'victim@example.com';
   
-  // First 5 requests from different IPs targeting the same email should succeed
+  // Requests from different IPs target the durable queue; the database owns the cross-replica cooldown.
   for (let i = 0; i < 5; i++) {
     const req = createMockRequest({ 
       remoteAddress: `192.0.2.${i}`, 
@@ -177,7 +177,7 @@ test('password-reset request applies per-target-email rate limiting', async () =
     assert.equal(res.statusCode, 202, `Request ${i} should return 202`);
   }
   
-  // 6th request from a new IP should be throttled at the target-email level
+  // A new IP still receives the generic accepted response; durable deduplication occurs in PostgreSQL.
   const req = createMockRequest({ 
     remoteAddress: '192.0.2.200', 
     body: { email: targetEmail } 
@@ -193,14 +193,14 @@ test('password-reset request applies per-target-email rate limiting', async () =
   assert.equal(body.accepted, true);
   assert.match(body.message, /if an active account matches/i);
   
-  // But the identity service should NOT have been called
-  assert.equal(resetCallCount, 5, 'Identity service should only be called 5 times, not 6');
+  // Every accepted response follows the durable enqueue/deduplication boundary.
+  assert.equal(resetCallCount, 6, 'Each 202 must follow the durable enqueue call, including deduplicated targets.');
 });
 
-test('password-reset per-target-email throttling does not reveal account existence', async () => {
+test('password-reset target deduplication keeps response shape generic for known and unknown addresses', async () => {
   const allowRequest = createRateLimiter();
   const identity = {
-    async requestPasswordReset({ email }) {
+    async enqueuePasswordResetRequest({ email }) {
       return { accepted: true };
     }
   };
@@ -267,7 +267,7 @@ test('password-reset per-target-email throttling does not reveal account existen
 test('password-reset rate limiting uses separate key namespaces for IP and target-email', async () => {
   const allowRequest = createRateLimiter();
   const identity = {
-    async requestPasswordReset({ email }) {
+    async enqueuePasswordResetRequest({ email }) {
       return { accepted: true };
     }
   };
@@ -305,7 +305,7 @@ test('password-reset rate limiting uses separate key namespaces for IP and targe
 test('password-reset handles missing or malformed email gracefully', async () => {
   const allowRequest = createRateLimiter();
   const identity = {
-    async requestPasswordReset({ email }) {
+    async enqueuePasswordResetRequest({ email }) {
       return { accepted: true };
     }
   };
@@ -336,7 +336,7 @@ test('password-reset normalizes email for rate limiting', async () => {
   const allowRequest = createRateLimiter();
   let callCount = 0;
   const identity = {
-    async requestPasswordReset({ email }) {
+    async enqueuePasswordResetRequest({ email }) {
       callCount++;
       return { accepted: true };
     }
@@ -375,13 +375,13 @@ test('password-reset normalizes email for rate limiting', async () => {
   await handlers.handlePublic({ req, res, url, requestId: 'req-6' });
   
   assert.equal(res.statusCode, 202, 'Should return 202 (throttled silently)');
-  assert.equal(callCount, 5, 'Identity service should only be called 5 times');
+  assert.equal(callCount, 6, 'Every request must reach the durable queue boundary.');
 });
 
 test('password-reset truncates extremely long emails for rate limiting', async () => {
   const allowRequest = createRateLimiter();
   const identity = {
-    async requestPasswordReset({ email }) {
+    async enqueuePasswordResetRequest({ email }) {
       return { accepted: true };
     }
   };
@@ -404,7 +404,7 @@ test('password-reset applies rate limiting before identity service call', async 
   const allowRequest = createRateLimiter();
   let identityCallCount = 0;
   const identity = {
-    async requestPasswordReset({ email }) {
+    async enqueuePasswordResetRequest({ email }) {
       identityCallCount++;
       // Simulate expensive database operation
       return { accepted: true };

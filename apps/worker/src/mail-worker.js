@@ -2,6 +2,8 @@
 
 const { loadEnvFile } = require('../../../scripts/load-env');
 const { createPostgresPool } = require('../../../packages/db/src/postgres-store');
+const { createIdentityService } = require('../../../packages/auth/src/service');
+const { createPasswordResetQueueMonitor } = require('../../../packages/observability/src/queue-metrics');
 const { sendEmail } = require('../../../packages/notifications/src/mailer');
 const { initializeTracing } = require('../../../packages/observability/src/tracing');
 const { initializeLogExport } = require('../../../packages/observability/src/otel-logs');
@@ -10,6 +12,16 @@ const { createStructuredLogger } = require('../../../packages/observability/src/
 const MAIL_OUTBOX_MAX_ATTEMPTS = 8;
 const MAIL_OUTBOX_LOCK_TIMEOUT_MINUTES = 5;
 const MAIL_OUTBOX_INTERRUPTED_ERROR = 'ERR_VIRGOSCORPIO_HUB_MAIL_WORKER_INTERRUPTED';
+
+function getBoundedRetryDelayMs(attempts) {
+  const retryAttempt = Math.max(0, Math.min(14, Math.trunc(Number(attempts) || 0)));
+  return Math.min(6 * 60 * 60_000, 1_000 * (2 ** retryAttempt));
+}
+
+function getSafeWorkerErrorCode(error, fallback) {
+  const candidate = typeof error?.code === 'string' ? error.code : fallback;
+  return /^ERR_[A-Z0-9_.-]{1,96}$/.test(candidate) ? candidate : fallback;
+}
 
 async function processBatch(pool, {
   limit = 10,
@@ -38,13 +50,11 @@ async function processBatch(pool, {
     for (const row of stale.rows) {
       const attempts = Number(row.attempts || 0) + 1;
       const terminal = attempts >= MAIL_OUTBOX_MAX_ATTEMPTS;
-      const delayMs = terminal
-        ? 0
-        : Math.min(6 * 60 * 60_000, 1_000 * (2 ** Math.min(attempts, 14)));
+      const delayMs = terminal ? 0 : getBoundedRetryDelayMs(attempts);
       await client.query(
         `UPDATE mail_outbox SET status=$2,attempts=$3,
           available_at=CASE WHEN $2='pending' THEN now()+($4 * interval '1 millisecond') ELSE available_at END,
-          last_error_code=$5,locked_at=NULL WHERE id=$1`,
+          last_error_code=$5,locked_at=NULL,payload=CASE WHEN $2='failed' THEN '{}'::jsonb ELSE payload END WHERE id=$1`,
         [row.id, terminal ? 'failed' : 'pending', attempts, delayMs, MAIL_OUTBOX_INTERRUPTED_ERROR]
       );
       log.emit('warn', 'virgoscorpio_hub.mail.interrupted_claim_recovered', {
@@ -68,6 +78,15 @@ async function processBatch(pool, {
   const results = [];
   for (const row of rows) {
     try {
+      const resetTokenExpiry = row.template === 'password-reset' && typeof row.payload?.expiresAt === 'string'
+        ? Date.parse(row.payload.expiresAt)
+        : Number.NaN;
+      if (row.template === 'password-reset' && (!Number.isFinite(resetTokenExpiry) || resetTokenExpiry <= clock())) {
+        await pool.query("UPDATE mail_outbox SET status='failed',payload='{}'::jsonb,last_error_code=$2,locked_at=NULL WHERE id=$1", [row.id, 'ERR_VIRGOSCORPIO_HUB_MAIL_RESET_TOKEN_EXPIRED']);
+        log.emit('warn', 'virgoscorpio_hub.mail.reset_token_expired', { component: 'mail', operation: 'delivery', code: 'ERR_VIRGOSCORPIO_HUB_MAIL_RESET_TOKEN_EXPIRED', outcome: 'expired' });
+        results.push({ id: row.id, status: 'expired' });
+        continue;
+      }
       await sendEmail({ recipient: row.recipient, template: row.template, payload: row.payload }, env);
       await pool.query("UPDATE mail_outbox SET status='sent',sent_at=now(),payload='{}'::jsonb,last_error_code=NULL,locked_at=NULL WHERE id=$1", [row.id]);
       results.push({ id: row.id, status: 'sent' });
@@ -78,10 +97,10 @@ async function processBatch(pool, {
         error.code === 'ERR_VIRGOSCORPIO_HUB_MAIL_PROVIDER' ||
         error.code === 'ERR_VIRGOSCORPIO_HUB_MAIL_CONFIG' ||
         error.code === 'ERR_VIRGOSCORPIO_HUB_MAIL_DISABLED';
-      const delayMs = Math.min(6 * 60 * 60_000, 1_000 * (2 ** Math.min(attempts, 14)));
-      const errorCode = error.code || 'ERR_VIRGOSCORPIO_HUB_MAIL_FAILED';
+      const delayMs = getBoundedRetryDelayMs(attempts);
+      const errorCode = getSafeWorkerErrorCode(error, 'ERR_VIRGOSCORPIO_HUB_MAIL_FAILED');
       await pool.query(
-        "UPDATE mail_outbox SET status=$2,attempts=$3,available_at=now()+($4 * interval '1 millisecond'),last_error_code=$5,locked_at=NULL WHERE id=$1",
+        "UPDATE mail_outbox SET status=$2,attempts=$3,available_at=now()+($4 * interval '1 millisecond'),last_error_code=$5,locked_at=NULL,payload=CASE WHEN $2='failed' THEN '{}'::jsonb ELSE payload END WHERE id=$1",
         [row.id, terminal ? 'failed' : 'pending', attempts, delayMs, errorCode]
       );
       log.emit('error', 'virgoscorpio_hub.mail.delivery_failure', {
@@ -96,6 +115,69 @@ async function processBatch(pool, {
     }
   }
   return { processed: results.length, results, durationMs: Math.max(0, clock() - started) };
+}
+
+const PASSWORD_RESET_REQUEST_INTERRUPTED_ERROR = 'ERR_VIRGOSCORPIO_HUB_PASSWORD_RESET_WORKER_INTERRUPTED';
+
+async function processPasswordResetRequestBatch(pool, { identity, limit = 10, logger = console, structuredLogger = null, clock = () => Date.now() } = {}) {
+  if (!pool || typeof pool.connect !== 'function' || typeof pool.query !== 'function') throw new TypeError('Password-reset queue processing requires a PostgreSQL pool.');
+  if (!identity || typeof identity.processPasswordResetRequest !== 'function') throw new TypeError('Password-reset queue processing requires identity.processPasswordResetRequest().');
+  if (!Number.isInteger(limit) || limit < 1 || limit > 100) throw new RangeError('Password-reset queue batch limit must be between 1 and 100.');
+  const log = structuredLogger || createStructuredLogger({ logger, service: 'virgoscorpio_hub-mail-worker', environment: process.env.NODE_ENV || 'development' });
+  const started = clock();
+  const client = await pool.connect();
+  let rows = [];
+  let recoveredCount = 0;
+  try {
+    await client.query('BEGIN');
+    const stale = await client.query(
+      "SELECT id,attempts FROM password_reset_requests WHERE status='processing' AND locked_at <= now() - interval '" + MAIL_OUTBOX_LOCK_TIMEOUT_MINUTES + " minutes' ORDER BY locked_at,created_at FOR UPDATE SKIP LOCKED LIMIT $1",
+      [limit]
+    );
+    for (const row of stale.rows) {
+      const attempts = Number(row.attempts || 0);
+      const terminal = attempts >= MAIL_OUTBOX_MAX_ATTEMPTS;
+      const delayMs = getBoundedRetryDelayMs(attempts);
+      await client.query(
+        "UPDATE password_reset_requests SET status=$2,available_at=CASE WHEN $2='pending' THEN now()+($3 * interval '1 millisecond') ELSE available_at END,processed_at=CASE WHEN $2='failed' THEN now() ELSE NULL END,locked_at=NULL,last_error_code=$4,target_email=CASE WHEN $2='failed' AND created_at <= now() - interval '120 seconds' THEN NULL ELSE target_email END WHERE id=$1 AND status='processing'",
+        [row.id, terminal ? 'failed' : 'pending', delayMs, PASSWORD_RESET_REQUEST_INTERRUPTED_ERROR]
+      );
+      recoveredCount += 1;
+    }
+    await client.query("UPDATE password_reset_requests SET target_email=NULL WHERE status IN ('completed','failed') AND target_email IS NOT NULL AND created_at <= now() - interval '120 seconds'");
+    await client.query("DELETE FROM password_reset_requests WHERE status IN ('completed','failed') AND processed_at <= now() - interval '24 hours'");
+    const claimed = await client.query(
+      "WITH picked AS (SELECT id FROM password_reset_requests WHERE status='pending' AND attempts < " + MAIL_OUTBOX_MAX_ATTEMPTS + " AND available_at <= now() ORDER BY created_at,id FOR UPDATE SKIP LOCKED LIMIT $1) UPDATE password_reset_requests AS request SET status='processing',locked_at=now(),attempts=request.attempts+1 FROM picked WHERE request.id=picked.id RETURNING request.id,request.attempts",
+      [limit]
+    );
+    rows = claimed.rows;
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw error;
+  } finally {
+    client.release();
+  }
+  if (recoveredCount) log.emit('warn', 'virgoscorpio_hub.password_reset_queue.claims_recovered', { component: 'auth', operation: 'queue_recovery', attempts: recoveredCount, outcome: 'recovered' });
+  const results = [];
+  for (const row of rows) {
+    try {
+      const processed = await identity.processPasswordResetRequest({ id: row.id });
+      results.push({ id: row.id, status: processed?.processed ? 'completed' : 'skipped' });
+    } catch (error) {
+      const attempts = Number(row.attempts || 0);
+      const terminal = attempts >= MAIL_OUTBOX_MAX_ATTEMPTS;
+      const delayMs = getBoundedRetryDelayMs(attempts);
+      const errorCode = getSafeWorkerErrorCode(error, 'ERR_VIRGOSCORPIO_HUB_PASSWORD_RESET_WORKER_FAILED');
+      await pool.query(
+        "UPDATE password_reset_requests SET status=$2,available_at=CASE WHEN $2='pending' THEN now()+($3 * interval '1 millisecond') ELSE available_at END,processed_at=CASE WHEN $2='failed' THEN now() ELSE NULL END,locked_at=NULL,last_error_code=$4,target_email=CASE WHEN $2='failed' AND created_at <= now() - interval '120 seconds' THEN NULL ELSE target_email END WHERE id=$1 AND status='processing'",
+        [row.id, terminal ? 'failed' : 'pending', delayMs, errorCode]
+      );
+      log.emit('error', 'virgoscorpio_hub.password_reset_queue.processing_failed', { component: 'auth', operation: 'queue_delivery', code: errorCode, attempts, terminal, outcome: terminal ? 'failed' : 'retry' });
+      results.push({ id: row.id, status: terminal ? 'failed' : 'retry' });
+    }
+  }
+  return { processed: results.length, results, recovered: recoveredCount, durationMs: Math.max(0, clock() - started) };
 }
 
 async function main() {
@@ -127,11 +209,15 @@ async function main() {
   let pool = null;
   try {
     pool = createPostgresPool(process.env);
+    const identity = createIdentityService({ pool, env: process.env });
+    const passwordResetQueueMonitor = createPasswordResetQueueMonitor();
     let stopping = false;
     const run = async () => {
       while (!stopping) {
+        const resetBatch = await processPasswordResetRequestBatch(pool, { identity, structuredLogger });
         const batch = await processBatch(pool, { structuredLogger });
-        if (!batch.processed) await new Promise(resolve => setTimeout(resolve, 2_000));
+        await passwordResetQueueMonitor.sample({ pool, logger: structuredLogger, env: process.env });
+        if (!resetBatch.processed && !batch.processed) await new Promise(resolve => setTimeout(resolve, 2_000));
       }
     };
     const shutdown = () => { stopping = true; };
@@ -168,4 +254,4 @@ if (require.main === module) void main().catch(error => {
   process.exitCode = 1;
 });
 
-module.exports = { processBatch, main };
+module.exports = { processBatch, processPasswordResetRequestBatch, main };

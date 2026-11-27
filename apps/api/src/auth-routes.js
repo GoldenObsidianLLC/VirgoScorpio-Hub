@@ -178,18 +178,24 @@ function createAuthRouteHandlers(dependencies = {}) {
       }
       if (!identity) return sendJson(res, 503, { error: 'Authentication requires PostgreSQL.', code: 'ERR_VIRGOSCORPIO_HUB_IDENTITY_DISABLED', requestId });
       const body = await readJson(req, Math.min(maxBody, MAX_AUTH_BODY_BYTES));
-      const targetEmail = typeof body?.email === 'string' ? body.email.trim().toLowerCase().slice(0, 320) : '';
-      if (targetEmail && !allowRequest('password-reset-target:' + targetEmail).allowed) {
-        // Respond identically to an accepted request so throttling does not reveal account existence.
-        return sendJson(res, 202, {
-          accepted: true,
-          message: 'If an active account matches that address, password reset instructions will be sent.',
-          requestId
-        });
+      const exposeDevTokens = env.NODE_ENV !== 'production' &&
+        env.VIRGOSCORPIO_HUB_EXPOSE_DEV_TOKENS === 'true';
+      let developmentToken;
+      if (exposeDevTokens) {
+        // Explicit local-only opt-in preserves the developer token workflow.
+        const result = await identity.requestPasswordReset({ email: body.email });
+        developmentToken = result?.developmentToken;
+      } else {
+        // A generic 202 is sent only after the normalized request is durably
+        // accepted by PostgreSQL. Never replace this with fire-and-forget work.
+        if (typeof identity.enqueuePasswordResetRequest !== 'function') {
+          throw fail(503, 'ERR_VIRGOSCORPIO_HUB_PASSWORD_RESET_QUEUE_UNAVAILABLE', 'Password reset is temporarily unavailable. Please try again later.');
+        }
+        await identity.enqueuePasswordResetRequest({ email: body.email });
       }
-      const result = await identity.requestPasswordReset({ email: body.email });
       return sendJson(res, 202, {
-        ...result,
+        accepted: true,
+        ...(developmentToken ? { developmentToken } : {}),
         message: 'If an active account matches that address, password reset instructions will be sent.',
         requestId
       });

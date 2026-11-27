@@ -1,28 +1,29 @@
 > **Historical mainline release baseline before F1.72 merge (25 November 2026 America/Chicago; superseded by the current exact-main snapshot below):** `main` was `de16a4275828fa6411800bbaf20c16b51186dc05` after F1.71 / PR #256. Exact-main [workflow #1396 / run 45693182743](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45693182743) passed 7/7: Node 22/24, PostgreSQL/Memgraph 195/195, 19/19 fresh/idempotent migrations, browser/accessibility 9/9, CodeQL, signed lockfile/SBOM attestation and exact-source evidence consolidation. Node 22 passed 965/965 with zero skips; both dependency audits reported zero vulnerabilities. Canonical readiness [artifact #15060181017](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45693182743/artifacts/15060181017) was 8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN, `readyForProduction=false`, NOT_PRODUCTION_CERTIFIED / NO-GO. Package 0.6.2 remains private/unreleased; no SemVer bump, tag, publication or deployment is authorized.
 
-## Current implementation baseline — 26 November 2026
+## Current implementation baseline — 26 November 2026 (reconciled after PR #305 merge)
 
-**Mainline:** `a1ab72cce3c11e0e9113831e72bab5954e867a81`. Exact-main workflow #45902431703 passed all seven jobs. Canonical readiness artifact #15155968721 records 8 PASS / 2 PARTIAL / 14 MISSING_EVIDENCE, `readyForProduction=false` and NOT_PRODUCTION_CERTIFIED / NO-GO.
+**Mainline:** 5be81f7388c2c32484377b918010ac399cafd574. Exact-main [Actions run #45904695214](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45904695214) passed all seven jobs. Canonical source-bound readiness [artifact #15157402047](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45904695214/artifacts/15157402047) remains 8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN, readyForProduction=false, NOT_PRODUCTION_CERTIFIED / NO-GO.
 
-**Merged runtime/security increments:**
-- F1.73 / PR #304: per-site retained library storage quotas (5 GiB / 10,000 objects defaults; 50 MiB per-file limit), migration-backed 30-minute quota reservations and source-version revalidation. Migration 0020.
-- PR #265: bounded per-customer checkout reservations and configuration ceilings.
-- PR #266: public asset concurrency capped at 1–8 (default 4), restored webhook ingress protections and deterministic overload-test cleanup.
-- PR #270: plugin registry quotas and bounded pagination, retaining the 100-item default.
-- PR #269: password-reset throttling and abandoned mail-outbox claim recovery after five minutes, bounded exponential backoff and terminal failure after eight attempts. Migration 0021.
+**Exact-main verification:** Node 22/24 each passed 1,113/1,113 Hub and 94/94 EnginEx tests; hosted PostgreSQL/Memgraph passed 200/200; migrations passed 21/21 fresh and 21/21 idempotent re-entry; browser smoke, CodeQL, signed lockfile/SBOM attestation and evidence consolidation passed. npm audit reported zero vulnerabilities.
 
-All five PRs passed exact-head required hosted checks before merge. Exact-main validation on a1ab72c passed Node 22/24 (1,113/1,113 Hub and 94/94 EnginEx each, zero skips), live PostgreSQL/Memgraph (200/200, zero skips), 21/21 fresh and idempotent migrations, browser smoke (9/9), CodeQL (308 JavaScript and 2 HTML files), SBOM parity, signed attestations and evidence consolidation. npm audit reported zero vulnerabilities. #269's PostgreSQL stale-claim recovery integration was executed, not merely registered.
+**Merged increments:**
+- F1.73 / PR #304: retained per-site library storage quotas and durable 30-minute capacity reservations (migration 0020).
+- PR #265: bounded checkout reservations; PR #266: bounded public asset concurrency and webhook ingress guards; PR #270: bounded plugin-registry quotas and pagination.
+- PR #269: per-IP/per-target password-reset throttling and five-minute abandoned mail-outbox claim recovery with eight-attempt terminalization (migration 0021).
+- PR #305: documentation-only exact-main release-gate refresh; merged at the current main SHA.
 
-**Open implementation/security work:** PR #274 is the only open runtime/security PR and remains Changes requested / do not merge. Its handler has a duplicate declaration, its generic 202 path uses non-durable in-memory fire-and-forget processing, and its tests do not exercise the real route/service/outbox path. PR #305 is the documentation-only refresh. Current live open-PR inventory: #274 and #305.
+**Current implementation candidate — F1.74 (draft PR #306; not mainline):** includes migration 0022; durable-before-202 queue acceptance; cross-replica target cooldown/capacity; atomic token-hash/mail-outbox/queue completion; worker claim/retry/recovery; mail reset-link expiry and terminal payload scrubbing; low-cardinality 30-second queue snapshots through structured OTLP logs; a systemd reference unit/host guide; PostgreSQL integration tests for replica deduplication, concurrent workers, capacity, hashed tokens, payload cleanup and stale recovery; and the F1.74 threat model. Local evidence: full top-level suite 1,128/1,131 (3 platform skips, 0 failures), post-dedup focused regression 33/33, verify.js 241 required paths/314 JavaScript files, diff check pass. Latest exact-head checks passed on c9a53ba4cd9aa9392fa9f65f9de77451113068a9: push run #45923708982 and PR run #45923712800 each completed successfully (7/7 jobs). Node 22.23.4 and 24.22.1 each passed 1,131/1,131 Hub tests and 94/94 EnginEx tests; hosted PostgreSQL/Memgraph passed 202/202 integration tests with zero skips; all 22 migrations applied fresh and the second pass skipped 22/22; browser smoke, CodeQL and evidence consolidation passed. The lockfile/SBOM attestation job is intentionally mainline-only and was skipped on push/PR. Maintainer self-review and deployment-host qualification remain.
+
+**Open security and release work:** PR #274 remains Changes requested / do not merge as submitted. The replacement PR #306 has passed its configured exact-head CI; the single-maintainer full-diff self-review is still pending. Issues #14 and #25 are independent production security-assurance gates, not ordinary PR approval requirements. Issues #23, #24, #26 and #13 remain open, alongside provider, product and operational evidence gates.
 
 ### Next implementation steps
 
-1. Keep #274 blocked until a bounded reset-request job is persisted before the generic response; process it through a worker; make account-present/account-absent timing comparable; and test the real route, transaction/outbox boundary, restart recovery, idempotency and abuse quotas.
-2. Complete independent tenant-isolation and authorization review, independent platform/security assessment, and qualified dependency/SBOM review. Passing CI and CodeQL do not substitute for these reviews.
-3. Complete live identity/email/MFA, malware, cloud storage, Stripe, commerce and community parity acceptance; keep browser smoke distinct from full accessibility/WCAG acceptance.
-4. Complete load/soak, fault injection, backup/restore, recovery, production OTLP and operations/runbook/rollback evidence. Regenerate source-bound readiness from stable exact source and obtain explicit release-owner approval only after every required gate is satisfied.
+1. Run the full repository test/check suite on supported Node versions, fresh/idempotent migration 0022 tests and PostgreSQL worker integration for restart recovery, concurrent claims, idempotency and failure exhaustion.
+2. Queue depth/oldest-age telemetry is implemented through low-cardinality structured OTLP snapshots; validate routing and alert thresholds on the target operations stack. A reference systemd unit and host guide are added under deploy/systemd/, but host-specific installation and production qualification remain operational tasks.
+3. Advance draft PR #306: bind evidence to its latest exact head, complete required CI, and have the maintainer attest the required full-diff self-review. Reconcile #274 only after the replacement is accepted.
+4. Complete independent tenant, dependency/SBOM and platform-security reviews; then close provider, product parity, backup/restore, load/soak, observability and release-owner gates.
 
-The older implementation-plan material below is historical context; this current baseline and execution order are authoritative. Package 0.6.2 remains private/unreleased. No SemVer bump, tag, publication or deployment is authorized.
+Package 0.6.2 remains private/unreleased. No SemVer increment, tag, publication, deployment or production promotion is authorized while readiness is NO-GO.
 
 ## Issue #134 implementation and first mainline acceptance - 13 November 2026 (historical baseline)
 

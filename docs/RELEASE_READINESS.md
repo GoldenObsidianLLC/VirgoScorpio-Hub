@@ -1,14 +1,44 @@
-# VirgoScorpio Hub 0.6.2 — current release-readiness snapshot (26 November 2026 America/Chicago; main a1ab72cce3c11e0e9113831e72bab5954e867a81; exact-main workflow #45902431703)
+# VirgoScorpio Hub 0.6.2 — current release-readiness snapshot (26 November 2026; main 5be81f7388c2c32484377b918010ac399cafd574; run #45904695214)
 
 ## Current exact-main readiness — 26 November 2026 (America/Chicago)
 
-Current main is a1ab72cce3c11e0e9113831e72bab5954e867a81. Exact-main [workflow run #45902431703](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45902431703) completed successfully with all seven workflow jobs successful. Node 22.23.4 and Node 24.22.1 each passed 1,113/1,113 Hub tests and 94/94 EnginEx tests with zero skips; both dependency audits reported zero vulnerabilities. Live PostgreSQL/Memgraph passed 200/200 with zero skips; 21/21 migrations applied on the fresh pass and 21/21 were idempotently skipped on the second pass; browser smoke passed 9/9; CodeQL scanned 308 JavaScript and 2 HTML files; signed supply-chain attestations, runtime SBOM parity and exact-source evidence aggregation passed.
+Current main is 5be81f7388c2c32484377b918010ac399cafd574. Exact-main [Actions run #45904695214](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45904695214) completed all seven required jobs. Canonical source-bound [readiness artifact #15157402047](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45904695214/artifacts/15157402047) was generated at 2026-11-26T22:28:38.206Z; archive SHA-256: 9347b258984f828c298831669c25831936199fcdd663883c04c8655f8d123408.
 
-Canonical exact-source [readiness artifact #15155968721](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45902431703/artifacts/15155968721) is bound to the SHA above. It records 8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN, readyForProduction=false and NOT_PRODUCTION_CERTIFIED / NO-GO. The partials are human dependency/lockfile review and the service-less diagnostic (1/55 executed, 54 skipped); that skipped diagnostic is not counted as live integration evidence. The exact 200/200 PostgreSQL/Memgraph integration is a separate PASS.
+Node 22.23.4 and 24.22.1 each passed 1,113/1,113 Hub tests and 94/94 EnginEx tests with zero skips; hosted PostgreSQL/Memgraph passed 200/200 with zero failures/skips; all 21 migrations applied fresh and passed the 21/21 idempotent second pass; browser editor/accessibility smoke, CodeQL, npm audit, lockfile/SBOM attestation, SBOM parity and exact-source evidence consolidation passed. Both npm audits reported zero vulnerabilities. The evidence artifact embedded an intermediate in-progress aggregation status; the authoritative Actions run subsequently completed 7/7 successfully.
 
-F1.73 / PR #304 and runtime PRs #265, #266, #270 and #269 are merged. Mainline merge SHAs and descriptions are in the 26 November [release-gate report](reports/2026-11-26-VirgoScorpio-Hub-0.6.2-Release-Gate-Report.md). The only open PRs in the live inventory are #274 (password-reset timing mitigation, Changes requested) and #305 (documentation refresh). PR #274 is blocked by a duplicate handler declaration, non-durable fire-and-forget request acceptance and tests that do not exercise the real route/outbox boundary.
+Readiness is 8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN, readyForProduction=false and NOT_PRODUCTION_CERTIFIED. Decision: **NO-GO**. PARTIALs: qualified human dependency/lockfile review (automation and npm ci passed, but reviewer sign-off is absent); service-less diagnostic (1 pass / 54 skips), distinct from the hosted 200/200 integration.
 
-Package 0.6.2 remains private and unreleased. No tag, publication, SemVer increment, GitHub Release, deployment or production promotion is authorized while readiness is NO-GO.
+## Fourteen missing production-evidence gates
+
+1. Independent tenant/site authorization and isolation review — #14.
+2. Live OIDC/SAML, email delivery, MFA recovery and identity-provider failure-path E2E.
+3. Live ClamAV, malicious-file corpus and legacy-asset quarantine.
+4. Real S3/GCS/Azure-compatible provider credentials, least privilege and lifecycle tests.
+5. Stripe webhook replay/idempotency, ambiguous outcome and inventory lifecycle acceptance.
+6. Full browser editor journeys, manual WCAG and screen-reader acceptance; smoke tests are not full sign-off.
+7. Commerce parity: tax, shipping, discounts, refunds, fulfilment, downloads and subscriptions.
+8. Community parity: group privacy, abuse, search, export/deletion and forum acceptance.
+9. Signed plugin pipeline and adversarial container/runtime isolation.
+10. Qualified human dependency, SBOM, provenance and CodeQL assessment — #23.
+11. Load/soak, fault injection, backup/restore and recovery drills — #24.
+12. Independent platform security assessment and severe-finding remediation/retest — #25.
+13. Deployment runbooks, secrets, rollback, monitoring and named release-owner approval — #26 and #13.
+14. Production OTLP backend, security/governance, retention, ownership and delivery evidence.
+
+Evidence must identify the exact candidate version and full source SHA. A source change invalidates source-bound evidence and requires regeneration. Internal inventories and CI do not substitute for independent reviews.
+
+## Current GitHub disposition
+
+- PR #305 is merged. PR #306 is the open F1.74 draft for durable password-reset acceptance and worker reliability. Its latest exact-head push and PR workflows passed Node 22/24, CodeQL, browser, hosted PostgreSQL/Memgraph and evidence consolidation; fresh migrations and 202 live integration tests passed with zero skips. Mainline-only lockfile/SBOM attestation was skipped by design. The repository single-maintainer self-review is pending; keep PR #306 draft until that is complete. PR #274 also remains open with Changes requested and must not be merged as submitted.
+- Other open issues include #277 Aikido PR-batch audit, #235 scan freshness, #234 SAST/secret-history triage, #124 tenant hardening, #14 tenant assurance, #23 dependency review, #24 load/recovery, #25 security review, #26 runbooks/release approval, #13 preview scope/provider acceptance and #32 operating controls.
+
+## F1.74 development continuation
+
+F1.74 is tracked in draft PR #306. The candidate includes migration 0022; durable-before-202 acceptance; cross-replica cooldown/capacity; atomic hashed-token/mail-outbox/queue completion; bounded retry/stale recovery; expired-link rejection and terminal payload cleanup; structured queue snapshots; a systemd reference; two PostgreSQL integration tests; shared worker helpers; and the threat model. Local: 1,128/1,131 full top-level tests (3 platform skips, 0 failures), 33/33 post-dedup focused tests, verify.js 241 paths/314 JS files, diff check pass. Latest exact-head checks passed on c9a53ba4cd9aa9392fa9f65f9de77451113068a9: push run #45923708982 and PR run #45923712800 each completed successfully (7/7 jobs). Node 22.23.4 and 24.22.1 each passed 1,131/1,131 Hub tests and 94/94 EnginEx tests; hosted PostgreSQL/Memgraph passed 202/202 integration tests with zero skips; all 22 migrations applied fresh and the second pass skipped 22/22; browser smoke, CodeQL and evidence consolidation passed. The lockfile/SBOM attestation job is intentionally mainline-only and was skipped on push/PR. The single-maintainer self-review remains pending. This is not mainline evidence; release remains NO-GO.
+
+## Release policy
+
+Package 0.6.2 remains private and unreleased. No tag, GitHub Release, publication, SemVer increment, deployment or production promotion while readyForProduction is false. Controlled non-production preview only; live provider and operational acceptance remain required.
 
 ## Historical exact-main readiness — 25 November 2026 (F1.71 baseline; superseded by the current snapshot above)
 

@@ -76,6 +76,7 @@ test('mail worker reclaims stale processing rows with bounded retries before cla
     call.sql.startsWith('UPDATE mail_outbox SET status=$2')
   );
   assert.equal(recoveries.length, 2);
+  assert.ok(recoveries[1].sql.includes("payload=CASE WHEN $2='failed' THEN '{}'::jsonb ELSE payload END"), 'terminal stale recovery must clear reset URL payloads');
   assert.deepEqual(
     recoveries.map(({ params }) => params),
     [

@@ -24,6 +24,15 @@ flowchart TB
 
 Arrows describe conceptual dependencies, not necessarily synchronous calls or a required deployment topology. The worker, MCP server, and plugin runner have distinct entry points and should be configured with only the permissions and resources they need.
 
+## Durable password-reset request flow
+
+Public reset requests pass the per-IP limiter and are durably inserted into password_reset_requests before the route returns its generic 202 response. A PostgreSQL transaction-scoped advisory lock serializes global pending-capacity and 120-second target-cooldown checks across API replicas. The shared mail worker claims due rows with the existing SKIP LOCKED pattern, applies bounded retry/backoff, and reclaims five-minute abandoned claims. Identity-token issuance, mail-outbox insertion and queue completion share one transaction. The identity_action_tokens table stores only SHA-256 token digests; the raw reset URL is retained in mail_outbox.payload while pending or retrying so the provider can deliver it, then cleared after successful delivery, expiry or terminal failure. Logs never contain reset URLs or target addresses. Completed/failed rows scrub target addresses after the cooldown and are pruned after 24 hours. The explicit developer-token shortcut is non-production only. This queue is a reliability boundary, not proof of provider delivery or production readiness.
+
+
+### Security analysis
+
+See the [F1.74 password-reset queue threat model](security/F1.74-PASSWORD-RESET-QUEUE-THREAT-MODEL.md) for assets, trust boundaries, attack scenarios, mitigations, and residual risk. It is an implementation design note, not independent security assurance; production assessments #14 and #25 remain separate gates.
+
 ## Applications
 
 | Path | Responsibility to investigate |

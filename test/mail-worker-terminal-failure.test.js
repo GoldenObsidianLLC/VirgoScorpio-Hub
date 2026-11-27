@@ -17,6 +17,11 @@ const { processBatch } = require('../apps/worker/src/mail-worker');
  */
 
 function createMockPool(rows = []) {
+  for (const row of rows) {
+    if (row.template === 'password-reset' && !row.payload?.expiresAt) {
+      row.payload = { ...(row.payload || {}), expiresAt: new Date(Date.now() + 60_000).toISOString() };
+    }
+  }
   const poolCalls = [];
   const clientCalls = [];
   let released = false;
