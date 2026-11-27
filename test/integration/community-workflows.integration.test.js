@@ -21,14 +21,17 @@ function apiContext({
   afterSiteCheck = null,
   afterBlockTargetCheck = null,
   blockTargetId = null,
+  failNotificationReadUpdate = false,
 }) {
   const url = new URL(`http://virgoscorpio-hub.integration${pathname}${query}`);
   const res = {};
-  const localPool = typeof afterBlockTargetCheck === 'function'
+  const wrapLocalPool = typeof afterBlockTargetCheck === 'function' || failNotificationReadUpdate;
+  const localPool = wrapLocalPool
     ? {
       async query(sql, params) {
         const result = await pool.query(sql, params);
         if (
+          typeof afterBlockTargetCheck === 'function' &&
           typeof sql === 'string' &&
           sql.includes('FROM site_memberships sm JOIN users u ON u.id=sm.user_id') &&
           params?.[1] === blockTargetId
@@ -37,7 +40,19 @@ function apiContext({
         }
         return result;
       },
-      connect: pool.connect.bind(pool),
+      async connect() {
+        const client = await pool.connect();
+        if (!failNotificationReadUpdate) return client;
+        return {
+          async query(sql, params) {
+            if (typeof sql === 'string' && sql.includes('UPDATE social_notifications SET read_at=COALESCE')) {
+              throw new Error('Forced notification read-marker failure.');
+            }
+            return client.query(sql, params);
+          },
+          release: client.release.bind(client),
+        };
+      },
     }
     : pool;
   return {
@@ -191,6 +206,290 @@ test('community direct messages, blocks, reports, notifications, and moderation 
   );
   assert.equal(staleMessagesError?.code, 'ERR_VIRGOSCORPIO_HUB_TENANT_FORBIDDEN');
   assert.equal(staleMessagesResponse, null);
+  // Keep an independent site's conversation and notifications as cross-tenant controls.
+  await pool.query(
+    'INSERT INTO site_memberships(site_id,user_id,role_id) VALUES($1,$2,$3),($1,$4,$3) ON CONFLICT DO NOTHING',
+    [otherSiteId, alice.id, roleId, bob.id],
+  );
+  const otherSiteConversationResult = await invoke({
+    pool,
+    siteId: otherSiteId,
+    user: alice,
+    method: 'POST',
+    pathname: '/api/v1/sites/' + otherSiteId + '/community/conversations',
+    body: { recipientId: bob.id },
+  });
+  assert.equal(otherSiteConversationResult.statusCode, 201);
+  const otherSiteConversationId = otherSiteConversationResult.payload.conversation.id;
+  const otherSiteConversationMarkerBefore = await pool.query(
+    'SELECT last_read_at FROM social_conversation_members WHERE site_id=$1 AND conversation_id=$2 AND user_id=$3',
+    [otherSiteId, otherSiteConversationId, bob.id],
+  );
+  assert.equal(otherSiteConversationMarkerBefore.rowCount, 1);
+
+  // Conversation-read POST must revalidate membership and atomically update
+  // both the participant marker and related notification markers.
+  const conversationReadNotification = await pool.query(
+    "INSERT INTO social_notifications(site_id,user_id,notification_type,payload) VALUES($1,$2,'community.message.test',jsonb_build_object('conversationId',$3::text)) RETURNING id,read_at",
+    [siteId, bob.id, fixtures.conversationId],
+  );
+  const bobConversationMarkerBefore = await pool.query(
+    'SELECT last_read_at FROM social_conversation_members WHERE site_id=$1 AND conversation_id=$2 AND user_id=$3 AND left_at IS NULL',
+    [siteId, fixtures.conversationId, bob.id],
+  );
+  assert.equal(bobConversationMarkerBefore.rowCount, 1);
+  const conversationReadGate = createGate();
+  let staleConversationReadError = null;
+  let staleConversationReadResponse = null;
+  const staleConversationReadRequest = invoke({
+    pool,
+    siteId,
+    user: bob,
+    method: 'POST',
+    pathname: '/api/v1/sites/' + siteId + '/community/conversations/' + fixtures.conversationId + '/read',
+    afterSiteCheck: async () => {
+      conversationReadGate.signal();
+      await conversationReadGate.wait;
+    },
+  });
+  await conversationReadGate.entered;
+  const disabledConversationReader = await pool.query(
+    "UPDATE users SET status='disabled' WHERE id=$1 RETURNING id",
+    [bob.id],
+  );
+  assert.equal(disabledConversationReader.rowCount, 1);
+  conversationReadGate.release();
+  try {
+    staleConversationReadResponse = await staleConversationReadRequest;
+  } catch (error) {
+    staleConversationReadError = error;
+  } finally {
+    await pool.query("UPDATE users SET status='active' WHERE id=$1", [bob.id]);
+  }
+  assert.equal(staleConversationReadError?.statusCode ?? staleConversationReadResponse?.statusCode, 403);
+  assert.equal(staleConversationReadError?.code, 'ERR_VIRGOSCORPIO_HUB_TENANT_FORBIDDEN');
+  assert.equal(staleConversationReadResponse, null);
+  const bobConversationMarkerAfter = await pool.query(
+    'SELECT last_read_at FROM social_conversation_members WHERE site_id=$1 AND conversation_id=$2 AND user_id=$3 AND left_at IS NULL',
+    [siteId, fixtures.conversationId, bob.id],
+  );
+  assert.equal(
+    bobConversationMarkerAfter.rows[0].last_read_at?.toISOString() ?? null,
+    bobConversationMarkerBefore.rows[0].last_read_at?.toISOString() ?? null,
+  );
+  const conversationReadNotificationAfter = await pool.query(
+    'SELECT read_at FROM social_notifications WHERE site_id=$1 AND user_id=$2 AND id=$3',
+    [siteId, bob.id, conversationReadNotification.rows[0].id],
+  );
+  assert.equal(conversationReadNotificationAfter.rows[0].read_at, null);
+  const otherSiteConversationMarkerAfterRevokedRead = await pool.query(
+    'SELECT last_read_at FROM social_conversation_members WHERE site_id=$1 AND conversation_id=$2 AND user_id=$3',
+    [otherSiteId, otherSiteConversationId, bob.id],
+  );
+  assert.equal(
+    otherSiteConversationMarkerAfterRevokedRead.rows[0].last_read_at?.toISOString() ?? null,
+    otherSiteConversationMarkerBefore.rows[0].last_read_at?.toISOString() ?? null,
+  );
+
+  // Notification read-all must deny after membership revocation and leave all
+  // unread rows untouched; the active-member control remains site-scoped.
+  const readAllSiteNotification = await pool.query(
+    "INSERT INTO social_notifications(site_id,user_id,notification_type,payload) VALUES($1,$2,'community.read-all.test','{}'::jsonb) RETURNING id,read_at",
+    [siteId, bob.id],
+  );
+  const readAllOtherSiteNotification = await pool.query(
+    "INSERT INTO social_notifications(site_id,user_id,notification_type,payload) VALUES($1,$2,'community.read-all.other-site.test','{}'::jsonb) RETURNING id,read_at",
+    [otherSiteId, bob.id],
+  );
+  const readAllGate = createGate();
+  let staleReadAllError = null;
+  let staleReadAllResponse = null;
+  const staleReadAllRequest = invoke({
+    pool,
+    siteId,
+    user: bob,
+    method: 'POST',
+    pathname: '/api/v1/sites/' + siteId + '/community/notifications/read-all',
+    afterSiteCheck: async () => {
+      readAllGate.signal();
+      await readAllGate.wait;
+    },
+  });
+  await readAllGate.entered;
+  const removedReadAllMembership = await pool.query(
+    'DELETE FROM site_memberships WHERE site_id=$1 AND user_id=$2 RETURNING user_id',
+    [siteId, bob.id],
+  );
+  assert.equal(removedReadAllMembership.rowCount, 1);
+  readAllGate.release();
+  try {
+    staleReadAllResponse = await staleReadAllRequest;
+  } catch (error) {
+    staleReadAllError = error;
+  } finally {
+    await pool.query(
+      'INSERT INTO site_memberships(site_id,user_id,role_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING',
+      [siteId, bob.id, roleId],
+    );
+  }
+  assert.equal(staleReadAllError?.statusCode ?? staleReadAllResponse?.statusCode, 403);
+  assert.equal(staleReadAllError?.code, 'ERR_VIRGOSCORPIO_HUB_TENANT_FORBIDDEN');
+  assert.equal(staleReadAllResponse, null);
+  const readAllSiteAfterRevoke = await pool.query(
+    'SELECT read_at FROM social_notifications WHERE site_id=$1 AND user_id=$2 AND id=$3',
+    [siteId, bob.id, readAllSiteNotification.rows[0].id],
+  );
+  const readAllOtherSiteAfterRevoke = await pool.query(
+    'SELECT read_at FROM social_notifications WHERE site_id=$1 AND user_id=$2 AND id=$3',
+    [otherSiteId, bob.id, readAllOtherSiteNotification.rows[0].id],
+  );
+  assert.equal(readAllSiteAfterRevoke.rows[0].read_at, null);
+  assert.equal(readAllOtherSiteAfterRevoke.rows[0].read_at, null);
+  const activeReadAll = await invoke({
+    pool,
+    siteId,
+    user: bob,
+    method: 'POST',
+    pathname: '/api/v1/sites/' + siteId + '/community/notifications/read-all',
+  });
+  assert.equal(activeReadAll.statusCode, 200);
+  assert.ok(activeReadAll.payload.markedRead >= 1);
+  const readAllSiteAfterPositive = await pool.query(
+    'SELECT read_at FROM social_notifications WHERE site_id=$1 AND user_id=$2 AND id=$3',
+    [siteId, bob.id, readAllSiteNotification.rows[0].id],
+  );
+  const readAllOtherSiteAfterPositive = await pool.query(
+    'SELECT read_at FROM social_notifications WHERE site_id=$1 AND user_id=$2 AND id=$3',
+    [otherSiteId, bob.id, readAllOtherSiteNotification.rows[0].id],
+  );
+  assert.ok(readAllSiteAfterPositive.rows[0].read_at);
+  assert.equal(readAllOtherSiteAfterPositive.rows[0].read_at, null);
+
+  // Specific-notification read must also serialize with site-membership
+  // revocation, then remain scoped to the selected site on the positive path.
+  const specificSiteNotification = await pool.query(
+    "INSERT INTO social_notifications(site_id,user_id,notification_type,payload) VALUES($1,$2,'community.read-one.test','{}'::jsonb) RETURNING id,read_at",
+    [siteId, bob.id],
+  );
+  const specificOtherSiteNotification = await pool.query(
+    "INSERT INTO social_notifications(site_id,user_id,notification_type,payload) VALUES($1,$2,'community.read-one.other-site.test','{}'::jsonb) RETURNING id,read_at",
+    [otherSiteId, bob.id],
+  );
+  const specificReadGate = createGate();
+  let staleSpecificReadError = null;
+  let staleSpecificReadResponse = null;
+  const staleSpecificReadRequest = invoke({
+    pool,
+    siteId,
+    user: bob,
+    method: 'POST',
+    pathname: '/api/v1/sites/' + siteId + '/community/notifications/' + specificSiteNotification.rows[0].id + '/read',
+    afterSiteCheck: async () => {
+      specificReadGate.signal();
+      await specificReadGate.wait;
+    },
+  });
+  await specificReadGate.entered;
+  const removedSpecificReadMembership = await pool.query(
+    'DELETE FROM site_memberships WHERE site_id=$1 AND user_id=$2 RETURNING user_id',
+    [siteId, bob.id],
+  );
+  assert.equal(removedSpecificReadMembership.rowCount, 1);
+  specificReadGate.release();
+  try {
+    staleSpecificReadResponse = await staleSpecificReadRequest;
+  } catch (error) {
+    staleSpecificReadError = error;
+  } finally {
+    await pool.query(
+      'INSERT INTO site_memberships(site_id,user_id,role_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING',
+      [siteId, bob.id, roleId],
+    );
+  }
+  assert.equal(staleSpecificReadError?.statusCode ?? staleSpecificReadResponse?.statusCode, 403);
+  assert.equal(staleSpecificReadError?.code, 'ERR_VIRGOSCORPIO_HUB_TENANT_FORBIDDEN');
+  assert.equal(staleSpecificReadResponse, null);
+  const specificSiteAfterRevoke = await pool.query(
+    'SELECT read_at FROM social_notifications WHERE site_id=$1 AND user_id=$2 AND id=$3',
+    [siteId, bob.id, specificSiteNotification.rows[0].id],
+  );
+  const specificOtherSiteAfterRevoke = await pool.query(
+    'SELECT read_at FROM social_notifications WHERE site_id=$1 AND user_id=$2 AND id=$3',
+    [otherSiteId, bob.id, specificOtherSiteNotification.rows[0].id],
+  );
+  assert.equal(specificSiteAfterRevoke.rows[0].read_at, null);
+  assert.equal(specificOtherSiteAfterRevoke.rows[0].read_at, null);
+  const activeSpecificRead = await invoke({
+    pool,
+    siteId,
+    user: bob,
+    method: 'POST',
+    pathname: '/api/v1/sites/' + siteId + '/community/notifications/' + specificSiteNotification.rows[0].id + '/read',
+  });
+  assert.equal(activeSpecificRead.statusCode, 200);
+  assert.ok(activeSpecificRead.payload.notification.read_at);
+  const specificOtherSiteAfterPositive = await pool.query(
+    'SELECT read_at FROM social_notifications WHERE site_id=$1 AND user_id=$2 AND id=$3',
+    [otherSiteId, bob.id, specificOtherSiteNotification.rows[0].id],
+  );
+  assert.equal(specificOtherSiteAfterPositive.rows[0].read_at, null);
+
+  // A failed second marker write must roll back the conversation marker as well.
+  const atomicReadNotification = await pool.query(
+    "INSERT INTO social_notifications(site_id,user_id,notification_type,payload) VALUES($1,$2,'community.message.atomic-test',jsonb_build_object('conversationId',$3::text)) RETURNING id,read_at",
+    [siteId, bob.id, fixtures.conversationId],
+  );
+  const atomicConversationMarkerBefore = await pool.query(
+    'SELECT last_read_at FROM social_conversation_members WHERE site_id=$1 AND conversation_id=$2 AND user_id=$3 AND left_at IS NULL',
+    [siteId, fixtures.conversationId, bob.id],
+  );
+  await assert.rejects(
+    invoke({
+      pool,
+      siteId,
+      user: bob,
+      method: 'POST',
+      pathname: '/api/v1/sites/' + siteId + '/community/conversations/' + fixtures.conversationId + '/read',
+      failNotificationReadUpdate: true,
+    }),
+    error => error.message === 'Forced notification read-marker failure.',
+  );
+  const atomicConversationMarkerAfterFailure = await pool.query(
+    'SELECT last_read_at FROM social_conversation_members WHERE site_id=$1 AND conversation_id=$2 AND user_id=$3 AND left_at IS NULL',
+    [siteId, fixtures.conversationId, bob.id],
+  );
+  const atomicNotificationAfterFailure = await pool.query(
+    'SELECT read_at FROM social_notifications WHERE site_id=$1 AND user_id=$2 AND id=$3',
+    [siteId, bob.id, atomicReadNotification.rows[0].id],
+  );
+  assert.equal(
+    atomicConversationMarkerAfterFailure.rows[0].last_read_at?.toISOString() ?? null,
+    atomicConversationMarkerBefore.rows[0].last_read_at?.toISOString() ?? null,
+  );
+  assert.equal(atomicNotificationAfterFailure.rows[0].read_at, null);
+  const activeConversationRead = await invoke({
+    pool,
+    siteId,
+    user: bob,
+    method: 'POST',
+    pathname: '/api/v1/sites/' + siteId + '/community/conversations/' + fixtures.conversationId + '/read',
+  });
+  assert.equal(activeConversationRead.statusCode, 200);
+  assert.ok(activeConversationRead.payload.conversationRead.last_read_at);
+  const atomicNotificationAfterCommit = await pool.query(
+    'SELECT read_at FROM social_notifications WHERE site_id=$1 AND user_id=$2 AND id=$3',
+    [siteId, bob.id, atomicReadNotification.rows[0].id],
+  );
+  assert.ok(atomicNotificationAfterCommit.rows[0].read_at);
+  const otherSiteConversationMarkerAfterPositive = await pool.query(
+    'SELECT last_read_at FROM social_conversation_members WHERE site_id=$1 AND conversation_id=$2 AND user_id=$3',
+    [otherSiteId, otherSiteConversationId, bob.id],
+  );
+  assert.equal(
+    otherSiteConversationMarkerAfterPositive.rows[0].last_read_at?.toISOString() ?? null,
+    otherSiteConversationMarkerBefore.rows[0].last_read_at?.toISOString() ?? null,
+  );
+
   const block = await invoke({
     pool, siteId, user: bob, method: 'POST', pathname: `/api/v1/sites/${siteId}/community/blocks`,
     body: { userId: alice.id, reason: 'Integration block' }

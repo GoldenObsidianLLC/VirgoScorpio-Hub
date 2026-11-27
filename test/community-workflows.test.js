@@ -170,17 +170,45 @@ test('report submission rejects unsupported target and category values', async (
   await assert.rejects(handleCommunityWorkflowRoute(ctx2), error => error.code === 'ERR_VIRGOSCORPIO_HUB_REPORT_CATEGORY' && error.statusCode === 400);
 });
 
-test('notification read-all endpoint is recognized and scopes updates by user and site', async () => {
-  let statement; let values;
-  const ctx = createContext({ method: 'POST', path: `/api/v1/sites/${siteId}/community/notifications/read-all`, pool: {
-    async query(sql, args) { statement = sql; values = args; return { rows: [{ id: 'n1' }, { id: 'n2' }] }; },
-    async connect() { throw new Error('connect should not be called'); }
-  } });
+test('notification read-all revalidates site membership transactionally and scopes updates by user and site', async () => {
+  const state = { statements: [], commits: 0, rollbacks: 0, releases: 0, values: null };
+  const client = {
+    async query(sql, args) {
+      const statement = String(sql).replace(/\s+/g, ' ').trim();
+      state.statements.push(statement);
+      if (statement === 'BEGIN') return { rows: [] };
+      if (statement === 'COMMIT') { state.commits += 1; return { rows: [] }; }
+      if (statement === 'ROLLBACK') { state.rollbacks += 1; return { rows: [] }; }
+      if (statement.includes('SELECT id FROM sites WHERE id=$1 FOR KEY SHARE')) return { rows: [{ id: siteId }] };
+      if (statement.includes('SELECT r.capabilities FROM users u')) return { rows: [{ capabilities: [] }] };
+      if (statement.startsWith('UPDATE social_notifications SET read_at=now()')) {
+        state.values = args;
+        return { rows: [{ id: 'n1' }, { id: 'n2' }] };
+      }
+      throw new Error('Unexpected notification read-all transaction query: ' + statement);
+    },
+    release() { state.releases += 1; },
+  };
+  const pool = {
+    async query() { throw new Error('pool query should not be used for transactional read-all'); },
+    async connect() { return client; },
+  };
+  const ctx = createContext({
+    method: 'POST',
+    path: '/api/v1/sites/' + siteId + '/community/notifications/read-all',
+    pool,
+  });
   assert.equal(await handleCommunityWorkflowRoute(ctx), true);
   assert.equal(ctx.res.statusCode, 200);
   assert.equal(ctx.res.payload.markedRead, 2);
-  assert.match(statement, /WHERE site_id=\$1 AND user_id=\$2 AND read_at IS NULL/);
-  assert.deepEqual(values, [siteId, actorId]);
+  assert.deepEqual(state.values, [siteId, actorId]);
+  assert.equal(state.commits, 1);
+  assert.equal(state.rollbacks, 0);
+  assert.equal(state.releases, 1);
+  const authorizationIndex = state.statements.findIndex(sql => sql.includes('SELECT r.capabilities FROM users u'));
+  const updateIndex = state.statements.findIndex(sql => sql.startsWith('UPDATE social_notifications SET read_at=now()'));
+  assert.ok(authorizationIndex >= 0);
+  assert.ok(updateIndex > authorizationIndex, 'active membership must be locked before the read-marker update');
 });
 
 function transactionalDirectConversationPool({
