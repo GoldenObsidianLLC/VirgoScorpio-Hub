@@ -8,7 +8,7 @@
   "generatedBy": "scripts/generate-tenant-isolation-route-inventory.js",
   "sourceTree": {
     "fileCount": 22,
-    "sha256": "325992e489ef57202c81b25c5469282442835786a262b73f54e4346023e92316",
+    "sha256": "a2e370c439551c5707a314a5008c5a6597ab5c8e74e5c97f1087033a45de43d8",
     "files": [
       "apps/api/src/ai-task-routes.js",
       "apps/api/src/auth-routes.js",
@@ -36,7 +36,7 @@
   },
   "testTree": {
     "fileCount": 61,
-    "sha256": "95a4da8d9c0ca6c0bbfd56a9eef53564f2dfbca614d7ed85653dc644b0bd2d0d",
+    "sha256": "ca2994f36043602dae950241c35a681d2b80a126994adc2d45d22f2845b6abe3",
     "files": [
       "test/ai-queue-worker.test.js",
       "test/ai-task-queue.test.js",
@@ -1446,13 +1446,13 @@
             {
               "anchor": "const feed=",
               "lines": [
-                452
+                469
               ]
             },
             {
               "anchor": "const friendRequest=",
               "lines": [
-                697
+                714
               ]
             }
           ]
@@ -1527,7 +1527,7 @@
             {
               "anchor": "const friendRequest=",
               "lines": [
-                697
+                714
               ]
             }
           ]
@@ -1645,7 +1645,7 @@
             {
               "anchor": "const firewallCollection",
               "lines": [
-                816
+                833
               ]
             }
           ]
@@ -1694,7 +1694,7 @@
             {
               "anchor": "const cloudConnections",
               "lines": [
-                884
+                901
               ]
             }
           ]
@@ -1742,7 +1742,7 @@
             {
               "anchor": "const megaMenus",
               "lines": [
-                1131
+                1148
               ]
             },
             {
@@ -1750,8 +1750,8 @@
               "lines": [
                 177,
                 194,
-                1183,
-                1216
+                1200,
+                1233
               ]
             }
           ]

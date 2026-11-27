@@ -571,6 +571,7 @@ async function handleCommunityWorkflowRoute(ctx) {
 module.exports = {
   handleCommunityWorkflowRoute,
   assertActiveSiteMembership,
+  assertSiteCapabilityInTransaction,
   isUuid,
   cleanRequiredText,
   constants: { MAX_MESSAGE_LENGTH, MAX_REPORT_DETAIL_LENGTH, MESSAGES_PER_MINUTE, REPORTS_PER_HOUR }
