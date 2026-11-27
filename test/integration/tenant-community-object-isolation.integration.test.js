@@ -98,19 +98,16 @@ test(
     delete env.VIRGOSCORPIO_HUB_API_TOKEN;
     const identity = createIdentityService({ pool, env });
     let authorizeSiteInterceptor = null;
-    const apiIdentity = new Proxy(identity, {
-      get(target, property) {
-        if (property === 'authorizeSite') {
-          return async (...args) => {
-            const allowed = await target.authorizeSite(...args);
-            if (authorizeSiteInterceptor) await authorizeSiteInterceptor(args, allowed);
-            return allowed;
-          };
-        }
-        const value = Reflect.get(target, property, target);
-        return typeof value === 'function' ? value.bind(target) : value;
+    // The identity service is frozen; clone its public methods rather than proxying
+    // frozen non-configurable properties, then wrap only the request-time preflight.
+    const apiIdentity = {
+      ...identity,
+      authorizeSite: async (...args) => {
+        const allowed = await identity.authorizeSite(...args);
+        if (authorizeSiteInterceptor) await authorizeSiteInterceptor(args, allowed);
+        return allowed;
       },
-    });
+    };
 
     t.after(async () => {
       if (server) {
