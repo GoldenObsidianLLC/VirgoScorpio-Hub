@@ -178,6 +178,14 @@ F1.77 extends the site-first, write-boundary authorization pattern to community 
 
 This scoped update does not imply that every community read-side effect is protected. Issue #124 remains open; subsequent source review should inspect last_read_at and social_notifications.read_at marker writes for a preflight-to-write revocation window before introducing a broader abstraction.
 
+## F1.78 merged — community read-marker authorization and transaction boundaries (PR #316)
+
+F1.78 closes the confirmed preflight-to-read-marker race in community messaging and notifications. GET conversation messages revalidates active site membership before locking/revalidating the conversation-member row, then advances last_read_at and reads messages inside the same transaction. Conversation-read POST revalidates site and conversation membership and commits participant and related notification read markers atomically. Notification read-all and specific-read writes revalidate active site membership in their write transaction.
+
+The implementation reuses withTransaction, assertActiveSiteMembership and the existing site-first lock order. Hosted PostgreSQL tests cover membership/account revocation, marker rollback, active-member controls and two-site isolation. Exact-main workflow #46066130972 passed the 203/203 live integration suite with zero skips.
+
+F1.75–F1.78 now cover message creation/moderation, report submission/status, block create/unblock and read-marker writes respectively. Parent issue #124 remains open for broader community and tenant workflow review; this set of bounded fixes is not independent production security assurance.
+
 ## Trust boundaries to review
 
 1. Browser/client input entering API routes.
