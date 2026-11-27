@@ -6,7 +6,7 @@ const { validateProfile, validateGroup, cleanText } = require('../../../packages
 const { validateIpPattern, MAX_FIREWALL_RULES_PER_SITE, MAX_FIREWALL_RULES_TOTAL } = require('../../../packages/security/src/firewall');
 const { cloudConfigStatus, createCloudStorageAdapterFromEnv, probeCloudStorageAdapter, resolveCloudCredentialReference, cloudEndpointAllowed } = require('../../../packages/cloud/src/storage-adapters');
 const { validateMenuItems } = require('../../../packages/domain/src/navigation');
-const { handleCommunityWorkflowRoute, assertActiveSiteMembership } = require('../../../packages/community/src/workflows');
+const { handleCommunityWorkflowRoute, assertActiveSiteMembership, assertSiteCapabilityInTransaction } = require('../../../packages/community/src/workflows');
 const { handleCommerceRoute, productInput } = require('./commerce-routes');
 const { handleLibraryRoute } = require('./library-routes');
 const { isBoundedJsonObject } = require('./request-validation');
@@ -447,7 +447,24 @@ async function handlePlatformRoute(ctx) {
       }
       return sendJson(res, 200, { membership: q.rows[0], requestId });
     }
-    if(groups[3]==='members'){await requireCapability(actor,siteId,'community:moderate');const q=await localPool.query('SELECT u.id,u.display_name,u.email,gm.role,gm.status,gm.created_at FROM social_group_memberships gm JOIN users u ON u.id=gm.user_id JOIN social_groups g ON g.id=gm.group_id WHERE g.site_id=$1 AND g.id=$2 ORDER BY gm.created_at',[siteId,groups[2]]);return sendJson(res,200,{members:q.rows,requestId});}
+    if (groups[3] === 'members') {
+      await requireCapability(actor, siteId, 'community:moderate');
+      const members = await withTransaction(localPool, async client => {
+        await assertSiteCapabilityInTransaction(
+          client,
+          ctx,
+          siteId,
+          actor.user.id,
+          'community:moderate',
+        );
+        const result = await client.query(
+          'SELECT u.id,u.display_name,u.email,gm.role,gm.status,gm.created_at FROM social_group_memberships gm JOIN users u ON u.id=gm.user_id JOIN social_groups g ON g.id=gm.group_id WHERE g.site_id=$1 AND g.id=$2 ORDER BY gm.created_at',
+          [siteId, groups[2]],
+        );
+        return result.rows;
+      });
+      return sendJson(res, 200, { members, requestId });
+    }
   }
   const feed=pathName.match(/^\/api\/v1\/sites\/([0-9a-f-]{36})\/community\/feed$/i);
   if (feed && ['GET', 'POST'].includes(method)) {

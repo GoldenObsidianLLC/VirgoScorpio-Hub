@@ -1005,6 +1005,167 @@ test(
       await assertSiteAUnchanged();
     });
 
+    await t.test('group member reads revalidate community:moderate after a concurrent role change', async () => {
+      let testRoleId = null;
+      let revocationClient = null;
+      let revocationOpen = false;
+      let memberRequest = null;
+      let memberOutcome = null;
+      let preflightCompleted;
+      let resumePreflight;
+      let preflightIntercepted = false;
+      const preflight = new Promise(resolve => { preflightCompleted = resolve; });
+      const preflightBarrier = new Promise(resolve => { resumePreflight = resolve; });
+
+      const originalRole = await pool.query(
+        'SELECT capabilities FROM roles WHERE id=$1',
+        [roleId],
+      );
+      assert.equal(originalRole.rowCount, 1);
+      assert.ok(originalRole.rows[0].capabilities.includes('community:moderate'));
+
+      const isolatedRole = await pool.query(
+        'INSERT INTO roles(slug,label,capabilities) VALUES($1,$2,$3::jsonb) RETURNING id',
+        [
+          `tenant-community-read-${randomUUID().slice(0, 10)}`,
+          'Tenant Community Read Race Moderator',
+          JSON.stringify(originalRole.rows[0].capabilities),
+        ],
+      );
+      testRoleId = isolatedRole.rows[0].id;
+
+      await pool.query(
+        'UPDATE site_memberships SET role_id=$3 WHERE site_id=$1 AND user_id=$2',
+        [siteB, actorB.id, testRoleId],
+      );
+      await pool.query(
+        "INSERT INTO social_group_memberships(group_id,user_id,role,status) VALUES($1,$2,'member','active')",
+        [groupB, userB2.id],
+      );
+
+      const groupMembershipsBefore = await pool.query(
+        'SELECT group_id,user_id,role,status,created_at FROM social_group_memberships WHERE group_id=$1 ORDER BY user_id',
+        [groupB],
+      );
+      const activeModerator = await fetch(
+        `${base}/api/v1/sites/${siteB}/community/groups/${groupB}/members`,
+        { headers },
+      );
+      assert.equal(activeModerator.status, 200, 'an active moderator retains group member-read access');
+      const activeModeratorPayload = await activeModerator.json();
+      assert.ok(
+        activeModeratorPayload.members.some(member => member.email === userB2.email),
+        'the active moderator control must include the active group member',
+      );
+
+      authorizeSiteInterceptor = async args => {
+        if (
+          !preflightIntercepted &&
+          args[0] === actorB.id &&
+          args[1] === siteB &&
+          args[2] === 'community:moderate'
+        ) {
+          preflightIntercepted = true;
+          preflightCompleted();
+          await preflightBarrier;
+        }
+      };
+
+      try {
+        memberRequest = fetch(
+          `${base}/api/v1/sites/${siteB}/community/groups/${groupB}/members`,
+          { headers },
+        ).then(async response => ({
+          status: response.status,
+          payload: await response.json(),
+        }));
+
+        const preflightObserved = await Promise.race([
+          preflight.then(() => true),
+          new Promise(resolve => setTimeout(() => resolve(false), 5000)),
+        ]);
+        assert.equal(preflightObserved, true, 'member request must complete its request-time moderation-capability preflight');
+        // Begin the independent revocation only after the request-time
+        // capability preflight has succeeded and the real handler is paused.
+        revocationClient = await pool.connect();
+        await revocationClient.query('BEGIN');
+        revocationOpen = true;
+        await revocationClient.query(
+          'SELECT id FROM roles WHERE id=$1 FOR UPDATE',
+          [testRoleId],
+        );
+        await revocationClient.query(
+          "UPDATE roles SET capabilities=capabilities-'community:moderate' WHERE id=$1",
+          [testRoleId],
+        );
+
+
+        // Resume the real route while the independent role update is still
+        // uncommitted. A direct non-transactional member SELECT does not wait
+        // for the roles row and can disclose the active members' email fields.
+        resumePreflight();
+        const earlyOutcome = await Promise.race([
+          memberRequest,
+          new Promise(resolve => setTimeout(() => resolve(null), 500)),
+        ]);
+        const lockObserved = earlyOutcome
+          ? false
+          : await waitForDatabaseWriteLock(
+            revocationClient,
+            'FOR SHARE',
+            5000,
+            { relationName: 'roles' },
+          );
+
+        await revocationClient.query('COMMIT');
+        revocationOpen = false;
+        memberOutcome = earlyOutcome || await memberRequest;
+
+        const memberEmailDisclosed = Boolean(
+          memberOutcome.payload.members?.some(member => member.email === userB2.email),
+        );
+        assert.equal(
+          memberEmailDisclosed,
+          false,
+          'a moderator whose capability was revoked must not receive group member email addresses',
+        );
+        assert.equal(lockObserved, true, 'member read must serialize against the current role capability row');
+        assert.equal(memberOutcome.status, 403, 'a role whose moderation capability was revoked must be denied');
+        assert.equal(
+          memberOutcome.payload.code,
+          'ERR_VIRGOSCORPIO_HUB_FORBIDDEN',
+          'the existing capability-denial contract must be preserved',
+        );
+
+        const groupMembershipsAfter = await pool.query(
+          'SELECT group_id,user_id,role,status,created_at FROM social_group_memberships WHERE group_id=$1 ORDER BY user_id',
+          [groupB],
+        );
+        assert.deepEqual(groupMembershipsAfter.rows, groupMembershipsBefore.rows);
+        await assertSiteAUnchanged();
+      } finally {
+        resumePreflight();
+        authorizeSiteInterceptor = null;
+        if (revocationOpen) await revocationClient.query('ROLLBACK').catch(() => {});
+        if (memberRequest && !memberOutcome) memberOutcome = await memberRequest.catch(() => null);
+        if (revocationClient) revocationClient.release();
+        await pool.query(
+          'UPDATE site_memberships SET role_id=$3 WHERE site_id=$1 AND user_id=$2',
+          [siteB, actorB.id, roleId],
+        ).catch(() => {});
+        await pool.query(
+          'DELETE FROM social_group_memberships WHERE group_id=$1 AND user_id=$2',
+          [groupB, userB2.id],
+        ).catch(() => {});
+        if (testRoleId) {
+          await pool.query('DELETE FROM roles WHERE id=$1', [testRoleId]).catch(() => {});
+        }
+      }
+
+      await assertSiteAUnchanged();
+      await assertSiteBUnchanged();
+    });
+
     await t.test('foreign group join is rejected without creating a site B membership', async () => {
       const response = await fetch(`${base}/api/v1/sites/${siteB}/community/groups/${groupA}/join`, {
         method: 'POST',
