@@ -285,7 +285,7 @@ test('community direct messages, blocks, reports, notifications, and moderation 
   // Repeat the preflight/revocation ordering for the privileged report status
   // mutation. Its capability must still exist at the SQL write boundary.
   await pool.query(
-    "UPDATE social_reports SET status='open',moderation_note=NULL,reviewed_by=NULL WHERE site_id=$1 AND id=$2",
+    "UPDATE social_reports SET status='open' WHERE site_id=$1 AND id=$2",
     [siteId, fixtures.reportId],
   );
   const reportModerationGate = createGate();
