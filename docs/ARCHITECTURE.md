@@ -176,15 +176,19 @@ This scoped rule covers the protected community message and moderation mutations
 
 F1.77 extends the site-first, write-boundary authorization pattern to community block create/unblock. Block creation revalidates actor and target active account/site membership in the same PostgreSQL transaction as the social_blocks upsert; unblock revalidates actor membership before deleting. lockActiveSiteParticipants locks the site first, then users and memberships in deterministic UUID order. Direct-conversation creation reuses the helper while retaining its existing advisory pair lock and stronger FOR UPDATE row lock. Exact-main workflow #46050954042 passed the hosted PostgreSQL revocation and reciprocal-lock regressions with zero skips.
 
-This scoped update does not imply that every community read-side effect is protected. Issue #124 remains open; subsequent source review should inspect last_read_at and social_notifications.read_at marker writes for a preflight-to-write revocation window before introducing a broader abstraction.
+These merged increments protect the reviewed community message, report, block, read-marker and profile-write paths, but do not establish that every community workflow is complete. Issue #124 remains open for source-anchored review of the remaining tenant-scoped surfaces; use a hosted PostgreSQL barrier and two-site state snapshots before expanding the shared authorization abstraction.
 
 ## F1.78 merged — community read-marker authorization and transaction boundaries (PR #316)
 
 F1.78 closes the confirmed preflight-to-read-marker race in community messaging and notifications. GET conversation messages revalidates active site membership before locking/revalidating the conversation-member row, then advances last_read_at and reads messages inside the same transaction. Conversation-read POST revalidates site and conversation membership and commits participant and related notification read markers atomically. Notification read-all and specific-read writes revalidate active site membership in their write transaction.
 
-The implementation reuses withTransaction, assertActiveSiteMembership and the existing site-first lock order. Hosted PostgreSQL tests cover membership/account revocation, marker rollback, active-member controls and two-site isolation. Exact-main workflow #46066130972 passed the 203/203 live integration suite with zero skips.
+The implementation reuses withTransaction, assertActiveSiteMembership and the existing site-first lock order. Hosted PostgreSQL tests cover membership/account revocation, marker rollback, active-member controls and two-site isolation. Exact-main workflow #46066130972 passed the 203/203 live integration suite with zero skips. This is the F1.78 merge baseline; F1.79 exact-main evidence is recorded in the following section.
 
-F1.75–F1.78 now cover message creation/moderation, report submission/status, block create/unblock and read-marker writes respectively. Parent issue #124 remains open for broader community and tenant workflow review; this set of bounded fixes is not independent production security assurance.
+F1.75–F1.79 cover message creation/moderation, report submission/status, block create/unblock, conversation/message and notification read markers, and community profile writes. Parent issue #124 remains open for broader tenant workflow review; these maintainer-led fixes and CI runs are not independent production security assurance.
+
+## F1.79 merged — community profile-write authorization and transaction boundary (PR #319)
+
+F1.79 closes the community profile preflight-to-write membership race. The PUT /api/v1/sites/:siteId/community/profile handler retains request-time site authorization as preflight, then executes the social_profiles upsert inside withTransaction and calls the shared assertActiveSiteMembership helper on the transaction client before mutation. The helper follows the established site-first lock order, serializing the profile write with membership revocation. Existing profile GET behavior, tenant-denial 403, optimistic-version 409 and response shape are preserved. No duplicate authorization SQL, schema or migration was introduced. Hosted PostgreSQL barriers prove the pre-fix stale write and the fixed denied/no-side-effect behavior, with active-member and two-site controls.
 
 ## Trust boundaries to review
 

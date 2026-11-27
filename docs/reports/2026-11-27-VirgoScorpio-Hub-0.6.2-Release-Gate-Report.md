@@ -1,45 +1,62 @@
 # VirgoScorpio Hub 0.6.2 — Release Gate and Development Status Report
 
-**Report date:** 27 November 2026 (America/Chicago)
-**Repository:** https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub
+## Current authoritative snapshot — F1.79 / PR #319 (27 November 2026; America/Chicago)
 
-## Current authoritative snapshot — F1.78 / PR #316 (27 November 2026; America/Chicago)
-
-**Exact main:** 840fd5e5dfbcafba0be5c7c80739c4f17a93682c
-**Exact-main workflow:** [#46066130972](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/46066130972) — success, 7/7 jobs
-**Canonical readiness artifact:** [#15230394562](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/46066130972/artifacts/15230394562)
-**Archive SHA-256:** f01b45d329da8d397d6c1f85db6b1e4be1642f89a76200e3926b99a747019322
-**Readiness JSON SHA-256:** f3a645148ab2bd806eb823b4c756d72278667e9f4128ddddd4f0e2f334287876
-**Readiness Markdown SHA-256:** 52011ae4f706c776a1b7ef077d181968b99f9a49627364f8cb56da854fc68c99
-**CI readiness JSON SHA-256:** ee456c38b00c35d725d69a39f5f3bac8a64a1ad06898acd747b79033a6a3c46a
-**CI readiness Markdown SHA-256:** 62030c85fbbcbb3d878b1bd91383e9a05ca478624243e33d6229fa67f8c9fecb
-**Package:** virgoscorpio-hub@0.6.2 — private, unreleased
-**Release decision:** **NO-GO — NOT_PRODUCTION_CERTIFIED**
+- **Exact main:** `2b4d5a5c096f704eb8a7c3066ba1e5c8dccb0542`
+- **Exact-main workflow:** [#46072736082](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/46072736082) — success, 7/7 jobs
+- **Canonical readiness artifact:** [#15233427068](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/46072736082/artifacts/15233427068)
+- **Archive SHA-256:** `97dfb9d352089f2e44b5b0b40d7215966500f191dd18fff9352eb70fe6f1b445`
+- **Readiness JSON SHA-256:** `a50db65d67281e1886d2bdc1a0903a18901fcffbc16afeef1a05cfdea81efefc`
+- **Readiness Markdown SHA-256:** `850a170384221b8f9f4b4fabad0ee5bb8c6d760e705f69de8127c236a117d2dd`
+- **CI readiness JSON SHA-256:** `592236958cbed08786afcc6e2bafb1651b52308bd4ced7b58d9deff627b18d3d`
+- **CI readiness Markdown SHA-256:** `ea6ec0f958e9875482cdf08a5d8323f8d920d0144a1ddd85418fdd2f21228b6f`
+- **Package:** `virgoscorpio-hub@0.6.2` — private, unreleased
+- **Release decision:** **NO-GO — NOT_PRODUCTION_CERTIFIED**
 
 > Passing CI does not establish provider acceptance, product parity, independent security assurance, operational recovery, governance or release-owner approval. Do not tag, publish, deploy or promote 0.6.2.
 
 ### 1. Current exact-main engineering evidence
 
-| Gate | Exact-main result on 840fd5e |
+| Gate | Exact-main result on 2b4d5a5 |
 |---|---|
-| Node.js 22.23.4 | 1,145/1,145 Hub tests and 94/94 EnginEx tests; zero skips |
-| Node.js 24.22.1 | 1,145/1,145 Hub tests and 94/94 EnginEx tests; zero skips |
-| npm audit | Zero vulnerabilities in both runtime jobs |
-| PostgreSQL/Memgraph | 203/203 tests passed; zero failures and zero skips |
+| Node.js 22.23.4 | 1,145/1,145 Hub tests; zero skips |
+| Node.js 24.22.1 | 1,145/1,145 Hub tests; zero skips |
+| PostgreSQL/Memgraph | 204/204 tests passed; zero failures and zero skips |
 | Fresh migrations | 22/22 applied to a disposable PostgreSQL database |
 | Idempotent migrations | 22/22 already-applied migrations skipped on second pass |
 | Memgraph outage | Live outage/replay test passed |
 | Graph rebuild | Live rebuild and idempotency probe passed |
-| F1.78 read-marker races | GET messages membership revocation, conversation-read account disablement, notification read-all and specific-read revocation, atomic rollback and two-site snapshots passed |
+| F1.78 read-marker races | Message listing, conversation-read and notification membership/account revocation, atomic rollback and two-site snapshots passed |
+| F1.79 profile-write race | Real-route membership revocation barrier, unchanged profile snapshot, active-member positive control, expected-version 409 and two-site isolation passed |
 | Browser smoke | 9/9 passed; not full WCAG or screen-reader acceptance |
 | CodeQL | Passed |
 | Lockfile/SBOM attestation | Signed mainline attestations created and verified |
 | SBOM parity | 200 components / 201 dependency records |
 | Overall workflow | 7/7 jobs successful |
 
-Readiness remains 8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN, readyForProduction=false, NOT_PRODUCTION_CERTIFIED. PARTIALs are qualified human dependency/lockfile review and service-less diagnostics (1 pass / 56 skips); those skips are distinct from the 203/203 hosted live suite.
+Readiness remains 8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN, readyForProduction=false, NOT_PRODUCTION_CERTIFIED. PARTIALs are qualified human dependency/lockfile review and service-less diagnostics (1 pass / 56 skips); those skips are distinct from the 204/204 hosted live suite.
 
-### 2. F1.78 merged implementation — PR #316 / issue #315
+### 2. F1.79 merged implementation — PR #319 / issue #318
+
+PR [#319](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/319) merged to main at 2b4d5a5c096f704eb8a7c3066ba1e5c8dccb0542; issue [#318](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/318) is closed. Final PR head was 890b9b99995f527900422d3a4f290244a99c4a03.
+
+The confirmed finding was a request-preflight-to-profile-write authorization gap in PUT /api/v1/sites/:siteId/community/profile. The route performed request-time site-membership preflight, then wrote social_profiles through a direct pool query, outside a transaction that revalidated active account/site membership. A membership revocation could commit after preflight but before the upsert.
+
+Hosted PostgreSQL workflow [#46071303082](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/46071303082), job 140748610119, reproduced the stale write on the pre-fix implementation: pause after successful request-time site authorization, hold the independent site-membership revocation transaction, resume the real PUT route, then commit revocation. The vulnerable handler persisted a profile row at version 1 for the revoked actor where the expected snapshot was empty. The pre-fix workflow was intentionally red because the regression detected this violation.
+
+The merged implementation reuses the existing authorization helper and transaction pattern:
+- The profile upsert now runs through withTransaction.
+- The transaction invokes assertActiveSiteMembership on the transaction client before mutation, using the established site-first lock order.
+- Profile GET behavior, tenant-denial 403, optimistic-version 409 and response shape are preserved.
+- No duplicate membership SQL, schema or migration was introduced.
+
+Hosted regression coverage verifies the real-route preflight/revocation barrier, no profile/version/metadata side effect after revocation, Site A snapshot preservation, active-member profile-write success and the existing stale-version 409 behavior. Source-anchored tenant inventory was regenerated: 28 families, 80 route patterns, 22 source files and 61 test references.
+
+Candidate push [#46072067810](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/46072067810) and PR-context [#46072258907](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/46072258907) passed Node 22/24 (1,145/1,145 each), hosted PostgreSQL/Memgraph (204/204, zero skips), browser 9/9, CodeQL and candidate evidence consolidation. Exact-main workflow #46072736082 passed 7/7 on the merge SHA.
+
+### Historical F1.78 merged implementation — PR #316 / issue #315
+
+
 
 PR [#316](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/316) merged to main at 840fd5e5dfbcafba0be5c7c80739c4f17a93682c; issue [#315](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/315) is closed. Final PR head was 71af5dd0f69497d5791480ea19bdb19589bcc0cd.
 
