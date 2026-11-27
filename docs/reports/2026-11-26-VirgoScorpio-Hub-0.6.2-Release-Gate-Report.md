@@ -74,9 +74,11 @@ All evidence must be tied to the exact candidate version and full source SHA. A 
 
 ### Open pull requests
 
-Only one PR was open in the verified GitHub snapshot:
+Two PRs are open in the current GitHub snapshot:
 
 - **[#274 — Aikido password-reset timing mitigation](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/274)** — open, Changes requested, non-draft, mergeability false / dirty. Head SHA 30f3a3754548c9a1445e5d6a4599b1cf4bbd7aab; base main SHA 13533aeb2c8288025f395ab0fb9f328367e3d33b, behind current main. Review identifies a duplicate handler declaration (parse-time failure), generic 202 before detached in-memory work (requests can be lost on process exit), and mock-only tests that do not execute the real route/service/outbox path. **Do not merge as submitted.**
+
+- **[#306 — F1.74 durable password-reset queue](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/306)** — open draft. The previous pushed head passed Node 22/24, CodeQL, browser and hosted PostgreSQL/Memgraph migration/integration workflows (including the new queue tests); a shared-worker-helper refactor was added locally afterwards and requires fresh exact-head CI. The repository single-maintainer policy requires maintainer full-diff self-review but does not require an external PR approval; the self-review attestation remains pending.
 
 PR #305, the release-gate documentation refresh, is merged into the current main SHA. No GitHub Release is published.
 
@@ -126,9 +128,9 @@ F1.74 is an isolated local worktree and a draft candidate in [PR #306](https://g
 
 ### Candidate validation and remaining work
 
-Focused queue/route/worker tests pass **58/58**. The complete top-level test glob passes **1,128/1,131** (3 platform skips, 0 failures) on local Node **v26.12.1**. `node scripts/verify.js` passes (241 required paths; 314 JavaScript files syntax-checked), and `git diff --check` passes. Two new PostgreSQL integration tests cover multi-replica deduplication/capacity, concurrent SKIP LOCKED workers, hashed token storage, outbox payload scrubbing, and stale-claim recovery; both skip locally because TEST_DATABASE_URL is not configured and must execute in hosted PR CI. Supported Node 22/24 and a live PostgreSQL migration 0022 run are required before merge. The candidate is not merged; independent code/security review is still pending.
+The broader queue/route/worker/tenant-inventory focused suite passed 58/58 before the final shared-helper deduplication; the post-refactor focused regression subset passed 33/33. The complete top-level test glob passes 1,128/1,131 (3 platform skips, 0 failures) on local Node v26.12.1. scripts/verify.js passes (241 required paths; 314 JavaScript files syntax-checked), and git diff --check passes. Two PostgreSQL integration tests cover multi-replica deduplication/capacity, concurrent SKIP LOCKED workers, hashed token storage, outbox payload scrubbing, and stale-claim recovery; both skip locally because TEST_DATABASE_URL is not configured and passed in the previous hosted PR integration run. Fresh hosted CI is required for the shared-worker-helper refactor.
 
-Next steps: (1) complete hosted PostgreSQL migration 0022 fresh/idempotent and queue-integration CI; (2) review exact-head Node 22/24, CodeQL, browser and evidence workflows; (3) obtain independent code/security review and resolve all findings; (4) qualify the systemd mail-worker service, OTLP routing and alert thresholds on the target deployment host; (5) reconcile PR #274 only after #306 is accepted. Do not close #274 or issue #13 prematurely.
+Next steps: (1) complete latest-head hosted Node 22/24, CodeQL, browser, evidence and PostgreSQL migration 0022 fresh/idempotent plus queue-integration CI; (2) have the maintainer complete the repository-required full-diff self-review and resolve any findings; external approval is not required by the single-maintainer ruleset, but AI-assisted review is not independent assurance and #14/#25 remain production gates; (3) qualify the systemd mail-worker service, secret permissions, OTLP routing and alert thresholds on the target deployment host; (4) reconcile PR #274 only after #306 is accepted. Do not close #274 or issue #13 prematurely.
 
 ## 7. Stability, security and architecture notes
 
