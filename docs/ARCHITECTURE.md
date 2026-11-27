@@ -172,6 +172,12 @@ The site-member removal path in `packages/auth/src/service.js` takes the site ro
 F1.75 updates community moderation to use the same site-first helper for its `community:moderate` capability, retaining the existing `site:manage` and wildcard overrides. Reuse this helper rather than duplicating authorization SQL or changing lock order. The non-production developer bypass remains a separate explicit path and must not be used as a production authorization mechanism.
 
 This scoped rule covers the protected community message and moderation mutations; it does not claim that every community workflow has been reviewed. New mutations should be traced from route preflight through transaction commit and receive targeted revocation-race tests where authorization can change across an asynchronous boundary. See the F1.75 membership-revocation threat model at `security/F1.75-COMMUNITY-MESSAGE-MEMBERSHIP-REVOCATION-THREAT-MODEL.md`.
+## F1.77 merged — community block-write authorization and participant lock ordering (PR #313)
+
+F1.77 extends the site-first, write-boundary authorization pattern to community block create/unblock. Block creation revalidates actor and target active account/site membership in the same PostgreSQL transaction as the social_blocks upsert; unblock revalidates actor membership before deleting. lockActiveSiteParticipants locks the site first, then users and memberships in deterministic UUID order. Direct-conversation creation reuses the helper while retaining its existing advisory pair lock and stronger FOR UPDATE row lock. Exact-main workflow #46050954042 passed the hosted PostgreSQL revocation and reciprocal-lock regressions with zero skips.
+
+This scoped update does not imply that every community read-side effect is protected. Issue #124 remains open; subsequent source review should inspect last_read_at and social_notifications.read_at marker writes for a preflight-to-write revocation window before introducing a broader abstraction.
+
 ## Trust boundaries to review
 
 1. Browser/client input entering API routes.
