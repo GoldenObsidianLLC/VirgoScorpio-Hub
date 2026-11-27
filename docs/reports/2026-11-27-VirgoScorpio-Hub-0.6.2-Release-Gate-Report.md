@@ -3,14 +3,16 @@
 **Report date:** 27 November 2026 (America/Chicago)
 **Repository:** https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub
 
-## Current authoritative snapshot — F1.77 / PR #313 (27 November 2026; America/Chicago)
+## Current authoritative snapshot — F1.78 / PR #316 (27 November 2026; America/Chicago)
 
-**Exact main:** 06b91c2d3e57120882294679bc1569d6b2a47f0c
-**Exact-main workflow:** [#46050954042](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/46050954042) — success, 7/7 jobs
-**Canonical readiness artifact:** [#15224526916](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/46050954042/artifacts/15224526916)
-**Archive SHA-256:** 8a9c0bdf1dc62b6ae246aa809ea272810420c520901d7291200b5c3b882f605fe
-**Readiness JSON SHA-256:** 65338e67128bf3f884a89f511eb7eabacef5e3b02f1f7e04ac3396117eff0a21
-**Readiness Markdown SHA-256:** ad8a85070e2ae61789bcdbb1eea43c1c808ea64e2817b530768aba7197db2139
+**Exact main:** 840fd5e5dfbcafba0be5c7c80739c4f17a93682c
+**Exact-main workflow:** [#46066130972](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/46066130972) — success, 7/7 jobs
+**Canonical readiness artifact:** [#15230394562](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/46066130972/artifacts/15230394562)
+**Archive SHA-256:** f01b45d329da8d397d6c1f85db6b1e4be1642f89a76200e3926b99a747019322
+**Readiness JSON SHA-256:** f3a645148ab2bd806eb823b4c756d72278667e9f4128ddddd4f0e2f334287876
+**Readiness Markdown SHA-256:** 52011ae4f706c776a1b7ef077d181968b99f9a49627364f8cb56da854fc68c99
+**CI readiness JSON SHA-256:** ee456c38b00c35d725d69a39f5f3bac8a64a1ad06898acd747b79033a6a3c46a
+**CI readiness Markdown SHA-256:** 62030c85fbbcbb3d878b1bd91383e9a05ca478624243e33d6229fa67f8c9fecb
 **Package:** virgoscorpio-hub@0.6.2 — private, unreleased
 **Release decision:** **NO-GO — NOT_PRODUCTION_CERTIFIED**
 
@@ -18,38 +20,54 @@
 
 ### 1. Current exact-main engineering evidence
 
-| Gate | Exact-main result on 06b91c2 |
+| Gate | Exact-main result on 840fd5e |
 |---|---|
 | Node.js 22.23.4 | 1,145/1,145 Hub tests and 94/94 EnginEx tests; zero skips |
 | Node.js 24.22.1 | 1,145/1,145 Hub tests and 94/94 EnginEx tests; zero skips |
 | npm audit | Zero vulnerabilities in both runtime jobs |
 | PostgreSQL/Memgraph | 203/203 tests passed; zero failures and zero skips |
-| F1.77 block-write races | Actor membership removal, account disablement, target revocation, unblock revocation and reciprocal-block lock order passed |
-| Fresh migrations | 22/22 applied |
+| Fresh migrations | 22/22 applied to a disposable PostgreSQL database |
 | Idempotent migrations | 22/22 already-applied migrations skipped on second pass |
+| Memgraph outage | Live outage/replay test passed |
+| Graph rebuild | Live rebuild and idempotency probe passed |
+| F1.78 read-marker races | GET messages membership revocation, conversation-read account disablement, notification read-all and specific-read revocation, atomic rollback and two-site snapshots passed |
 | Browser smoke | 9/9 passed; not full WCAG or screen-reader acceptance |
 | CodeQL | Passed |
 | Lockfile/SBOM attestation | Signed mainline attestations created and verified |
 | SBOM parity | 200 components / 201 dependency records |
 | Overall workflow | 7/7 jobs successful |
 
-Readiness remains 8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN, readyForProduction=false, NOT_PRODUCTION_CERTIFIED. PARTIALs are qualified human dependency/lockfile review and service-less diagnostics (1 pass / 56 skips); those skips are distinct from the hosted live suite.
+Readiness remains 8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN, readyForProduction=false, NOT_PRODUCTION_CERTIFIED. PARTIALs are qualified human dependency/lockfile review and service-less diagnostics (1 pass / 56 skips); those skips are distinct from the 203/203 hosted live suite.
 
-### 2. F1.77 merged implementation — PR #313 / issue #312
+### 2. F1.78 merged implementation — PR #316 / issue #315
 
-PR [#313](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/313) merged to main at 06b91c2d3e57120882294679bc1569d6b2a47f0c; issue [#312](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/312) is closed. Final PR head was 6aaf9e13d99893fcfc51f3c9f5e256dbc6ca190c.
+PR [#316](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/316) merged to main at 840fd5e5dfbcafba0be5c7c80739c4f17a93682c; issue [#315](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/315) is closed. Final PR head was 71af5dd0f69497d5791480ea19bdb19589bcc0cd.
 
-The finding was a request-preflight-to-mutation authorization gap. Block creation previously checked target active membership before a separate pool upsert; unblock used a direct pool delete after request-entry authorization. A site-membership or account revocation could commit after preflight and before either autocommit write.
+The confirmed finding was a request-preflight-to-read-marker authorization gap in the GET conversation-messages path. The route performed request-time site-membership preflight, then listMessages checked only a surviving conversation-member row outside a transaction, advanced last_read_at using a separate pool query, and returned messages. Conversation membership can outlive site membership.
 
-The merged implementation reuses the shared site-first transaction pattern. lockActiveSiteParticipants locks the site first, then user and membership rows in deterministic UUID order. Block creation revalidates active actor and target membership/account inside the upsert transaction; unblock revalidates actor membership inside the delete transaction. Direct-conversation creation reuses the helper while preserving the advisory pair lock and stronger FOR UPDATE row lock. Existing 403 actor-denial and generic 404 target-denial contracts remain unchanged. No schema, migration, API response, dependency, lockfile or SemVer change was made.
+A hosted PostgreSQL barrier reproduced the stale request: pause immediately after request-time site authorization, delete the actor's site-membership row on an independent connection, then resume the real GET handler. Before the fix, the request continued and advanced last_read_at. Pre-fix workflow [#46063371203](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/46063371203) reported 203 tests, 202 passed, one failed and zero skipped; the failure was the revocation regression.
 
-Hosted PostgreSQL regressions cover actor membership removal after POST body parsing, actor account disablement after POST body parsing, target membership removal after target preflight, actor membership removal before unblock, and concurrent reciprocal block requests. Rejected writes have no protected side effects; reciprocal requests complete without deadlock and restore fixture state.
+The merged implementation reuses the established transaction and site-first authorization helpers:
 
-Final PR-head push [#46050444314](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/46050444314) and PR-context [#46050450685](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/46050450685) both passed. Exact-main [#46050954042](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/46050954042) passed all seven jobs and published signed mainline attestations plus the canonical readiness artifact.
+- GET conversation messages now validates active site membership and current conversation membership inside one transaction before advancing last_read_at and selecting messages. Revoked actors are denied before marker mutation or message disclosure.
+- Conversation-read POST now revalidates membership inside a transaction and commits the participant read marker plus related notification read markers atomically.
+- Notification read-all and specific-notification read now revalidate active site membership in the transaction that updates read_at.
+- Existing response shapes, actor/site scoping, 403 authorization behavior and non-disclosing not-found behavior are preserved. No schema, migration, dependency, lockfile, API response-shape or SemVer change was made.
 
-### 3. Previous merged F1.76 increment — PR #311 / issue #310
+Hosted integration regressions use real route handlers and barriers to cover GET membership revocation; conversation-read account disablement; notification read-all and specific-read membership revocation; active-member positive controls; two-site snapshots; and rollback when the second conversation/notification marker write fails.
 
-F1.76 revalidates reporter membership before report insertion and current community:moderate capability before report-status mutation. Three hosted PostgreSQL races cover membership removal, account disablement and moderator-role capability removal. PR #311 merged at f823dca404ce38d66aeab170b7f889503adba6f4; issue #310 is closed. The bounded work does not close parent issue #124 or independent assurance #14/#25.
+Final PR-head push [#46065565513](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/46065565513) and PR-context [#46065609242](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/46065609242) both passed. Each passed Node 22/24 (1,145/1,145 Hub tests each), hosted PostgreSQL/Memgraph (203/203, zero failures/skips), browser smoke 9/9, CodeQL and candidate evidence consolidation.
+
+Exact-main workflow [#46066130972](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/46066130972) completed 7/7 jobs on merge SHA 840fd5e5dfbcafba0be5c7c80739c4f17a93682c. It passed 22/22 fresh/idempotent migrations, live Memgraph outage and graph-rebuild probes, signed mainline lockfile/SBOM attestations and exact-source evidence consolidation.
+
+Canonical source-bound readiness artifact [#15230394562](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/46066130972/artifacts/15230394562) remains 8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN, readyForProduction=false, NOT_PRODUCTION_CERTIFIED / NO-GO.
+
+### 3. Previous merged community authorization increments
+
+- F1.75 / PR #308: community message writes and moderation revalidate active site membership at the write boundary.
+- F1.76 / PR #311: report submission revalidates reporter membership and report-status mutation revalidates community:moderate capability.
+- F1.77 / PR #313: block creation revalidates actor and target account/membership; unblock revalidates actor membership.
+- F1.78 / PR #316: conversation/message and notification read-marker writes revalidate site authorization in the transaction that owns the write.
 
 ### 4. Current formal production evidence gates
 
@@ -65,33 +83,23 @@ The fourteen missing evidence categories remain those listed in release readines
 
 ### 5. Current GitHub issue and PR disposition
 
-- F1.76 / PR #311 merged; issue #310 closed.
-- F1.77 / PR #313 merged; issue #312 closed.
-- Parent issue #124 remains open for broader tenant/site and community mutation review.
+- F1.75 / PR #308 merged; F1.76 / PR #311 merged; F1.77 / PR #313 merged; F1.78 / PR #316 merged.
+- Issues #310, #312 and #315 are closed; parent issue #124 remains open for broader tenant/site and community workflow review.
 - Independent reviews #14/#25 remain open / NOT PERFORMED; qualified dependency/license review #23 remains PARTIAL.
 - Load/restore #24, operations/release-owner #26, provider/scope approval #13 and governance #32 remain open.
 - Scanner triage #234/#235/#277 remains separate from PR dispositions.
 
 ### 6. Recommended development sequence
 
-1. Continue issue #124 with source-anchored review of community read-marker writes. listMessages updates social_conversation_members.last_read_at after an out-of-transaction conversation-member check; conversation-read and notification read/read-all routes directly update last_read_at / social_notifications.read_at after request-time site authorization. Reproduce the revocation window with hosted PostgreSQL barriers before opening another F1 issue.
-2. If confirmed, reuse withTransaction, assertActiveSiteMembership and site-first lock order. Revalidate conversation membership inside the transaction and make coupled conversation/notification marker updates atomic; preserve response shapes and two-site isolation.
+1. Continue issue #124 with source-anchored review of remaining community and tenant-scoped workflows beyond the message, report, block and read-marker paths already hardened. Require a hosted PostgreSQL barrier and two-site snapshot to confirm any further preflight-to-write or cross-site race before opening another increment.
+2. Reuse withTransaction, assertActiveSiteMembership and the established site-first lock order. Preserve HTTP response shapes and non-disclosing not-found behavior; keep coupled writes atomic.
 3. Complete independent reviews #14/#25 and human dependency review #23 separately from maintainer tests; then load/restore, provider, product-parity, operations and observability gates.
 4. Map individual Aikido/SAST findings under #234/#235/#277 using source evidence and fresh scans.
 5. Keep 0.6.2 private/unreleased and production NO-GO until all required gates and release-owner approval are accepted.
 
 ### 7. Compatibility and release boundary
 
-F1.77 is security/authorization hardening within 0.6.2. No schema, migration, dependency, lockfile, public API response-shape, package-version or SemVer change. No tag, GitHub Release, publication, production-data test, deployment or promotion is authorized.
-
-**Original report baseline main (pre-PR #307):** `4c1052988a8db57d16ca17c267ffb903907c9f69`
-**Exact-main workflow:** [#45935558396](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45935558396) — success, 7/7 jobs
-**Canonical readiness artifact:** [#15169989179](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45935558396/artifacts/15169989179)
-**Readiness artifact digest:** `sha256:2dabbadcb68f4eba3466b3133e2b0f4afbf5eac92528bef8c5a46b25d20cd1fd9`
-**Package:** `virgoscorpio-hub@0.6.2` — private, unreleased
-**Release decision:** **NO-GO — NOT_PRODUCTION_CERTIFIED**
-
-> This report distinguishes source-bound mainline evidence from unmerged PR candidates and local maintainer validation. Passing CI does not establish independent security assurance, provider acceptance, product parity, operational recovery, governance or release-owner approval. Do not tag, publish, deploy or promote 0.6.2.
+F1.78 is security/authorization hardening within 0.6.2. No schema, migration, dependency, lockfile, public API response-shape, package-version or SemVer change. No tag, GitHub Release, publication, production-data test, deployment or promotion is authorized.
 
 ## 1. Executive decision
 
