@@ -6,7 +6,7 @@ const { validateProfile, validateGroup, cleanText } = require('../../../packages
 const { validateIpPattern, MAX_FIREWALL_RULES_PER_SITE, MAX_FIREWALL_RULES_TOTAL } = require('../../../packages/security/src/firewall');
 const { cloudConfigStatus, createCloudStorageAdapterFromEnv, probeCloudStorageAdapter, resolveCloudCredentialReference, cloudEndpointAllowed } = require('../../../packages/cloud/src/storage-adapters');
 const { validateMenuItems } = require('../../../packages/domain/src/navigation');
-const { handleCommunityWorkflowRoute } = require('../../../packages/community/src/workflows');
+const { handleCommunityWorkflowRoute, assertActiveSiteMembership } = require('../../../packages/community/src/workflows');
 const { handleCommerceRoute, productInput } = require('./commerce-routes');
 const { handleLibraryRoute } = require('./library-routes');
 const { isBoundedJsonObject } = require('./request-validation');
@@ -226,7 +226,81 @@ async function handlePlatformRoute(ctx) {
   if(method==='GET'&&docVersion){if(!localPool)throw fail(503,'ERR_VIRGOSCORPIO_HUB_DATABASE_DISABLED','Document version controls require PostgreSQL.');const siteId=docVersion[1];await siteIdFor({ req, url, body: {}, actor, routeSiteId: siteId });await requireCapability(actor,siteId,'content:read');const row=await localPool.query('SELECT id,site_id,content_type,slug,locale,title,status,schema_version,version,body,published_at,updated_at FROM content_items WHERE site_id=$1 AND id=$2 AND deleted_at IS NULL',[siteId,docVersion[2]]);if(!row.rows[0])throw fail(404,'ERR_VIRGOSCORPIO_HUB_CONTENT_NOT_FOUND','Content was not found.');const revisionCount=await localPool.query('SELECT count(*)::integer AS count,max(version)::integer AS latest_version FROM content_revisions WHERE content_id=$1',[docVersion[2]]);const item=row.rows[0];return sendJson(res,200,{documentId:item.body?.documentId||item.id,contentId:item.id,version:item.version,schemaVersion:item.schema_version,status:item.status,publishedAt:item.published_at,updatedAt:item.updated_at,revisionCount:revisionCount.rows[0].count,latestRevisionVersion:revisionCount.rows[0].latest_version,requestId});}
 
   const communityProfile=pathName.match(/^\/api\/v1\/sites\/([0-9a-f-]{36})\/community\/profile$/i);
-  if(communityProfile&&['GET','PUT'].includes(method)){if(!localPool||!actor.user.id)throw fail(503,'ERR_VIRGOSCORPIO_HUB_COMMUNITY_DISABLED','Community profiles require a signed-in user and PostgreSQL.');const siteId=communityProfile[1];const body=method==='PUT'?await readJson(req,Math.min(maxBody,32_000)):{};await siteIdFor({ req, url, body, actor, routeSiteId: siteId });if(method==='GET'){const q=await localPool.query('SELECT display_name,bio,avatar_asset_id,website_url,visibility,metadata,version,updated_at FROM social_profiles WHERE site_id=$1 AND user_id=$2',[siteId,actor.user.id]);return sendJson(res,200,{profile:q.rows[0]||null,requestId});}const v=validateProfile(body);if(!v.valid)throw fail(422,'ERR_VIRGOSCORPIO_HUB_PROFILE_INVALID','Profile validation failed.',v.errors);const profile=await localPool.query(`INSERT INTO social_profiles(site_id,user_id,display_name,bio,avatar_asset_id,website_url,visibility,metadata) VALUES($1,$2,$3,$4,$5,$6,$7,$8::jsonb) ON CONFLICT(site_id,user_id) DO UPDATE SET display_name=EXCLUDED.display_name,bio=EXCLUDED.bio,avatar_asset_id=EXCLUDED.avatar_asset_id,website_url=EXCLUDED.website_url,visibility=EXCLUDED.visibility,metadata=EXCLUDED.metadata,version=social_profiles.version+1,updated_at=now() WHERE $9::integer IS NULL OR social_profiles.version=$9 RETURNING display_name,bio,avatar_asset_id,website_url,visibility,metadata,version,updated_at`,[siteId,actor.user.id,body.displayName.trim(),body.bio||'',body.avatarAssetId||null,body.websiteUrl||null,body.visibility||'members',JSON.stringify(body.metadata||{}),body.expectedVersion==null?null:Number(body.expectedVersion)]);if(!profile.rows[0])throw fail(409,'ERR_VIRGOSCORPIO_HUB_VERSION_CONFLICT','Profile version is stale.');return sendJson(res,200,{profile:profile.rows[0],requestId});}
+  if (communityProfile && ['GET', 'PUT'].includes(method)) {
+    if (!localPool || !actor.user.id) {
+      throw fail(
+        503,
+        'ERR_VIRGOSCORPIO_HUB_COMMUNITY_DISABLED',
+        'Community profiles require a signed-in user and PostgreSQL.',
+      );
+    }
+    const siteId = communityProfile[1];
+    const body = method === 'PUT'
+      ? await readJson(req, Math.min(maxBody, 32_000))
+      : {};
+    await siteIdFor({ req, url, body, actor, routeSiteId: siteId });
+
+    if (method === 'GET') {
+      const result = await localPool.query(
+        'SELECT display_name,bio,avatar_asset_id,website_url,visibility,metadata,version,updated_at FROM social_profiles WHERE site_id=$1 AND user_id=$2',
+        [siteId, actor.user.id],
+      );
+      return sendJson(res, 200, { profile: result.rows[0] || null, requestId });
+    }
+
+    const validation = validateProfile(body);
+    if (!validation.valid) {
+      throw fail(
+        422,
+        'ERR_VIRGOSCORPIO_HUB_PROFILE_INVALID',
+        'Profile validation failed.',
+        validation.errors,
+      );
+    }
+
+    const profile = await withTransaction(localPool, async client => {
+      // Revalidate membership at the profile mutation boundary using the shared
+      // community site-first lock order; the request preflight is not write authority.
+      await assertActiveSiteMembership(client, ctx, siteId, actor.user.id);
+      const result = await client.query(
+        `INSERT INTO social_profiles
+          (site_id,user_id,display_name,bio,avatar_asset_id,website_url,visibility,metadata)
+         VALUES($1,$2,$3,$4,$5,$6,$7,$8::jsonb)
+         ON CONFLICT(site_id,user_id) DO UPDATE SET
+           display_name=EXCLUDED.display_name,
+           bio=EXCLUDED.bio,
+           avatar_asset_id=EXCLUDED.avatar_asset_id,
+           website_url=EXCLUDED.website_url,
+           visibility=EXCLUDED.visibility,
+           metadata=EXCLUDED.metadata,
+           version=social_profiles.version+1,
+           updated_at=now()
+         WHERE $9::integer IS NULL OR social_profiles.version=$9
+         RETURNING display_name,bio,avatar_asset_id,website_url,visibility,metadata,version,updated_at`,
+        [
+          siteId,
+          actor.user.id,
+          body.displayName.trim(),
+          body.bio || '',
+          body.avatarAssetId || null,
+          body.websiteUrl || null,
+          body.visibility || 'members',
+          JSON.stringify(body.metadata || {}),
+          body.expectedVersion == null ? null : Number(body.expectedVersion),
+        ],
+      );
+      if (!result.rows[0]) {
+        throw fail(
+          409,
+          'ERR_VIRGOSCORPIO_HUB_VERSION_CONFLICT',
+          'Profile version is stale.',
+        );
+      }
+      return result.rows[0];
+    });
+
+    return sendJson(res, 200, { profile, requestId });
+  }
   const groups=pathName.match(/^\/api\/v1\/sites\/([0-9a-f-]{36})\/community\/groups(?:\/([0-9a-f-]{36})\/(join|members))?$/i);
   if (
     groups && (
