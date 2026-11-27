@@ -101,7 +101,7 @@ test('password-reset service enforces per-account cooldown to prevent token inva
               return { rowCount: 0, rows: [] };
             }
             
-            if (sql === 'ROLLBACK') {
+            if (sql === 'ROLLBACK' || sql === 'COMMIT') {
               return { rowCount: 0, rows: [] };
             }
             
@@ -128,11 +128,11 @@ test('password-reset service enforces per-account cooldown to prevent token inva
     // Should return accepted without creating new token
     assert.deepEqual(result, { accepted: true });
 
-    // Verify the sequence: BEGIN, acquire account reset lock, check recent tokens, ROLLBACK
+    // Verify the sequence: BEGIN, acquire account reset lock, check recent tokens, COMMIT
     assert.equal(queries[0].sql, 'BEGIN');
     assert.ok(queries[1].sql.includes('pg_advisory_xact_lock'), 'Should acquire per-account reset lock');
     assert.ok(queries[2].sql.includes('created_at > now() - interval'), 'Should check for recent tokens');
-    assert.equal(queries[3].sql, 'ROLLBACK', 'Should rollback when cooldown is active');
+    assert.equal(queries[3].sql, 'COMMIT', 'Read-only cooldown transaction should complete without side effects');
     
     // Verify no token creation or mail insertion happened
     assert.equal(queries.some(q => q.sql.includes('INSERT INTO identity_action_tokens')), false);
@@ -212,7 +212,7 @@ test('password-reset service enforces per-account cooldown to prevent token inva
       async connect() {
         return {
           async query(sql, values) {
-            if (sql === 'BEGIN' || sql === 'ROLLBACK') {
+            if (sql === 'BEGIN' || sql === 'ROLLBACK' || sql === 'COMMIT') {
               return { rowCount: 0, rows: [] };
             }
             if (sql.includes('pg_advisory_xact_lock')) {
@@ -258,7 +258,7 @@ test('password-reset prevents token invalidation and mail amplification attacks'
       async connect() {
         return {
           async query(sql) {
-            if (sql === 'BEGIN' || sql === 'ROLLBACK') {
+            if (sql === 'BEGIN' || sql === 'ROLLBACK' || sql === 'COMMIT') {
               return { rowCount: 0, rows: [] };
             }
             if (sql.includes('pg_advisory_xact_lock')) {
@@ -322,8 +322,8 @@ test('password-reset prevents token invalidation and mail amplification attacks'
               lockSequence.push('CHECK_COOLDOWN');
               return { rowCount: 1, rows: [{ '?column?': 1 }] };
             }
-            if (sql === 'ROLLBACK') {
-              lockSequence.push('ROLLBACK');
+            if (sql === 'ROLLBACK' || sql === 'COMMIT') {
+              lockSequence.push('COMMIT');
               return { rowCount: 0, rows: [] };
             }
             throw new Error('Unexpected query: ' + sql);
@@ -358,7 +358,7 @@ test('password-reset prevents token invalidation and mail amplification attacks'
       async connect() {
         return {
           async query(sql) {
-            if (sql === 'BEGIN' || sql === 'ROLLBACK') return { rowCount: 0, rows: [] };
+            if (sql === 'BEGIN' || sql === 'ROLLBACK' || sql === 'COMMIT') return { rowCount: 0, rows: [] };
             if (sql.includes('pg_advisory_xact_lock')) return { rowCount: 1, rows: [{ id: userId }] };
             if (sql.includes('created_at > now() - interval')) return { rowCount: 1, rows: [{ '?column?': 1 }] };
             throw new Error('Unexpected query');
@@ -477,8 +477,8 @@ test('password-reset security properties are enforced in correct order', async t
               defenseSequence.push('COOLDOWN_CHECK');
               return { rowCount: 1, rows: [{ '?column?': 1 }] };
             }
-            if (sql === 'ROLLBACK') {
-              defenseSequence.push('ROLLBACK');
+            if (sql === 'ROLLBACK' || sql === 'COMMIT') {
+              defenseSequence.push('COMMIT');
               return { rowCount: 0, rows: [] };
             }
             throw new Error('Unexpected query');
@@ -506,7 +506,7 @@ test('password-reset security properties are enforced in correct order', async t
       'BEGIN_TRANSACTION',     // Third: start transaction
       'LOCK_ACCOUNT',             // Fourth: acquire the per-account advisory lock
       'COOLDOWN_CHECK',        // Fifth: check per-account cooldown
-      'ROLLBACK',              // Sixth: rollback when cooldown is active
+      'COMMIT',                // Sixth: close the read-only cooldown transaction
       'RELEASE',               // Finally: release connection
     ]);
   });

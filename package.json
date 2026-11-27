@@ -17,6 +17,7 @@
     "dev": "node apps/api/src/server.js",
     "seed:dev": "node scripts/seed-dev.js",
     "start:worker": "node apps/worker/src/outbox-worker.js",
+    "start:mail-worker": "node apps/worker/src/mail-worker.js",
     "migrate": "node scripts/migrate.js",
     "bootstrap:owner": "node scripts/bootstrap-owner.js",
     "plugin:provenance": "node scripts/plugin-provenance.js",

@@ -11,6 +11,7 @@ const MFA_ACCOUNT_FAILURE_WINDOW_MINUTES = 15;
 const { generateTotpSecret, verifyTotp, totpUri, encryptSecret, decryptSecret, generateRecoveryCodes } = require('./totp');
 const { createSessionService } = require('./session-service');
 const { withTransaction } = require('../../db/src/transaction');
+const { UUID_RE } = require('../../domain/src/identifiers');
 
 function digest(value) { return createHash('sha256').update(String(value)).digest('hex'); }
 function safeEqualText(a, b) {
@@ -219,6 +220,30 @@ function createIdentityService({ pool, env = process.env, clock = () => Date.now
     onAuthorizationChange: notifyAuthorizationChange
   });
 
+  async function createPasswordResetForEmail(queryable, inputEmail, knownUser = null) {
+    const email = normalizeEmail(inputEmail);
+    if (!email) return { accepted: true };
+    const result = knownUser ? { rows: [knownUser] } : await queryable.query("SELECT id,email FROM users WHERE lower(email)=$1 AND status='active' LIMIT 1", [email]);
+    const user = result.rows[0];
+    if (!user) return { accepted: true };
+
+    // Generate the secret only after confirming an active account; persist only its digest.
+    const token = randomBytes(32).toString('base64url');
+    const expiresAt = new Date(clock() + 30 * 60_000);
+    const base = configuredPublicBase(env);
+    // This advisory lock avoids reversing the action-token/user lock order used by resetPassword().
+    await queryable.query('SELECT pg_advisory_xact_lock(hashtext($1))', ['virgoscorpio_hub-password-reset:' + user.id]);
+    const recent = await queryable.query("SELECT 1 FROM identity_action_tokens WHERE user_id=$1 AND purpose='password-reset' AND created_at > now() - interval '120 seconds' LIMIT 1", [user.id]);
+    if (recent.rows && recent.rows.length > 0) return { accepted: true };
+    await queryable.query("UPDATE identity_action_tokens SET consumed_at=now() WHERE user_id=$1 AND purpose='password-reset' AND consumed_at IS NULL", [user.id]);
+    await queryable.query("INSERT INTO identity_action_tokens(user_id,purpose,token_hash,expires_at) VALUES($1,'password-reset',$2,$3)", [user.id, digest(token), expiresAt]);
+    await queryable.query("INSERT INTO mail_outbox(recipient,template,payload) VALUES($1,'password-reset',$2::jsonb)", [user.email, JSON.stringify({
+      resetUrl: base + '/reset-password?token=' + encodeURIComponent(token),
+      expiresAt: expiresAt.toISOString()
+    })]);
+    return { accepted: true, ...(env.NODE_ENV !== 'production' && env.VIRGOSCORPIO_HUB_EXPOSE_DEV_TOKENS === 'true' ? { developmentToken: token } : {}) };
+  }
+
   return Object.freeze({
     async bootstrapOwner({ email: inputEmail, password, displayName, siteSlug = 'main', siteName = 'Main Site' }) {
       const email = normalizeEmail(inputEmail);
@@ -403,31 +428,52 @@ function createIdentityService({ pool, env = process.env, clock = () => Date.now
       finally { client.release(); }
     },
 
-    async requestPasswordReset({ email: inputEmail }) {
-      const email = normalizeEmail(inputEmail); if (!email) return { accepted: true };
-      const result = await pool.query("SELECT id,email FROM users WHERE lower(email)=$1 AND status='active' LIMIT 1", [email]);
-      const user = result.rows[0]; if (!user) return { accepted: true };
-      const token = randomBytes(32).toString('base64url'); const expiresAt = new Date(clock() + 30 * 60_000);
-      const base = configuredPublicBase(env);
-      const client = await pool.connect();
-      try {
-        await client.query('BEGIN');
-        // Serialize reset requests without taking the users row lock. Reset acceptance locks
-        // the action-token row before updating the user; using the same row lock here
-        // would invert order (user -> token versus token -> user) and permit deadlocks.
-        // The transaction-scoped advisory lock still serializes requests per account.
-        await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', ['virgoscorpio_hub-password-reset:' + user.id]);
-        const recent = await client.query("SELECT 1 FROM identity_action_tokens WHERE user_id=$1 AND purpose='password-reset' AND created_at > now() - interval '120 seconds' LIMIT 1", [user.id]);
-        if (recent.rows && recent.rows.length > 0) {
-          await client.query('ROLLBACK');
-          return { accepted: true };
+    async enqueuePasswordResetRequest({ email: inputEmail }) {
+      const email = normalizeEmail(inputEmail);
+      if (!email) return { accepted: true };
+      const configuredMaximum = env.VIRGOSCORPIO_HUB_PASSWORD_RESET_QUEUE_MAX_PENDING;
+      const maxPending = configuredMaximum === undefined || configuredMaximum === '' ? 5_000 : Number(configuredMaximum);
+      if (!Number.isSafeInteger(maxPending) || maxPending < 1 || maxPending > 100_000) {
+        throw authError(500, 'ERR_VIRGOSCORPIO_HUB_PASSWORD_RESET_QUEUE_CONFIG', 'VIRGOSCORPIO_HUB_PASSWORD_RESET_QUEUE_MAX_PENDING must be an integer from 1 to 100000.');
+      }
+      return withTransaction(pool, async client => {
+        // Serialize capacity and per-target cooldown checks across API replicas.
+        await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', ['virgoscorpio_hub-password-reset-queue-capacity']);
+        const recent = await client.query("SELECT 1 FROM password_reset_requests WHERE target_email=$1 AND status IN ('pending','processing','completed') AND created_at > now() - interval '120 seconds' LIMIT 1", [email]);
+        if (recent.rows[0]) return { accepted: true };
+        const count = await client.query("SELECT count(*)::integer AS pending FROM password_reset_requests WHERE status IN ('pending','processing')");
+        if (Number(count.rows[0]?.pending || 0) >= maxPending) {
+          throw authError(503, 'ERR_VIRGOSCORPIO_HUB_PASSWORD_RESET_QUEUE_FULL', 'Password reset is temporarily unavailable. Please try again later.');
         }
-        await client.query("UPDATE identity_action_tokens SET consumed_at=now() WHERE user_id=$1 AND purpose='password-reset' AND consumed_at IS NULL", [user.id]);
-        await client.query("INSERT INTO identity_action_tokens(user_id,purpose,token_hash,expires_at) VALUES($1,'password-reset',$2,$3)", [user.id, digest(token), expiresAt]);
-        await client.query("INSERT INTO mail_outbox(recipient,template,payload) VALUES($1,'password-reset',$2::jsonb)", [user.email, JSON.stringify({ resetUrl: `${base}/reset-password?token=${encodeURIComponent(token)}`, expiresAt: expiresAt.toISOString() })]);
-        await client.query('COMMIT');
-      } catch (error) { await client.query('ROLLBACK').catch(() => {}); throw error; } finally { client.release(); }
-      return { accepted: true, ...(env.NODE_ENV !== 'production' && env.VIRGOSCORPIO_HUB_EXPOSE_DEV_TOKENS === 'true' ? { developmentToken: token } : {}) };
+        await client.query('INSERT INTO password_reset_requests(target_email) VALUES($1)', [email]);
+        return { accepted: true };
+      });
+    },
+
+    async processPasswordResetRequest({ id }) {
+      if (typeof id !== 'string' || !UUID_RE.test(id)) {
+        throw authError(400, 'ERR_VIRGOSCORPIO_HUB_PASSWORD_RESET_REQUEST_ID_INVALID', 'Password reset request identifier is invalid.');
+      }
+      return withTransaction(pool, async client => {
+        const selected = await client.query('SELECT id,target_email,status FROM password_reset_requests WHERE id=$1 FOR UPDATE', [id]);
+        const request = selected.rows[0];
+        if (!request || request.status !== 'processing' || !request.target_email) return { processed: false };
+        // Token issuance, mail-outbox insertion and queue acknowledgement share one PostgreSQL transaction.
+        await createPasswordResetForEmail(client, request.target_email);
+        await client.query("UPDATE password_reset_requests SET status='completed',processed_at=now(),locked_at=NULL,last_error_code=NULL,target_email=CASE WHEN created_at > now() - interval '120 seconds' THEN target_email ELSE NULL END WHERE id=$1 AND status='processing'", [id]);
+        return { processed: true };
+      });
+    },
+
+    async requestPasswordReset({ email: inputEmail }) {
+      const email = normalizeEmail(inputEmail);
+      if (!email) return { accepted: true };
+      // Preserve the existing fast active-user lookup before opening a write transaction.
+      // Queue processing deliberately performs this lookup on its transaction client.
+      const lookup = await pool.query("SELECT id,email FROM users WHERE lower(email)=$1 AND status='active' LIMIT 1", [email]);
+      const user = lookup.rows[0];
+      if (!user) return { accepted: true };
+      return withTransaction(pool, client => createPasswordResetForEmail(client, email, user));
     },
 
     async resetPassword({ token, password }) {

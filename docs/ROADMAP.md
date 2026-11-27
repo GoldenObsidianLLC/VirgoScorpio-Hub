@@ -1,22 +1,23 @@
 ## Historical mainline baseline before F1.72 merge — 25 November 2026 (America/Chicago)
 
-## Current authoritative status — 26 November 2026
+## Current authoritative status — 26 November 2026 (reconciled after PR #305 merge)
 
-- Main: `a1ab72cce3c11e0e9113831e72bab5954e867a81`. Exact-main run #45902431703 passed all seven workflow jobs. Node 22/24 each passed 1,113/1,113 Hub and 94/94 EnginEx tests; PostgreSQL/Memgraph 200/200; 21/21 fresh and idempotent migrations; browser smoke 9/9; CodeQL, signed attestations and evidence consolidation.
-- Canonical readiness artifact #15155968721: 8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN. `readyForProduction=false`, NOT_PRODUCTION_CERTIFIED / NO-GO. Partial results are human dependency/lockfile review and a service-less diagnostic with 54/55 skipped; the latter is not the live integration result.
-- Merged increments: F1.73 / PR #304, and runtime PRs #265, #266, #270 and #269. Their merge SHAs and features are documented in the 26 November release-gate report.
-- Current open PRs: #274 (password-reset timing mitigation, Changes requested) and #305 (documentation-only release-gate refresh). #274 is blocked by a duplicate handler declaration, non-durable fire-and-forget request acceptance and mock-only tests that do not cover the real route/outbox boundary.
-- The Aikido proposal audit in issue #277 is a PR-state summary, not scanner-fingerprint disposition. Current GitHub open-PR state is authoritative for PR inventory.
+- Main: 5be81f7388c2c32484377b918010ac399cafd574. Exact-main Actions run [#45904695214](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45904695214) completed successfully with all seven jobs. Source-bound readiness artifact [#15157402047](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/45904695214/artifacts/15157402047).
+- Exact-main evidence: Node 22/24 each passed 1,113/1,113 Hub and 94/94 EnginEx tests; PostgreSQL/Memgraph passed 200/200; 21 migrations passed fresh and idempotent passes; browser smoke, CodeQL, signed supply-chain attestation and evidence consolidation passed. Dependency audits reported zero vulnerabilities.
+- Readiness remains 8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN; readyForProduction=false, NOT_PRODUCTION_CERTIFIED / NO-GO. Partials: qualified human dependency/lockfile review and service-less diagnostics (1 pass / 54 skips), not the hosted integration.
+- PR #305 is merged. PR #274 remains open with Changes requested: duplicate handler declaration, generic 202 before durable work, and mock-only tests that do not cover the actual route/service/outbox boundary. Do not merge #274 as submitted.
+- F1.74 local candidate adds a bounded PostgreSQL reset-request queue, durable-before-202 acceptance, atomic token/outbox/queue completion, shared worker retries/recovery, PII retention controls, and actual route/service/worker unit coverage. It is not in main and does not close PR #274 or issue #13.
+- Production gaps remain #14 tenant review, #23 human dependency/SBOM review, #25 independent security assessment, #24 load/backup/restore, #26 operations/release-owner sign-off, #13 scope/provider acceptance, plus live identity/email, malware, cloud, Stripe, commerce, community, accessibility, plugin isolation and production observability evidence.
 
 ### Execution order
 
-1. Keep #274 blocked. Replace in-memory deferred work with a bounded durable reset-request record created before generic acknowledgement; process it via a worker; add actual route/service tests, restart recovery, idempotency, abuse-quota and response-timing coverage.
+1. Complete and review F1.74; run full supported-Node tests, fresh/idempotent PostgreSQL migration checks and queue-worker integration; open a reviewable PR. Keep #274 blocked until a reviewed replacement is ready.
 2. Complete independent tenant-isolation, dependency/SBOM and platform-security reviews.
-3. Complete external identity/email/MFA, malware, cloud provider, Stripe, commerce, community and full accessibility/product-parity acceptance.
+3. Complete external identity/email/MFA, malware, cloud, Stripe, commerce, community and full accessibility/product-parity acceptance.
 4. Complete load/soak, fault injection, backup/restore, production OTLP, deployment runbooks, secrets/rollback and monitoring evidence.
-5. Regenerate exact-source readiness after implementation is stable and obtain explicit release-owner sign-off only after all required gates are satisfied.
+5. Regenerate exact-source readiness after implementation is stable and obtain release-owner sign-off only after all required gates pass.
 
-Older roadmap entries below are historical planning context; this snapshot is authoritative for current main and open-PR status. Package 0.6.2 remains private/unreleased. Do not tag, publish, deploy or promote while readiness is NO-GO.
+This snapshot is authoritative; older entries below are historical planning context. Package 0.6.2 remains private/unreleased. Do not tag, publish, deploy or promote while readiness is NO-GO.
 
 ### Merged - F1.71 MFA enrollment step-up reauthentication ([PR #256](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/256); main SHA de16a4275828fa6411800bbaf20c16b51186dc05)
 

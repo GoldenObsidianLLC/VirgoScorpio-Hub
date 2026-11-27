@@ -17,6 +17,12 @@
 
 Use different database identities for migration and runtime. Grant the runtime only the least privilege it needs. Do not assume `DATABASE_URL` can use a superuser in production. Back up PostgreSQL, media storage and relevant deployment/configuration manifests; test restores regularly.
 
+## Password-reset queue operations
+
+- Mail delivery and password-reset queue worker (npm run start:mail-worker): this is separate from npm run start:worker, which runs the graph-projection outbox consumer. Run the mail worker as its own supervised process alongside the API; it drains both password-reset requests and mail_outbox messages. Configure the same PostgreSQL database and capacity setting across API and mail-worker instances.
+Public non-development reset requests are acknowledged only after migration 0022_password_reset_request_queue.sql commits a bounded request row. Configure VIRGOSCORPIO_HUB_PASSWORD_RESET_QUEUE_MAX_PENDING (default 5,000; allowed 1..100,000) consistently across API instances. Target cooldown is 120 seconds and is enforced in PostgreSQL under a transaction-scoped advisory lock. The existing mail worker claims up to ten requests per pass with SKIP LOCKED, retries with bounded exponential backoff, recovers five-minute abandoned claims, and terminalizes at eight attempts. Token hash, mail-outbox insert and queue completion are one transaction. Target email PII is scrubbed after 120 seconds; terminal queue rows are removed after 24 hours. Monitor pending depth/oldest age, retry and terminal counts, and downstream mail-outbox health. Mail-provider credentials, sender-domain verification, delivery/bounce monitoring and live E2E acceptance remain separate release gates. The non-production VIRGOSCORPIO_HUB_EXPOSE_DEV_TOKENS=true path bypasses the durable queue and must never be set in production.
+
+
 ## Background processes
 
 - **Outbox worker** (`npm run start:worker`): consumes the persisted `graph.projection.v1` consumer group from PostgreSQL and applies allow-listed content, workflow-status, taxonomy and relationship events to Memgraph. Requires migrations 0010–0013. Delivery attempts and dead letters live in `outbox_deliveries`; the source `outbox_events` rows remain the replay source. Configure `VIRGOSCORPIO_HUB_GRAPH_CONSUMER_GROUP`, batch/dispatch sizes, lease duration, max attempts and poll interval through the `VIRGOSCORPIO_HUB_GRAPH_*` variables when needed. Monitor group backlog, retries and dead letters; event groups have independent subscriptions and must not be treated as authorization controls.

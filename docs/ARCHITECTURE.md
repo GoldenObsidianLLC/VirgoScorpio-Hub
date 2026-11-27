@@ -24,6 +24,11 @@ flowchart TB
 
 Arrows describe conceptual dependencies, not necessarily synchronous calls or a required deployment topology. The worker, MCP server, and plugin runner have distinct entry points and should be configured with only the permissions and resources they need.
 
+## Durable password-reset request flow
+
+Public reset requests pass the per-IP limiter and are durably inserted into password_reset_requests before the route returns its generic 202 response. A PostgreSQL transaction-scoped advisory lock serializes global pending-capacity and 120-second target-cooldown checks across API replicas. The shared mail worker claims due rows with the existing SKIP LOCKED pattern, applies bounded retry/backoff, and reclaims five-minute abandoned claims. Identity-token issuance, mail-outbox insertion and queue completion share one transaction; reset-token values are never stored in plaintext. Completed/failed rows scrub target addresses after the cooldown and are pruned after 24 hours. The explicit developer-token shortcut is non-production only. This queue is a reliability boundary, not proof of provider delivery or production readiness.
+
+
 ## Applications
 
 | Path | Responsibility to investigate |
