@@ -13,7 +13,7 @@
 
 ### Execution order
 
-1. Complete PR #307 first: exact-head push #45954348958 and PR #45954356918 passed on code head `5085695b5fa938e4036bd2a81f4194a41b4c4160`. Review the shared helper used by static readiness, the migration executor and fresh-migration evidence runner; treat the one COMMENTED owner self-review as maintainer evidence only; obtain the required APPROVED review before merge. Preserve prior source-bound artifacts and rerun mainline attestation after merge.
+1. Complete PR #307 first: exact-head push #45954348958 and PR #45954356918 passed on code head `5085695b5fa938e4036bd2a81f4194a41b4c4160`. Review the shared helper used by static readiness, the migration executor and fresh-migration evidence runner; the single-maintainer ruleset requires zero approving reviews. After the final documentation-head required checks pass and inline threads remain resolved, merge under the active ruleset. Preserve prior source-bound artifacts and rerun mainline attestation after merge.
 2. Only after #307 merges, rebase PR #308 onto `main`, retarget its base to `main`, review the final site → user/membership/role lock ordering and no-side-effect denial tests, then obtain fresh exact-head Node 22/24, PostgreSQL/Memgraph zero-skip, CodeQL and evidence checks.
 3. Resume parent issue #124 with a source-anchored tenant/site authorization review; prioritize demonstrated authorization gaps at transaction boundaries over speculative feature work.
 4. Complete independent tenant, dependency/SBOM and platform-security reviews (#14, #23, #25), then load/restore, provider, product-parity, observability and release-owner gates (#24, #26, #13, #32).

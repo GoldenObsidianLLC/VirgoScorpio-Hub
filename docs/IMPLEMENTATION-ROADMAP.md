@@ -21,7 +21,7 @@
 
 ### Next implementation steps
 
-1. Complete PR #307: exact-head push #45954348958 and PR #45954356918 passed on `5085695b5fa938e4036bd2a81f4194a41b4c4160`; the shared inventory helper is used by static readiness, migration execution and fresh-migration evidence. Treat the single COMMENTED owner self-review as maintainer evidence, not approval; preserve the historical mainline evidence. Merge only after the required approval.
+1. Complete PR #307: exact-head push #45954348958 and PR #45954356918 passed on `5085695b5fa938e4036bd2a81f4194a41b4c4160`; the shared inventory helper is used by static readiness, migration execution and fresh-migration evidence. The active single-maintainer ruleset requires zero approving reviews. After final documentation-head checks pass and inline threads remain resolved, merge under that ruleset. Preserve historical mainline evidence and rerun exact-main attestation after merge.
 2. Resume parent issue #124 with a source-anchored tenant/site authorization review. Prioritize a demonstrated authorization bypass or transaction-boundary race over speculative feature expansion.
 3. Complete independent tenant-isolation, dependency/SBOM and platform-security reviews (#14, #23, #25), then load/restore, provider, product-parity, observability and release-owner gates (#24, #26, #13, #32).
 4. Continue individual scanner-fingerprint/source-evidence mapping under #234, #235 and #277; PR status inventory is not a substitute for scanner remediation evidence.
