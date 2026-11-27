@@ -345,6 +345,10 @@ async function handleReports(ctx, siteId, reportId, method) {
     if (!REPORT_CATEGORIES.has(body.category)) routeError(ctx, 400, 'ERR_VIRGOSCORPIO_HUB_REPORT_CATEGORY', 'Report category is invalid.');
     const detail = cleanRequiredText(body.detail, MAX_REPORT_DETAIL_LENGTH);
     const report = await withTransaction(ctx.localPool, async client => {
+      // Revalidate the reporter after request parsing, inside the mutation
+      // transaction, so a committed site-membership revocation wins the race.
+      await assertActiveSiteMembership(client, ctx, siteId, ctx.actor.user.id);
+
       // Serialize rate-limit accounting by reporter so concurrent requests cannot
       // all pass the count check and exceed the documented ceiling.
       await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`virgoscorpio_hub:report-rate:${siteId}:${ctx.actor.user.id}`]);
@@ -380,6 +384,16 @@ async function handleReports(ctx, siteId, reportId, method) {
     if (!['reviewing', 'resolved', 'dismissed'].includes(body.status)) routeError(ctx, 400, 'ERR_VIRGOSCORPIO_HUB_REPORT_STATUS', 'A report may be moved to reviewing, resolved, or dismissed.');
     const note = cleanRequiredText(body.moderationNote, MAX_REPORT_DETAIL_LENGTH);
     const report = await withTransaction(ctx.localPool, async client => {
+      // The preflight capability check protects request routing; this
+      // transaction-scoped check protects the actual moderation write.
+      await assertSiteCapabilityInTransaction(
+        client,
+        ctx,
+        siteId,
+        ctx.actor.user.id,
+        'community:moderate',
+      );
+
       const updated = await client.query(
         'UPDATE social_reports SET status=$3,moderation_note=$4,reviewed_by=$5,updated_at=now() WHERE site_id=$1 AND id=$2 RETURNING id,site_id,reporter_id,target_type,target_id,category,detail,status,moderation_note,reviewed_by,updated_at',
         [siteId, reportId, body.status, note, ctx.actor.user.id]
