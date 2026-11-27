@@ -13,6 +13,16 @@ const MAIL_OUTBOX_MAX_ATTEMPTS = 8;
 const MAIL_OUTBOX_LOCK_TIMEOUT_MINUTES = 5;
 const MAIL_OUTBOX_INTERRUPTED_ERROR = 'ERR_VIRGOSCORPIO_HUB_MAIL_WORKER_INTERRUPTED';
 
+function getBoundedRetryDelayMs(attempts) {
+  const retryAttempt = Math.max(0, Math.min(14, Math.trunc(Number(attempts) || 0)));
+  return Math.min(6 * 60 * 60_000, 1_000 * (2 ** retryAttempt));
+}
+
+function getSafeWorkerErrorCode(error, fallback) {
+  const candidate = typeof error?.code === 'string' ? error.code : fallback;
+  return /^ERR_[A-Z0-9_.-]{1,96}$/.test(candidate) ? candidate : fallback;
+}
+
 async function processBatch(pool, {
   limit = 10,
   logger = console,
@@ -40,9 +50,7 @@ async function processBatch(pool, {
     for (const row of stale.rows) {
       const attempts = Number(row.attempts || 0) + 1;
       const terminal = attempts >= MAIL_OUTBOX_MAX_ATTEMPTS;
-      const delayMs = terminal
-        ? 0
-        : Math.min(6 * 60 * 60_000, 1_000 * (2 ** Math.min(attempts, 14)));
+      const delayMs = terminal ? 0 : getBoundedRetryDelayMs(attempts);
       await client.query(
         `UPDATE mail_outbox SET status=$2,attempts=$3,
           available_at=CASE WHEN $2='pending' THEN now()+($4 * interval '1 millisecond') ELSE available_at END,
@@ -89,9 +97,8 @@ async function processBatch(pool, {
         error.code === 'ERR_VIRGOSCORPIO_HUB_MAIL_PROVIDER' ||
         error.code === 'ERR_VIRGOSCORPIO_HUB_MAIL_CONFIG' ||
         error.code === 'ERR_VIRGOSCORPIO_HUB_MAIL_DISABLED';
-      const delayMs = Math.min(6 * 60 * 60_000, 1_000 * (2 ** Math.min(attempts, 14)));
-      const rawErrorCode = typeof error?.code === 'string' ? error.code : 'ERR_VIRGOSCORPIO_HUB_MAIL_FAILED';
-      const errorCode = /^ERR_[A-Z0-9_.-]{1,96}$/.test(rawErrorCode) ? rawErrorCode : 'ERR_VIRGOSCORPIO_HUB_MAIL_FAILED';
+      const delayMs = getBoundedRetryDelayMs(attempts);
+      const errorCode = getSafeWorkerErrorCode(error, 'ERR_VIRGOSCORPIO_HUB_MAIL_FAILED');
       await pool.query(
         "UPDATE mail_outbox SET status=$2,attempts=$3,available_at=now()+($4 * interval '1 millisecond'),last_error_code=$5,locked_at=NULL,payload=CASE WHEN $2='failed' THEN '{}'::jsonb ELSE payload END WHERE id=$1",
         [row.id, terminal ? 'failed' : 'pending', attempts, delayMs, errorCode]
@@ -130,7 +137,7 @@ async function processPasswordResetRequestBatch(pool, { identity, limit = 10, lo
     for (const row of stale.rows) {
       const attempts = Number(row.attempts || 0);
       const terminal = attempts >= MAIL_OUTBOX_MAX_ATTEMPTS;
-      const delayMs = Math.min(6 * 60 * 60_000, 1_000 * (2 ** Math.min(attempts, 14)));
+      const delayMs = getBoundedRetryDelayMs(attempts);
       await client.query(
         "UPDATE password_reset_requests SET status=$2,available_at=CASE WHEN $2='pending' THEN now()+($3 * interval '1 millisecond') ELSE available_at END,processed_at=CASE WHEN $2='failed' THEN now() ELSE NULL END,locked_at=NULL,last_error_code=$4,target_email=CASE WHEN $2='failed' AND created_at <= now() - interval '120 seconds' THEN NULL ELSE target_email END WHERE id=$1 AND status='processing'",
         [row.id, terminal ? 'failed' : 'pending', delayMs, PASSWORD_RESET_REQUEST_INTERRUPTED_ERROR]
@@ -160,9 +167,8 @@ async function processPasswordResetRequestBatch(pool, { identity, limit = 10, lo
     } catch (error) {
       const attempts = Number(row.attempts || 0);
       const terminal = attempts >= MAIL_OUTBOX_MAX_ATTEMPTS;
-      const delayMs = Math.min(6 * 60 * 60_000, 1_000 * (2 ** Math.min(attempts, 14)));
-      const rawCode = typeof error?.code === 'string' ? error.code : 'ERR_VIRGOSCORPIO_HUB_PASSWORD_RESET_WORKER_FAILED';
-      const errorCode = /^[A-Za-z0-9_.:-]{1,100}$/.test(rawCode) ? rawCode : 'ERR_VIRGOSCORPIO_HUB_PASSWORD_RESET_WORKER_FAILED';
+      const delayMs = getBoundedRetryDelayMs(attempts);
+      const errorCode = getSafeWorkerErrorCode(error, 'ERR_VIRGOSCORPIO_HUB_PASSWORD_RESET_WORKER_FAILED');
       await pool.query(
         "UPDATE password_reset_requests SET status=$2,available_at=CASE WHEN $2='pending' THEN now()+($3 * interval '1 millisecond') ELSE available_at END,processed_at=CASE WHEN $2='failed' THEN now() ELSE NULL END,locked_at=NULL,last_error_code=$4,target_email=CASE WHEN $2='failed' AND created_at <= now() - interval '120 seconds' THEN NULL ELSE target_email END WHERE id=$1 AND status='processing'",
         [row.id, terminal ? 'failed' : 'pending', delayMs, errorCode]
