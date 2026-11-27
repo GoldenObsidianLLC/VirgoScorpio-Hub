@@ -67,6 +67,27 @@ test('migration inventory rejects SQL-named directories and other non-regular en
   }
 });
 
+test('migration inventory enforces the executable four-digit SQL filename contract', () => {
+  const inventory = inspectMigrationFileNames([
+    '0001_initial.sql',
+    '0002_add-feature.sql',
+    '0003_bad.name.sql',
+    '00004_five_digit.sql',
+    '0000_zero.sql',
+  ]);
+
+  assert.equal(inventory.valid, false);
+  assert.deepEqual(inventory.migrationFiles, [
+    '0001_initial.sql',
+    '0002_add-feature.sql',
+  ]);
+  assert.deepEqual(inventory.invalidSqlFiles, [
+    '00004_five_digit.sql',
+    '0000_zero.sql',
+    '0003_bad.name.sql',
+  ]);
+});
+
 test('migration inventory ignores non-SQL entries', () => {
   const inventory = inspectMigrationFileNames([
     '0001_initial.sql',

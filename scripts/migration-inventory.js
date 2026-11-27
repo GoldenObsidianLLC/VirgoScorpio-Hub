@@ -2,7 +2,7 @@
 
 const fs = require('node:fs');
 
-const MIGRATION_FILE_PATTERN = /^(\d{4})_[a-z0-9][a-z0-9._-]*\.sql$/i;
+const MIGRATION_FILE_PATTERN = /^(\d{4})_[a-z0-9_-]+\.sql$/i;
 
 /**
  * Inspect migration directory entry names as a contiguous numbered sequence.
