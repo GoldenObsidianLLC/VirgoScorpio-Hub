@@ -8,7 +8,17 @@ const { handlePlatformRoute } = require('../../apps/api/src/platform-routes');
 
 const enabled = Boolean(process.env.DATABASE_URL && process.env.VIRGOSCORPIO_HUB_RUN_POSTGRES_INTEGRATION === 'true');
 
-function apiContext({ pool, siteId, user, method, pathname, body = {}, query = '' }) {
+function apiContext({
+  pool,
+  siteId,
+  user,
+  method,
+  pathname,
+  body = {},
+  query = '',
+  afterReadJson = null,
+  afterCapabilityCheck = null,
+}) {
   const url = new URL(`http://virgoscorpio-hub.integration${pathname}${query}`);
   const res = {};
   return {
@@ -27,8 +37,14 @@ function apiContext({ pool, siteId, user, method, pathname, body = {}, query = '
         [requestedSiteId, actor.user.id, capability]
       );
       if (!result.rows[0]) throw Object.assign(new Error('Capability required.'), { code: 'ERR_VIRGOSCORPIO_HUB_CAPABILITY', statusCode: 403 });
+      if (typeof afterCapabilityCheck === 'function') {
+        await afterCapabilityCheck({ actor, requestedSiteId, capability });
+      }
     },
-    async readJson() { return body; },
+    async readJson() {
+      if (typeof afterReadJson === 'function') await afterReadJson();
+      return body;
+    },
     sendJson(response, statusCode, payload) { response.statusCode = statusCode; response.payload = payload; return true; },
     fail(statusCode, code, message, details) { return Object.assign(new Error(message), { statusCode, code, details }); }
   };
@@ -146,4 +162,170 @@ test('community direct messages, blocks, reports, notifications, and moderation 
   assert.ok(readAll.payload.markedRead >= 1);
   const moderationAudit = await pool.query("SELECT count(*)::int AS count FROM virgoscorpio_hub_moderation_actions WHERE site_id=$1 AND target_id=$2", [siteId, fixtures.reportId]);
   assert.equal(moderationAudit.rows[0].count, 1);
+
+  // A successful request-time membership check is not permission to mutate
+  // after a site administrator has committed the actor's revocation.
+  function createGate() {
+    let signalEntered;
+    let release;
+    const entered = new Promise(resolve => { signalEntered = resolve; });
+    const pending = new Promise(resolve => { release = resolve; });
+    return {
+      entered,
+      wait: pending,
+      signal: signalEntered,
+      release,
+    };
+  }
+
+  const reportNotificationCountBefore = await pool.query(
+    "SELECT count(*)::int AS count FROM social_notifications WHERE site_id=$1 AND notification_type='community.report.created'",
+    [siteId],
+  );
+  const reportSubmissionGate = createGate();
+  const staleSubmission = invoke({
+    pool,
+    siteId,
+    user: bob,
+    method: 'POST',
+    pathname: '/api/v1/sites/' + siteId + '/community/reports',
+    body: {
+      targetType: 'user',
+      targetId: alice.id,
+      category: 'other',
+      detail: 'Must not persist after reporter membership is revoked.',
+    },
+    afterReadJson: async () => {
+      reportSubmissionGate.signal();
+      await reportSubmissionGate.wait;
+    },
+  });
+  await reportSubmissionGate.entered;
+  const revokedReporter = await pool.query(
+    'DELETE FROM site_memberships WHERE site_id=$1 AND user_id=$2 RETURNING user_id',
+    [siteId, bob.id],
+  );
+  assert.equal(revokedReporter.rowCount, 1);
+  reportSubmissionGate.release();
+  await assert.rejects(
+    staleSubmission,
+    error => error.statusCode === 403 &&
+      error.code === 'ERR_VIRGOSCORPIO_HUB_TENANT_FORBIDDEN',
+  );
+  const staleSubmissionRows = await pool.query(
+    "SELECT count(*)::int AS count FROM social_reports WHERE site_id=$1 AND reporter_id=$2 AND detail=$3",
+    [siteId, bob.id, 'Must not persist after reporter membership is revoked.'],
+  );
+  assert.equal(staleSubmissionRows.rows[0].count, 0);
+  const reportNotificationCountAfter = await pool.query(
+    "SELECT count(*)::int AS count FROM social_notifications WHERE site_id=$1 AND notification_type='community.report.created'",
+    [siteId],
+  );
+  assert.equal(
+    reportNotificationCountAfter.rows[0].count,
+    reportNotificationCountBefore.rows[0].count,
+    'A revoked reporter must not notify moderators.',
+  );
+
+  // Account disablement also invalidates the preflight result. Restore the
+  // membership first so the request reaches body parsing before disablement.
+  await pool.query(
+    'INSERT INTO site_memberships(site_id,user_id,role_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING',
+    [siteId, bob.id, roleId],
+  );
+  const accountRevocationGate = createGate();
+  const reportAccountNotificationCountBefore = await pool.query(
+    "SELECT count(*)::int AS count FROM social_notifications WHERE site_id=$1 AND notification_type='community.report.created'",
+    [siteId],
+  );
+  const staleAccountSubmission = invoke({
+    pool,
+    siteId,
+    user: bob,
+    method: 'POST',
+    pathname: '/api/v1/sites/' + siteId + '/community/reports',
+    body: {
+      targetType: 'user',
+      targetId: alice.id,
+      category: 'other',
+      detail: 'Must not persist after reporter account is disabled.',
+    },
+    afterReadJson: async () => {
+      accountRevocationGate.signal();
+      await accountRevocationGate.wait;
+    },
+  });
+  await accountRevocationGate.entered;
+  const disabledReporter = await pool.query(
+    "UPDATE users SET status='disabled' WHERE id=$1 RETURNING id",
+    [bob.id],
+  );
+  assert.equal(disabledReporter.rowCount, 1);
+  accountRevocationGate.release();
+  await assert.rejects(
+    staleAccountSubmission,
+    error => error.statusCode === 403 &&
+      error.code === 'ERR_VIRGOSCORPIO_HUB_TENANT_FORBIDDEN',
+  );
+  const disabledReporterRows = await pool.query(
+    "SELECT count(*)::int AS count FROM social_reports WHERE site_id=$1 AND reporter_id=$2 AND detail=$3",
+    [siteId, bob.id, 'Must not persist after reporter account is disabled.'],
+  );
+  assert.equal(disabledReporterRows.rows[0].count, 0);
+  const reportNotificationCountAfterAccountDisable = await pool.query(
+    "SELECT count(*)::int AS count FROM social_notifications WHERE site_id=$1 AND notification_type='community.report.created'",
+    [siteId],
+  );
+  assert.equal(
+    reportNotificationCountAfterAccountDisable.rows[0].count,
+    reportAccountNotificationCountBefore.rows[0].count,
+    'A disabled reporter must not notify moderators.',
+  );
+
+  // Repeat the preflight/revocation ordering for the privileged report status
+  // mutation. Its capability must still exist at the SQL write boundary.
+  await pool.query(
+    "UPDATE social_reports SET status='open',moderation_note=NULL,reviewed_by=NULL WHERE site_id=$1 AND id=$2",
+    [siteId, fixtures.reportId],
+  );
+  const reportModerationGate = createGate();
+  const staleModeration = invoke({
+    pool,
+    siteId,
+    user: alice,
+    method: 'PATCH',
+    pathname: '/api/v1/sites/' + siteId + '/community/reports/' + fixtures.reportId,
+    body: { status: 'dismissed', moderationNote: 'Must not persist after capability revocation.' },
+    afterCapabilityCheck: async ({ capability }) => {
+      assert.equal(capability, 'community:moderate');
+      reportModerationGate.signal();
+      await reportModerationGate.wait;
+    },
+  });
+  await reportModerationGate.entered;
+  const revokedModerationCapability = await pool.query(
+    "UPDATE roles SET capabilities=capabilities-'community:moderate' WHERE id=$1 RETURNING capabilities",
+    [roleId],
+  );
+  assert.equal(revokedModerationCapability.rowCount, 1);
+  assert.equal(
+    revokedModerationCapability.rows[0].capabilities.includes('community:moderate'),
+    false,
+  );
+  reportModerationGate.release();
+  await assert.rejects(
+    staleModeration,
+    error => error.statusCode === 403 &&
+      error.code === 'ERR_VIRGOSCORPIO_HUB_FORBIDDEN',
+  );
+  const unchangedReport = await pool.query(
+    'SELECT status FROM social_reports WHERE site_id=$1 AND id=$2',
+    [siteId, fixtures.reportId],
+  );
+  assert.equal(unchangedReport.rows[0].status, 'open');
+  const unchangedModerationAudit = await pool.query(
+    "SELECT count(*)::int AS count FROM virgoscorpio_hub_moderation_actions WHERE site_id=$1 AND target_id=$2",
+    [siteId, fixtures.reportId],
+  );
+  assert.equal(unchangedModerationAudit.rows[0].count, 1);
 });
