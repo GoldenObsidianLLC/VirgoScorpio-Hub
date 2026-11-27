@@ -97,6 +97,20 @@ test(
     };
     delete env.VIRGOSCORPIO_HUB_API_TOKEN;
     const identity = createIdentityService({ pool, env });
+    let authorizeSiteInterceptor = null;
+    const apiIdentity = new Proxy(identity, {
+      get(target, property) {
+        if (property === 'authorizeSite') {
+          return async (...args) => {
+            const allowed = await target.authorizeSite(...args);
+            if (authorizeSiteInterceptor) await authorizeSiteInterceptor(args, allowed);
+            return allowed;
+          };
+        }
+        const value = Reflect.get(target, property, target);
+        return typeof value === 'function' ? value.bind(target) : value;
+      },
+    });
 
     t.after(async () => {
       if (server) {
@@ -303,7 +317,7 @@ test(
     server = createApiServer({
       env,
       pool,
-      identityService: identity,
+      identityService: apiIdentity,
       logger: { error() {} },
     });
     await new Promise((resolve, reject) => {
@@ -2422,10 +2436,7 @@ test(
       let preflightIntercepted = false;
       const preflight = new Promise(resolve => { preflightCompleted = resolve; });
       const preflightBarrier = new Promise(resolve => { resumePreflight = resolve; });
-      const originalAuthorizeSite = identity.authorizeSite;
-
-      identity.authorizeSite = async (...args) => {
-        const allowed = await originalAuthorizeSite.apply(identity, args);
+      authorizeSiteInterceptor = async args => {
         if (
           !preflightIntercepted &&
           args[0] === actorB.id &&
@@ -2436,7 +2447,6 @@ test(
           preflightCompleted();
           await preflightBarrier;
         }
-        return allowed;
       };
 
       try {
@@ -2483,10 +2493,22 @@ test(
             { relationName: 'sites' },
           );
 
-        await revocationClient.query(lockObserved ? 'COMMIT' : 'ROLLBACK');
+        // Commit revocation even if the unsafe route has already completed. This
+        // preserves the stale-preflight race ordering and leaves the actor revoked
+        // until the finally block restores the fixture membership.
+        await revocationClient.query('COMMIT');
         revocationOpen = false;
         profileOutcome = earlyOutcome || await profilePromise;
 
+        const profileAfter = await pool.query(
+          'SELECT display_name,bio,avatar_asset_id,website_url,visibility,metadata,version FROM social_profiles WHERE site_id=$1 AND user_id=$2',
+          [siteB, actorB.id]
+        );
+        assert.deepEqual(
+          profileAfter.rows,
+          profileBefore.rows,
+          'a profile write must not commit after site membership has been revoked',
+        );
         assert.equal(lockObserved, true, 'profile mutation must serialize against site-membership removal');
         assert.equal(profileOutcome.status, 403, 'a revoked site member must not update their profile');
         assert.equal(
@@ -2494,16 +2516,10 @@ test(
           'ERR_VIRGOSCORPIO_HUB_TENANT_FORBIDDEN',
           'the existing tenant-denial contract must be preserved',
         );
-
-        const profileAfter = await pool.query(
-          'SELECT display_name,bio,avatar_asset_id,website_url,visibility,metadata,version FROM social_profiles WHERE site_id=$1 AND user_id=$2',
-          [siteB, actorB.id]
-        );
-        assert.deepEqual(profileAfter.rows, profileBefore.rows, 'denied profile mutation must leave the profile row unchanged');
         await assertSiteAUnchanged();
       } finally {
         resumePreflight();
-        identity.authorizeSite = originalAuthorizeSite;
+        authorizeSiteInterceptor = null;
         if (revocationOpen) await revocationClient.query('ROLLBACK').catch(() => {});
         if (profilePromise && !profileOutcome) profileOutcome = await profilePromise.catch(() => null);
         revocationClient.release();
@@ -2512,6 +2528,44 @@ test(
           [siteB, actorB.id, roleId],
         ).catch(() => {});
       }
+
+      const activeProfileInput = {
+        displayName: 'Active Profile Positive Control',
+        bio: 'An active site member may still update their own profile.',
+        visibility: 'members',
+      };
+      const activeProfileResponse = await fetch(`${base}/api/v1/sites/${siteB}/community/profile`, {
+        method: 'PUT',
+        headers: { ...headers, 'content-type': 'application/json' },
+        body: JSON.stringify(activeProfileInput),
+      });
+      assert.equal(activeProfileResponse.status, 200, 'an active site member must retain the profile-write capability');
+      const activeProfilePayload = await activeProfileResponse.json();
+      assert.equal(activeProfilePayload.profile.display_name, activeProfileInput.displayName);
+      assert.equal(activeProfilePayload.profile.version, 1);
+
+      const staleVersionResponse = await fetch(`${base}/api/v1/sites/${siteB}/community/profile`, {
+        method: 'PUT',
+        headers: { ...headers, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          ...activeProfileInput,
+          displayName: 'Stale Version Must Not Persist',
+          expectedVersion: 0,
+        }),
+      });
+      assert.equal(staleVersionResponse.status, 409, 'the existing optimistic-version conflict must remain intact');
+      assert.equal(
+        (await staleVersionResponse.json()).code,
+        'ERR_VIRGOSCORPIO_HUB_VERSION_CONFLICT',
+      );
+      const unchangedAfterConflict = await pool.query(
+        'SELECT display_name,version FROM social_profiles WHERE site_id=$1 AND user_id=$2',
+        [siteB, actorB.id],
+      );
+      assert.deepEqual(unchangedAfterConflict.rows, [{
+        display_name: activeProfileInput.displayName,
+        version: 1,
+      }]);
     });
 
     const ownMessage = await fetch(`${base}/api/v1/sites/${siteB}/community/conversations/${conversationB}/messages`, { headers });
