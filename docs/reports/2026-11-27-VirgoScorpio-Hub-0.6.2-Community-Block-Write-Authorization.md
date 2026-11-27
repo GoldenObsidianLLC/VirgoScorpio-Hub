@@ -1,9 +1,9 @@
 # VirgoScorpio Hub 0.6.2 — F1.77 Community Block-Write Authorization Candidate
 
-**Tracking issue:** [#312](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/312)  
-**Branch:** `security/f1-77-community-block-write-authorization`  
-**Base:** `main` at `f823dca404ce38d66aeab170b7f889503adba6f4`  
-**Status:** implementation candidate; exact-head hosted CI and maintainer review pending  
+**Tracking issue:** [#312](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/312)
+**Branch:** `security/f1-77-community-block-write-authorization`
+**Base:** `main` at `f823dca404ce38d66aeab170b7f889503adba6f4`
+**Status:** exact-head hosted CI passed; single-maintainer review completed; merge decision pending
 **Package:** `virgoscorpio-hub@0.6.2` — private, unreleased
 
 ## Finding
@@ -52,7 +52,7 @@ The test restores fixture membership and the original reverse-block reason after
 | `node scripts/verify.js` | Pass; 241 required paths / 316 JavaScript files syntax-checked |
 | Tenant inventory generator/check | Pass; 28 families / 80 route patterns / 22 source files / 61 test references |
 | `git diff --check origin/main` | Pass |
-| Hosted PostgreSQL revocation races | Pending exact-head CI; no local live PostgreSQL configured |
+| Hosted PostgreSQL revocation races | Passed on exact final head in push and PR-context workflows: 203/203, zero failures/skips in both; local PostgreSQL is not configured |
 
 The full top-level unit suite passed on Windows/Node 26.12.1 after initializing the pinned EnginEx submodule at `d99e021f55664f006b5e65b4a58202f9c7bc4f4b`. The three skips are existing platform-conditional tests. The live PostgreSQL races in the nested integration fixture have not been run on the workstation; hosted CI remains the acceptance source for those tests.
 
@@ -60,4 +60,4 @@ The full top-level unit suite passed on Windows/Node 26.12.1 after initializing 
 
 No database schema/migration, public API response shape, dependency, lockfile, package-version or SemVer change is intended. No SemVer increment is warranted. The work covers only community block create/delete mutation authorization and deterministic participant locking; it does not certify all community workflows.
 
-Package 0.6.2 remains private/unreleased and production remains **NO-GO / NOT_PRODUCTION_CERTIFIED**. Exact-head hosted PostgreSQL, Node 22/24, browser, CodeQL and evidence workflows must pass before merge. Independent reviews #14/#25 and parent tenant-hardening issue #124 remain separate open obligations.
+Package 0.6.2 remains private/unreleased and production remains **NO-GO / NOT_PRODUCTION_CERTIFIED**. Final candidate head passed both push [#46049493631](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/46049493631) and PR-context [#46049550731](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/46049550731): Node 22/24 (1,145/1,145 each), PostgreSQL/Memgraph (203/203 with zero failures/skips), browser smoke (9/9), CodeQL and evidence consolidation. Feature-event signed lockfile/SBOM attestation was skipped by design; exact-main attestation remains a post-merge gate. Independent reviews #14/#25 and parent issue #124 remain separate open obligations.
