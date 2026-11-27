@@ -2469,7 +2469,7 @@ test(
         assert.equal(listOutcome.status, 403, 'a revoked site member must not list retained conversation rows');
         assert.equal(listOutcome.payload.code, 'ERR_VIRGOSCORPIO_HUB_TENANT_FORBIDDEN');
         assert.equal(JSON.stringify(listOutcome.payload).includes('Site B message control'), false);
-        assert.equal(listOutcome.payload.conversations?.some(item => item.id === conversationB), false);
+        assert.equal(Object.hasOwn(listOutcome.payload, 'conversations'), false, 'denied response must not include conversation records');
         assert.deepEqual(await snapshotCommunitySite(pool, siteB), beforeSiteB);
         await assertSiteAUnchanged();
       } finally {
