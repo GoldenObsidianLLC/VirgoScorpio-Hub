@@ -2527,6 +2527,94 @@ test(
       await assertSiteAUnchanged();
     });
 
+    await t.test('report listings revalidate community:moderate after a concurrent role change', async () => {
+      let reportRoleId = null;
+      let revocationClient = null;
+      let revocationOpen = false;
+      let reportRequest = null;
+      let reportOutcome = null;
+      let preflightCompleted;
+      let resumePreflight;
+      let preflightIntercepted = false;
+      const preflight = new Promise(resolve => { preflightCompleted = resolve; });
+      const preflightBarrier = new Promise(resolve => { resumePreflight = resolve; });
+      const siteABefore = await snapshotCommunitySite(pool, siteA);
+      const siteBBefore = await snapshotCommunitySite(pool, siteB);
+      let reportId = null;
+      try {
+        const originalRole = await pool.query('SELECT capabilities FROM roles WHERE id=$1', [roleId]);
+        assert.equal(originalRole.rowCount, 1);
+        assert.ok(originalRole.rows[0].capabilities.includes('community:moderate'));
+        const isolatedRole = await pool.query(
+          'INSERT INTO roles(slug,label,capabilities) VALUES($1,$2,$3::jsonb) RETURNING id',
+          ['tenant-community-report-read-' + randomUUID().slice(0, 10), 'Tenant Community Report Read Moderator', JSON.stringify(originalRole.rows[0].capabilities)],
+        );
+        reportRoleId = isolatedRole.rows[0].id;
+        await pool.query('UPDATE site_memberships SET role_id=$3 WHERE site_id=$1 AND user_id=$2', [siteB, actorB.id, reportRoleId]);
+        const privateDetail = 'SITE_B_REPORT_PRIVATE_DETAIL_' + randomUUID();
+        const reportResult = await pool.query(
+          'INSERT INTO social_reports(site_id,reporter_id,target_type,target_id,category,detail,status) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id',
+          [siteB, userB2.id, 'user', userB2.id, 'harassment', privateDetail, 'open'],
+        );
+        reportId = reportResult.rows[0].id;
+        const activeModerator = await fetch(base + '/api/v1/sites/' + siteB + '/community/reports', { headers });
+        assert.equal(activeModerator.status, 200, 'an active moderator retains report-list access');
+        const activePayload = await activeModerator.json();
+        assert.ok(activePayload.reports.some(report => report.id === reportId && report.detail === privateDetail), 'the active moderator control includes the Site B report details');
+        authorizeSiteInterceptor = async args => {
+          if (!preflightIntercepted && args[0] === actorB.id && args[1] === siteB && args[2] === 'community:moderate') {
+            preflightIntercepted = true;
+            preflightCompleted();
+            await preflightBarrier;
+          }
+        };
+        reportRequest = fetch(base + '/api/v1/sites/' + siteB + '/community/reports', { headers })
+          .then(async response => ({ status: response.status, payload: await response.json() }));
+        const preflightObserved = await Promise.race([
+          preflight.then(() => true),
+          new Promise(resolve => setTimeout(() => resolve(false), 5000)),
+        ]);
+        assert.equal(preflightObserved, true, 'report-list request must complete its request-time moderation-capability preflight');
+        // Revoke the isolated moderator role only after preflight has succeeded.
+        revocationClient = await pool.connect();
+        await revocationClient.query('BEGIN');
+        revocationOpen = true;
+        await revocationClient.query('SELECT id FROM roles WHERE id=$1 FOR UPDATE', [reportRoleId]);
+        await revocationClient.query("UPDATE roles SET capabilities=capabilities-'community:moderate' WHERE id=$1", [reportRoleId]);
+        resumePreflight();
+        const earlyOutcome = await Promise.race([
+          reportRequest,
+          new Promise(resolve => setTimeout(() => resolve(null), 500)),
+        ]);
+        const lockObserved = earlyOutcome
+          ? false
+          : await waitForDatabaseWriteLock(revocationClient, 'FOR SHARE', 5000, { relationName: 'roles' });
+        await revocationClient.query('COMMIT');
+        revocationOpen = false;
+        reportOutcome = earlyOutcome || await reportRequest;
+        const reportDetailsDisclosed = Boolean(reportOutcome.payload.reports?.some(report => report.id === reportId));
+        assert.equal(reportDetailsDisclosed, false, 'a moderator whose capability was revoked must not receive community report details');
+        assert.equal(lockObserved, true, 'report listing must serialize against the current role capability row');
+        assert.equal(reportOutcome.status, 403, 'a role whose moderation capability was revoked must be denied');
+        assert.equal(reportOutcome.payload.code, 'ERR_VIRGOSCORPIO_HUB_FORBIDDEN');
+        assert.equal(Object.hasOwn(reportOutcome.payload, 'reports'), false, 'the denied response must not include report records');
+      } finally {
+        resumePreflight();
+        authorizeSiteInterceptor = null;
+        if (revocationOpen) await revocationClient.query('ROLLBACK').catch(() => {});
+        if (reportRequest && !reportOutcome) reportOutcome = await reportRequest.catch(() => null);
+        if (revocationClient) revocationClient.release();
+        if (reportRoleId) {
+          await pool.query('UPDATE site_memberships SET role_id=$3 WHERE site_id=$1 AND user_id=$2', [siteB, actorB.id, roleId]).catch(() => {});
+          if (reportId) await pool.query('DELETE FROM social_reports WHERE site_id=$1 AND id=$2', [siteB, reportId]).catch(() => {});
+          await pool.query('DELETE FROM roles WHERE id=$1', [reportRoleId]).catch(() => {});
+        }
+      }
+      assert.deepEqual(await snapshotCommunitySite(pool, siteA), siteABefore);
+      assert.deepEqual(await snapshotCommunitySite(pool, siteB), siteBBefore);
+      await assertSiteAUnchanged();
+    });
+
     await t.test('foreign moderation IDs cannot hide site A activity or emit audit rows', async () => {
       const response = await fetch(`${base}/api/v1/sites/${siteB}/community/moderation`, {
         method: 'POST',
