@@ -111,28 +111,34 @@ async function hasBlockBetween(client, siteId, userId, otherUserId) {
 }
 
 async function listConversations(ctx, siteId, userId) {
-  const result = await ctx.localPool.query(
-    `SELECT c.id,c.conversation_type,c.group_id,c.created_at,c.updated_at,
-            COALESCE((SELECT jsonb_agg(jsonb_build_object('userId',m2.user_id,'displayName',u.display_name)
-                                      ORDER BY m2.joined_at)
-                        FROM social_conversation_members m2 JOIN users u ON u.id=m2.user_id
-                       WHERE m2.conversation_id=c.id AND m2.site_id=c.site_id AND m2.left_at IS NULL), '[]'::jsonb) AS participants,
-            last_message.body AS last_message_body,last_message.sender_id AS last_message_sender_id,
-            last_message.created_at AS last_message_at,
-            (SELECT count(*)::int FROM social_messages unread
-              WHERE unread.site_id=c.site_id AND unread.conversation_id=c.id AND unread.deleted_at IS NULL
-                AND unread.sender_id IS DISTINCT FROM $2
-                AND unread.created_at > COALESCE(m.last_read_at, '-infinity'::timestamptz)) AS unread_count
-       FROM social_conversations c
-       JOIN social_conversation_members m ON m.conversation_id=c.id AND m.site_id=c.site_id
-      LEFT JOIN LATERAL (SELECT sm.body,sm.sender_id,sm.created_at FROM social_messages sm
-                          WHERE sm.site_id=c.site_id AND sm.conversation_id=c.id AND sm.deleted_at IS NULL
-                          ORDER BY sm.created_at DESC LIMIT 1) last_message ON true
-      WHERE c.site_id=$1 AND m.user_id=$2 AND m.left_at IS NULL
-      ORDER BY COALESCE(last_message.created_at,c.updated_at) DESC LIMIT $3`,
-    [siteId, userId, Math.min(100, Math.max(1, Number(ctx.url.searchParams.get('limit')) || 30))]
-  );
-  return ctx.sendJson(ctx.res, 200, { conversations: result.rows, requestId: ctx.requestId });
+  const conversations = await withTransaction(ctx.localPool, async client => {
+    // Conversation membership can outlive site membership. Revalidate the actor
+    // in the read transaction before returning participant or message previews.
+    await assertActiveSiteMembership(client, ctx, siteId, userId);
+    const result = await client.query(
+      `SELECT c.id,c.conversation_type,c.group_id,c.created_at,c.updated_at,
+              COALESCE((SELECT jsonb_agg(jsonb_build_object('userId',m2.user_id,'displayName',u.display_name)
+                                        ORDER BY m2.joined_at)
+                          FROM social_conversation_members m2 JOIN users u ON u.id=m2.user_id
+                         WHERE m2.conversation_id=c.id AND m2.site_id=c.site_id AND m2.left_at IS NULL), '[]'::jsonb) AS participants,
+              last_message.body AS last_message_body,last_message.sender_id AS last_message_sender_id,
+              last_message.created_at AS last_message_at,
+              (SELECT count(*)::int FROM social_messages unread
+                WHERE unread.site_id=c.site_id AND unread.conversation_id=c.id AND unread.deleted_at IS NULL
+                  AND unread.sender_id IS DISTINCT FROM $2
+                  AND unread.created_at > COALESCE(m.last_read_at, '-infinity'::timestamptz)) AS unread_count
+         FROM social_conversations c
+         JOIN social_conversation_members m ON m.conversation_id=c.id AND m.site_id=c.site_id
+        LEFT JOIN LATERAL (SELECT sm.body,sm.sender_id,sm.created_at FROM social_messages sm
+                            WHERE sm.site_id=c.site_id AND sm.conversation_id=c.id AND sm.deleted_at IS NULL
+                            ORDER BY sm.created_at DESC LIMIT 1) last_message ON true
+        WHERE c.site_id=$1 AND m.user_id=$2 AND m.left_at IS NULL
+        ORDER BY COALESCE(last_message.created_at,c.updated_at) DESC LIMIT $3`,
+      [siteId, userId, Math.min(100, Math.max(1, Number(ctx.url.searchParams.get('limit')) || 30))],
+    );
+    return result.rows;
+  });
+  return ctx.sendJson(ctx.res, 200, { conversations, requestId: ctx.requestId });
 }
 
 async function createDirectConversation(ctx, siteId, body) {
