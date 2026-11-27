@@ -62,7 +62,7 @@ The exact-main readiness artifact's static migration-artifact row says **19** fi
 
 This is a readiness-report correctness defect, not a failed migration or a failed database integration test. The source-bound artifact is retained unchanged; it must not be retroactively edited.
 
-A follow-up on branch `fix/release-readiness-dynamic-migrations-2026-11-27` replaces the fixed list with a filesystem-derived contiguous migration inventory. It validates `NNNN_name.sql` names, detects missing and duplicate version numbers, rejects malformed SQL entries and fails closed when an SQL-named entry is not a regular file. Focused regression tests currently pass **4/4**, and JavaScript syntax checks pass. The fix still requires full repository validation, exact-head CI, maintainer review and merge before it becomes authoritative mainline behavior.
+The readiness-validator follow-up is tracked in [draft PR #307](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/307) on branch `fix/release-readiness-dynamic-migrations-2026-11-27`, and replaces the fixed list with a filesystem-derived contiguous migration inventory. It validates `NNNN_name.sql` names, detects missing and duplicate version numbers, rejects malformed SQL entries and fails closed when an SQL-named entry is not a regular file. Focused regression tests pass **4/4**; the full local repository suite passes **1,132/1,135** (three platform-specific skips, zero failures), scripts/verify.js passes, and the seven touched Markdown documents have 199 relative links with zero broken targets. Exact-head hosted CI, maintainer review and merge remain before this validator becomes authoritative mainline behavior.
 
 ## Remaining release gates
 
