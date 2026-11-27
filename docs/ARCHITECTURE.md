@@ -163,6 +163,15 @@ External AI, Stripe, email, object storage, and malware-scanning interfaces may 
 
 Security-sensitive modules should fail closed when required configuration or controls are missing. Do not weaken those checks simply to make a test pass; configure explicit test fixtures or mock the boundary instead.
 
+## F1.75 candidate — community mutation authorization and lock ordering (PR #308, unmerged)
+
+Request-level site resolution and membership checks are preflight controls, not authorization that can be carried across an asynchronous boundary into a later mutation. The F1.75 PR #308 candidate adds revalidation of active authorization inside the PostgreSQL message transaction before domain locks or writes. Shared candidate helpers in `packages/community/src/workflows.js` acquire the site row `FOR KEY SHARE`, then lock the active user, site-membership and role rows `FOR SHARE`. Message creation then validates/locks the conversation and conversation-member rows before inserting the message and notification rows. This behavior is not part of merged `main` until PR #308 merges.
+
+The site-member removal path in `packages/auth/src/service.js` takes the site row `FOR UPDATE` before deleting the membership. That conflicting site lock serializes revocation with the protected message transaction. Under PostgreSQL READ COMMITTED, after the waiting mutation obtains the site lock, its subsequent membership query observes a committed removal and fails closed before the message/notification write. Account and role rows are also protected by shared row locks while the mutation proceeds. PR #308 adds a PostgreSQL concurrency regression for this ordering; hosted execution on the rebased exact head is still required.
+
+The F1.75 candidate updates community moderation to use the same site-first helper for its `community:moderate` capability, retaining the existing `site:manage` and wildcard overrides. Reuse this helper rather than duplicating authorization SQL or changing lock order. The non-production developer bypass remains a separate explicit path and must not be used as a production authorization mechanism.
+
+If PR #308 merges, this scoped rule will cover the protected community message and moderation mutations; it does not claim that every community workflow has been reviewed. New mutations should be traced from route preflight through transaction commit and receive targeted revocation-race tests where authorization can change across an asynchronous boundary. See the F1.75 membership-revocation threat model at `security/F1.75-COMMUNITY-MESSAGE-MEMBERSHIP-REVOCATION-THREAT-MODEL.md`.
 ## Trust boundaries to review
 
 1. Browser/client input entering API routes.
