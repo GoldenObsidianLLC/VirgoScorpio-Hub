@@ -26,6 +26,47 @@ function createContext({ method = 'GET', path = `/api/v1/sites/${siteId}/communi
   return ctx;
 }
 
+function transactionalConversationListPool({ activeMembership = true } = {}) {
+  const state = { statements: [], commits: 0, rollbacks: 0, releases: 0 };
+  const conversationId = 'a8bf4f30-9827-4bf0-9a77-2b96b173bfb1';
+  const client = {
+    async query(sql) {
+      const statement = String(sql).trim();
+      state.statements.push(statement);
+      if (statement === 'BEGIN') return { rows: [] };
+      if (statement === 'COMMIT') { state.commits += 1; return { rows: [] }; }
+      if (statement === 'ROLLBACK') { state.rollbacks += 1; return { rows: [] }; }
+      if (statement.includes('SELECT id FROM sites WHERE id=$1 FOR KEY SHARE')) {
+        return { rows: [{ id: siteId }] };
+      }
+      if (statement.includes('SELECT r.capabilities FROM users u')) {
+        return { rows: activeMembership ? [{ capabilities: ['content:read'] }] : [] };
+      }
+      if (statement.startsWith('SELECT c.id,c.conversation_type,c.group_id')) {
+        return {
+          rows: [{
+            id: conversationId,
+            conversation_type: 'direct',
+            group_id: null,
+            participants: [{ userId: actorId, displayName: 'Actor' }],
+            last_message_body: 'Latest message preview',
+            last_message_sender_id: recipientId,
+            last_message_at: new Date('2026-11-27T00:00:00.000Z'),
+            unread_count: 1,
+          }],
+        };
+      }
+      throw new Error('Unexpected conversation-list transaction query: ' + statement);
+    },
+    release() { state.releases += 1; },
+  };
+  return {
+    state,
+    async query() { throw new Error('pool.query must not be used for the transactional conversation list'); },
+    async connect() { return client; },
+  };
+}
+
 function transactionalMessagePool({ activeMembership = true } = {}) {
   const state = { statements: [], commits: 0, rollbacks: 0, releases: 0 };
   const conversationId = 'e8e1c8c8-3523-4acd-a3f6-c4dfd3cdbb9b';
@@ -104,6 +145,43 @@ test('message creation rolls back when the sender lost active site membership', 
   assert.equal(pool.state.rollbacks, 1);
   assert.equal(pool.state.releases, 1);
   assert.equal(pool.state.statements.some(sql => sql.startsWith('INSERT INTO social_messages')), false);
+});
+
+test('conversation listing revalidates active site membership before returning previews in one transaction', async () => {
+  const pool = transactionalConversationListPool();
+  const ctx = createContext({ pool });
+
+  assert.equal(await handleCommunityWorkflowRoute(ctx), true);
+  assert.equal(ctx.res.statusCode, 200);
+  assert.equal(ctx.res.payload.conversations.length, 1);
+  assert.equal(ctx.res.payload.conversations[0].last_message_body, 'Latest message preview');
+  assert.equal(pool.state.commits, 1);
+  assert.equal(pool.state.rollbacks, 0);
+  assert.equal(pool.state.releases, 1);
+
+  const siteLock = pool.state.statements.findIndex(sql => sql.includes('SELECT id FROM sites WHERE id=$1 FOR KEY SHARE'));
+  const membershipCheck = pool.state.statements.findIndex(sql => sql.includes('SELECT r.capabilities FROM users u'));
+  const conversationList = pool.state.statements.findIndex(sql => sql.startsWith('SELECT c.id,c.conversation_type,c.group_id'));
+  assert.ok(siteLock >= 0 && siteLock < membershipCheck);
+  assert.ok(membershipCheck < conversationList, 'site membership must be revalidated before the conversation preview query');
+});
+
+test('conversation listing rolls back and discloses no previews after site membership revocation', async () => {
+  const pool = transactionalConversationListPool({ activeMembership: false });
+  const ctx = createContext({ pool });
+
+  await assert.rejects(
+    handleCommunityWorkflowRoute(ctx),
+    error => error.code === 'ERR_VIRGOSCORPIO_HUB_TENANT_FORBIDDEN' && error.statusCode === 403,
+  );
+  assert.equal(pool.state.commits, 0);
+  assert.equal(pool.state.rollbacks, 1);
+  assert.equal(pool.state.releases, 1);
+  assert.equal(
+    pool.state.statements.some(sql => sql.startsWith('SELECT c.id,c.conversation_type,c.group_id')),
+    false,
+    'denied requests must not execute the conversation preview query',
+  );
 });
 
 test('developer message creation preserves its existing membership-check bypass', async () => {

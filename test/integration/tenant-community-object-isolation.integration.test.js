@@ -2417,6 +2417,70 @@ test(
       await assertSiteAUnchanged();
     });
 
+    await t.test('conversation listing revalidates site membership before disclosing retained conversation rows', async () => {
+      const revocationClient = await pool.connect();
+      let revocationOpen = false;
+      let listPromise;
+      let listOutcome;
+      let preflightCompleted;
+      let resumePreflight;
+      let preflightIntercepted = false;
+      const preflight = new Promise(resolve => { preflightCompleted = resolve; });
+      const preflightBarrier = new Promise(resolve => { resumePreflight = resolve; });
+      const beforeSiteB = await snapshotCommunitySite(pool, siteB);
+
+      authorizeSiteInterceptor = async args => {
+        if (!preflightIntercepted && args[0] === actorB.id && args[1] === siteB && args[2] === 'content:read') {
+          preflightIntercepted = true;
+          preflightCompleted();
+          await preflightBarrier;
+        }
+      };
+
+      try {
+        await revocationClient.query('BEGIN');
+        revocationOpen = true;
+        await revocationClient.query('SELECT id FROM sites WHERE id=$1 FOR UPDATE', [siteB]);
+        await revocationClient.query('DELETE FROM site_memberships WHERE site_id=$1 AND user_id=$2', [siteB, actorB.id]);
+
+        listPromise = fetch(base + '/api/v1/sites/' + siteB + '/community/conversations', { headers })
+          .then(async response => ({ status: response.status, payload: await response.json() }));
+        const preflightObserved = await Promise.race([
+          preflight.then(() => true),
+          new Promise(resolve => setTimeout(() => resolve(false), 5000)),
+        ]);
+        assert.equal(preflightObserved, true, 'conversation-list request must reach the existing site authorization preflight');
+
+        // Resume the real route while membership revocation remains uncommitted.
+        resumePreflight();
+        const earlyOutcome = await Promise.race([
+          listPromise,
+          new Promise(resolve => setTimeout(() => resolve(null), 100)),
+        ]);
+        const lockObserved = earlyOutcome
+          ? false
+          : await waitForDatabaseWriteLock(revocationClient, 'FOR KEY SHARE', 5000, { relationName: 'sites' });
+
+        await revocationClient.query('COMMIT');
+        revocationOpen = false;
+        listOutcome = earlyOutcome || await listPromise;
+
+        assert.equal(lockObserved, true, 'conversation listing must serialize against site-membership removal');
+        assert.equal(listOutcome.status, 403, 'a revoked site member must not list retained conversation rows');
+        assert.equal(listOutcome.payload.code, 'ERR_VIRGOSCORPIO_HUB_TENANT_FORBIDDEN');
+        assert.equal(JSON.stringify(listOutcome.payload).includes('Site B message control'), false);
+        assert.equal(Object.hasOwn(listOutcome.payload, 'conversations'), false, 'denied response must not include conversation records');
+        assert.deepEqual(await snapshotCommunitySite(pool, siteB), beforeSiteB);
+        await assertSiteAUnchanged();
+      } finally {
+        resumePreflight();
+        authorizeSiteInterceptor = null;
+        if (revocationOpen) await revocationClient.query('ROLLBACK').catch(() => {});
+        if (listPromise && !listOutcome) listOutcome = await listPromise.catch(() => null);
+        revocationClient.release();
+        await pool.query('INSERT INTO site_memberships(site_id,user_id,role_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING', [siteB, actorB.id, roleId]).catch(() => {});
+      }
+    });
     await t.test('community profile mutation waits for site-member revocation and revalidates access', async () => {
       const profileBefore = await pool.query(
         'SELECT display_name,bio,avatar_asset_id,website_url,visibility,metadata,version FROM social_profiles WHERE site_id=$1 AND user_id=$2',
