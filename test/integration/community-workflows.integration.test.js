@@ -136,6 +136,61 @@ test('community direct messages, blocks, reports, notifications, and moderation 
     error => error.code === 'ERR_VIRGOSCORPIO_HUB_SITE_ACCESS' && error.statusCode === 403
   );
 
+  // A conversation-member row can outlive site membership. A stale request
+  // must not update last_read_at or disclose messages after site access is revoked.
+  const aliceReadMarkerBefore = await pool.query(
+    'SELECT last_read_at FROM social_conversation_members WHERE site_id=$1 AND conversation_id=$2 AND user_id=$3 AND left_at IS NULL',
+    [siteId, fixtures.conversationId, alice.id],
+  );
+  assert.equal(aliceReadMarkerBefore.rowCount, 1);
+  const readPreflightGate = createGate();
+  let staleMessagesResponse = null;
+  let staleMessagesError = null;
+  const staleMessagesRequest = invoke({
+    pool,
+    siteId,
+    user: alice,
+    method: 'GET',
+    pathname: '/api/v1/sites/' + siteId + '/community/conversations/' + fixtures.conversationId + '/messages',
+    afterSiteCheck: async () => {
+      readPreflightGate.signal();
+      await readPreflightGate.wait;
+    },
+  });
+  await readPreflightGate.entered;
+  const removedAliceReadMembership = await pool.query(
+    'DELETE FROM site_memberships WHERE site_id=$1 AND user_id=$2 RETURNING user_id',
+    [siteId, alice.id],
+  );
+  assert.equal(removedAliceReadMembership.rowCount, 1);
+  readPreflightGate.release();
+  try {
+    staleMessagesResponse = await staleMessagesRequest;
+  } catch (error) {
+    staleMessagesError = error;
+  } finally {
+    await pool.query(
+      'INSERT INTO site_memberships(site_id,user_id,role_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING',
+      [siteId, alice.id, roleId],
+    );
+  }
+  const aliceReadMarkerAfter = await pool.query(
+    'SELECT last_read_at FROM social_conversation_members WHERE site_id=$1 AND conversation_id=$2 AND user_id=$3 AND left_at IS NULL',
+    [siteId, fixtures.conversationId, alice.id],
+  );
+  assert.equal(aliceReadMarkerAfter.rowCount, 1);
+  assert.equal(
+    aliceReadMarkerAfter.rows[0].last_read_at?.toISOString() ?? null,
+    aliceReadMarkerBefore.rows[0].last_read_at?.toISOString() ?? null,
+    'A revoked actor must not advance the conversation read marker.',
+  );
+  assert.equal(
+    staleMessagesError?.statusCode ?? staleMessagesResponse?.statusCode,
+    403,
+    'A stale GET messages request must be denied after site-membership revocation.',
+  );
+  assert.equal(staleMessagesError?.code, 'ERR_VIRGOSCORPIO_HUB_TENANT_FORBIDDEN');
+  assert.equal(staleMessagesResponse, null);
   const block = await invoke({
     pool, siteId, user: bob, method: 'POST', pathname: `/api/v1/sites/${siteId}/community/blocks`,
     body: { userId: alice.id, reason: 'Integration block' }
