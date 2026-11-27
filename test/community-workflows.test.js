@@ -26,6 +26,105 @@ function createContext({ method = 'GET', path = `/api/v1/sites/${siteId}/communi
   return ctx;
 }
 
+function transactionalMessagePool({ activeMembership = true } = {}) {
+  const state = { statements: [], commits: 0, rollbacks: 0, releases: 0 };
+  const conversationId = 'e8e1c8c8-3523-4acd-a3f6-c4dfd3cdbb9b';
+  const client = {
+    async query(sql) {
+      const statement = sql.replace(/\s+/g, ' ').trim();
+      state.statements.push(statement);
+      if (statement === 'BEGIN') return { rows: [] };
+      if (statement === 'COMMIT') { state.commits += 1; return { rows: [] }; }
+      if (statement === 'ROLLBACK') { state.rollbacks += 1; return { rows: [] }; }
+      if (statement.includes('SELECT id FROM sites WHERE id=$1 FOR KEY SHARE')) return { rows: [{ id: siteId }] };
+      if (statement.includes('SELECT r.capabilities FROM users u')) {
+        return { rows: activeMembership ? [{ capabilities: ['content:create'] }] : [] };
+      }
+      if (statement.startsWith('SELECT c.id,c.conversation_type,c.group_id')) {
+        return { rows: [{ id: conversationId, conversation_type: 'direct', group_id: null }] };
+      }
+      if (statement.startsWith('SELECT user_id FROM social_conversation_members')) return { rows: [{ user_id: recipientId }] };
+      if (statement.includes('FROM social_blocks')) return { rows: [] };
+      if (statement.includes('pg_advisory_xact_lock')) return { rows: [] };
+      if (statement.includes('SELECT count(*)::int AS count FROM social_messages')) return { rows: [{ count: 0 }] };
+      if (statement.startsWith('INSERT INTO social_messages')) {
+        return { rows: [{ id: 'c2f744b0-5c66-4f26-91d3-22f42d11a509', conversation_id: conversationId, sender_id: actorId, body: 'Hello', status: 'sent' }] };
+      }
+      if (statement.startsWith('UPDATE social_conversations')) return { rows: [] };
+      if (statement.startsWith('INSERT INTO social_notifications')) return { rows: [] };
+      throw new Error('Unexpected message transaction query: ' + statement);
+    },
+    release() { state.releases += 1; }
+  };
+  return {
+    state,
+    async query() { throw new Error('pool.query should not be called by message mutation'); },
+    async connect() { return client; }
+  };
+}
+
+test('message creation revalidates active site membership under the site-first transaction lock', async () => {
+  const pool = transactionalMessagePool();
+  const conversationId = 'e8e1c8c8-3523-4acd-a3f6-c4dfd3cdbb9b';
+  const ctx = createContext({
+    method: 'POST',
+    path: '/api/v1/sites/' + siteId + '/community/conversations/' + conversationId + '/messages',
+    body: { body: 'Hello' },
+    pool
+  });
+
+  assert.equal(await handleCommunityWorkflowRoute(ctx), true);
+  assert.equal(ctx.res.statusCode, 201);
+  assert.equal(pool.state.commits, 1);
+  assert.equal(pool.state.rollbacks, 0);
+  assert.equal(pool.state.releases, 1);
+  const siteLock = pool.state.statements.findIndex(sql => sql.includes('SELECT id FROM sites WHERE id=$1 FOR KEY SHARE'));
+  const membershipCheck = pool.state.statements.findIndex(sql => sql.includes('SELECT r.capabilities FROM users u'));
+  const conversationCheck = pool.state.statements.findIndex(sql => sql.startsWith('SELECT c.id,c.conversation_type,c.group_id'));
+  const messageInsert = pool.state.statements.findIndex(sql => sql.startsWith('INSERT INTO social_messages'));
+  assert.ok(siteLock >= 0 && siteLock < membershipCheck);
+  assert.ok(membershipCheck < conversationCheck && conversationCheck < messageInsert);
+});
+
+test('message creation rolls back when the sender lost active site membership', async () => {
+  const pool = transactionalMessagePool({ activeMembership: false });
+  const conversationId = 'e8e1c8c8-3523-4acd-a3f6-c4dfd3cdbb9b';
+  const ctx = createContext({
+    method: 'POST',
+    path: '/api/v1/sites/' + siteId + '/community/conversations/' + conversationId + '/messages',
+    body: { body: 'Must not be persisted' },
+    pool
+  });
+
+  await assert.rejects(
+    handleCommunityWorkflowRoute(ctx),
+    error => error.code === 'ERR_VIRGOSCORPIO_HUB_TENANT_FORBIDDEN' && error.statusCode === 403
+  );
+  assert.equal(pool.state.commits, 0);
+  assert.equal(pool.state.rollbacks, 1);
+  assert.equal(pool.state.releases, 1);
+  assert.equal(pool.state.statements.some(sql => sql.startsWith('INSERT INTO social_messages')), false);
+});
+
+test('developer message creation preserves its existing membership-check bypass', async () => {
+  const pool = transactionalMessagePool({ activeMembership: false });
+  const conversationId = 'e8e1c8c8-3523-4acd-a3f6-c4dfd3cdbb9b';
+  const ctx = createContext({
+    method: 'POST',
+    path: '/api/v1/sites/' + siteId + '/community/conversations/' + conversationId + '/messages',
+    body: { body: 'Developer message' },
+    pool
+  });
+  ctx.actor.isDeveloper = true;
+
+  assert.equal(await handleCommunityWorkflowRoute(ctx), true);
+  assert.equal(ctx.res.statusCode, 201);
+  assert.equal(pool.state.commits, 1);
+  assert.equal(pool.state.releases, 1);
+  assert.equal(pool.state.statements.some(sql => sql.includes('SELECT id FROM sites WHERE id=$1 FOR KEY SHARE')), false);
+  assert.equal(pool.state.statements.some(sql => sql.includes('SELECT r.capabilities FROM users u')), false);
+});
+
 test('community workflow helpers sanitize control characters and cap input length', () => {
   assert.equal(cleanRequiredText('  hello\r\nworld\u0000  ', 100), 'hello\nworld');
   assert.equal(cleanRequiredText('x'.repeat(20), 5), 'xxxxx');

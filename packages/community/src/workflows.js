@@ -40,6 +40,43 @@ async function assertConversationMember(client, ctx, siteId, conversationId, use
   return result.rows[0];
 }
 
+/**
+ * Load and lock the actor's current site authorization inside a mutation transaction.
+ *
+ * Lock order is site -> user/membership/role. Site-member removal takes the
+ * site row first, so FOR KEY SHARE serializes protected mutations against
+ * concurrent removal; row-level shared locks also serialize account and role changes.
+ * A null result is the existing non-production developer bypass.
+ */
+async function loadActiveSiteAuthorization(client, ctx, siteId, userId) {
+  if (ctx.actor.isDeveloper) return null;
+  await client.query('SELECT id FROM sites WHERE id=$1 FOR KEY SHARE', [siteId]);
+  const result = await client.query(
+    'SELECT r.capabilities FROM users u JOIN site_memberships m ON m.user_id=u.id AND m.site_id=$1 JOIN roles r ON r.id=m.role_id WHERE u.id=$2 AND u.status=$3 ORDER BY u.id, m.role_id, r.id FOR SHARE OF u, m, r',
+    [siteId, userId, 'active']
+  );
+  return result.rows;
+}
+
+async function assertActiveSiteMembership(client, ctx, siteId, userId) {
+  const authorization = await loadActiveSiteAuthorization(client, ctx, siteId, userId);
+  if (authorization === null) return;
+  if (authorization.length === 0) {
+    routeError(ctx, 403, 'ERR_VIRGOSCORPIO_HUB_TENANT_FORBIDDEN', 'You are not an active member of this site.');
+  }
+}
+
+async function assertSiteCapabilityInTransaction(client, ctx, siteId, userId, capability) {
+  const authorization = await loadActiveSiteAuthorization(client, ctx, siteId, userId);
+  if (authorization === null) return;
+  const allowed = authorization.some(row => Array.isArray(row.capabilities) && (
+    row.capabilities.includes(capability) || row.capabilities.includes('site:manage') || row.capabilities.includes('*')
+  ));
+  if (!allowed) {
+    routeError(ctx, 403, 'ERR_VIRGOSCORPIO_HUB_FORBIDDEN', 'The ' + capability + ' capability is required for this site.');
+  }
+}
+
 async function hasBlockBetween(client, siteId, userId, otherUserId) {
   const result = await client.query(
     `SELECT 1 FROM social_blocks
@@ -195,6 +232,10 @@ async function createMessage(ctx, siteId, conversationId, body) {
   const content = cleanRequiredText(body.body, MAX_MESSAGE_LENGTH);
   if (!content) routeError(ctx, 400, 'ERR_VIRGOSCORPIO_HUB_MESSAGE_INVALID', 'Message body must contain 1–10000 characters.');
   const saved = await withTransaction(ctx.localPool, async client => {
+    // Serialize message creation with site-member revocation before taking
+    // conversation locks; conversation membership alone does not imply the
+    // sender still has access to the tenant.
+    await assertActiveSiteMembership(client, ctx, siteId, ctx.actor.user.id);
     await assertConversationMember(client, ctx, siteId, conversationId, ctx.actor.user.id, { lock: true });
     const recipients = await client.query(
       `SELECT user_id FROM social_conversation_members
@@ -366,30 +407,10 @@ async function handleModeration(ctx, siteId) {
   }
   const reason = cleanRequiredText(body.reason, MAX_MODERATION_REASON_LENGTH);
   const target = await withTransaction(ctx.localPool, async client => {
-    // Revalidate the moderator inside the mutation transaction. The
-    // capability check may be stale after body parsing; the site lock is
-    // acquired before user/membership/role locks, matching the member-removal
-    // path; shared row locks make concurrent account, membership, and role changes
-    // wait until the moderation transaction completes.
-    if (!ctx.actor.isDeveloper) {
-      await client.query('SELECT id FROM sites WHERE id=$1 FOR KEY SHARE', [siteId]);
-      const authorization = await client.query(
-        `SELECT r.capabilities
-           FROM users u
-           JOIN site_memberships m ON m.user_id=u.id AND m.site_id=$1
-           JOIN roles r ON r.id=m.role_id
-          WHERE u.id=$2 AND u.status='active'
-          ORDER BY u.id, m.role_id, r.id
-            FOR SHARE OF u, m, r`,
-        [siteId, ctx.actor.user.id]
-      );
-      const stillAuthorized = authorization.rows.some(row => Array.isArray(row.capabilities) && (
-        row.capabilities.includes('community:moderate') || row.capabilities.includes('site:manage') || row.capabilities.includes('*')
-      ));
-      if (!stillAuthorized) {
-        routeError(ctx, 403, 'ERR_VIRGOSCORPIO_HUB_FORBIDDEN', 'The community:moderate capability is required for this site.');
-      }
-    }
+    // Use the same site-first, transaction-scoped authorization lock sequence
+    // as other community mutations so membership/account/role revocation cannot
+    // race the moderation write.
+    await assertSiteCapabilityInTransaction(client, ctx, siteId, ctx.actor.user.id, 'community:moderate');
     let result;
     if (body.targetType === 'activity') {
       result = await client.query(
