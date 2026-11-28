@@ -209,3 +209,94 @@ test('community group member listing is reachable only with the site moderation 
   const memberQueryIndex = transactionQueries.findIndex(query => query.sql.includes('FROM social_group_memberships gm JOIN users u'));
   assert.ok(capabilityQueryIndex >= 0 && capabilityQueryIndex < memberQueryIndex, 'the current site capability must be locked before member details are selected');
 });
+
+test('community block listing revalidates active site membership before reading blocked-user details', async t => {
+  const authorizationCalls = [];
+  const transactionQueries = [];
+  let blockDataQueries = 0;
+  const identity = {
+    async authenticate(token) {
+      assert.equal(token, 'site-a-block-session');
+      return {
+        mode: 'session',
+        sessionToken: token,
+        sessionId: SESSION_A,
+        expiresAt: new Date(Date.now() + 60_000),
+        user: { id: USER_A, email: 'site-a-block@example.test', displayName: 'Site A Blocker', status: 'active' },
+        memberships: [{ siteId: SITE_A }]
+      };
+    },
+    async authorizeSite(userId, siteId, capability) {
+      authorizationCalls.push({ userId, siteId, capability });
+      return userId === USER_A && siteId === SITE_A && capability === 'content:read';
+    },
+    async isSessionActive() { return true; }
+  };
+  const expectedBlocks = [{
+    user_id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+    display_name: 'Site A Block Target',
+    reason: 'Block list reason',
+    created_at: '2026-11-27T12:00:00.000Z'
+  }];
+  const pool = {
+    async query(sql) {
+      if (sql.includes('FROM firewall_rules WHERE enabled=true')) return { rows: [] };
+      throw new Error('Block-list data must use the membership-authorization transaction: ' + sql);
+    },
+    async connect() {
+      return {
+        async query(sql, params) {
+          transactionQueries.push({ sql, params });
+          if (['BEGIN', 'COMMIT', 'ROLLBACK'].includes(sql.trim().toUpperCase())) return { rows: [] };
+          if (sql.includes('SELECT id FROM sites WHERE id=$1 FOR KEY SHARE')) {
+            assert.deepEqual(params, [SITE_A], 'site lock must be bound to the route site');
+            return { rows: [{ id: SITE_A }] };
+          }
+          if (sql.includes('SELECT r.capabilities FROM users u JOIN site_memberships m')) {
+            assert.deepEqual(params, [SITE_A, USER_A, 'active'], 'membership validation must bind site, actor and active status');
+            return { rows: [{ capabilities: ['content:read'] }] };
+          }
+          if (sql.includes('FROM social_blocks b JOIN users u ON u.id=b.blocked_id')) {
+            blockDataQueries += 1;
+            assert.deepEqual(params, [SITE_A, USER_A], 'block listing must remain scoped to site and authenticated blocker');
+            return { rows: expectedBlocks };
+          }
+          throw new Error('Unexpected block-list transaction query: ' + sql);
+        },
+        release() {}
+      };
+    },
+    async end() {}
+  };
+  const server = createApiServer({
+    env: { NODE_ENV: 'test', AI_PROVIDER: 'mock', RATE_LIMIT_MAX_REQUESTS: '100' },
+    pool,
+    identityService: identity,
+    logger: { error() {} }
+  });
+
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  t.after(async () => {
+    await new Promise(resolve => server.close(resolve));
+    await server.virgoScorpioHub.close();
+  });
+
+  const base = 'http://127.0.0.1:' + server.address().port;
+  assert.equal((await fetch(base + '/health')).status, 200);
+  const response = await fetch(base + '/api/v1/sites/' + SITE_A + '/community/blocks', {
+    headers: { authorization: 'Bearer site-a-block-session' }
+  });
+  assert.equal(response.status, 200);
+  const payload = await response.json();
+  assert.deepEqual(payload.blocks, expectedBlocks);
+  assert.ok(authorizationCalls.some(call => call.userId === USER_A && call.siteId === SITE_A && call.capability === 'content:read'));
+  assert.equal(blockDataQueries, 1, 'the block list must be read once after transaction-time membership validation');
+
+  const siteLockIndex = transactionQueries.findIndex(query => query.sql.includes('SELECT id FROM sites WHERE id=$1 FOR KEY SHARE'));
+  const membershipIndex = transactionQueries.findIndex(query => query.sql.includes('SELECT r.capabilities FROM users u JOIN site_memberships m'));
+  const blockListIndex = transactionQueries.findIndex(query => query.sql.includes('FROM social_blocks b JOIN users u ON u.id=b.blocked_id'));
+  assert.ok(
+    siteLockIndex >= 0 && siteLockIndex < membershipIndex && membershipIndex < blockListIndex,
+    'site and current membership locks must precede the block-detail SELECT',
+  );
+});

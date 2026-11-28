@@ -286,13 +286,19 @@ async function createMessage(ctx, siteId, conversationId, body) {
 async function handleBlocks(ctx, siteId, targetId, method) {
   const actorId = ctx.actor.user.id;
   if (method === 'GET' && !targetId) {
-    const result = await ctx.localPool.query(
-      `SELECT b.blocked_id AS user_id,u.display_name,b.reason,b.created_at
-         FROM social_blocks b JOIN users u ON u.id=b.blocked_id
-        WHERE b.site_id=$1 AND b.blocker_id=$2 ORDER BY b.created_at DESC LIMIT 500`,
-      [siteId, actorId]
-    );
-    return ctx.sendJson(ctx.res, 200, { blocks: result.rows, requestId: ctx.requestId });
+    const blocks = await withTransaction(ctx.localPool, async client => {
+      // Block records can outlive the actor's site membership. Revalidate the
+      // actor on the same transaction client before returning blocked-user details.
+      await assertActiveSiteMembership(client, ctx, siteId, actorId);
+      const result = await client.query(
+        `SELECT b.blocked_id AS user_id,u.display_name,b.reason,b.created_at
+           FROM social_blocks b JOIN users u ON u.id=b.blocked_id
+          WHERE b.site_id=$1 AND b.blocker_id=$2 ORDER BY b.created_at DESC LIMIT 500`,
+        [siteId, actorId]
+      );
+      return result.rows;
+    });
+    return ctx.sendJson(ctx.res, 200, { blocks, requestId: ctx.requestId });
   }
   if (method === 'POST' && !targetId) {
     const body = await ctx.readJson(ctx.req, Math.min(ctx.maxBody || 64_000, 16_000));
