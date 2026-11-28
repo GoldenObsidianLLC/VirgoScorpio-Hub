@@ -359,13 +359,19 @@ async function handleReports(ctx, siteId, reportId, method) {
     await ctx.requireCapability(ctx.actor, siteId, 'community:moderate');
     const requestedStatus = ctx.url.searchParams.get('status') || 'open';
     if (!REPORT_STATUSES.has(requestedStatus)) routeError(ctx, 400, 'ERR_VIRGOSCORPIO_HUB_REPORT_STATUS', 'Report status filter is invalid.');
-    const result = await ctx.localPool.query(
-      `SELECT r.id,r.reporter_id,u.display_name AS reporter_name,r.target_type,r.target_id,r.category,r.detail,r.status,r.moderation_note,r.reviewed_by,r.created_at,r.updated_at
-         FROM social_reports r JOIN users u ON u.id=r.reporter_id
-        WHERE r.site_id=$1 AND r.status=$2 ORDER BY r.created_at ASC LIMIT $3`,
-      [siteId, requestedStatus, Math.min(200, Math.max(1, Number(ctx.url.searchParams.get('limit')) || 50))]
-    );
-    return ctx.sendJson(ctx.res, 200, { reports: result.rows, requestId: ctx.requestId });
+    const reports = await withTransaction(ctx.localPool, async client => {
+      // Revalidate the moderator's current site capability in the same transaction
+      // that reads reporter identity and report details.
+      await assertSiteCapabilityInTransaction(client, ctx, siteId, ctx.actor.user.id, 'community:moderate');
+      const result = await client.query(
+        `SELECT r.id,r.reporter_id,u.display_name AS reporter_name,r.target_type,r.target_id,r.category,r.detail,r.status,r.moderation_note,r.reviewed_by,r.created_at,r.updated_at
+           FROM social_reports r JOIN users u ON u.id=r.reporter_id
+          WHERE r.site_id=$1 AND r.status=$2 ORDER BY r.created_at ASC LIMIT $3`,
+        [siteId, requestedStatus, Math.min(200, Math.max(1, Number(ctx.url.searchParams.get('limit')) || 50))]
+      );
+      return result.rows;
+    });
+    return ctx.sendJson(ctx.res, 200, { reports, requestId: ctx.requestId });
   }
   if (method === 'POST' && !reportId) {
     const body = await ctx.readJson(ctx.req, Math.min(ctx.maxBody || 64_000, 16_000));
