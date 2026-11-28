@@ -334,6 +334,103 @@ test(
     }
     const before = await contentSideEffects(pool, siteA, foreignContent.id);
     assert.ok(before, 'site A fixture must exist before adversarial requests');
+    await t.test('content version read revalidates content:read before disclosing retained version metadata', async () => {
+      const activeVersion = await fetch(`${base}/api/v1/sites/${siteB}/content/${ownContent.id}/version`, { headers });
+      assert.equal(activeVersion.status, 200, 'an active site member with content:read must retain version-read access');
+      const activePayload = await activeVersion.json();
+      assert.equal(activePayload.contentId, ownContent.id);
+      assert.equal(activePayload.version, ownContent.version);
+      assert.equal(typeof activePayload.revisionCount, 'number');
+      assert.equal(typeof activePayload.latestRevisionVersion, 'number');
+      const siteABefore = await contentSideEffects(pool, siteA, foreignContent.id);
+      const siteBBefore = await contentSideEffects(pool, siteB, ownContent.id);
+      const contentBefore = await pool.query(
+        'SELECT id,site_id,content_type,slug,title,status,schema_version,version,body,published_at,updated_at FROM content_items WHERE site_id=$1 AND id=$2 AND deleted_at IS NULL',
+        [siteB, ownContent.id],
+      );
+      const revisionBefore = await pool.query(
+        'SELECT count(*)::integer AS count,max(version)::integer AS latest_version FROM content_revisions WHERE content_id=$1',
+        [ownContent.id],
+      );
+      assert.equal(contentBefore.rowCount, 1, 'Site B version fixture must exist');
+
+      const originalAuthorizeSite = identity.authorizeSite.bind(identity);
+      let preflightCompleted;
+      let resumePreflight;
+      let preflightIntercepted = false;
+      let requestPromise = null;
+      let requestOutcome = null;
+      let revocationClient = null;
+      let revocationOpen = false;
+      const preflight = new Promise(resolve => { preflightCompleted = resolve; });
+      const preflightBarrier = new Promise(resolve => { resumePreflight = resolve; });
+      identity.authorizeSite = async (userId, authorizedSiteId, capability) => {
+        const allowed = await originalAuthorizeSite(userId, authorizedSiteId, capability);
+        if (!preflightIntercepted && userId === actor.id && authorizedSiteId === siteB && capability === 'content:read' && allowed) {
+          preflightIntercepted = true;
+          preflightCompleted();
+          await preflightBarrier;
+        }
+        return allowed;
+      };
+
+      try {
+        revocationClient = await pool.connect();
+        await revocationClient.query('BEGIN');
+        revocationOpen = true;
+        await revocationClient.query('SELECT id FROM sites WHERE id=$1 FOR UPDATE', [siteB]);
+        await revocationClient.query('DELETE FROM site_memberships WHERE site_id=$1 AND user_id=$2', [siteB, actor.id]);
+
+        requestPromise = fetch(`${base}/api/v1/sites/${siteB}/content/${ownContent.id}/version`, { headers })
+          .then(async response => ({ status: response.status, payload: await response.json() }));
+        const preflightObserved = await Promise.race([
+          preflight.then(() => true),
+          new Promise(resolve => setTimeout(() => resolve(false), 5000)),
+        ]);
+        assert.equal(preflightObserved, true, 'version GET must reach successful request-time content:read preflight before revocation continues');
+
+        // Resume the real HTTP handler while the membership deletion still holds the Site B row lock.
+        resumePreflight();
+        const earlyOutcome = await Promise.race([
+          requestPromise,
+          new Promise(resolve => setTimeout(() => resolve(null), 200)),
+        ]);
+
+        await revocationClient.query('COMMIT');
+        revocationOpen = false;
+        requestOutcome = earlyOutcome || await requestPromise;
+
+        assert.equal(earlyOutcome, null, 'version metadata must not be disclosed before membership revocation commits');
+        assert.equal(requestOutcome.status, 403, 'a revoked site member must not read content version metadata');
+        assert.equal(requestOutcome.payload.code, 'ERR_VIRGOSCORPIO_HUB_FORBIDDEN');
+        for (const key of ['documentId','contentId','version','schemaVersion','status','publishedAt','updatedAt','revisionCount','latestRevisionVersion']) {
+          assert.equal(Object.hasOwn(requestOutcome.payload, key), false, 'denied response must not include '+key);
+        }
+        assert.deepEqual(await contentSideEffects(pool, siteA, foreignContent.id), siteABefore, 'Site A content/revision side effects must remain unchanged');
+        assert.deepEqual(await contentSideEffects(pool, siteB, ownContent.id), siteBBefore, 'Site B content/revision side effects must remain unchanged');
+        const contentAfter = await pool.query(
+          'SELECT id,site_id,content_type,slug,title,status,schema_version,version,body,published_at,updated_at FROM content_items WHERE site_id=$1 AND id=$2 AND deleted_at IS NULL',
+          [siteB, ownContent.id],
+        );
+        const revisionAfter = await pool.query(
+          'SELECT count(*)::integer AS count,max(version)::integer AS latest_version FROM content_revisions WHERE content_id=$1',
+          [ownContent.id],
+        );
+        assert.deepEqual(contentAfter.rows, contentBefore.rows, 'private content record must remain unchanged');
+        assert.deepEqual(revisionAfter.rows, revisionBefore.rows, 'revision metadata must remain unchanged');
+      } finally {
+        resumePreflight();
+        identity.authorizeSite = originalAuthorizeSite;
+        if (revocationOpen) await revocationClient.query('ROLLBACK').catch(() => {});
+        if (requestPromise && !requestOutcome) requestOutcome = await requestPromise.catch(() => null);
+        if (revocationClient) revocationClient.release();
+        await pool.query(
+          'INSERT INTO site_memberships(site_id,user_id,role_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING',
+          [siteB, actor.id, ownerRoleId],
+        ).catch(() => {});
+      }
+    });
+
     await t.test('relationship endpoints must belong to the selected site and valid same-site relationships still work', async () => {
       const foreignEndpoints = [
         { sourceId: ownContent.id, targetId: foreignContent.id },
