@@ -712,7 +712,19 @@ async function handlePlatformRoute(ctx) {
   }
 
   const friendRequest=pathName.match(/^\/api\/v1\/sites\/([0-9a-f-]{36})\/community\/friends(?:\/([0-9a-f-]{36}))?$/i);
-  if(friendRequest&&['GET','POST','PUT','DELETE'].includes(method)){if(!localPool||!actor.user.id)throw fail(503,'ERR_VIRGOSCORPIO_HUB_COMMUNITY_DISABLED','Friendships require PostgreSQL and a signed-in user.');const siteId=friendRequest[1],target=friendRequest[2];await siteIdFor({ req, url, body: {}, actor, routeSiteId: siteId });if(method==='GET'){const q=await localPool.query(`SELECT f.requester_id,f.addressee_id,f.status,f.created_at,u1.display_name AS requester_name,u2.display_name AS addressee_name FROM social_friendships f JOIN users u1 ON u1.id=f.requester_id JOIN users u2 ON u2.id=f.addressee_id WHERE f.site_id=$1 AND (f.requester_id=$2 OR f.addressee_id=$2) ORDER BY f.created_at DESC LIMIT 200`,[siteId,actor.user.id]);return sendJson(res,200,{friendships:q.rows,requestId});}if(!target||!validUuid(target)||target===actor.user.id)throw fail(400,'ERR_VIRGOSCORPIO_HUB_FRIEND_INVALID','A different valid user ID is required.');if(method==='POST'){
+  if(friendRequest&&['GET','POST','PUT','DELETE'].includes(method)){if(!localPool||!actor.user.id)throw fail(503,'ERR_VIRGOSCORPIO_HUB_COMMUNITY_DISABLED','Friendships require PostgreSQL and a signed-in user.');const siteId=friendRequest[1],target=friendRequest[2];await siteIdFor({ req, url, body: {}, actor, routeSiteId: siteId });if (method === 'GET') {
+      const friendships = await withTransaction(localPool, async client => {
+        // Revalidate membership in the same transaction as the detail read
+        // so a committed site-membership revocation wins the race.
+        await assertActiveSiteMembership(client, ctx, siteId, actor.user.id);
+        const result = await client.query(
+          "SELECT f.requester_id,f.addressee_id,f.status,f.created_at,u1.display_name AS requester_name,u2.display_name AS addressee_name FROM social_friendships f JOIN users u1 ON u1.id=f.requester_id JOIN users u2 ON u2.id=f.addressee_id WHERE f.site_id=$1 AND (f.requester_id=$2 OR f.addressee_id=$2) ORDER BY f.created_at DESC LIMIT 200",
+          [siteId, actor.user.id],
+        );
+        return result.rows;
+      });
+      return sendJson(res, 200, { friendships, requestId });
+    }if(!target||!validUuid(target)||target===actor.user.id)throw fail(400,'ERR_VIRGOSCORPIO_HUB_FRIEND_INVALID','A different valid user ID is required.');if(method==='POST'){
       const member=await localPool.query('SELECT 1 FROM site_memberships sm JOIN users u ON u.id=sm.user_id WHERE sm.site_id=$1 AND sm.user_id=$2 AND u.status=$3 LIMIT 1',[siteId,target,'active']);
       if(!member.rows[0])throw fail(404,'ERR_VIRGOSCORPIO_HUB_COMMUNITY_USER_NOT_FOUND','User is not a member of this site.');
       const q=await localPool.query(`WITH participant_users AS MATERIALIZED (

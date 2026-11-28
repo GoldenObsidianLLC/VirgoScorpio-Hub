@@ -2461,6 +2461,104 @@ test(
       assert.deepEqual(await snapshotCommunitySite(pool, siteB), siteBStateAfterRequest);
     });
 
+    await t.test('friendship listings revalidate site membership after a concurrent revocation', async () => {
+      let friendTarget = null;
+      let friendshipCreated = false;
+      let siteBBefore = null;
+      let revocationClient = null;
+      let revocationOpen = false;
+      let friendshipRequest = null;
+      let friendshipOutcome = null;
+      let preflightCompleted;
+      let resumePreflight;
+      let preflightIntercepted = false;
+      const preflight = new Promise(resolve => { preflightCompleted = resolve; });
+      const preflightBarrier = new Promise(resolve => { resumePreflight = resolve; });
+      const siteABefore = await snapshotCommunitySite(pool, siteA);
+      siteBBefore = await snapshotCommunitySite(pool, siteB);
+
+      try {
+        friendTarget = await createUser('Site B Friendship List Race Target');
+        await pool.query(
+          'INSERT INTO site_memberships(site_id,user_id,role_id) VALUES($1,$2,$3)',
+          [siteB, friendTarget.id, roleId],
+        );
+        await pool.query(
+          "INSERT INTO social_friendships(site_id,requester_id,addressee_id,status) VALUES($1,$2,$3,'accepted')",
+          [siteB, actorB.id, friendTarget.id],
+        );
+        friendshipCreated = true;
+        const activeMember = await fetch(base + '/api/v1/sites/' + siteB + '/community/friends', { headers });
+        assert.equal(activeMember.status, 200, 'an active site member retains friendship-list access');
+        const activePayload = await activeMember.json();
+        assert.ok(
+          activePayload.friendships.some(friendship => friendship.requester_id === actorB.id && friendship.addressee_id === friendTarget.id),
+          'the active-member control must include the Site B friendship',
+        );
+
+        authorizeSiteInterceptor = async args => {
+          if (!preflightIntercepted && args[0] === actorB.id && args[1] === siteB && args[2] === 'content:read') {
+            preflightIntercepted = true;
+            preflightCompleted();
+            await preflightBarrier;
+          }
+        };
+
+        friendshipRequest = fetch(base + '/api/v1/sites/' + siteB + '/community/friends', { headers })
+          .then(async response => ({ status: response.status, payload: await response.json() }));
+        const preflightObserved = await Promise.race([
+          preflight.then(() => true),
+          new Promise(resolve => setTimeout(() => resolve(false), 5000)),
+        ]);
+        assert.equal(preflightObserved, true, 'friendship-list request must complete its request-time site-membership preflight');
+
+        // Revoke Site B membership only after the actual route preflight has succeeded.
+        revocationClient = await pool.connect();
+        await revocationClient.query('BEGIN');
+        revocationOpen = true;
+        await revocationClient.query('SELECT id FROM sites WHERE id=$1 FOR UPDATE', [siteB]);
+        await revocationClient.query('DELETE FROM site_memberships WHERE site_id=$1 AND user_id=$2', [siteB, actorB.id]);
+
+        resumePreflight();
+        const earlyOutcome = await Promise.race([
+          friendshipRequest,
+          new Promise(resolve => setTimeout(() => resolve(null), 500)),
+        ]);
+        assert.equal(earlyOutcome, null, 'friendship details must not be returned while site-membership revocation is uncommitted');
+        const lockObserved = earlyOutcome
+          ? false
+          : await waitForDatabaseWriteLock(revocationClient, 'FOR KEY SHARE', 5000, { relationName: 'sites' });
+
+        await revocationClient.query('COMMIT');
+        revocationOpen = false;
+        friendshipOutcome = earlyOutcome || await friendshipRequest;
+
+        assert.equal(lockObserved, true, 'friendship listing must serialize against site membership revocation');
+        assert.equal(friendshipOutcome.status, 403, 'a revoked site member must not list retained friendship rows');
+        assert.equal(friendshipOutcome.payload.code, 'ERR_VIRGOSCORPIO_HUB_TENANT_FORBIDDEN');
+        assert.equal(Object.hasOwn(friendshipOutcome.payload, 'friendships'), false, 'the denied response must not include friendship records');
+        assert.equal(JSON.stringify(friendshipOutcome.payload).includes(friendTarget.email), false, 'the denied response must not disclose participant email');
+        assert.equal(JSON.stringify(friendshipOutcome.payload).includes(friendTarget.display_name), false, 'the denied response must not disclose participant display names');
+        await assertSiteAUnchanged();
+      } finally {
+        resumePreflight();
+        authorizeSiteInterceptor = null;
+        if (revocationOpen) await revocationClient.query('ROLLBACK').catch(() => {});
+        if (friendshipRequest && !friendshipOutcome) friendshipOutcome = await friendshipRequest.catch(() => null);
+        if (revocationClient) revocationClient.release();
+        await pool.query(
+          'INSERT INTO site_memberships(site_id,user_id,role_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING',
+          [siteB, actorB.id, roleId],
+        ).catch(() => {});
+        if (friendshipCreated) await pool.query('DELETE FROM social_friendships WHERE site_id=$1 AND requester_id=$2 AND addressee_id=$3', [siteB, actorB.id, friendTarget.id]).catch(() => {});
+        if (friendTarget) await pool.query('DELETE FROM site_memberships WHERE site_id=$1 AND user_id=$2', [siteB, friendTarget.id]).catch(() => {});
+      }
+
+      await assertSiteAUnchanged();
+      assert.deepEqual(await snapshotCommunitySite(pool, siteB), siteBBefore, 'friendship and community rows must be unchanged after cleanup');
+      if (friendTarget) await pool.query('DELETE FROM users WHERE id=$1', [friendTarget.id]);
+    });
+
     await t.test('friendship create preserves an existing blocked state on conflict', async () => {
       const blockedRecipient = await createUser('Site B Blocked Friendship Recipient');
       const siteAStateBeforeBlockedRetry = await snapshotCommunitySite(pool, siteA);
