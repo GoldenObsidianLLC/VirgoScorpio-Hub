@@ -8,7 +8,7 @@
   "generatedBy": "scripts/generate-tenant-isolation-route-inventory.js",
   "sourceTree": {
     "fileCount": 22,
-    "sha256": "a10b79584415f91188b7ecebd0aa336a0740f181b10042db979730ec3abe9451",
+    "sha256": "1919d33b73e54ceb71074b4aeff503fade53105ed07e85f6fd1a10171e25a84f",
     "files": [
       "apps/api/src/ai-task-routes.js",
       "apps/api/src/auth-routes.js",
@@ -36,7 +36,7 @@
   },
   "testTree": {
     "fileCount": 61,
-    "sha256": "80c58f290f22c7830f0f802ee3ec3eb2b4b49ac807dcd8150c83fd3b627e7560",
+    "sha256": "fc678ff45213398e95ee85a9430559c09e123192829ba1782af1670b84278234",
     "files": [
       "test/ai-queue-worker.test.js",
       "test/ai-task-queue.test.js",
@@ -1440,19 +1440,19 @@
             {
               "anchor": "const groups=",
               "lines": [
-                304
+                310
               ]
             },
             {
               "anchor": "const feed=",
               "lines": [
-                469
+                475
               ]
             },
             {
               "anchor": "const friendRequest=",
               "lines": [
-                714
+                720
               ]
             }
           ]
@@ -1527,7 +1527,7 @@
             {
               "anchor": "const friendRequest=",
               "lines": [
-                714
+                720
               ]
             }
           ]
@@ -1645,7 +1645,7 @@
             {
               "anchor": "const firewallCollection",
               "lines": [
-                833
+                839
               ]
             }
           ]
@@ -1694,7 +1694,7 @@
             {
               "anchor": "const cloudConnections",
               "lines": [
-                901
+                907
               ]
             }
           ]
@@ -1742,7 +1742,7 @@
             {
               "anchor": "const megaMenus",
               "lines": [
-                1148
+                1154
               ]
             },
             {
@@ -1750,8 +1750,8 @@
               "lines": [
                 177,
                 194,
-                1200,
-                1233
+                1206,
+                1239
               ]
             }
           ]

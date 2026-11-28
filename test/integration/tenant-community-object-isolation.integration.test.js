@@ -2730,6 +2730,123 @@ test(
         await pool.query('INSERT INTO site_memberships(site_id,user_id,role_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING', [siteB, actorB.id, roleId]).catch(() => {});
       }
     });
+    await t.test('community profile listing revalidates site membership before disclosing profile fields', async () => {
+      const profileBefore = await pool.query(
+        'SELECT display_name,bio,avatar_asset_id,website_url,visibility,metadata,version,updated_at FROM social_profiles WHERE site_id=$1 AND user_id=$2',
+        [siteB, actorB.id],
+      );
+      assert.equal(profileBefore.rowCount, 0, 'the fixture user must not already have a profile');
+      const profileSeed = {
+        displayName: 'F1.85 Private Profile Display Marker',
+        bio: 'F1.85 private profile biography marker',
+        websiteUrl: 'https://f1-85-private-profile.example.test',
+        visibility: 'members',
+        metadata: { privateMarker: 'F1.85 private profile metadata marker' },
+      };
+      await pool.query(
+        `INSERT INTO social_profiles(site_id,user_id,display_name,bio,website_url,visibility,metadata)
+         VALUES($1,$2,$3,$4,$5,$6,$7::jsonb)`,
+        [siteB, actorB.id, profileSeed.displayName, profileSeed.bio, profileSeed.websiteUrl, profileSeed.visibility, JSON.stringify(profileSeed.metadata)],
+      );
+      const seededProfile = await pool.query(
+        'SELECT display_name,bio,avatar_asset_id,website_url,visibility,metadata,version,updated_at FROM social_profiles WHERE site_id=$1 AND user_id=$2',
+        [siteB, actorB.id],
+      );
+      assert.equal(seededProfile.rowCount, 1);
+      const siteABefore = await snapshotCommunitySite(pool, siteA);
+      const siteBBefore = await snapshotCommunitySite(pool, siteB);
+
+      const activeResponse = await fetch(`${base}/api/v1/sites/${siteB}/community/profile`, { headers });
+      assert.equal(activeResponse.status, 200, 'an active site member must retain profile-read access');
+      const activePayload = await activeResponse.json();
+      assert.equal(activePayload.profile.display_name, profileSeed.displayName);
+      assert.equal(activePayload.profile.bio, profileSeed.bio);
+      assert.equal(activePayload.profile.website_url, profileSeed.websiteUrl);
+      assert.deepEqual(activePayload.profile.metadata, profileSeed.metadata);
+
+      const revocationClient = await pool.connect();
+      let revocationOpen = false;
+      let profilePromise;
+      let profileOutcome;
+      let preflightCompleted;
+      let resumePreflight;
+      let preflightIntercepted = false;
+      const preflight = new Promise(resolve => { preflightCompleted = resolve; });
+      const preflightBarrier = new Promise(resolve => { resumePreflight = resolve; });
+      authorizeSiteInterceptor = async args => {
+        if (!preflightIntercepted && args[0] === actorB.id && args[1] === siteB && args[2] === 'content:read') {
+          preflightIntercepted = true;
+          preflightCompleted();
+          await preflightBarrier;
+        }
+      };
+
+      try {
+        await revocationClient.query('BEGIN');
+        revocationOpen = true;
+        await revocationClient.query('SELECT id FROM sites WHERE id=$1 FOR UPDATE', [siteB]);
+        await revocationClient.query(
+          'DELETE FROM site_memberships WHERE site_id=$1 AND user_id=$2',
+          [siteB, actorB.id],
+        );
+
+        profilePromise = fetch(`${base}/api/v1/sites/${siteB}/community/profile`, { headers })
+          .then(async response => ({ status: response.status, payload: await response.json() }));
+        const preflightObserved = await Promise.race([
+          preflight.then(() => true),
+          new Promise(resolve => setTimeout(() => resolve(false), 5000)),
+        ]);
+        assert.equal(preflightObserved, true, 'profile GET must reach the successful request-time site-membership preflight');
+
+        // Resume the real handler while membership deletion still owns the Site B row lock.
+        resumePreflight();
+        const earlyOutcome = await Promise.race([
+          profilePromise,
+          new Promise(resolve => setTimeout(() => resolve(null), 100)),
+        ]);
+        const lockObserved = earlyOutcome
+          ? false
+          : await waitForDatabaseWriteLock(revocationClient, 'FOR KEY SHARE', 5000, { relationName: 'sites' });
+
+        await revocationClient.query('COMMIT');
+        revocationOpen = false;
+        profileOutcome = earlyOutcome || await profilePromise;
+
+        assert.equal(earlyOutcome, null, 'profile fields must not be returned before membership revocation commits');
+        assert.equal(lockObserved, true, 'profile listing must serialize against site-membership revocation');
+        assert.equal(profileOutcome.status, 403, 'a revoked site member must not read retained profile fields');
+        assert.equal(profileOutcome.payload.code, 'ERR_VIRGOSCORPIO_HUB_TENANT_FORBIDDEN');
+        assert.equal(Object.hasOwn(profileOutcome.payload, 'profile'), false, 'the denied response must not contain a profile object');
+        const deniedPayload = JSON.stringify(profileOutcome.payload);
+        for (const marker of [profileSeed.displayName, profileSeed.bio, profileSeed.websiteUrl, 'F1.85 private profile metadata marker']) {
+          assert.equal(deniedPayload.includes(marker), false, 'the denied response must not disclose profile marker: ' + marker);
+        }
+        const profileAfter = await pool.query(
+          'SELECT display_name,bio,avatar_asset_id,website_url,visibility,metadata,version,updated_at FROM social_profiles WHERE site_id=$1 AND user_id=$2',
+          [siteB, actorB.id],
+        );
+        assert.deepEqual(profileAfter.rows, seededProfile.rows, 'profile storage must remain unchanged during the denied read');
+        assert.deepEqual(await snapshotCommunitySite(pool, siteA), siteABefore, 'Site A profile/community state must remain unchanged');
+        assert.deepEqual(await snapshotCommunitySite(pool, siteB), siteBBefore, 'Site B profile/community state must remain unchanged');
+        await assertSiteAUnchanged();
+      } finally {
+        resumePreflight();
+        authorizeSiteInterceptor = null;
+        if (revocationOpen) await revocationClient.query('ROLLBACK').catch(() => {});
+        if (profilePromise && !profileOutcome) profileOutcome = await profilePromise.catch(() => null);
+        revocationClient.release();
+        await pool.query(
+          'INSERT INTO site_memberships(site_id,user_id,role_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING',
+          [siteB, actorB.id, roleId],
+        ).catch(() => {});
+        await pool.query('DELETE FROM social_profiles WHERE site_id=$1 AND user_id=$2', [siteB, actorB.id]).catch(() => {});
+      }
+
+      const absentResponse = await fetch(`${base}/api/v1/sites/${siteB}/community/profile`, { headers });
+      assert.equal(absentResponse.status, 200);
+      assert.equal((await absentResponse.json()).profile, null, 'an active member without a profile must still receive profile:null');
+    });
+
     await t.test('community profile mutation waits for site-member revocation and revalidates access', async () => {
       const profileBefore = await pool.query(
         'SELECT display_name,bio,avatar_asset_id,website_url,visibility,metadata,version FROM social_profiles WHERE site_id=$1 AND user_id=$2',
