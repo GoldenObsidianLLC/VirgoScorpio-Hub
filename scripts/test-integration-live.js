@@ -30,28 +30,31 @@ function persistEvidence() {
   evidence.generatedAt = new Date().toISOString();
   fs.writeFileSync(path.join(evidenceDir, 'integration-live.json'), `${JSON.stringify(evidence, null, 2)}\n`);
 }
-function run(label, args, env, evidenceFile) {
+function run(label, args, env, evidenceFile, { allowTestFailures = false } = {}) {
   console.log(`\n==> ${label}`);
   const result = spawnSync(process.execPath, args, {
     cwd: root,
     env,
     encoding: 'utf8',
-    // The serialized live suite now exceeds the previous 10-minute guard as
-    // tenant revocation regressions accumulate. Keep a finite 15-minute bound;
-    // never let an integration subprocess run without a timeout.
+    // Keep a finite per-process bound. The serialized integration collection
+    // is executed one file at a time below, so a long earlier file cannot
+    // consume the timeout budget for later security regressions.
     timeout: 900_000,
     maxBuffer: 32 * 1024 * 1024,
     windowsHide: true
   });
   if (result.stdout) process.stdout.write(result.stdout);
   if (result.stderr) process.stderr.write(result.stderr);
+  const output = `${result.stdout || ''}\n${result.stderr || ''}`;
   if (evidenceFile) {
     fs.mkdirSync(evidenceDir, { recursive: true });
-    fs.writeFileSync(path.join(evidenceDir, evidenceFile), `${result.stdout || ''}\n${result.stderr || ''}`);
+    fs.writeFileSync(path.join(evidenceDir, evidenceFile), output);
   }
   if (result.error) throw new Error(`${label} failed to start: ${result.error.message}`);
-  if (result.status !== 0) throw new Error(`${label} failed with exit code ${result.status ?? 'unknown'}.`);
-  return `${result.stdout || ''}\n${result.stderr || ''}`;
+  if (result.status !== 0 && !allowTestFailures) {
+    throw new Error(`${label} failed with exit code ${result.status ?? 'unknown'}.`);
+  }
+  return { output, status: result.status };
 }
 
 function delay(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
@@ -159,25 +162,43 @@ async function main() {
     .sort()
     .map(file => path.join('test', 'integration', file));
   if (!files.length) throw new Error('No integration test files were found.');
-  // These suites share the dedicated PostgreSQL test database and graph fixture.
-  // Serial file execution prevents cross-suite inserts/cleanup from racing with
-  // the outbox consumer-group baseline captured by the Memgraph integration test.
-  const output = run('Run live PostgreSQL/Memgraph/product integration tests', ['--test', '--test-concurrency=1', ...files], env, 'integration-tests.tap.log');
-  const summary = parseNodeTestSummary(output);
-  if (!summary) {
-    throw new Error('Could not parse the Node.js test summary. Expected TAP (# tests 5) or Node information (ℹ tests 5) summary lines; inspect artifacts/evidence/integration-tests.tap.log.');
+  // The test files share one dedicated PostgreSQL database, Redis service and
+  // graph endpoint, but Node's multi-file test runner previously imposed one
+  // 900-second timeout across the entire collection. A timeout in an earlier
+  // file prevented later security regressions (including cloud-connection
+  // capability revocation) from executing. Run each file serially in its own
+  // bounded child process: this preserves fixture ordering while isolating the
+  // timeout budget and retaining per-file logs for actionable diagnostics.
+  const combinedLogPath = path.join(evidenceDir, 'integration-tests.tap.log');
+  fs.mkdirSync(evidenceDir, { recursive: true });
+  fs.writeFileSync(combinedLogPath, '');
+  const totals = { tests: 0, passed: 0, failed: 0, cancelled: 0, skipped: 0, todo: 0 };
+  for (const file of files) {
+    const label = `Run live integration file ${path.basename(file)}`;
+    const evidenceFile = `integration-${path.basename(file, '.test.js')}.tap.log`;
+    const result = run(label, ['--test', '--test-concurrency=1', file], env, evidenceFile, { allowTestFailures: true });
+    fs.appendFileSync(combinedLogPath, `\n\n===== ${file} =====\n${result.output}`);
+    const summary = parseNodeTestSummary(result.output);
+    if (!summary) {
+      throw new Error(`${label} produced no complete Node.js test summary; inspect artifacts/evidence/${evidenceFile}.`);
+    }
+    for (const key of Object.keys(totals)) totals[key] += summary[key];
+    Object.assign(evidence, totals);
+    persistEvidence();
+    if (result.status !== 0) throw new Error(`${label} failed with exit code ${result.status ?? 'unknown'}.`);
+    if (summary.failed > 0) throw new Error(`${label} reported ${summary.failed} failed test(s).`);
+    if (summary.cancelled > 0) throw new Error(`${label} reported ${summary.cancelled} cancelled test(s).`);
+    if (summary.skipped > 0) throw new Error(`${label} reported ${summary.skipped} skipped test(s); live integration requires zero skips.`);
+    if (summary.todo > 0) throw new Error(`${label} reported ${summary.todo} TODO test(s); live integration requires zero TODO tests.`);
   }
-  const { tests, passed, failed, cancelled, skipped, todo } = summary;
-  Object.assign(evidence, { tests, passed, failed, cancelled, skipped, todo });
-  if (tests < 1) throw new Error('Integration test runner reported zero tests.');
-  if (failed > 0) throw new Error(`${failed} integration test(s) failed.`);
-  if (cancelled > 0) throw new Error(`${cancelled} integration test(s) were cancelled.`);
-  if (skipped > 0) throw new Error(`${skipped} integration test(s) were skipped. Live integration validation requires zero skipped tests.`);
-  if (todo > 0) throw new Error(`${todo} integration test(s) are marked TODO. Live integration validation requires no TODO tests.`);
+
+  Object.assign(evidence, totals);
+  if (totals.tests < 1) throw new Error('Integration test runner reported zero tests.');
   evidence.status = 'PASS';
+  persistEvidence();
 
   console.log('\nLIVE INTEGRATION RESULT: PASS');
-  console.log(`Executed ${tests} tests with zero skips against the dedicated test database.`);
+  console.log(`Executed ${totals.tests} tests across ${files.length} serialized files with zero skips against the dedicated test database.`);
   console.log('This is local integration evidence only; it does not certify production, third-party identity, Stripe, storage, or security review gates.');
 }
 
