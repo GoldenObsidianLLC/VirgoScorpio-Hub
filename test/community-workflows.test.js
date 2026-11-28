@@ -234,6 +234,68 @@ test('message creation rejects empty content before opening a transaction', asyn
   await assert.rejects(handleCommunityWorkflowRoute(ctx), error => error.code === 'ERR_VIRGOSCORPIO_HUB_MESSAGE_INVALID' && error.statusCode === 400);
 });
 
+test('report listing revalidates community moderation transactionally before reading details', async () => {
+  const report = {
+    id: 'f65a5487-f9fc-4a98-a71b-1f23c9f08490',
+    reporter_id: recipientId,
+    reporter_name: 'Reporter',
+    target_type: 'user',
+    target_id: recipientId,
+    category: 'harassment',
+    detail: 'Private report detail',
+    status: 'open',
+  };
+  function createPool({ hasCapability }) {
+    const state = { statements: [], commits: 0, rollbacks: 0, releases: 0, poolQueries: 0 };
+    const client = {
+      async query(sql, params) {
+        const statement = String(sql).replace(/\s+/g, ' ').trim();
+        state.statements.push({ statement, params });
+        if (statement === 'BEGIN') return { rows: [] };
+        if (statement === 'COMMIT') { state.commits += 1; return { rows: [] }; }
+        if (statement === 'ROLLBACK') { state.rollbacks += 1; return { rows: [] }; }
+        if (statement.includes('SELECT id FROM sites WHERE id=$1 FOR KEY SHARE')) return { rows: [{ id: siteId }] };
+        if (statement.includes('SELECT r.capabilities FROM users u')) {
+          return { rows: hasCapability ? [{ capabilities: ['community:moderate'] }] : [] };
+        }
+        if (statement.includes('FROM social_reports r JOIN users u')) return { rows: [report] };
+        throw new Error('Unexpected report-list transaction query: ' + statement);
+      },
+      release() { state.releases += 1; },
+    };
+    return {
+      state,
+      pool: {
+        async query() { state.poolQueries += 1; throw new Error('pool.query must not be used for the transactional report list'); },
+        async connect() { return client; },
+      },
+    };
+  }
+
+  const active = createPool({ hasCapability: true });
+  const activeCtx = createContext({ method: 'GET', path: '/api/v1/sites/' + siteId + '/community/reports', query: '?status=open&limit=25', pool: active.pool });
+  assert.equal(await handleCommunityWorkflowRoute(activeCtx), true);
+  assert.equal(activeCtx.res.statusCode, 200);
+  assert.deepEqual(activeCtx.res.payload.reports, [report]);
+  assert.equal(activeCtx.res.payload.requestId, 'test-request');
+  assert.equal(active.state.poolQueries, 0);
+  assert.equal(active.state.commits, 1);
+  assert.equal(active.state.rollbacks, 0);
+  assert.equal(active.state.releases, 1);
+  const capabilityIndex = active.state.statements.findIndex(({ statement }) => statement.includes('SELECT r.capabilities FROM users u'));
+  const reportIndex = active.state.statements.findIndex(({ statement }) => statement.includes('FROM social_reports r JOIN users u'));
+  assert.ok(capabilityIndex >= 0 && capabilityIndex < reportIndex, 'the current moderation capability must be locked before report details are selected');
+  assert.deepEqual(active.state.statements[reportIndex].params, [siteId, 'open', 25]);
+
+  const revoked = createPool({ hasCapability: false });
+  const revokedCtx = createContext({ method: 'GET', path: '/api/v1/sites/' + siteId + '/community/reports', pool: revoked.pool });
+  await assert.rejects(handleCommunityWorkflowRoute(revokedCtx), error => error.statusCode === 403 && error.code === 'ERR_VIRGOSCORPIO_HUB_FORBIDDEN');
+  assert.equal(revoked.state.statements.some(({ statement }) => statement.includes('FROM social_reports r JOIN users u')), false, 'revoked moderators must not reach the report-detail query');
+  assert.equal(revoked.state.commits, 0);
+  assert.equal(revoked.state.rollbacks, 1);
+  assert.equal(revoked.state.releases, 1);
+});
+
 test('report submission rejects unsupported target and category values', async () => {
   const ctx = createContext({ method: 'POST', path: `/api/v1/sites/${siteId}/community/reports`, body: { targetType: 'table', targetId: recipientId, category: 'spam' }, pool: {
     async query() { throw new Error('query should not be called for invalid report'); },
