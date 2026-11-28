@@ -84,7 +84,7 @@ Evidence must identify the exact candidate version and full source SHA. A source
 
 ## Current GitHub disposition
 
-- PR #326 (F1.81) merged; issue #325 closed. Current main: 109c9dfe146ec3261c394d5b4a6e27c7ce64a90a; exact-main workflow #46086982574 passed 7/7 jobs.
+- PR #326 (F1.81) merged; issue #325 closed. Current main: 109c9dfe146ec3261c394d5b4a6e27c7ce64a90a; exact-main workflow #46086982574 passed 7/7 jobs. Documentation refresh PR #327 is open against main and changes only these release Markdown files.
 - Open security PRs: #329 (F1.82 friendship list / issue #328), #331 (F1.83 notification list / issue #330), #333 (F1.84 block list / issue #332) and #335 (F1.85 profile list / issue #334). Push and PR-context CI is green for all four; all remain unmerged. GitHub records maintainer COMMENTED reviews only on #329/#331/#333, no APPROVED independent reviews, and no review submission on #335; these do not satisfy independent approval. PR-event signed attestations are skipped by policy; exact-main attestation/readiness must be rerun after merge.
 - P0: #13 provider/scope approval; #14 independent tenant/site review; #25 independent security assessment; #26 operations/release-owner approval; #32 governance/capital controls.
 - P1: #23 human dependency/SBOM review; #24 load/restore; #124 remaining tenant-isolation work; #234 SAST/secret-history triage; #277 autofix triage. P2: #235 scan freshness/asset coverage.
@@ -93,7 +93,7 @@ Evidence must identify the exact candidate version and full source SHA. A source
 ## Recommended development sequence
 
 1. Complete independent review of PRs #329, #331, #333 and #335; resolve requested changes and merge only when repository review policy is satisfied. Keep changes in small, reviewable increments.
-2. After each merge, rerun exact-main migrations, signed lockfile/SBOM attestation, CodeQL and source-bound readiness. Update the main SHA and current evidence in one coherent documentation change.
+2. These candidates share tenant integration/route unit tests and generated inventory JSON/Markdown; #329/#335 also touch platform-routes and #331/#333 touch community workflows. Rebase/update remaining branches sequentially after each merge, regenerate the inventory on the updated source, and rerun branch CI to prevent stale evidence/conflicts. Then rerun exact-main migrations, signed lockfile/SBOM attestation, CodeQL and source-bound readiness.
 3. Continue issue #124 only after the current bounded read-path PRs have been reviewed. For any new finding require a deterministic hosted PostgreSQL pre-fix reproduction and post-fix proof, active-member positive control, revoked-member denial and unchanged two-site snapshots.
 4. Reuse shared transaction-time authorization helpers and site-first lock order; avoid duplicate authorization SQL and preserve API contracts.
 5. Complete independent reviews #14/#25, qualified dependency/SBOM review #23, load/restore #24, operations/release-owner #26, scope/provider approval #13 and governance #32; triage #234/#235/#277 against fresh source and scanner evidence.

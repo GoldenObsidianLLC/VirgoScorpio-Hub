@@ -118,7 +118,7 @@ The fourteen missing evidence categories remain those listed in release readines
 ### 6. Recommended development sequence
 
 1. Complete independent review of PRs #329, #331, #333 and #335; resolve requested changes and merge only when repository review policy is satisfied. Keep these bounded changes in small, reviewable increments.
-2. After each merge, rerun exact-main migrations, signed lockfile/SBOM attestation, CodeQL and source-bound readiness; refresh the main SHA and all current Markdown snapshots together.
+2. These candidates share integration/route unit tests, generated tenant-inventory JSON/Markdown and overlapping application modules. Rebase/update remaining branches sequentially after each merge, regenerate the inventory against the new base and rerun branch CI to avoid stale evidence/conflicts. Then rerun exact-main migrations, signed lockfile/SBOM attestation, CodeQL and source-bound readiness; refresh all current Markdown snapshots together.
 3. Continue issue #124 only after current candidate PRs have been reviewed. For a new finding, require deterministic hosted PostgreSQL pre-fix reproduction and post-fix validation, active-member positive control, revoked-member denial and unchanged two-site snapshots.
 4. Reuse withTransaction, assertActiveSiteMembership, assertSiteCapabilityInTransaction and the established site-first lock order. Avoid duplicate authorization SQL and preserve fail-closed/API-contract behavior.
 5. Complete independent tenant/platform reviews #14/#25, qualified dependency/SBOM review #23, load/restore #24, operations/release-owner #26, provider/scope approval #13 and governance #32. Continue SAST/Aikido triage #234/#235/#277 against fresh source and scanner evidence.
