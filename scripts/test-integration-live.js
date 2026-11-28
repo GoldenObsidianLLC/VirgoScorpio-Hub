@@ -36,8 +36,9 @@ function run(label, args, env, evidenceFile) {
     cwd: root,
     env,
     encoding: 'utf8',
-    // Keep a bounded subprocess guard; the integration tests must release transactions during storage I/O.
-    timeout: 240_000,
+    // The serialized live suite now exercises more tenant revocation races.
+    // Keep a finite guard, but allow the expanded PostgreSQL/Memgraph suite to complete.
+    timeout: 600_000,
     maxBuffer: 32 * 1024 * 1024,
     windowsHide: true
   });
