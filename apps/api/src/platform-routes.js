@@ -241,11 +241,17 @@ async function handlePlatformRoute(ctx) {
     await siteIdFor({ req, url, body, actor, routeSiteId: siteId });
 
     if (method === 'GET') {
-      const result = await localPool.query(
-        'SELECT display_name,bio,avatar_asset_id,website_url,visibility,metadata,version,updated_at FROM social_profiles WHERE site_id=$1 AND user_id=$2',
-        [siteId, actor.user.id],
-      );
-      return sendJson(res, 200, { profile: result.rows[0] || null, requestId });
+      const profile = await withTransaction(localPool, async client => {
+        // Revalidate membership on the same transaction as this persisted profile
+        // read; request-time site resolution alone is not durable read authority.
+        await assertActiveSiteMembership(client, ctx, siteId, actor.user.id);
+        const result = await client.query(
+          'SELECT display_name,bio,avatar_asset_id,website_url,visibility,metadata,version,updated_at FROM social_profiles WHERE site_id=$1 AND user_id=$2',
+          [siteId, actor.user.id],
+        );
+        return result.rows[0] || null;
+      });
+      return sendJson(res, 200, { profile, requestId });
     }
 
     const validation = validateProfile(body);

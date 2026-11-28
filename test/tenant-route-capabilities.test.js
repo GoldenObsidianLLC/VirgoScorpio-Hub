@@ -209,3 +209,103 @@ test('community group member listing is reachable only with the site moderation 
   const memberQueryIndex = transactionQueries.findIndex(query => query.sql.includes('FROM social_group_memberships gm JOIN users u'));
   assert.ok(capabilityQueryIndex >= 0 && capabilityQueryIndex < memberQueryIndex, 'the current site capability must be locked before member details are selected');
 });
+
+test('community profile listing revalidates active site membership before reading profile fields', async t => {
+  const authorizationCalls = [];
+  const transactionQueries = [];
+  let profileRows = [{
+    display_name: 'Site A Profile',
+    bio: 'Private profile biography',
+    avatar_asset_id: null,
+    website_url: 'https://site-a-profile.example.test',
+    visibility: 'members',
+    metadata: { source: 'route-unit-test' },
+    version: 3,
+    updated_at: '2026-11-27T12:00:00.000Z'
+  }];
+  let profileQueryCount = 0;
+  const identity = {
+    async authenticate(token) {
+      assert.equal(token, 'site-a-profile-session');
+      return {
+        mode: 'session',
+        sessionToken: token,
+        sessionId: SESSION_A,
+        expiresAt: new Date(Date.now() + 60_000),
+        user: { id: USER_A, email: 'site-a-profile@example.test', displayName: 'Site A Profile User', status: 'active' },
+        memberships: [{ siteId: SITE_A }]
+      };
+    },
+    async authorizeSite(userId, siteId, capability) {
+      authorizationCalls.push({ userId, siteId, capability });
+      return userId === USER_A && siteId === SITE_A && capability === 'content:read';
+    },
+    async isSessionActive() { return true; }
+  };
+  const expectedProfile = profileRows[0];
+  const pool = {
+    async query(sql) {
+      if (sql.includes('FROM firewall_rules WHERE enabled=true')) return { rows: [] };
+      throw new Error('Profile data must use the membership-authorization transaction: ' + sql);
+    },
+    async connect() {
+      return {
+        async query(sql, params) {
+          transactionQueries.push({ sql, params });
+          if (['BEGIN', 'COMMIT', 'ROLLBACK'].includes(sql.trim().toUpperCase())) return { rows: [] };
+          if (sql.includes('SELECT id FROM sites WHERE id=$1 FOR KEY SHARE')) {
+            assert.deepEqual(params, [SITE_A], 'site lock must be bound to the route site');
+            return { rows: [{ id: SITE_A }] };
+          }
+          if (sql.includes('SELECT r.capabilities FROM users u JOIN site_memberships m')) {
+            assert.deepEqual(params, [SITE_A, USER_A, 'active'], 'membership validation must bind site, actor and active status');
+            return { rows: [{ capabilities: ['content:read'] }] };
+          }
+          if (sql.includes('FROM social_profiles WHERE site_id=$1 AND user_id=$2')) {
+            profileQueryCount += 1;
+            assert.deepEqual(params, [SITE_A, USER_A], 'profile query must remain constrained by site and authenticated actor');
+            return { rows: profileRows };
+          }
+          throw new Error('Unexpected profile transaction query: ' + sql);
+        },
+        release() {}
+      };
+    },
+    async end() {}
+  };
+  const server = createApiServer({
+    env: { NODE_ENV: 'test', AI_PROVIDER: 'mock', RATE_LIMIT_MAX_REQUESTS: '100' },
+    pool,
+    identityService: identity,
+    logger: { error() {} }
+  });
+
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  t.after(async () => {
+    await new Promise(resolve => server.close(resolve));
+    await server.virgoScorpioHub.close();
+  });
+
+  const base = 'http://127.0.0.1:' + server.address().port;
+  assert.equal((await fetch(base + '/health')).status, 200);
+  const headers = { authorization: 'Bearer site-a-profile-session' };
+  const response = await fetch(base + '/api/v1/sites/' + SITE_A + '/community/profile', { headers });
+  assert.equal(response.status, 200);
+  assert.deepEqual((await response.json()).profile, expectedProfile);
+  assert.ok(authorizationCalls.some(call => call.userId === USER_A && call.siteId === SITE_A && call.capability === 'content:read'));
+
+  const firstRead = transactionQueries.slice();
+  const siteLockIndex = firstRead.findIndex(query => query.sql.includes('SELECT id FROM sites WHERE id=$1 FOR KEY SHARE'));
+  const membershipIndex = firstRead.findIndex(query => query.sql.includes('SELECT r.capabilities FROM users u JOIN site_memberships m'));
+  const profileIndex = firstRead.findIndex(query => query.sql.includes('FROM social_profiles WHERE site_id=$1 AND user_id=$2'));
+  assert.ok(
+    siteLockIndex >= 0 && siteLockIndex < membershipIndex && membershipIndex < profileIndex,
+    'site and current membership locks must precede the profile-detail SELECT',
+  );
+
+  profileRows = [];
+  const absentResponse = await fetch(base + '/api/v1/sites/' + SITE_A + '/community/profile', { headers });
+  assert.equal(absentResponse.status, 200);
+  assert.equal((await absentResponse.json()).profile, null, 'an active member without a saved profile must still receive profile:null');
+  assert.equal(profileQueryCount, 2, 'each profile read must execute its SELECT once within the transaction');
+});
