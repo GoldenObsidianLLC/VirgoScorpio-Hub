@@ -5,6 +5,7 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const { loadEnvFile } = require('./load-env');
 const { parseNodeTestSummary } = require('./parse-node-test-summary');
+const { orderLiveIntegrationFiles } = require('./order-live-integration-files');
 
 const root = path.resolve(__dirname, '..');
 const evidenceDir = path.join(root, 'artifacts', 'evidence');
@@ -156,11 +157,15 @@ async function main() {
   const integrationDir = path.join(root, 'test', 'integration');
   const runDisposableRedisOutageTest = process.env.CI === 'true' &&
     process.env.VIRGOSCORPIO_HUB_RUN_REDIS_OUTAGE_INTEGRATION === 'true';
-  const files = fs.readdirSync(integrationDir)
-    .filter(file => file.endsWith('.test.js'))
-    .filter(file => file !== 'redis-outage-recovery.integration.test.js' || runDisposableRedisOutageTest)
-    .sort()
-    .map(file => path.join('test', 'integration', file));
+  // Run the high-cardinality tenant-isolation suite first against the freshly
+  // migrated database, before preceding integration fixtures can add residual
+  // rows or increase query cost. Remaining suites retain deterministic order.
+  const files = orderLiveIntegrationFiles(
+    fs.readdirSync(integrationDir)
+      .filter(file => file.endsWith('.test.js'))
+      .filter(file => file !== 'redis-outage-recovery.integration.test.js' || runDisposableRedisOutageTest)
+      .map(file => path.join('test', 'integration', file))
+  );
   if (!files.length) throw new Error('No integration test files were found.');
   // The test files share one dedicated PostgreSQL database, Redis service and
   // graph endpoint, but Node's multi-file test runner previously imposed one
