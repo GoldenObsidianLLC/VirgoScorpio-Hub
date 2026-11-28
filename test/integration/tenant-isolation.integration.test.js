@@ -6,6 +6,7 @@ const { randomUUID } = require('node:crypto');
 const { createPostgresPool, createPostgresStore } = require('../../packages/db/src/postgres-store');
 const { createIdentityService, hashPassword } = require('../../packages/auth/src/service');
 const { createApiServer } = require('../../apps/api/src/server');
+const { waitForDatabaseWriteLock } = require('../helpers/postgres-locks');
 
 const enabled = Boolean(
   process.env.DATABASE_URL &&
@@ -43,6 +44,17 @@ test(
     delete env.VIRGOSCORPIO_HUB_API_TOKEN;
 
     const identity = createIdentityService({ pool, env });
+    let authorizeSiteInterceptor = null;
+    // Intercept only request-time site capability checks so the real HTTP handler
+    // can be paused after authorization while a concurrent role revocation commits.
+    const apiIdentity = {
+      ...identity,
+      authorizeSite: async (...args) => {
+        const allowed = await identity.authorizeSite(...args);
+        if (authorizeSiteInterceptor) await authorizeSiteInterceptor(args, allowed);
+        return allowed;
+      },
+    };
 
     t.after(async () => {
       if (server) {
@@ -125,7 +137,7 @@ test(
     const session = await identity.login({ email: actor.email, password, ip: '127.0.0.1' });
     assert.equal(session.mfaRequired, false);
 
-    server = createApiServer({ env, pool, identityService: identity, logger: { error() {} } });
+    server = createApiServer({ env, pool, identityService: apiIdentity, logger: { error() {} } });
     await new Promise((resolve, reject) => {
       server.once('error', reject);
       server.listen(0, '127.0.0.1', resolve);
@@ -741,6 +753,82 @@ test(
       assert.deepEqual(listedConnections.map(connection => connection.id), [siteBConnectionId]);
       assert.equal(JSON.stringify(listedConnections).includes(siteABefore.name), false);
       assert.equal(JSON.stringify(listedConnections).includes(siteABefore.credential_reference), false);
+
+      await t.test('cloud connection listing revalidates cloud:manage before disclosing provider configuration and credential references', async () => {
+        const originalCapabilitiesResult = await pool.query('SELECT capabilities FROM roles WHERE id=$1', [cloudRoleId]);
+        const originalCapabilities = originalCapabilitiesResult.rows[0].capabilities;
+        assert.ok(originalCapabilities.includes('cloud:manage'), 'the Site B cloud-manager role starts authorized');
+
+        const revocationClient = await pool.connect();
+        let revocationOpen = false;
+        let connectionsPromise;
+        let connectionsOutcome;
+        let preflightCompleted;
+        let resumePreflight;
+        let preflightIntercepted = false;
+        const preflight = new Promise(resolve => { preflightCompleted = resolve; });
+        const preflightBarrier = new Promise(resolve => { resumePreflight = resolve; });
+        authorizeSiteInterceptor = async (args, allowed) => {
+          if (!preflightIntercepted && allowed && args[0] === cloudActor.id && args[1] === siteB && args[2] === 'cloud:manage') {
+            preflightIntercepted = true;
+            preflightCompleted();
+            await preflightBarrier;
+          }
+        };
+
+        try {
+          await revocationClient.query('BEGIN');
+          revocationOpen = true;
+          // Preserve the established transaction-time authorization lock order.
+          await revocationClient.query('SELECT id FROM sites WHERE id=$1 FOR UPDATE', [siteB]);
+          await revocationClient.query('SELECT id FROM roles WHERE id=$1 FOR UPDATE', [cloudRoleId]);
+          await revocationClient.query("UPDATE roles SET capabilities=capabilities-'cloud:manage' WHERE id=$1", [cloudRoleId]);
+
+          connectionsPromise = fetch(`${base}/api/v1/sites/${siteB}/cloud/connections`, { headers: cloudHeaders })
+            .then(async response => ({ status: response.status, payload: await response.json() }));
+          const preflightObserved = await Promise.race([
+            preflight.then(() => true),
+            new Promise(resolve => setTimeout(() => resolve(false), 5000)),
+          ]);
+          assert.equal(preflightObserved, true, 'cloud connection-list request must pass request-time cloud:manage authorization before revocation');
+
+          // Resume the real HTTP handler while revocation still holds the Site B and role row locks.
+          resumePreflight();
+          const earlyOutcome = await Promise.race([
+            connectionsPromise,
+            new Promise(resolve => setTimeout(() => resolve(null), 100)),
+          ]);
+          const lockObserved = earlyOutcome
+            ? false
+            : await waitForDatabaseWriteLock(revocationClient, 'FOR KEY SHARE', 5000, { relationName: 'sites' });
+
+          await revocationClient.query('COMMIT');
+          revocationOpen = false;
+          connectionsOutcome = earlyOutcome || await connectionsPromise;
+
+          assert.equal(earlyOutcome, null, 'cloud configuration and credential references must not be returned before capability revocation commits');
+          assert.equal(lockObserved, true, 'cloud connection listing must serialize against site-scoped cloud:manage revocation');
+          assert.equal(connectionsOutcome.status, 403, 'a revoked cloud manager must not list retained cloud connections');
+          assert.equal(connectionsOutcome.payload.code, 'ERR_VIRGOSCORPIO_HUB_FORBIDDEN');
+          assert.equal(Object.hasOwn(connectionsOutcome.payload, 'connections'), false, 'the denied response must not include a connection collection');
+          const deniedPayload = JSON.stringify(connectionsOutcome.payload);
+          for (const marker of [siteBConnectionId, siteBBefore.name, siteBBefore.credential_reference, siteBBefore.config.bucket]) {
+            assert.equal(deniedPayload.includes(String(marker)), false, 'the denied response must not disclose cloud-connection marker: ' + marker);
+          }
+
+          const revokedCapabilities = await pool.query('SELECT capabilities FROM roles WHERE id=$1', [cloudRoleId]);
+          assert.equal(revokedCapabilities.rows[0].capabilities.includes('cloud:manage'), false, 'cloud:manage remains revoked until cleanup');
+          assert.deepEqual(await snapshot(siteA, siteAConnectionId), siteABefore, 'Site A cloud connection must remain unchanged');
+          assert.deepEqual(await snapshot(siteB, siteBConnectionId), siteBBefore, 'Site B cloud connection must remain unchanged');
+        } finally {
+          resumePreflight();
+          authorizeSiteInterceptor = null;
+          if (revocationOpen) await revocationClient.query('ROLLBACK').catch(() => {});
+          if (connectionsPromise && !connectionsOutcome) connectionsOutcome = await connectionsPromise.catch(() => null);
+          revocationClient.release();
+          await pool.query('UPDATE roles SET capabilities=$2::jsonb WHERE id=$1', [cloudRoleId, JSON.stringify(originalCapabilities)]).catch(() => {});
+        }
+      });
 
       for (const action of ['test', 'disable']) {
         const response = await fetch(
