@@ -58,7 +58,13 @@ GET community profile previously selected persisted profile fields through a poo
 
 PR [#335](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/335) uses withTransaction and shared assertActiveSiteMembership in the same transaction as the profile SELECT, preserving profile:null for an active member without a record. Post-fix push [#46102459374](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/46102459374) and PR-context [#46102801546](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/46102801546) passed all required jobs: PostgreSQL/Memgraph 208/208, Node 22/24 each 1,149/1,149, EnginEx 94/94, browser 9/9, CodeQL and npm audit zero. PR-event attestation is skipped by policy; exact-main attestation is required after merge.
 
-F1.82–F1.85 are unmerged maintainer-led fixes. They add no schema/migration, dependency/lockfile, external response-shape or SemVer change. Their passing PR CI does not close independent tenant review #14 or platform security assessment #25.
+### F1.86 verified PR candidate — document-version capability revalidation (issue #338 / PR #339)
+
+GET `/api/v1/sites/:siteId/content/:contentId/version` previously passed both request-time site and `content:read` checks, then performed separate pool-level reads for the content item and revision count. Pre-fix hosted workflow [#46105677058](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/46105677058) reproduced HTTP 200 disclosure of document/content IDs, version/schema/status and revision metadata while an independent Site B transaction held the role row lock after removing `content:read`.
+
+PR [#339](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/339) reuses withTransaction and assertSiteCapabilityInTransaction for both reads on the same transaction client. The deterministic PostgreSQL regression verifies the active-member positive control, serialization against role-capability revocation, 403 without document metadata, unchanged content/revision rows and Site A/Site B snapshots, plus role/fixture restoration. Post-fix push [#46106380797](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/46106380797) passed PostgreSQL/Memgraph 208/208 with zero skips, Node 22/24 each 1,149/1,149, EnginEx 94/94, browser 9/9, CodeQL and npm audit zero vulnerabilities. PR-context [#46106744261](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/46106744261) completed successfully with all required PR jobs; its signed-attestation job is skipped by PR policy. Exact-main signed attestation and readiness regeneration remain required after merge.
+
+F1.82–F1.86 are unmerged maintainer-led fixes. They add no schema/migration, dependency/lockfile, external response-shape or SemVer change. Passing candidate CI does not close independent tenant review #14 or platform security assessment #25.
 
 ### F1.80 merged security change — PR #324 / issue #321
 
@@ -84,18 +90,19 @@ Evidence must identify the exact candidate version and full source SHA. A source
 
 ## Current GitHub disposition
 
-- PR #326 (F1.81) merged; issue #325 closed. Current main: 109c9dfe146ec3261c394d5b4a6e27c7ce64a90a; exact-main workflow #46086982574 passed 7/7 jobs. Documentation refresh PR #336 is open against main and changes only these release Markdown files.
-- Open security PRs: #329 (F1.82 friendship list / issue #328), #331 (F1.83 notification list / issue #330), #333 (F1.84 block list / issue #332) and #335 (F1.85 profile list / issue #334). Push and PR-context CI is green for all four; all remain unmerged. GitHub records maintainer COMMENTED reviews only on #329/#331/#333, no APPROVED independent reviews, and no review submission on #335; these do not satisfy independent approval. PR-event signed attestations are skipped by policy; exact-main attestation/readiness must be rerun after merge.
+- PR #326 (F1.81) merged; issue #325 closed. Current main: 109c9dfe146ec3261c394d5b4a6e27c7ce64a90a; exact-main workflow #46086982574 passed 7/7 jobs. Documentation refresh PR #336 is open against main and changes only the release Markdown files.
+- Open security PRs: #329 (F1.82 friendship list / issue #328), #331 (F1.83 notification list / issue #330), #333 (F1.84 block list / issue #332), #335 (F1.85 profile read / issue #334) and #339 (F1.86 document-version capability read / issue #338). Required push and PR-context checks are green for all five; all remain unmerged.
+- Review state at this snapshot: #329/#331/#333 have maintainer COMMENTED reviews only; #335 and #339 have no submitted reviews. There are no APPROVED independent reviews. These maintainer checks do not satisfy independent approval. PR-event signed-attestation jobs are skipped by policy; exact-main attestation/readiness must be rerun after each merge.
 - P0: #13 provider/scope approval; #14 independent tenant/site review; #25 independent security assessment; #26 operations/release-owner approval; #32 governance/capital controls.
 - P1: #23 human dependency/SBOM review; #24 load/restore; #124 remaining tenant-isolation work; #234 SAST/secret-history triage; #277 autofix triage. P2: #235 scan freshness/asset coverage.
 - Package 0.6.2 remains private/unreleased; production remains NO-GO.
 
 ## Recommended development sequence
 
-1. Complete independent review of PRs #329, #331, #333 and #335; resolve requested changes and merge only when repository review policy is satisfied. Keep changes in small, reviewable increments.
-2. These candidates share tenant integration/route unit tests and generated inventory JSON/Markdown; #329/#335 also touch platform-routes and #331/#333 touch community workflows. Rebase/update remaining branches sequentially after each merge, regenerate the inventory on the updated source, and rerun branch CI to prevent stale evidence/conflicts. Then rerun exact-main migrations, signed lockfile/SBOM attestation, CodeQL and source-bound readiness.
+1. Complete independent review of PRs #329, #331, #333, #335 and #339; resolve requested changes and merge only when repository review policy is satisfied. Review documentation PR #336 separately. Keep changes in small, reviewable increments.
+2. These candidates share tenant integration/route unit tests and generated inventory JSON/Markdown; several also touch overlapping route handlers. Rebase/update remaining branches sequentially after each merge, regenerate the inventory on the updated source, and rerun branch CI to prevent stale evidence/conflicts. Then rerun exact-main migrations, signed lockfile/SBOM attestation, CodeQL and source-bound readiness.
 3. Continue issue #124 only after the current bounded read-path PRs have been reviewed. For any new finding require a deterministic hosted PostgreSQL pre-fix reproduction and post-fix proof, active-member positive control, revoked-member denial and unchanged two-site snapshots.
-4. Reuse shared transaction-time authorization helpers and site-first lock order; avoid duplicate authorization SQL and preserve API contracts.
+4. Reuse shared transaction-time membership/capability authorization helpers and site-first lock order; avoid duplicate authorization SQL and preserve API contracts.
 5. Complete independent reviews #14/#25, qualified dependency/SBOM review #23, load/restore #24, operations/release-owner #26, scope/provider approval #13 and governance #32; triage #234/#235/#277 against fresh source and scanner evidence.
 
 ## F1.74 merged implementation

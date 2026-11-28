@@ -54,7 +54,15 @@ GET /api/v1/sites/:siteId/community/profile previously selected persisted profil
 
 PR [#335](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/335) moves profile GET into withTransaction and calls shared assertActiveSiteMembership on the same transaction client as the SELECT; the active-member profile:null contract is unchanged. Post-fix push [#46102459374](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/46102459374) and PR-context [#46102801546](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/46102801546) passed all required jobs: PostgreSQL/Memgraph 208/208 with zero skips, Node 22/24 each 1,149/1,149, EnginEx 94/94, browser smoke 9/9, CodeQL and npm audit zero vulnerabilities. PR-event attestation is skipped by policy; exact-main signed attestation remains required after merge.
 
-F1.82–F1.85 are unmerged maintainer-led candidate changes. All reuse established transaction authorization helpers and site-first locking; no schema/migration, dependency/lockfile, external response-shape or SemVer change is implied. Passing candidate CI does not satisfy independent tenant/site review #14, platform security assessment #25 or other production gates.
+### F1.86 verified PR candidate — document-version capability revalidation (27 November 2026 America/Chicago; issue #338 / PR #339)
+
+GET /api/v1/sites/:siteId/content/:contentId/version previously passed request-time site membership and content:read checks, then selected the content item and revision count with two pool-level queries. Pre-fix hosted workflow [#46105677058](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/46105677058) reproduced HTTP 200 disclosure of document/content identifiers, version/schema/status and revision metadata while an independent Site B transaction held the role-row lock after removing content:read.
+
+PR [#339](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/339) reuses withTransaction and shared assertSiteCapabilityInTransaction for both SELECTs on the same transaction client. The request-time preflights, site/content predicates, 404 behavior, response shape and request ID remain unchanged. The deterministic role-capability regression verifies active-member access, serialization against role revocation, post-commit 403 without version metadata, unchanged content/revision rows and Site A/Site B snapshots, and fixture restoration.
+
+Post-fix hosted push workflow [#46106380797](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/46106380797) passed PostgreSQL/Memgraph 208/208 with zero failures/skips (document-version regression passed as subtest 24); Node 22/24 each 1,149/1,149 with zero skips; EnginEx 94/94; browser smoke 9/9; CodeQL; and npm audit zero vulnerabilities. PR-context workflow [#46106744261](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/46106744261) also completed successfully with all required PR jobs. Its signed-attestation job is skipped by PR-event policy; exact-main signed attestation and readiness regeneration remain required after merge.
+
+F1.82–F1.86 are unmerged maintainer-led candidate changes. All reuse established transaction authorization helpers and site-first locking; no schema/migration, dependency/lockfile, external response-shape or SemVer change is implied. Passing candidate CI does not satisfy independent tenant/site review #14, platform security assessment #25 or other production gates.
 
 ### F1.80 merged implementation — PR #324 / issue #321
 
@@ -112,20 +120,21 @@ The fourteen missing evidence categories remain those listed in release readines
 ### 5. Current GitHub issue and PR disposition
 
 - PR #326 (F1.81) merged; issue #325 closed. Main: 109c9dfe146ec3261c394d5b4a6e27c7ce64a90a. Exact-main workflow #46086982574 passed 7/7 jobs.
-- Open security PRs: #329 (F1.82 friendship list / issue #328), #331 (F1.83 notification list / issue #330), #333 (F1.84 block list / issue #332) and #335 (F1.85 profile list / issue #334). Push and PR-context CI is green for all four; all remain unmerged. GitHub records maintainer COMMENTED reviews only on #329/#331/#333, no APPROVED independent reviews, and no review submission on #335; these do not satisfy independent approval. PR-event attestations are skipped by policy; exact-main signed attestations and readiness regeneration are required after merge.
+- Open security PRs: #329 (F1.82 friendship list / issue #328), #331 (F1.83 notification list / issue #330), #333 (F1.84 block list / issue #332), #335 (F1.85 profile read / issue #334) and #339 (F1.86 document-version capability read / issue #338). Required push and PR-context CI passed for all five; all remain unmerged. PR #336 separately updates release Markdown only.
+- Review state: #329/#331/#333 have maintainer COMMENTED reviews only; #335 and #339 have no submitted reviews. No APPROVED independent review exists. These checks do not satisfy independent approval. PR-event signed attestations are skipped by policy; exact-main signed attestation and readiness regeneration are required after merge.
 - Parent #124 and independent reviews #14/#25 remain open. P0: #13, #14, #25, #26 and #32. P1: #23, #24, #124, #234 and #277. P2: #235.
 
 ### 6. Recommended development sequence
 
-1. Complete independent review of PRs #329, #331, #333 and #335; resolve requested changes and merge only when repository review policy is satisfied. Keep these bounded changes in small, reviewable increments.
-2. These candidates share integration/route unit tests, generated tenant-inventory JSON/Markdown and overlapping application modules. Rebase/update remaining branches sequentially after each merge, regenerate the inventory against the new base and rerun branch CI to avoid stale evidence/conflicts. Then rerun exact-main migrations, signed lockfile/SBOM attestation, CodeQL and source-bound readiness; refresh all current Markdown snapshots together.
-3. Continue issue #124 only after current candidate PRs have been reviewed. For a new finding, require deterministic hosted PostgreSQL pre-fix reproduction and post-fix validation, active-member positive control, revoked-member denial and unchanged two-site snapshots.
+1. Complete independent review of PRs #329, #331, #333, #335 and #339; resolve requested changes and merge only when repository review policy is satisfied. Review docs PR #336 separately.
+2. These candidates share integration/route unit tests and generated tenant-inventory JSON/Markdown, with overlapping route/workflow modules. Rebase/update remaining branches sequentially after each merge, regenerate the inventory against the new base and rerun branch CI to avoid stale evidence/conflicts. Then rerun exact-main migrations, signed lockfile/SBOM attestation, CodeQL and source-bound readiness; refresh all current Markdown snapshots together.
+3. Continue issue #124 only after current candidate PRs have been reviewed. For a new finding, require deterministic hosted PostgreSQL pre-fix reproduction and post-fix validation, an active-member positive control, revoked-capability denial and unchanged two-site snapshots.
 4. Reuse withTransaction, assertActiveSiteMembership, assertSiteCapabilityInTransaction and the established site-first lock order. Avoid duplicate authorization SQL and preserve fail-closed/API-contract behavior.
 5. Complete independent tenant/platform reviews #14/#25, qualified dependency/SBOM review #23, load/restore #24, operations/release-owner #26, provider/scope approval #13 and governance #32. Continue SAST/Aikido triage #234/#235/#277 against fresh source and scanner evidence.
 
 ### 7. Compatibility and release boundary
 
-F1.81 and the unmerged F1.82–F1.85 candidate changes introduce no schema/migration, dependency/lockfile, external response-shape or SemVer change. Package 0.6.2 remains private and unreleased. No tag, publication, deployment or production promotion is authorized. Production remains NOT_PRODUCTION_CERTIFIED / NO-GO.
+F1.81 and the unmerged F1.82–F1.86 candidate changes introduce no schema/migration, dependency/lockfile, external response-shape or SemVer change. Package 0.6.2 remains private and unreleased. No tag, publication, deployment or production promotion is authorized. Production remains NOT_PRODUCTION_CERTIFIED / NO-GO.
 
 ## Historical report baseline — original executive decision (superseded by the current snapshot above)
 
