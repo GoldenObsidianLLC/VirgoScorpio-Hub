@@ -209,3 +209,101 @@ test('community group member listing is reachable only with the site moderation 
   const memberQueryIndex = transactionQueries.findIndex(query => query.sql.includes('FROM social_group_memberships gm JOIN users u'));
   assert.ok(capabilityQueryIndex >= 0 && capabilityQueryIndex < memberQueryIndex, 'the current site capability must be locked before member details are selected');
 });
+
+test('community notification listing revalidates active site membership before reading inbox data', async t => {
+  const authorizationCalls = [];
+  const transactionQueries = [];
+  const dataQueries = [];
+  const identity = {
+    async authenticate(token) {
+      assert.equal(token, 'site-a-notification-session');
+      return {
+        mode: 'session',
+        sessionToken: token,
+        sessionId: SESSION_A,
+        expiresAt: new Date(Date.now() + 60_000),
+        user: { id: USER_A, email: 'site-a-notification@example.test', displayName: 'Site A Notification User', status: 'active' },
+        memberships: [{ siteId: SITE_A }]
+      };
+    },
+    async authorizeSite(userId, siteId, capability) {
+      authorizationCalls.push({ userId, siteId, capability });
+      return userId === USER_A && siteId === SITE_A && capability === 'content:read';
+    }
+  };
+  const expectedNotifications = [{
+    id: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
+    notification_type: 'community.message.new',
+    payload: { messageId: 'ffffffff-ffff-4fff-8fff-ffffffffffff' },
+    read_at: null,
+    created_at: '2026-11-27T12:00:00.000Z'
+  }];
+  const pool = {
+    async query(sql) {
+      if (sql.includes('FROM firewall_rules WHERE enabled=true')) return { rows: [] };
+      throw new Error('Notification data must use the membership-authorization transaction: ' + sql);
+    },
+    async connect() {
+      return {
+        async query(sql, params) {
+          transactionQueries.push({ sql, params });
+          if (['BEGIN', 'COMMIT', 'ROLLBACK'].includes(sql.trim().toUpperCase())) return { rows: [] };
+          if (sql.includes('SELECT id FROM sites WHERE id=$1 FOR KEY SHARE')) {
+            assert.deepEqual(params, [SITE_A], 'site lock must be bound to the route site');
+            return { rows: [{ id: SITE_A }] };
+          }
+          if (sql.includes('SELECT r.capabilities FROM users u JOIN site_memberships m')) {
+            assert.deepEqual(params, [SITE_A, USER_A, 'active'], 'membership validation must bind site, actor and active status');
+            return { rows: [{ capabilities: ['content:read'] }] };
+          }
+          if (sql.includes('FROM social_notifications') && sql.includes('ORDER BY created_at DESC LIMIT $3')) {
+            dataQueries.push({ sql, params });
+            assert.deepEqual(params, [SITE_A, USER_A, 25], 'notification list must remain scoped to site, recipient and requested limit');
+            return { rows: expectedNotifications };
+          }
+          if (sql.includes('SELECT count(*)::int AS count FROM social_notifications') && sql.includes('read_at IS NULL')) {
+            dataQueries.push({ sql, params });
+            assert.deepEqual(params, [SITE_A, USER_A], 'unread count must remain scoped to site and recipient');
+            return { rows: [{ count: 1 }] };
+          }
+          throw new Error('Unexpected notification transaction query: ' + sql);
+        },
+        release() {}
+      };
+    },
+    async end() {}
+  };
+  const server = createApiServer({
+    env: { NODE_ENV: 'test', AI_PROVIDER: 'mock', RATE_LIMIT_MAX_REQUESTS: '100' },
+    pool,
+    identityService: identity,
+    logger: { error() {} }
+  });
+
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  t.after(async () => {
+    await new Promise(resolve => server.close(resolve));
+    await server.virgoScorpioHub.close();
+  });
+
+  const base = 'http://127.0.0.1:' + server.address().port;
+  assert.equal((await fetch(base + '/health')).status, 200);
+  const response = await fetch(base + '/api/v1/sites/' + SITE_A + '/community/notifications?limit=25', {
+    headers: { authorization: 'Bearer site-a-notification-session' }
+  });
+  assert.equal(response.status, 200);
+  const payload = await response.json();
+  assert.deepEqual(payload.notifications, expectedNotifications);
+  assert.equal(payload.unreadCount, 1);
+  assert.ok(authorizationCalls.some(call => call.userId === USER_A && call.siteId === SITE_A && call.capability === 'content:read'));
+  assert.equal(dataQueries.length, 2, 'notification rows and unread count must both be read in the same transaction');
+
+  const siteLockIndex = transactionQueries.findIndex(query => query.sql.includes('SELECT id FROM sites WHERE id=$1 FOR KEY SHARE'));
+  const membershipIndex = transactionQueries.findIndex(query => query.sql.includes('SELECT r.capabilities FROM users u JOIN site_memberships m'));
+  const listIndex = transactionQueries.findIndex(query => query.sql.includes('FROM social_notifications') && query.sql.includes('ORDER BY created_at DESC LIMIT $3'));
+  const unreadIndex = transactionQueries.findIndex(query => query.sql.includes('SELECT count(*)::int AS count FROM social_notifications'));
+  assert.ok(
+    siteLockIndex >= 0 && siteLockIndex < membershipIndex && membershipIndex < listIndex && listIndex < unreadIndex,
+    'site and current membership locks must precede both inbox reads',
+  );
+});

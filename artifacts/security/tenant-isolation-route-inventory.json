@@ -8,7 +8,7 @@
   "generatedBy": "scripts/generate-tenant-isolation-route-inventory.js",
   "sourceTree": {
     "fileCount": 22,
-    "sha256": "a10b79584415f91188b7ecebd0aa336a0740f181b10042db979730ec3abe9451",
+    "sha256": "15302cded84578c25147f806b8e339191a6d79f74c7901c2409289574e57a99b",
     "files": [
       "apps/api/src/ai-task-routes.js",
       "apps/api/src/auth-routes.js",
@@ -36,7 +36,7 @@
   },
   "testTree": {
     "fileCount": 61,
-    "sha256": "80c58f290f22c7830f0f802ee3ec3eb2b4b49ac807dcd8150c83fd3b627e7560",
+    "sha256": "4f4bc557ec8bd18700103b1208ce14e76b7d769f27ac2db097347eb7ae059ffe",
     "files": [
       "test/ai-queue-worker.test.js",
       "test/ai-task-queue.test.js",
@@ -1516,7 +1516,7 @@
             {
               "anchor": "async function handleCommunityWorkflowRoute(",
               "lines": [
-                522
+                535
               ]
             }
           ]

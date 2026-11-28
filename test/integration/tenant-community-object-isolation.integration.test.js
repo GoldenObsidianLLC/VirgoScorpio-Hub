@@ -2666,6 +2666,90 @@ test(
       await assertSiteAUnchanged();
     });
 
+    await t.test('notification listing revalidates site membership before disclosing retained notifications', async () => {
+      const revocationClient = await pool.connect();
+      let revocationOpen = false;
+      let notificationPromise;
+      let notificationOutcome;
+      let preflightCompleted;
+      let resumePreflight;
+      let preflightIntercepted = false;
+      const preflight = new Promise(resolve => { preflightCompleted = resolve; });
+      const preflightBarrier = new Promise(resolve => { resumePreflight = resolve; });
+      const siteABefore = await snapshotCommunitySite(pool, siteA);
+      const siteBBefore = await snapshotCommunitySite(pool, siteB);
+
+      try {
+        const activeInbox = await fetch(base + '/api/v1/sites/' + siteB + '/community/notifications', { headers });
+        assert.equal(activeInbox.status, 200, 'an active site member must retain notification-list access');
+        const activePayload = await activeInbox.json();
+        assert.ok(activePayload.notifications.some(item => item.id === notificationB), 'the active-member control must include the Site B notification');
+        const expectedUnread = await pool.query(
+          'SELECT count(*)::int AS count FROM social_notifications WHERE site_id=$1 AND user_id=$2 AND read_at IS NULL',
+          [siteB, actorB.id],
+        );
+        assert.equal(activePayload.unreadCount, expectedUnread.rows[0].count, 'active unread-count semantics remain unchanged');
+
+        authorizeSiteInterceptor = async args => {
+          if (!preflightIntercepted && args[0] === actorB.id && args[1] === siteB && args[2] === 'content:read') {
+            preflightIntercepted = true;
+            preflightCompleted();
+            await preflightBarrier;
+          }
+        };
+
+        await revocationClient.query('BEGIN');
+        revocationOpen = true;
+        await revocationClient.query('SELECT id FROM sites WHERE id=$1 FOR UPDATE', [siteB]);
+        await revocationClient.query('DELETE FROM site_memberships WHERE site_id=$1 AND user_id=$2', [siteB, actorB.id]);
+
+        notificationPromise = fetch(base + '/api/v1/sites/' + siteB + '/community/notifications', { headers })
+          .then(async response => ({ status: response.status, payload: await response.json() }));
+        const preflightObserved = await Promise.race([
+          preflight.then(() => true),
+          new Promise(resolve => setTimeout(() => resolve(false), 5000)),
+        ]);
+        assert.equal(preflightObserved, true, 'notification-list request must reach the successful request-time site authorization preflight');
+
+        // Resume the actual handler while the membership-deletion transaction still holds the Site B row lock.
+        resumePreflight();
+        const earlyOutcome = await Promise.race([
+          notificationPromise,
+          new Promise(resolve => setTimeout(() => resolve(null), 100)),
+        ]);
+        notificationOutcome = earlyOutcome;
+        assert.equal(earlyOutcome, null, 'notification rows and unread metadata must not be returned before membership revocation commits');
+        const lockObserved = await waitForDatabaseWriteLock(revocationClient, 'FOR KEY SHARE', 5000, { relationName: 'sites' });
+
+        await revocationClient.query('COMMIT');
+        revocationOpen = false;
+        notificationOutcome = await notificationPromise;
+
+        assert.equal(lockObserved, true, 'notification listing must serialize against site membership revocation');
+        assert.equal(notificationOutcome.status, 403, 'a revoked site member must not list retained notifications');
+        assert.equal(notificationOutcome.payload.code, 'ERR_VIRGOSCORPIO_HUB_TENANT_FORBIDDEN');
+        assert.equal(Object.hasOwn(notificationOutcome.payload, 'notifications'), false, 'the denied response must not include notification rows');
+        assert.equal(Object.hasOwn(notificationOutcome.payload, 'unreadCount'), false, 'the denied response must not disclose unread metadata');
+        const deniedPayload = JSON.stringify(notificationOutcome.payload);
+        assert.equal(deniedPayload.includes(notificationB), false, 'the denied response must not disclose notification identifiers');
+        assert.equal(deniedPayload.includes(messageB), false, 'the denied response must not disclose notification payload identifiers');
+      } finally {
+        resumePreflight();
+        authorizeSiteInterceptor = null;
+        if (revocationOpen) await revocationClient.query('ROLLBACK').catch(() => {});
+        if (notificationPromise && !notificationOutcome) notificationOutcome = await notificationPromise.catch(() => null);
+        revocationClient.release();
+        await pool.query(
+          'INSERT INTO site_memberships(site_id,user_id,role_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING',
+          [siteB, actorB.id, roleId],
+        ).catch(() => {});
+      }
+
+      assert.deepEqual(await snapshotCommunitySite(pool, siteA), siteABefore, 'Site A notification and community state must remain unchanged');
+      assert.deepEqual(await snapshotCommunitySite(pool, siteB), siteBBefore, 'Site B notification and community state must remain unchanged after restoration');
+      await assertSiteAUnchanged();
+    });
+
     await t.test('conversation listing revalidates site membership before disclosing retained conversation rows', async () => {
       const revocationClient = await pool.connect();
       let revocationOpen = false;
