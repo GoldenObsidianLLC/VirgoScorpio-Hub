@@ -2504,6 +2504,108 @@ test(
       assert.deepEqual(await snapshotCommunitySite(pool, siteB), siteBStateBeforeBlockedRetry);
     });
 
+    await t.test('block listings revalidate site membership before disclosing retained block details', async () => {
+      let blockedTarget = null;
+      let blockCreated = false;
+      let revocationClient = null;
+      let revocationOpen = false;
+      let blocksRequest = null;
+      let blocksOutcome = null;
+      let preflightCompleted;
+      let resumePreflight;
+      let preflightIntercepted = false;
+      const preflight = new Promise(resolve => { preflightCompleted = resolve; });
+      const preflightBarrier = new Promise(resolve => { resumePreflight = resolve; });
+      const siteABefore = await snapshotCommunitySite(pool, siteA);
+      const siteBBefore = await snapshotCommunitySite(pool, siteB);
+
+      try {
+        blockedTarget = await createUser('Site B Block List Target');
+        await pool.query(
+          'INSERT INTO site_memberships(site_id,user_id,role_id) VALUES($1,$2,$3)',
+          [siteB, blockedTarget.id, roleId],
+        );
+        await pool.query(
+          'INSERT INTO social_blocks(site_id,blocker_id,blocked_id,reason) VALUES($1,$2,$3,$4)',
+          [siteB, actorB.id, blockedTarget.id, 'F1.84 private block reason marker'],
+        );
+        blockCreated = true;
+
+        const activeList = await fetch(base + '/api/v1/sites/' + siteB + '/community/blocks', { headers });
+        assert.equal(activeList.status, 200, 'an active site member must retain block-list access');
+        const activePayload = await activeList.json();
+        const expectedBlock = activePayload.blocks.find(block => block.user_id === blockedTarget.id);
+        assert.ok(expectedBlock, 'the active-member control must include the Site B block');
+        assert.equal(expectedBlock.display_name, blockedTarget.display_name);
+        assert.equal(expectedBlock.reason, 'F1.84 private block reason marker');
+
+        authorizeSiteInterceptor = async args => {
+          if (!preflightIntercepted && args[0] === actorB.id && args[1] === siteB && args[2] === 'content:read') {
+            preflightIntercepted = true;
+            preflightCompleted();
+            await preflightBarrier;
+          }
+        };
+
+        blocksRequest = fetch(base + '/api/v1/sites/' + siteB + '/community/blocks', { headers })
+          .then(async response => ({ status: response.status, payload: await response.json() }));
+        const preflightObserved = await Promise.race([
+          preflight.then(() => true),
+          new Promise(resolve => setTimeout(() => resolve(false), 5000)),
+        ]);
+        assert.equal(preflightObserved, true, 'block-list request must reach the successful request-time site-membership preflight');
+
+        // Revoke Site B membership only after the real route has passed request-time authorization.
+        revocationClient = await pool.connect();
+        await revocationClient.query('BEGIN');
+        revocationOpen = true;
+        await revocationClient.query('SELECT id FROM sites WHERE id=$1 FOR UPDATE', [siteB]);
+        await revocationClient.query('DELETE FROM site_memberships WHERE site_id=$1 AND user_id=$2', [siteB, actorB.id]);
+
+        resumePreflight();
+        const earlyOutcome = await Promise.race([
+          blocksRequest,
+          new Promise(resolve => setTimeout(() => resolve(null), 100)),
+        ]);
+        const lockObserved = earlyOutcome
+          ? false
+          : await waitForDatabaseWriteLock(revocationClient, 'FOR KEY SHARE', 5000, { relationName: 'sites' });
+
+        await revocationClient.query('COMMIT');
+        revocationOpen = false;
+        blocksOutcome = earlyOutcome || await blocksRequest;
+
+        assert.equal(earlyOutcome, null, 'block rows and blocked-user details must not be returned before membership revocation commits');
+        assert.equal(lockObserved, true, 'block listing must serialize against site membership revocation');
+        assert.equal(blocksOutcome.status, 403, 'a revoked site member must not list retained block rows');
+        assert.equal(blocksOutcome.payload.code, 'ERR_VIRGOSCORPIO_HUB_TENANT_FORBIDDEN');
+        assert.equal(Object.hasOwn(blocksOutcome.payload, 'blocks'), false, 'the denied response must not include block records');
+        const deniedPayload = JSON.stringify(blocksOutcome.payload);
+        assert.equal(deniedPayload.includes(blockedTarget.id), false, 'the denied response must not disclose blocked-user IDs');
+        assert.equal(deniedPayload.includes(blockedTarget.display_name), false, 'the denied response must not disclose blocked-user display names');
+        assert.equal(deniedPayload.includes('F1.84 private block reason marker'), false, 'the denied response must not disclose block reasons');
+      } finally {
+        resumePreflight();
+        authorizeSiteInterceptor = null;
+        if (revocationOpen) await revocationClient.query('ROLLBACK').catch(() => {});
+        if (blocksRequest && !blocksOutcome) blocksOutcome = await blocksRequest.catch(() => null);
+        if (revocationClient) revocationClient.release();
+        await pool.query(
+          'INSERT INTO site_memberships(site_id,user_id,role_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING',
+          [siteB, actorB.id, roleId],
+        ).catch(() => {});
+        if (blockCreated && blockedTarget) {
+          await pool.query('DELETE FROM social_blocks WHERE site_id=$1 AND blocker_id=$2 AND blocked_id=$3', [siteB, actorB.id, blockedTarget.id]).catch(() => {});
+        }
+        if (blockedTarget) await pool.query('DELETE FROM site_memberships WHERE site_id=$1 AND user_id=$2', [siteB, blockedTarget.id]).catch(() => {});
+      }
+
+      await assertSiteAUnchanged();
+      assert.deepEqual(await snapshotCommunitySite(pool, siteA), siteABefore, 'Site A community state must remain unchanged');
+      assert.deepEqual(await snapshotCommunitySite(pool, siteB), siteBBefore, 'Site B block and community state must be restored');
+      if (blockedTarget) await pool.query('DELETE FROM users WHERE id=$1', [blockedTarget.id]);
+    });
+
     await t.test('foreign report target and review IDs cannot reveal or change site A reports', async () => {
       const reports = await fetch(`${base}/api/v1/sites/${siteB}/community/reports`, { headers });
       assert.equal(reports.status, 200);
