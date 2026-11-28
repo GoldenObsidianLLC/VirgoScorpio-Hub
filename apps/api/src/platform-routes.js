@@ -223,7 +223,45 @@ async function handlePlatformRoute(ctx) {
   if (libraryHandled) return true;
 
   const docVersion=pathName.match(/^\/api\/v1\/sites\/([0-9a-f-]{36})\/content\/([0-9a-f-]{36})\/version$/i);
-  if(method==='GET'&&docVersion){if(!localPool)throw fail(503,'ERR_VIRGOSCORPIO_HUB_DATABASE_DISABLED','Document version controls require PostgreSQL.');const siteId=docVersion[1];await siteIdFor({ req, url, body: {}, actor, routeSiteId: siteId });await requireCapability(actor,siteId,'content:read');const row=await localPool.query('SELECT id,site_id,content_type,slug,locale,title,status,schema_version,version,body,published_at,updated_at FROM content_items WHERE site_id=$1 AND id=$2 AND deleted_at IS NULL',[siteId,docVersion[2]]);if(!row.rows[0])throw fail(404,'ERR_VIRGOSCORPIO_HUB_CONTENT_NOT_FOUND','Content was not found.');const revisionCount=await localPool.query('SELECT count(*)::integer AS count,max(version)::integer AS latest_version FROM content_revisions WHERE content_id=$1',[docVersion[2]]);const item=row.rows[0];return sendJson(res,200,{documentId:item.body?.documentId||item.id,contentId:item.id,version:item.version,schemaVersion:item.schema_version,status:item.status,publishedAt:item.published_at,updatedAt:item.updated_at,revisionCount:revisionCount.rows[0].count,latestRevisionVersion:revisionCount.rows[0].latest_version,requestId});}
+  if (method === 'GET' && docVersion) {
+    if (!localPool) {
+      throw fail(503, 'ERR_VIRGOSCORPIO_HUB_DATABASE_DISABLED', 'Document version controls require PostgreSQL.');
+    }
+    const siteId = docVersion[1];
+    await siteIdFor({ req, url, body: {}, actor, routeSiteId: siteId });
+    await requireCapability(actor, siteId, 'content:read');
+
+    // Request-time authorization is a preflight only. Revalidate the current
+    // role capability in the same transaction as both version metadata reads.
+    const versionMetadata = await withTransaction(localPool, async client => {
+      await assertSiteCapabilityInTransaction(client, ctx, siteId, actor.user.id, 'content:read');
+      const row = await client.query(
+        'SELECT id,site_id,content_type,slug,locale,title,status,schema_version,version,body,published_at,updated_at FROM content_items WHERE site_id=$1 AND id=$2 AND deleted_at IS NULL',
+        [siteId, docVersion[2]],
+      );
+      if (!row.rows[0]) {
+        throw fail(404, 'ERR_VIRGOSCORPIO_HUB_CONTENT_NOT_FOUND', 'Content was not found.');
+      }
+      const revisionCount = await client.query(
+        'SELECT count(*)::integer AS count,max(version)::integer AS latest_version FROM content_revisions WHERE content_id=$1',
+        [docVersion[2]],
+      );
+      return { item: row.rows[0], revisionCount: revisionCount.rows[0] };
+    });
+    const { item, revisionCount } = versionMetadata;
+    return sendJson(res, 200, {
+      documentId: item.body?.documentId || item.id,
+      contentId: item.id,
+      version: item.version,
+      schemaVersion: item.schema_version,
+      status: item.status,
+      publishedAt: item.published_at,
+      updatedAt: item.updated_at,
+      revisionCount: revisionCount.count,
+      latestRevisionVersion: revisionCount.latest_version,
+      requestId,
+    });
+  }
 
   const communityProfile=pathName.match(/^\/api\/v1\/sites\/([0-9a-f-]{36})\/community\/profile$/i);
   if (communityProfile && ['GET', 'PUT'].includes(method)) {
