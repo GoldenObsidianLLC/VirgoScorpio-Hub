@@ -4,16 +4,18 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { orderLiveIntegrationFiles } = require('../scripts/order-live-integration-files');
 
-test('live integration order prioritizes the stateful tenant isolation suite', () => {
+test('live integration order runs focused cloud authorization before broad tenant isolation', () => {
   const input = [
     'test/integration/tenant-content-object-isolation.integration.test.js',
     'test/integration/postgres.integration.test.js',
     'test/integration/tenant-isolation.integration.test.js',
+    'test/integration/tenant-cloud-connection-isolation.integration.test.js',
     'test/integration/community-workflows.integration.test.js',
   ];
   const ordered = orderLiveIntegrationFiles(input);
 
   assert.deepEqual(ordered, [
+    'test/integration/tenant-cloud-connection-isolation.integration.test.js',
     'test/integration/tenant-isolation.integration.test.js',
     'test/integration/community-workflows.integration.test.js',
     'test/integration/postgres.integration.test.js',
@@ -23,6 +25,7 @@ test('live integration order prioritizes the stateful tenant isolation suite', (
     'test/integration/tenant-content-object-isolation.integration.test.js',
     'test/integration/postgres.integration.test.js',
     'test/integration/tenant-isolation.integration.test.js',
+    'test/integration/tenant-cloud-connection-isolation.integration.test.js',
     'test/integration/community-workflows.integration.test.js',
   ], 'ordering must not mutate the caller-owned file list');
 });

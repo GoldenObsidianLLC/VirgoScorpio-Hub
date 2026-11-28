@@ -2,9 +2,11 @@
 
 const path = require('node:path');
 
-// Run the stateful, high-cardinality tenant isolation suite against the freshly
-// migrated database before other integration files add fixture rows.
+// Run the focused cloud-connection authorization race first, then the broader
+// stateful tenant-isolation suite, immediately after fresh migrations and before
+// other integration files add fixture rows.
 const PRIORITY_INTEGRATION_FILES = Object.freeze([
+  'tenant-cloud-connection-isolation.integration.test.js',
   'tenant-isolation.integration.test.js',
 ]);
 
