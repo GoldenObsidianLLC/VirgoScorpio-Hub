@@ -1,23 +1,21 @@
 ## Historical mainline baseline before F1.72 merge — 25 November 2026 (America/Chicago)
 
-## Current authoritative status — 27 November 2026 (F1.74, migration inventory, F1.75, F1.76, F1.77, F1.78 and F1.79 merged)
+## Current authoritative status — 28 November 2026 (F1.81 merged; F1.82–F1.87 candidates; F1.88 hosted revalidation in progress)
 
-- Main: 2b4d5a5c096f704eb8a7c3066ba1e5c8dccb0542. PRs #306, #307, #308, #311, #313, #316 and #319 are merged; issues #310, #312, #315 and #318 are closed as completed.
-- F1.79 / PR #319 closes the confirmed community profile-write preflight-to-write authorization gap. The profile PUT now performs its upsert inside withTransaction after transaction-time assertActiveSiteMembership using the existing site-first lock pattern; profile GET, 403 denial, 409 expected-version conflict and response shape remain unchanged.
-- Candidate PR head 890b9b99995f527900422d3a4f290244a99c4a03 passed push #46072067810 and PR-context #46072258907: Node 22/24 each passed 1,145/1,145, hosted PostgreSQL/Memgraph 204/204 with zero failures/skips, browser 9/9, CodeQL and candidate evidence consolidation passed.
-- Exact-main workflow #46072736082 passed all seven jobs on 2b4d5a5c096f704eb8a7c3066ba1e5c8dccb0542. Canonical readiness artifact #15233427068 records 8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN, readyForProduction=false, NOT_PRODUCTION_CERTIFIED / NO-GO. Node 22/24 each passed 1,145/1,145 Hub tests; hosted PostgreSQL/Memgraph passed 204/204; 22/22 fresh migrations and 22/22 idempotent skips; Memgraph outage/rebuild; browser 9/9; CodeQL and signed supply-chain attestations passed.
-- F1.75 covers message writes/moderation; F1.76 covers report submission/status; F1.77 covers block creation/unblock; F1.78 covers conversation/message and notification read markers; F1.79 covers community profile writes. All reuse established site-first transaction authorization helpers.
-- Source-anchored tenant inventory: 28 families, 80 route patterns, 22 source files and 61 test references.
-- Parent issue #124 and independent reviews #14/#25 remain open. Human dependency review #23 remains PARTIAL; #24 load/restore, #26 operations/release-owner, #13 scope/provider approval, #32 governance and #234/#235/#277 scanner triage remain open.
-- Package 0.6.2 remains private/unreleased; production remains NO-GO until every required evidence gate is accepted.
+- Main remains 109c9dfe146ec3261c394d5b4a6e27c7ce64a90a. F1.81 / PR #326 is merged; issue #325 is closed. Exact-main workflow #46086982574 passed 7/7 jobs including signed lockfile/SBOM attestation. Docs-only PR #336 is open.
+- Exact-main readiness remains 8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN; readyForProduction=false; NOT_PRODUCTION_CERTIFIED / NO-GO. The baseline evidence is source-bound to main SHA 109c9dfe and excludes all unmerged candidates.
+- F1.82–F1.87 remain verified, unmerged candidates: PRs #329, #331, #333, #335, #339 and #341. Their hosted pre-fix/post-fix results and candidate CI are recorded in RELEASE-EVIDENCE.md; they await independent review.
+- F1.88 / issue #342 / draft PR #343 targets GET cloud connections. The runtime implementation reuses withTransaction and assertSiteCapabilityInTransaction for the provider-configuration and credential-reference SELECT. Prior hosted attempts #46123766040/#46123770579 expired in tenant-isolation.integration.test.js before the F1.88 target regression ran; they do not establish a pre-fix leak or post-fix pass. Head 457e87d5c0ff7b6f06e7036f49f1ab65b8238b81 now runs that high-cardinality tenant-isolation suite first, after migrations and before other integration fixtures, while retaining serial execution and deterministic ordering. Local ordering unit tests passed 2/2; verification passed 241 paths / 318 JS files; inventory remains 28 families / 80 route patterns / 22 sources / 61 integration tests (SHA-256 51994eff932e25b9377f46bcd0e1dfddccf81b25ba6fc7f8feefde0e17d0f433). Push #46128306079 and PR-context #46128310607 are running; Node 22/24, browser and CodeQL are green, but hosted PostgreSQL/Memgraph is still in progress. No F1.88 hosted regression result is claimed.
+- Tenant inventory is a maintainer navigation aid, not proof of completeness or independent assurance.
+- Parent #124 and independent reviews #14/#25 remain open. P0: #13, #14, #25, #26 and #32. P1: #23, #24, #124, #234 and #277. P2: #235. Package 0.6.2 remains private/unreleased; production remains NO-GO.
 
 ### Execution order
 
-1. Continue source-anchored issue #124 review on exact main 2b4d5a5c096f704eb8a7c3066ba1e5c8dccb0542. F1.75–F1.79 have closed the identified message, report, block, read-marker and profile-write authorization gaps; continue reviewing remaining community and tenant-scoped workflows for preflight-to-write races, stale authorization and cross-site disclosure. Require a reproducible hosted PostgreSQL barrier before opening another bounded fix.
-2. Reuse the established withTransaction, assertActiveSiteMembership and site-first authorization helpers. Preserve site -> actor authorization -> resource/member lock ordering and cross-site snapshot assertions; avoid duplicate authorization SQL abstractions.
-3. Complete independent reviews #14/#25 and qualified human dependency/SBOM review #23 separately from maintainer testing; then #24 load/restore, #26 operations, #13 provider/scope and #32 governance.
-4. Map individual Aikido/SAST findings under #234/#235/#277 using source evidence and fresh scans.
-5. Keep package 0.6.2 private/unreleased and production NO-GO until every required gate is accepted.
+1. Complete F1.88 push and PR hosted PostgreSQL/Memgraph verification on exact head 457e87d5. Confirm that the cloud-connection capability-revocation regression actually executed and passed with zero skips; keep PR #343 draft until it does.
+2. Obtain independent review for PRs #329, #331, #333, #335, #339, #341 and #343; merge only after repository review policy is satisfied. Review docs PR #336 separately.
+3. Rebase and merge candidates sequentially because they share tenant integration and generated inventory artifacts. Regenerate inventory after each source/test change and rerun affected branch CI. After merge, require exact-main migrations, signed attestation and source-bound readiness.
+4. Continue #124 only with deterministic hosted PostgreSQL pre-fix reproduction and post-fix proof, active-member positive control, revoked-capability denial and unchanged two-site snapshots.
+5. Complete independent reviews #14/#25, qualified dependency/SBOM review #23, load/restore #24, operations #26, provider/scope #13 and governance #32; triage scanner issues #234/#235/#277 against fresh evidence.
 
 ### Merged - F1.71 MFA enrollment step-up reauthentication ([PR #256](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/256); main SHA de16a4275828fa6411800bbaf20c16b51186dc05)
 
