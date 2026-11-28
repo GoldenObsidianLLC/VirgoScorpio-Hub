@@ -36,9 +36,10 @@ function run(label, args, env, evidenceFile) {
     cwd: root,
     env,
     encoding: 'utf8',
-    // The serialized live suite now exercises more tenant revocation races.
-    // Keep a finite guard, but allow the expanded PostgreSQL/Memgraph suite to complete.
-    timeout: 600_000,
+    // The serialized live suite now exceeds the previous 10-minute guard as
+    // tenant revocation regressions accumulate. Keep a finite 15-minute bound;
+    // never let an integration subprocess run without a timeout.
+    timeout: 900_000,
     maxBuffer: 32 * 1024 * 1024,
     windowsHide: true
   });
