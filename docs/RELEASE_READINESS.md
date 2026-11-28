@@ -40,6 +40,26 @@ GET /api/v1/sites/:siteId/community/friends had a stale-membership read race: af
 PR [#329](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/329) moves the GET detail read into withTransaction and calls the shared assertActiveSiteMembership helper on that same transaction client before selecting friendship rows and participant display names. It preserves initial site preflight, site predicate, ordering, limit, response shape and denial contract. The PostgreSQL regression verifies the active-member positive control, request blocking until revocation commits, post-revocation 403, absence of friendship rows and participant email/display-name disclosure, unchanged Site A/Site B snapshots and fixture cleanup. Route-level authorization unit tests assert site and membership locks precede the detail SELECT.
 
 Post-fix hosted workflow [#46088039996](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/46088039996) passed all required PR checks: PostgreSQL/Memgraph 208/208 with zero failures/skips (including the new regression); Node 22.23.4 and 24.22.1 each 1,149/1,149 unit/security tests with zero skips; EnginEx 94/94; browser smoke 9/9; CodeQL scanned 316 JavaScript and 2 HTML files; npm audit found zero vulnerabilities. The PR-event signed-attestation job was skipped by workflow design; an exact-main attestation remains required after merge. PR #329 is awaiting independent review. No schema/migration, dependency/lockfile, external response-shape or SemVer change. Maintainer verification does not close independent tenant review #14 or platform security assessment #25.
+### F1.83 verified PR candidate — notification-list membership revalidation (issue #330 / PR #331)
+
+GET community notifications previously performed request-time site preflight and then read notification rows and unread count through separate pool-level queries. Pre-fix hosted PostgreSQL workflow [#46096142316](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/46096142316) reproduced HTTP 200 disclosure while Site B membership revocation held its site-row lock.
+
+PR [#331](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/331) places both inbox queries inside one transaction after shared assertActiveSiteMembership. The regression verifies active-member access, serialization with revocation, post-commit 403, no notification rows/identifiers/unread metadata in the denied response and unchanged two-site snapshots. Post-fix push [#46096571899](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/46096571899) and PR-context [#46096909826](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/46096909826) passed 208/208 hosted integration, Node 22/24 each 1,149/1,149, EnginEx 94/94, browser smoke 9/9, CodeQL and npm audit zero.
+
+### F1.84 verified PR candidate — block-list membership revalidation (issue #332 / PR #333)
+
+GET community blocks previously selected persisted block rows and blocked-user details after request-time membership preflight. Pre-fix hosted workflow [#46097362828](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/46097362828) reproduced HTTP 200 disclosure of a block row, blocked-user ID, display name and private reason during uncommitted Site B membership revocation.
+
+PR [#333](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/333) revalidates active membership through the shared helper inside the transaction that selects block details. Post-fix push [#46099827506](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/46099827506) and PR-context [#46100137036](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/46100137036) passed 208/208 hosted integration, Node 22/24 each 1,149/1,149, EnginEx 94/94, browser 9/9, CodeQL and npm audit zero.
+
+### F1.85 verified PR candidate — profile-list membership revalidation (issue #334 / PR #335)
+
+GET community profile previously selected persisted profile fields through a pool-level query after request-time site authorization. Pre-fix hosted workflow [#46102097846](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/46102097846) reproduced HTTP 200 disclosure of display name, bio, website URL, visibility, version/timestamp and private metadata during uncommitted Site B membership revocation. The existing profile PUT revocation test remained green.
+
+PR [#335](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/335) uses withTransaction and shared assertActiveSiteMembership in the same transaction as the profile SELECT, preserving profile:null for an active member without a record. Post-fix push [#46102459374](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/46102459374) and PR-context [#46102801546](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/46102801546) passed all required jobs: PostgreSQL/Memgraph 208/208, Node 22/24 each 1,149/1,149, EnginEx 94/94, browser 9/9, CodeQL and npm audit zero. PR-event attestation is skipped by policy; exact-main attestation is required after merge.
+
+F1.82–F1.85 are unmerged maintainer-led fixes. They add no schema/migration, dependency/lockfile, external response-shape or SemVer change. Their passing PR CI does not close independent tenant review #14 or platform security assessment #25.
+
 ### F1.80 merged security change — PR #324 / issue #321
 
 The group-members GET now revalidates community:moderate through the shared assertSiteCapabilityInTransaction helper on the same PostgreSQL transaction client used to read member details. The request-time preflight, 403 contract, site/group predicates and response shape remain unchanged. A deterministic two-site PostgreSQL barrier regression reproduces the pre-fix email disclosure after role-capability revocation and verifies that the corrected handler denies disclosure; exact-main workflow #46084252994 passed it. The route fixture and source-anchored tenant-isolation JSON/Markdown inventory were updated in the same change. This maintainer fix does not replace independent review #14.
@@ -65,18 +85,18 @@ Evidence must identify the exact candidate version and full source SHA. A source
 ## Current GitHub disposition
 
 - PR #326 (F1.81) merged; issue #325 closed. Current main: 109c9dfe146ec3261c394d5b4a6e27c7ce64a90a; exact-main workflow #46086982574 passed 7/7 jobs.
-- PR #329 (F1.82 friendship-list membership revalidation) is open and all required PR CI checks pass; awaiting independent review. Issue #328 is tracked as the PR's closing issue.
+- Open security PRs: #329 (F1.82 friendship list / issue #328), #331 (F1.83 notification list / issue #330), #333 (F1.84 block list / issue #332) and #335 (F1.85 profile list / issue #334). Push and PR-context CI is green for all four; all remain unmerged. GitHub records maintainer COMMENTED reviews only on #329/#331/#333, no APPROVED independent reviews, and no review submission on #335; these do not satisfy independent approval. PR-event signed attestations are skipped by policy; exact-main attestation/readiness must be rerun after merge.
 - P0: #13 provider/scope approval; #14 independent tenant/site review; #25 independent security assessment; #26 operations/release-owner approval; #32 governance/capital controls.
 - P1: #23 human dependency/SBOM review; #24 load/restore; #124 remaining tenant-isolation work; #234 SAST/secret-history triage; #277 autofix triage. P2: #235 scan freshness/asset coverage.
 - Package 0.6.2 remains private/unreleased; production remains NO-GO.
 
 ## Recommended development sequence
 
-1. Complete independent review of F1.82 PR #329 and merge only after repository review policy is satisfied; then rerun exact-main migration, attestation and source-bound readiness gates.
-2. Continue #124 using the refreshed route-capability inventory; require a reproducible hosted PostgreSQL barrier, positive control and unchanged two-site snapshots before another bounded fix.
-3. Reuse shared transaction-time authorization helpers and site-first lock order; avoid duplicate authorization SQL and preserve API contracts.
-4. Complete independent tenant/security reviews #14/#25 and qualified dependency/SBOM review #23.
-5. Complete load/restore #24, operations/release-owner #26, scope/provider approval #13 and governance #32; triage SAST/Aikido work #234/#235/#277 against exact source and fresh scans.
+1. Complete independent review of PRs #329, #331, #333 and #335; resolve requested changes and merge only when repository review policy is satisfied. Keep changes in small, reviewable increments.
+2. After each merge, rerun exact-main migrations, signed lockfile/SBOM attestation, CodeQL and source-bound readiness. Update the main SHA and current evidence in one coherent documentation change.
+3. Continue issue #124 only after the current bounded read-path PRs have been reviewed. For any new finding require a deterministic hosted PostgreSQL pre-fix reproduction and post-fix proof, active-member positive control, revoked-member denial and unchanged two-site snapshots.
+4. Reuse shared transaction-time authorization helpers and site-first lock order; avoid duplicate authorization SQL and preserve API contracts.
+5. Complete independent reviews #14/#25, qualified dependency/SBOM review #23, load/restore #24, operations/release-owner #26, scope/provider approval #13 and governance #32; triage #234/#235/#277 against fresh source and scanner evidence.
 
 ## F1.74 merged implementation
 
