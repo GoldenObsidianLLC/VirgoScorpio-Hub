@@ -917,12 +917,19 @@ async function handlePlatformRoute(ctx) {
     if (method === 'POST') requireCloudConnectionAudit(identity, fail);
 
     if (!cloudConnections[2] && method === 'GET') {
-      const q = await localPool.query(
-        'SELECT id,site_id,provider,name,config,credential_reference,status,last_health_check_at,created_at,updated_at FROM cloud_connections WHERE site_id=$1 ORDER BY created_at DESC',
-        [siteId],
-      );
+      const connections = await withTransaction(localPool, async client => {
+        // Cloud connection metadata includes provider configuration and secret
+        // references. Revalidate cloud:manage under the shared site-first lock
+        // order on the same client as the persisted provider-configuration read.
+        await assertSiteCapabilityInTransaction(client, ctx, siteId, actor.user.id, 'cloud:manage');
+        const q = await client.query(
+          'SELECT id,site_id,provider,name,config,credential_reference,status,last_health_check_at,created_at,updated_at FROM cloud_connections WHERE site_id=$1 ORDER BY created_at DESC',
+          [siteId],
+        );
+        return q.rows;
+      });
       return sendJson(res, 200, {
-        connections: q.rows,
+        connections,
         availableProviders: ['aws-s3', 's3-compatible', 'google-cloud-storage', 'azure-blob', 'cloudflare-r2', 'minio'],
         requestId,
       });

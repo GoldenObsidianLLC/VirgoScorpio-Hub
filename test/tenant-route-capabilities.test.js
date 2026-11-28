@@ -209,3 +209,105 @@ test('community group member listing is reachable only with the site moderation 
   const memberQueryIndex = transactionQueries.findIndex(query => query.sql.includes('FROM social_group_memberships gm JOIN users u'));
   assert.ok(capabilityQueryIndex >= 0 && capabilityQueryIndex < memberQueryIndex, 'the current site capability must be locked before member details are selected');
 });
+
+test('cloud connection listing revalidates cloud:manage in the same transaction as provider configuration reads', async t => {
+  const authorizationCalls = [];
+  const transactionQueries = [];
+  const connectionQueries = [];
+  const identity = {
+    async authenticate(token) {
+      assert.equal(token, 'site-a-cloud-session');
+      return {
+        mode: 'session',
+        sessionToken: token,
+        sessionId: SESSION_A,
+        expiresAt: new Date(Date.now() + 60_000),
+        user: { id: USER_A, email: 'site-a-cloud@example.test', displayName: 'Site A Cloud Manager', status: 'active' },
+        memberships: [{ siteId: SITE_A }]
+      };
+    },
+    async authorizeSite(userId, siteId, capability) {
+      authorizationCalls.push({ userId, siteId, capability });
+      return userId === USER_A && siteId === SITE_A &&
+        ['content:read', 'cloud:manage'].includes(capability);
+    }
+  };
+  const expectedConnections = [{
+    id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+    site_id: SITE_A,
+    provider: 's3-compatible',
+    name: 'Site A Cloud Connection',
+    config: { bucket: 'site-a-private-bucket' },
+    credential_reference: 'vault://site-a/private-credential',
+    status: 'configured',
+    last_health_check_at: null,
+    created_at: '2026-11-27T12:00:00.000Z',
+    updated_at: '2026-11-27T12:00:00.000Z'
+  }];
+  const pool = {
+    async query(sql) {
+      if (sql.includes('FROM firewall_rules WHERE enabled=true')) return { rows: [] };
+      throw new Error('Cloud connection data must use the authorization transaction: ' + sql);
+    },
+    async connect() {
+      return {
+        async query(sql, params) {
+          transactionQueries.push({ sql, params });
+          if (['BEGIN', 'COMMIT', 'ROLLBACK'].includes(sql.trim().toUpperCase())) return { rows: [] };
+          if (sql.includes('SELECT id FROM sites WHERE id=$1 FOR KEY SHARE')) {
+            assert.deepEqual(params, [SITE_A], 'site lock must be bound to the route site');
+            return { rows: [{ id: SITE_A }] };
+          }
+          if (sql.includes('SELECT r.capabilities FROM users u JOIN site_memberships m')) {
+            assert.deepEqual(params, [SITE_A, USER_A, 'active'], 'capability lookup must bind site, actor and active status');
+            return { rows: [{ capabilities: ['cloud:manage'] }] };
+          }
+          if (sql.includes('FROM cloud_connections WHERE site_id=$1 ORDER BY created_at DESC')) {
+            connectionQueries.push({ sql, params });
+            assert.deepEqual(params, [SITE_A], 'connection listing must remain scoped to the route site');
+            return { rows: expectedConnections };
+          }
+          throw new Error('Unexpected cloud connection transaction query: ' + sql);
+        },
+        release() {}
+      };
+    },
+    async end() {}
+  };
+  const server = createApiServer({
+    env: {
+      NODE_ENV: 'test',
+      AI_PROVIDER: 'mock',
+      RATE_LIMIT_MAX_REQUESTS: '100'
+    },
+    pool,
+    identityService: identity,
+    logger: { error() {} }
+  });
+
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  t.after(async () => {
+    await new Promise(resolve => server.close(resolve));
+    await server.virgoScorpioHub.close();
+  });
+
+  const base = 'http://127.0.0.1:' + server.address().port;
+  assert.equal((await fetch(base + '/health')).status, 200);
+  const response = await fetch(base + '/api/v1/sites/' + SITE_A + '/cloud/connections', {
+    headers: { authorization: 'Bearer site-a-cloud-session' }
+  });
+  const payload = await response.json();
+  assert.equal(response.status, 200, 'cloud list should be authorized and queried through the transaction client');
+  assert.deepEqual(payload.connections, expectedConnections);
+  assert.ok(payload.availableProviders.includes('s3-compatible'));
+  assert.ok(authorizationCalls.some(call => call.userId === USER_A && call.siteId === SITE_A && call.capability === 'cloud:manage'));
+  assert.equal(connectionQueries.length, 1);
+
+  const siteLockIndex = transactionQueries.findIndex(query => query.sql.includes('SELECT id FROM sites WHERE id=$1 FOR KEY SHARE'));
+  const capabilityIndex = transactionQueries.findIndex(query => query.sql.includes('SELECT r.capabilities FROM users u JOIN site_memberships m'));
+  const connectionIndex = transactionQueries.findIndex(query => query.sql.includes('FROM cloud_connections WHERE site_id=$1 ORDER BY created_at DESC'));
+  assert.ok(
+    siteLockIndex >= 0 && siteLockIndex < capabilityIndex && capabilityIndex < connectionIndex,
+    'site and current cloud:manage authorization locks must precede provider configuration and credential-reference reads',
+  );
+});
