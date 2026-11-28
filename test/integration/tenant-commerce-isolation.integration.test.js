@@ -6,6 +6,7 @@ const { randomUUID } = require('node:crypto');
 const { createPostgresPool } = require('../../packages/db/src/postgres-store');
 const { createIdentityService, hashPassword } = require('../../packages/auth/src/service');
 const { createApiServer } = require('../../apps/api/src/server');
+const { waitForDatabaseWriteLock } = require('../helpers/postgres-locks');
 
 const enabled = Boolean(
   process.env.DATABASE_URL &&
@@ -34,6 +35,17 @@ test(
     delete env.VIRGOSCORPIO_HUB_API_TOKEN;
 
     const identity = createIdentityService({ pool, env });
+    let authorizeSiteInterceptor = null;
+    // Intercept only request-time capability checks so the integration test can
+    // pause the real handler after authorization and reproduce a role-revocation race.
+    const apiIdentity = {
+      ...identity,
+      authorizeSite: async (...args) => {
+        const allowed = await identity.authorizeSite(...args);
+        if (authorizeSiteInterceptor) await authorizeSiteInterceptor(args, allowed);
+        return allowed;
+      },
+    };
 
     t.after(async () => {
       if (server) {
@@ -124,7 +136,7 @@ test(
     server = createApiServer({
       env,
       pool,
-      identityService: identity,
+      identityService: apiIdentity,
       logger: { error() {} },
     });
     await new Promise((resolve, reject) => {
@@ -189,6 +201,100 @@ test(
       assert.ok(payload.orders.some(item => item.id === orderB.id));
       assert.equal(payload.orders.some(item => item.id === orderA.id), false);
       assert.equal(payload.orders.some(item => item.email === orderA.email), false);
+    });
+
+    await t.test('commerce order listing revalidates commerce:read before disclosing customer details', async () => {
+      const originalCapabilitiesResult = await pool.query('SELECT capabilities FROM roles WHERE id=$1', [roleId]);
+      const originalCapabilities = originalCapabilitiesResult.rows[0].capabilities;
+      const activeCapabilities = ['content:read', 'commerce:read'];
+      await pool.query('UPDATE roles SET capabilities=$2::jsonb WHERE id=$1', [roleId, JSON.stringify(activeCapabilities)]);
+      const capabilitiesBefore = await pool.query('SELECT capabilities FROM roles WHERE id=$1', [roleId]);
+      assert.deepEqual(capabilitiesBefore.rows[0].capabilities, activeCapabilities);
+
+      const activeResponse = await fetch(`${base}/api/v1/sites/${siteB}/commerce/orders`, { headers });
+      assert.equal(activeResponse.status, 200, 'an active commerce:read member must retain order-list access');
+      const activePayload = await activeResponse.json();
+      const activeOrder = activePayload.orders.find(item => item.id === orderB.id);
+      assert.ok(activeOrder, 'the active-member control must include the Site B order');
+      assert.equal(activeOrder.email, orderB.email, 'the existing order-list response keeps customer email for authorized readers');
+
+      const orderSnapshot = async siteId => {
+        const result = await pool.query(
+          'SELECT id,site_id,customer_id,email,status,currency,subtotal_minor,discount_minor,tax_minor,shipping_minor,total_minor,provider,provider_session_id,created_at,updated_at FROM commerce_orders WHERE site_id=$1 ORDER BY id',
+          [siteId],
+        );
+        return result.rows;
+      };
+      const siteABefore = await orderSnapshot(siteA);
+      const siteBBefore = await orderSnapshot(siteB);
+      const revocationClient = await pool.connect();
+      let revocationOpen = false;
+      let ordersPromise;
+      let ordersOutcome;
+      let preflightCompleted;
+      let resumePreflight;
+      let preflightIntercepted = false;
+      const preflight = new Promise(resolve => { preflightCompleted = resolve; });
+      const preflightBarrier = new Promise(resolve => { resumePreflight = resolve; });
+      authorizeSiteInterceptor = async (args, allowed) => {
+        if (!preflightIntercepted && allowed && args[0] === actor.id && args[1] === siteB && args[2] === 'commerce:read') {
+          preflightIntercepted = true;
+          preflightCompleted();
+          await preflightBarrier;
+        }
+      };
+
+      try {
+        await revocationClient.query('BEGIN');
+        revocationOpen = true;
+        // Preserve the shared site -> role lock order used by transaction-time authorization.
+        await revocationClient.query('SELECT id FROM sites WHERE id=$1 FOR UPDATE', [siteB]);
+        await revocationClient.query('SELECT id FROM roles WHERE id=$1 FOR UPDATE', [roleId]);
+        await revocationClient.query("UPDATE roles SET capabilities=capabilities-'commerce:read' WHERE id=$1", [roleId]);
+
+        ordersPromise = fetch(`${base}/api/v1/sites/${siteB}/commerce/orders`, { headers })
+          .then(async response => ({ status: response.status, payload: await response.json() }));
+        const preflightObserved = await Promise.race([
+          preflight.then(() => true),
+          new Promise(resolve => setTimeout(() => resolve(false), 5000)),
+        ]);
+        assert.equal(preflightObserved, true, 'order-list request must pass request-time commerce:read authorization before the revocation race');
+
+        // Resume the actual handler while the role-revocation transaction still holds the Site B locks.
+        resumePreflight();
+        const earlyOutcome = await Promise.race([
+          ordersPromise,
+          new Promise(resolve => setTimeout(() => resolve(null), 100)),
+        ]);
+        const lockObserved = earlyOutcome
+          ? false
+          : await waitForDatabaseWriteLock(revocationClient, 'FOR KEY SHARE', 5000, { relationName: 'sites' });
+
+        await revocationClient.query('COMMIT');
+        revocationOpen = false;
+        ordersOutcome = earlyOutcome || await ordersPromise;
+
+        assert.equal(earlyOutcome, null, 'order and customer details must not be returned before capability revocation commits');
+        assert.equal(lockObserved, true, 'order-list reads must serialize against site-scoped role-capability revocation');
+        assert.equal(ordersOutcome.status, 403, 'a revoked commerce:read member must not list site orders');
+        assert.equal(ordersOutcome.payload.code, 'ERR_VIRGOSCORPIO_HUB_FORBIDDEN');
+        assert.equal(Object.hasOwn(ordersOutcome.payload, 'orders'), false, 'the denied response must not contain an order collection');
+        const deniedPayload = JSON.stringify(ordersOutcome.payload);
+        for (const marker of [orderB.id, orderB.email, String(orderB.total_minor)]) {
+          assert.equal(deniedPayload.includes(marker), false, 'the denied response must not disclose order/customer marker: ' + marker);
+        }
+        const revokedCapabilities = await pool.query('SELECT capabilities FROM roles WHERE id=$1', [roleId]);
+        assert.equal(revokedCapabilities.rows[0].capabilities.includes('commerce:read'), false, 'the role remains revoked until cleanup');
+        assert.deepEqual(await orderSnapshot(siteA), siteABefore, 'Site A order/customer data must remain unchanged');
+        assert.deepEqual(await orderSnapshot(siteB), siteBBefore, 'Site B order/customer data must remain unchanged');
+      } finally {
+        resumePreflight();
+        authorizeSiteInterceptor = null;
+        if (revocationOpen) await revocationClient.query('ROLLBACK').catch(() => {});
+        if (ordersPromise && !ordersOutcome) ordersOutcome = await ordersPromise.catch(() => null);
+        revocationClient.release();
+        await pool.query('UPDATE roles SET capabilities=$2::jsonb WHERE id=$1', [roleId, JSON.stringify(originalCapabilities)]).catch(() => {});
+      }
     });
 
     const orderAfter = await pool.query(

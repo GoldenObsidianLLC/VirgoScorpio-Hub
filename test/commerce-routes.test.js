@@ -3,6 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { handleCommerceRoute } = require('../apps/api/src/commerce-routes');
+const { assertSiteCapabilityInTransaction } = require('../packages/community/src/workflows');
 
 const siteId = '11111111-1111-4111-8111-111111111111';
 const productId = '22222222-2222-4222-8222-222222222222';
@@ -90,6 +91,80 @@ test('product listing establishes site and capability scope before a site-filter
   assert.equal(events[1].capability, 'commerce:read');
   assert.match(events[2].sql, /FROM commerce_products WHERE site_id=\$1/);
   assert.equal(events[2].values[0], siteId);
+});
+
+test('commerce order listing revalidates commerce:read transactionally before reading customer details', async () => {
+  const events = [];
+  const transactionQueries = [];
+  const order = {
+    id: '44444444-4444-4444-8444-444444444444',
+    order_number: 'ORD-1004',
+    customer_id: '55555555-5555-4555-8555-555555555555',
+    email: 'site-b-customer@example.test',
+    status: 'paid',
+    currency: 'USD',
+    subtotal_minor: '2599',
+    discount_minor: '0',
+    tax_minor: '0',
+    shipping_minor: '0',
+    total_minor: '2599',
+    provider: 'stripe',
+    provider_session_id: 'cs_test_site_b',
+    created_at: '2026-11-27T12:00:00.000Z',
+    updated_at: '2026-11-27T12:00:00.000Z'
+  };
+  const pool = {
+    async query(sql, values) {
+      events.push({ type: 'pool-query', sql, values });
+      throw new Error('Order details must be read through the capability transaction.');
+    },
+    async connect() {
+      return {
+        async query(sql, values) {
+          transactionQueries.push({ sql, values });
+          if (['BEGIN', 'COMMIT', 'ROLLBACK'].includes(sql.trim().toUpperCase())) return { rows: [] };
+          if (sql.includes('SELECT id FROM sites WHERE id=$1 FOR KEY SHARE')) {
+            assert.deepEqual(values, [siteId]);
+            return { rows: [{ id: siteId }] };
+          }
+          if (sql.includes('SELECT r.capabilities FROM users u JOIN site_memberships m')) {
+            assert.deepEqual(values, [siteId, '33333333-3333-4333-8333-333333333333', 'active']);
+            return { rows: [{ capabilities: ['commerce:read'] }] };
+          }
+          if (sql.includes('FROM commerce_orders WHERE site_id=$1 ORDER BY created_at DESC LIMIT $2')) {
+            assert.deepEqual(values, [siteId, 2]);
+            return { rows: [order] };
+          }
+          throw new Error('Unexpected order-list transaction query: ' + sql);
+        },
+        release() {}
+      };
+    }
+  };
+  const ctx = createContext({
+    path: `/api/v1/sites/${siteId}/commerce/orders?limit=2`,
+    method: 'GET',
+    pool,
+    events
+  });
+  ctx.assertSiteCapabilityInTransaction = assertSiteCapabilityInTransaction;
+
+  assert.equal(await handleCommerceRoute(ctx), true);
+  assert.equal(ctx.res.statusCode, 200);
+  assert.deepEqual(ctx.res.payload.orders, [order]);
+  assert.equal(ctx.res.payload.requestId, requestId);
+  assert.deepEqual(events.map(event => event.type), ['site', 'capability', 'sendJson']);
+  assert.equal(events[0].siteId, siteId);
+  assert.equal(events[1].capability, 'commerce:read');
+  assert.equal(events.some(event => event.type === 'pool-query'), false, 'order rows must not be selected outside the authorization transaction');
+
+  const siteLockIndex = transactionQueries.findIndex(query => query.sql.includes('SELECT id FROM sites WHERE id=$1 FOR KEY SHARE'));
+  const capabilityIndex = transactionQueries.findIndex(query => query.sql.includes('SELECT r.capabilities FROM users u JOIN site_memberships m'));
+  const ordersIndex = transactionQueries.findIndex(query => query.sql.includes('FROM commerce_orders WHERE site_id=$1 ORDER BY created_at DESC LIMIT $2'));
+  assert.ok(
+    siteLockIndex >= 0 && siteLockIndex < capabilityIndex && capabilityIndex < ordersIndex,
+    'site and role capability locks must precede the order/customer detail SELECT',
+  );
 });
 
 test('invalid product writes are rejected before any database mutation', async () => {

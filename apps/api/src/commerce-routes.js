@@ -5,6 +5,7 @@ const { normalizeCart, validateProduct, calculateLineTotal } = require('../../..
 const { createStripeCheckoutSession, createStripeRefund, normalizeStripeRefundStatus } = require('../../../packages/billing/src/stripe');
 const { releaseOrderStockReservations } = require('../../../packages/commerce/src/stock-reservations');
 const { isBoundedJsonObject } = require('./request-validation');
+const { withTransaction } = require('../../../packages/db/src/transaction');
 
 function productInput(body) {
   return { slug: body.slug, name: body.name, description: body.description || '', productType: body.productType || 'simple', status: body.status || 'draft', currency: body.currency || 'USD', priceMinor: body.priceMinor, compareAtPriceMinor: body.compareAtPriceMinor ?? null, sku: body.sku || null, inventoryQuantity: body.inventoryQuantity === undefined ? null : body.inventoryQuantity, stockStatus: body.stockStatus || (body.inventoryQuantity === 0 ? 'out_of_stock' : 'in_stock'), requiresShipping: body.requiresShipping === true, weightGrams: body.weightGrams ?? null, images: body.images || [], attributes: body.attributes || {}, metadata: body.metadata || {} };
@@ -37,7 +38,7 @@ function checkoutOrderResponse(row) {
  * Returns false only when the path/method is not owned by this route family.
  */
 async function handleCommerceRoute(ctx) {
-  const { req, res, url, actor, siteIdFor, requireCapability, readJson, sendJson, fail, requestId, localPool, env, identity, maxBody } = ctx;
+  const { req, res, url, actor, siteIdFor, requireCapability, assertSiteCapabilityInTransaction, readJson, sendJson, fail, requestId, localPool, env, identity, maxBody } = ctx;
   const pathName = url.pathname;
   const method = req.method;
   const products=pathName.match(/^\/api\/v1\/sites\/([0-9a-f-]{36})\/products$/i);
@@ -56,7 +57,20 @@ async function handleCommerceRoute(ctx) {
   const orders=pathName.match(/^\/api\/v1\/sites\/([0-9a-f-]{36})\/commerce\/orders(?:\/([0-9a-f-]{36}))?$/i);
   if(orders&&['GET','POST'].includes(method)){
     if(!localPool)throw fail(503,'ERR_VIRGOSCORPIO_HUB_DATABASE_DISABLED','Orders require PostgreSQL.');const siteId=orders[1];const body=method==='POST'?await readJson(req,Math.min(maxBody,150_000)):{};await siteIdFor({ req, url, body, actor, routeSiteId: siteId });await requireCapability(actor,siteId,method==='GET'?'commerce:read':'commerce:manage');
-    if(method==='GET'){const result=await localPool.query('SELECT id,order_number,customer_id,email,status,currency,subtotal_minor,discount_minor,tax_minor,shipping_minor,total_minor,provider,provider_session_id,created_at,updated_at FROM commerce_orders WHERE site_id=$1 ORDER BY created_at DESC LIMIT $2',[siteId,Math.min(100,Math.max(1,Number(url.searchParams.get('limit'))||50))]);return sendJson(res,200,{orders:result.rows,requestId});}
+    if (method === 'GET') {
+      const limit = Math.min(100, Math.max(1, Number(url.searchParams.get('limit')) || 50));
+      // The request-time capability check is a preflight only. Revalidate
+      // commerce:read in the same transaction as customer/order disclosure.
+      const ordersResult = await withTransaction(localPool, async client => {
+        await assertSiteCapabilityInTransaction(client, ctx, siteId, actor.user.id, 'commerce:read');
+        const result = await client.query(
+          'SELECT id,order_number,customer_id,email,status,currency,subtotal_minor,discount_minor,tax_minor,shipping_minor,total_minor,provider,provider_session_id,created_at,updated_at FROM commerce_orders WHERE site_id=$1 ORDER BY created_at DESC LIMIT $2',
+          [siteId, limit],
+        );
+        return result.rows;
+      });
+      return sendJson(res, 200, { orders: ordersResult, requestId });
+    }
     // Admin-created orders are possible, but payment checkout is handled through the customer-facing endpoint below.
     throw fail(409,'ERR_VIRGOSCORPIO_HUB_CHECKOUT_ENDPOINT','Use the public checkout endpoint; administrators cannot set order totals directly.');
   }

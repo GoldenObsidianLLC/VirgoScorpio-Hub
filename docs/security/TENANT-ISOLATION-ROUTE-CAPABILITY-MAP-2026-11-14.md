@@ -8,8 +8,8 @@ Maintainer-prepared route, capability, data-access, and regression-test navigati
 
 - Status: MAINTAINER_PREPARED_NOT_INDEPENDENTLY_REVIEWED.
 - Generated from the current working-tree implementation anchors and the catalog at docs/security/tenant-isolation-route-inventory.catalog.json.
-- Implementation-source digest: a10b79584415f91188b7ecebd0aa336a0740f181b10042db979730ec3abe9451 across 22 files.
-- Referenced-test digest: 80c58f290f22c7830f0f802ee3ec3eb2b4b49ac807dcd8150c83fd3b627e7560 across 61 files.
+- Implementation-source digest: a7af0dd83685fa18e567f958be031298737eff8ef1469aafb059e4a4bd963484 across 22 files.
+- Referenced-test digest: e5dc381a7cb9e382e18a34dbe93cbd495ae5ca1d517becdd364ef69367cfa77c across 61 files.
 - Inventory size: 28 route/flow families, 80 declared route patterns, 22 source files, and 61 test files.
 - Regenerate with npm run security:tenant-inventory; CI checks freshness with node scripts/generate-tenant-isolation-route-inventory.js --check.
 
@@ -253,7 +253,7 @@ Tests: test/content-type-routes.test.js, test/collaboration-api.test.js, test/re
 - Capabilities/controls: commerce:read, commerce:manage
 - Data-access boundary: commerce_products; orders/order_items; inventory and stock reservations; checkout idempotency records; Stripe provider session/refund state
 - Side effects: Order create/update; Stock reserve/commit/release; Stripe checkout/refund requests; Webhook/reconciliation state changes
-- Source: apps/api/src/commerce-routes.js (lines 43, 56, 63, 284)
+- Source: apps/api/src/commerce-routes.js (lines 44, 57, 77, 298)
 - Test references: test/commerce-routes.test.js, test/checkout-idempotency.test.js, test/checkout-reconciliation.test.js, test/integration/tenant-commerce-isolation.integration.test.js, test/integration/tenant-checkout-idempotency-isolation.integration.test.js, test/integration/stripe-refund-audit-atomicity.integration.test.js
 - Coverage characterization: **targeted-two-site**. A/B tests cover selected product/order access and idempotency-key reuse/foreign product IDs. Full concurrency, provider ambiguous outcomes, all refund transitions and live Stripe lifecycle are not certified. F1.41 merged through PR #176 at main eb6fe4c8672dadd98892a62062ecf718ce9393b6 from implementation commit c60c0448de676e06f7b22b399107a8e61674b8af. The site-scoped trigger-injection PostgreSQL regression proves provider-response refund binding/status, order transition and commerce.refund_requested audit share one transaction; audit failure rolls back local state and same-key retry reconciles the stable Stripe idempotency key exactly once. Local dedicated PostgreSQL fixture passed 4/4 with zero skips. Exact-head #702 and exact-main #703 passed; exact-main live PostgreSQL/Memgraph passed 115/115 with zero skips. Stripe is stubbed, so live Stripe lifecycle acceptance remains open. Issue #175 remains OPEN for maintainer close-out; PR #176 recorded zero formal reviews and zero inline review threads. Maintainer/automation evidence only, not independent review or production certification.
 
@@ -267,7 +267,7 @@ Tests: test/content-type-routes.test.js, test/collaboration-api.test.js, test/re
 - Capabilities/controls: memberships:manage
 - Data-access boundary: membership_plans; paid_memberships; provider subscription metadata; billing webhook receipts
 - Side effects: Provider checkout/session creation; Membership/subscription state reconciliation; Webhook receipt/idempotency updates
-- Source: apps/api/src/commerce-routes.js (lines 501, 508, 510); apps/api/src/server.js (lines 995)
+- Source: apps/api/src/commerce-routes.js (lines 515, 522, 524); apps/api/src/server.js (lines 995)
 - Test references: test/billing-webhook-tenant.test.js, test/commerce-routes.test.js, test/billing-webhook-tenant.test.js
 - Coverage characterization: **targeted**. Provider metadata binding and selected state reconciliation are tested with doubles. Live provider-generated events and two-site database behavior remain open.
 
