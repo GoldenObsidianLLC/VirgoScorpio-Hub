@@ -207,7 +207,7 @@ async function handlePlatformRoute(ctx) {
   if (communityWorkflowHandled) return true;
   const commerceHandled = await handleCommerceRoute({
     req, res, url, actor, siteIdFor, requireCapability, readJson, sendJson, fail,
-    requestId, localPool, env, identity, maxBody
+    requestId, localPool, env, identity, maxBody, assertSiteCapabilityInTransaction
   });
   if (commerceHandled) return true;
   const pathName=url.pathname; const method=req.method;
