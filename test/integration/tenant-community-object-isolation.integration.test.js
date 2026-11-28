@@ -2730,6 +2730,136 @@ test(
         await pool.query('INSERT INTO site_memberships(site_id,user_id,role_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING', [siteB, actorB.id, roleId]).catch(() => {});
       }
     });
+    await t.test('document version reads revalidate content:read after a concurrent role-capability change', async () => {
+      const contentId = randomUUID();
+      const documentId = randomUUID();
+      const revisionSnapshot = {
+        documentId,
+        title: 'F1.86 private document revision marker',
+        body: { marker: 'F1.86 private revision metadata' },
+      };
+      await pool.query(
+        `INSERT INTO content_items
+          (id,site_id,content_type,slug,locale,title,status,body,created_by,updated_by)
+         VALUES($1,$2,'page',$3,'en',$4,'draft',$5::jsonb,$6,$6)`,
+        [contentId, siteB, 'f1-86-document-version-' + randomUUID().slice(0, 8), 'F1.86 private document version', JSON.stringify({ documentId, marker: 'F1.86 private document payload marker' }), actorB.id],
+      );
+      await pool.query(
+        `INSERT INTO content_revisions(content_id,version,snapshot,author_id,change_summary)
+         VALUES($1,1,$2::jsonb,$3,$4)`,
+        [contentId, JSON.stringify(revisionSnapshot), actorB.id, 'F1.86 private revision marker'],
+      );
+      const contentBefore = await pool.query(
+        'SELECT id,site_id,content_type,slug,locale,title,status,schema_version,version,body,created_by,updated_by,published_at,updated_at FROM content_items WHERE site_id=$1 AND id=$2',
+        [siteB, contentId],
+      );
+      const revisionsBefore = await pool.query(
+        'SELECT content_id,version,snapshot,author_id,change_summary FROM content_revisions WHERE content_id=$1 ORDER BY version',
+        [contentId],
+      );
+      const capabilitiesBefore = await pool.query('SELECT capabilities FROM roles WHERE id=$1', [roleId]);
+      assert.equal(contentBefore.rowCount, 1);
+      assert.equal(revisionsBefore.rowCount, 1);
+      assert.ok(capabilitiesBefore.rows[0].capabilities.includes('content:read'));
+
+      const route = `${base}/api/v1/sites/${siteB}/content/${contentId}/version`;
+      const activeResponse = await fetch(route, { headers });
+      assert.equal(activeResponse.status, 200, 'an active content:read member must retain document-version access');
+      const activePayload = await activeResponse.json();
+      assert.equal(activePayload.contentId, contentId);
+      assert.equal(activePayload.documentId, documentId);
+      assert.equal(activePayload.version, contentBefore.rows[0].version);
+      assert.equal(activePayload.revisionCount, 1);
+      assert.equal(activePayload.latestRevisionVersion, 1);
+
+      const revocationClient = await pool.connect();
+      let revocationOpen = false;
+      let versionPromise;
+      let versionOutcome;
+      let preflightCompleted;
+      let resumePreflight;
+      let contentReadChecks = 0;
+      const preflight = new Promise(resolve => { preflightCompleted = resolve; });
+      const preflightBarrier = new Promise(resolve => { resumePreflight = resolve; });
+      authorizeSiteInterceptor = async (args, allowed) => {
+        if (args[0] !== actorB.id || args[1] !== siteB || args[2] !== 'content:read') return;
+        contentReadChecks += 1;
+        // siteIdFor membership preflight is the first check; the route capability
+        // check is the second. Pause only after the real route capability passed.
+        if (contentReadChecks === 2 && allowed) {
+          preflightCompleted();
+          await preflightBarrier;
+        }
+      };
+
+      try {
+        await revocationClient.query('BEGIN');
+        revocationOpen = true;
+        await revocationClient.query('SELECT id FROM roles WHERE id=$1 FOR UPDATE', [roleId]);
+        await revocationClient.query(
+          `UPDATE roles SET capabilities=capabilities-'content:read' WHERE id=$1`,
+          [roleId],
+        );
+
+        versionPromise = fetch(route, { headers }).then(async response => ({
+          status: response.status,
+          payload: await response.json(),
+        }));
+        const preflightObserved = await Promise.race([
+          preflight.then(() => true),
+          new Promise(resolve => setTimeout(() => resolve(false), 5000)),
+        ]);
+        assert.equal(preflightObserved, true, 'document-version request must pass both request-time content:read checks before revocation');
+
+        // Resume the actual handler while the independent role-capability update
+        // still owns the role row's exclusive lock.
+        resumePreflight();
+        const earlyOutcome = await Promise.race([
+          versionPromise,
+          new Promise(resolve => setTimeout(() => resolve(null), 100)),
+        ]);
+        const lockObserved = earlyOutcome
+          ? false
+          : await waitForDatabaseWriteLock(revocationClient, 'FOR SHARE', 5000, { relationName: 'roles' });
+
+        await revocationClient.query('COMMIT');
+        revocationOpen = false;
+        versionOutcome = earlyOutcome || await versionPromise;
+
+        assert.equal(earlyOutcome, null, 'document-version metadata must not be returned before content:read revocation commits');
+        assert.equal(lockObserved, true, 'document-version read must serialize against the role-capability change');
+        assert.equal(versionOutcome.status, 403, 'a member whose content:read capability was revoked must not read version metadata');
+        assert.equal(versionOutcome.payload.code, 'ERR_VIRGOSCORPIO_HUB_FORBIDDEN');
+        for (const field of ['documentId', 'contentId', 'version', 'schemaVersion', 'status', 'revisionCount', 'latestRevisionVersion']) {
+          assert.equal(Object.hasOwn(versionOutcome.payload, field), false, 'denied response must not disclose document-version field: ' + field);
+        }
+        const contentAfter = await pool.query(
+          'SELECT id,site_id,content_type,slug,locale,title,status,schema_version,version,body,created_by,updated_by,published_at,updated_at FROM content_items WHERE site_id=$1 AND id=$2',
+          [siteB, contentId],
+        );
+        const revisionsAfter = await pool.query(
+          'SELECT content_id,version,snapshot,author_id,change_summary FROM content_revisions WHERE content_id=$1 ORDER BY version',
+          [contentId],
+        );
+        assert.deepEqual(contentAfter.rows, contentBefore.rows, 'content item must remain unchanged by the denied read');
+        assert.deepEqual(revisionsAfter.rows, revisionsBefore.rows, 'revision data must remain unchanged by the denied read');
+        const capabilitiesAfterRevoke = await pool.query('SELECT capabilities FROM roles WHERE id=$1', [roleId]);
+        assert.equal(capabilitiesAfterRevoke.rows[0].capabilities.includes('content:read'), false, 'the role remains revoked until cleanup');
+        await assertSiteAUnchanged();
+      } finally {
+        resumePreflight();
+        authorizeSiteInterceptor = null;
+        if (revocationOpen) await revocationClient.query('ROLLBACK').catch(() => {});
+        if (versionPromise && !versionOutcome) versionOutcome = await versionPromise.catch(() => null);
+        revocationClient.release();
+        await pool.query('UPDATE roles SET capabilities=$2::jsonb WHERE id=$1', [roleId, JSON.stringify(capabilitiesBefore.rows[0].capabilities)]).catch(() => {});
+        await pool.query('DELETE FROM content_items WHERE site_id=$1 AND id=$2', [siteB, contentId]).catch(() => {});
+      }
+
+      const restoredCapabilities = await pool.query('SELECT capabilities FROM roles WHERE id=$1', [roleId]);
+      assert.deepEqual(restoredCapabilities.rows[0].capabilities, capabilitiesBefore.rows[0].capabilities, 'the role capability fixture must be restored');
+    });
+
     await t.test('community profile mutation waits for site-member revocation and revalidates access', async () => {
       const profileBefore = await pool.query(
         'SELECT display_name,bio,avatar_asset_id,website_url,visibility,metadata,version FROM social_profiles WHERE site_id=$1 AND user_id=$2',
