@@ -486,13 +486,26 @@ async function handleModeration(ctx, siteId) {
 async function handleNotifications(ctx, siteId, notificationId, action, method) {
   const userId = ctx.actor.user.id;
   if (method === 'GET' && !notificationId) {
-    const result = await ctx.localPool.query(
-      `SELECT id,notification_type,payload,read_at,created_at FROM social_notifications
-        WHERE site_id=$1 AND user_id=$2 ORDER BY created_at DESC LIMIT $3`,
-      [siteId, userId, Math.min(100, Math.max(1, Number(ctx.url.searchParams.get('limit')) || 50))]
-    );
-    const unread = await ctx.localPool.query('SELECT count(*)::int AS count FROM social_notifications WHERE site_id=$1 AND user_id=$2 AND read_at IS NULL', [siteId, userId]);
-    return ctx.sendJson(ctx.res, 200, { notifications: result.rows, unreadCount: Number(unread.rows[0]?.count || 0), requestId: ctx.requestId });
+    const limit = Math.min(100, Math.max(1, Number(ctx.url.searchParams.get('limit')) || 50));
+    const inbox = await withTransaction(ctx.localPool, async client => {
+      // Revalidate the actor in the same transaction as both inbox reads so
+      // committed site-membership revocation prevents notification disclosure.
+      await assertActiveSiteMembership(client, ctx, siteId, userId);
+      const result = await client.query(
+        `SELECT id,notification_type,payload,read_at,created_at FROM social_notifications
+          WHERE site_id=$1 AND user_id=$2 ORDER BY created_at DESC LIMIT $3`,
+        [siteId, userId, limit]
+      );
+      const unread = await client.query(
+        'SELECT count(*)::int AS count FROM social_notifications WHERE site_id=$1 AND user_id=$2 AND read_at IS NULL',
+        [siteId, userId]
+      );
+      return {
+        notifications: result.rows,
+        unreadCount: Number(unread.rows[0]?.count || 0),
+      };
+    });
+    return ctx.sendJson(ctx.res, 200, { ...inbox, requestId: ctx.requestId });
   }
   if (method === 'POST' && action === 'read-all' && !notificationId) {
     const result = await withTransaction(ctx.localPool, async client => {
