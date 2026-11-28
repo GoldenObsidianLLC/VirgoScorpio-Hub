@@ -8,7 +8,7 @@
   "generatedBy": "scripts/generate-tenant-isolation-route-inventory.js",
   "sourceTree": {
     "fileCount": 22,
-    "sha256": "a10b79584415f91188b7ecebd0aa336a0740f181b10042db979730ec3abe9451",
+    "sha256": "057b95dd9320dacdf8df31a1c3e1decbf6b0794555616ac67caea90666f27b12",
     "files": [
       "apps/api/src/ai-task-routes.js",
       "apps/api/src/auth-routes.js",
@@ -36,7 +36,7 @@
   },
   "testTree": {
     "fileCount": 61,
-    "sha256": "4014ba951b75ebf598dd73e9c3b2314c19d3b7fcf074a39967bfe86b7f4cbd5d",
+    "sha256": "d317385661084347cf520d53eaab4f5bd5f2f473c2980e80c7e86b720d8ad3b0",
     "files": [
       "test/ai-queue-worker.test.js",
       "test/ai-task-queue.test.js",
@@ -1434,25 +1434,25 @@
             {
               "anchor": "const communityProfile",
               "lines": [
-                228
+                266
               ]
             },
             {
               "anchor": "const groups=",
               "lines": [
-                304
+                342
               ]
             },
             {
               "anchor": "const feed=",
               "lines": [
-                469
+                507
               ]
             },
             {
               "anchor": "const friendRequest=",
               "lines": [
-                714
+                752
               ]
             }
           ]
@@ -1527,7 +1527,7 @@
             {
               "anchor": "const friendRequest=",
               "lines": [
-                714
+                752
               ]
             }
           ]
@@ -1645,7 +1645,7 @@
             {
               "anchor": "const firewallCollection",
               "lines": [
-                833
+                871
               ]
             }
           ]
@@ -1694,7 +1694,7 @@
             {
               "anchor": "const cloudConnections",
               "lines": [
-                901
+                939
               ]
             }
           ]
@@ -1742,7 +1742,7 @@
             {
               "anchor": "const megaMenus",
               "lines": [
-                1148
+                1186
               ]
             },
             {
@@ -1750,8 +1750,8 @@
               "lines": [
                 177,
                 194,
-                1200,
-                1233
+                1238,
+                1271
               ]
             }
           ]

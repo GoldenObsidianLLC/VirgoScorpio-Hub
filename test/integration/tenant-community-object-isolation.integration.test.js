@@ -2761,6 +2761,8 @@ test(
       assert.equal(contentBefore.rowCount, 1);
       assert.equal(revisionsBefore.rowCount, 1);
       assert.ok(capabilitiesBefore.rows[0].capabilities.includes('content:read'));
+      const siteABefore = await snapshotCommunitySite(pool, siteA);
+      const siteBBefore = await snapshotCommunitySite(pool, siteB);
 
       const route = `${base}/api/v1/sites/${siteB}/content/${contentId}/version`;
       const activeResponse = await fetch(route, { headers });
@@ -2845,6 +2847,8 @@ test(
         assert.deepEqual(revisionsAfter.rows, revisionsBefore.rows, 'revision data must remain unchanged by the denied read');
         const capabilitiesAfterRevoke = await pool.query('SELECT capabilities FROM roles WHERE id=$1', [roleId]);
         assert.equal(capabilitiesAfterRevoke.rows[0].capabilities.includes('content:read'), false, 'the role remains revoked until cleanup');
+        assert.deepEqual(await snapshotCommunitySite(pool, siteA), siteABefore, 'Site A community state must remain unchanged');
+        assert.deepEqual(await snapshotCommunitySite(pool, siteB), siteBBefore, 'Site B community state must remain unchanged');
         await assertSiteAUnchanged();
       } finally {
         resumePreflight();
