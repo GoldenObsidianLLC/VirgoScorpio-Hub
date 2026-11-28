@@ -2524,6 +2524,7 @@ test(
           friendshipRequest,
           new Promise(resolve => setTimeout(() => resolve(null), 500)),
         ]);
+        assert.equal(earlyOutcome, null, 'friendship details must not be returned while site-membership revocation is uncommitted');
         const lockObserved = earlyOutcome
           ? false
           : await waitForDatabaseWriteLock(revocationClient, 'FOR KEY SHARE', 5000, { relationName: 'sites' });
