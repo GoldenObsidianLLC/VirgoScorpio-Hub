@@ -747,6 +747,11 @@ test(
 
       const listing = await fetch(`${base}/api/v1/sites/${siteB}/cloud/connections`, {
         headers: cloudHeaders,
+        // A route-level regression must fail promptly rather than consume the
+        // full per-file integration timeout while the HTTP response is pending.
+        signal: AbortSignal.timeout(15_000),
+      }).catch(error => {
+        throw new Error('Active cloud-connection listing did not complete within 15 seconds: ' + error.message);
       });
       assert.equal(listing.status, 200);
       const listedConnections = (await listing.json()).connections;
@@ -784,8 +789,13 @@ test(
           await revocationClient.query('SELECT id FROM roles WHERE id=$1 FOR UPDATE', [cloudRoleId]);
           await revocationClient.query("UPDATE roles SET capabilities=capabilities-'cloud:manage' WHERE id=$1", [cloudRoleId]);
 
-          connectionsPromise = fetch(`${base}/api/v1/sites/${siteB}/cloud/connections`, { headers: cloudHeaders })
-            .then(async response => ({ status: response.status, payload: await response.json() }));
+          connectionsPromise = fetch(`${base}/api/v1/sites/${siteB}/cloud/connections`, {
+            headers: cloudHeaders,
+            signal: AbortSignal.timeout(15_000),
+          }).then(async response => ({ status: response.status, payload: await response.json() }))
+            .catch(error => {
+              throw new Error('Revocation-race cloud-connection listing did not complete within 15 seconds: ' + error.message);
+            });
           const preflightObserved = await Promise.race([
             preflight.then(() => true),
             new Promise(resolve => setTimeout(() => resolve(false), 5000)),
