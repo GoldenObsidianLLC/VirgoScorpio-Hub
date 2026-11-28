@@ -1,10 +1,12 @@
-# VirgoScorpio Hub 0.6.2 — current release-readiness snapshot (27 November 2026; main 275f4685ce6e37369c1f341d1358f71979fbd008; run #46084252994)
+# VirgoScorpio Hub 0.6.2 — current release-readiness snapshot (27 November 2026 America/Chicago; main 109c9dfe146ec3261c394d5b4a6e27c7ce64a90a; run #46086982574)
 
-## Current exact-main readiness — 27 November 2026 (America/Chicago; post-F1.80 / PR #324 merge)
+## Current exact-main readiness — 27 November 2026 (America/Chicago; post-F1.81 / PR #326 merge)
 
-Main is 275f4685ce6e37369c1f341d1358f71979fbd008 after PR #324 (F1.80) merged. Exact-main workflow [#46084252994](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/46084252994) completed successfully with all seven jobs. Canonical release-readiness artifact [#15237933738](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/46084252994/artifacts/15237933738) is bound to that exact source revision. Archive SHA-256: b23b4ca83f306d57eb00680817d9975d7ba7c3b9391ae7d29401708f489af164. Readiness JSON SHA-256: 054ea0282db168d7b59330c080d8939dda65db11e299263b48208648d74d2ff2; readiness Markdown SHA-256: 0b17ced7a293ace363fced50946b4cdfca72fca3960b53d7c5b091a527d7d8a3. CI evidence JSON SHA-256: 892aaec5583aea1c4fd1f5a9bd149d4be92d15eb16cc6563c8567523971d8e0f; CI evidence Markdown SHA-256: cce37c60e1e01ac9146f6da78bee6a4f7fbb25cc6dd73d90aaa857bd13bb198f. Finalization validated exact-source producers, migrations, checksums and required attestation status; production certification remains separate.
+Main is 109c9dfe146ec3261c394d5b4a6e27c7ce64a90a after PR #326 (F1.81) merged. Exact-main workflow [#46086982574](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/46086982574) completed successfully with all seven jobs, including signed lockfile/SBOM attestation and final evidence consolidation. Canonical readiness bundle [#15239283305](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/46086982574/artifacts/15239283305) is bound to this exact SHA; archive SHA-256: c645c8e48e73042dcf8e5905c8da76c7fc00a7c8f152f996552ed67a9ddfd13f. Readiness JSON SHA-256: c5851944c81cdbfa500973a9c4c685f4455274d1275e51d5f4ca95aec6d85b40; readiness Markdown SHA-256: 24bcff3b5b287e0a4166bd19415b1e75c71872dea399f776ef22f932494aed45. CI evidence JSON SHA-256: 97c352ac8876c417cecb2e3c25dfe813e97498400ee8a2d91e268b2a5545155e; CI evidence Markdown SHA-256: 7a287542571c38bd9c217f9cf057141d5038741088bbc8afd51cb6e4676e44f0.
 
-Node.js 22.23.4 and 24.22.1 each passed 1,147/1,147 Hub tests with zero failures/skips; vendored EnginEx passed 94/94. Hosted PostgreSQL/Memgraph passed 206/206 with zero failures/skips. All 22 migrations applied to a fresh disposable database and all 22 were skipped on idempotent re-entry; cleanup dropped the database. PostgreSQL multi-node collaboration, Redis outage/authorization fallback and recovery, Memgraph outage/outbox recovery, and canonical graph rebuild passed. Browser smoke passed 9/9; CodeQL passed. npm audit reported zero vulnerabilities. Signed lockfile/SBOM attestation passed; CycloneDX 1.5 inventories matched across Node runtimes at 200 components / 201 dependency records.
+Node.js 22.23.4 and 24.22.1 each passed 1,148/1,148 Hub tests with zero failures/skips; vendored EnginEx passed 94/94. Hosted PostgreSQL/Memgraph passed 207/207 with zero failures/skips. All 22 migrations applied to a fresh disposable database and all 22 were skipped on idempotent re-entry; cleanup dropped the database. PostgreSQL multi-node collaboration, Redis outage/authorization fallback and recovery, Memgraph outage/outbox recovery, and canonical graph rebuild passed. Browser smoke passed 9/9; CodeQL passed. npm audit reported zero vulnerabilities. Signed lockfile/SBOM attestation passed; CycloneDX 1.5 inventories matched across Node runtimes at 200 components / 201 dependency records.
+
+
 
 Readiness remains **8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN**; readyForProduction=false, NOT_PRODUCTION_CERTIFIED. Decision: **NO-GO**. PARTIAL items are qualified human dependency/license review and service-less integration diagnostics (1 pass / 56 skips); those skips are not the live hosted database suite and do not count as production validation.
 
@@ -12,9 +14,9 @@ Readiness remains **8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT
 
 | Gate | Exact-main result |
 |---|---|
-| Node.js 22.23.4 / 24.22.1 | 1,147/1,147 Hub tests each; zero skips |
+| Node.js 22.23.4 / 24.22.1 | 1,148/1,148 Hub tests each; zero skips |
 | Vendored EnginEx | 94/94 tests |
-| PostgreSQL/Memgraph | 206/206; zero failures/skips |
+| PostgreSQL/Memgraph | 207/207; zero failures/skips |
 | Fresh / idempotent migrations | 22/22 applied; 22/22 skipped on second pass |
 | PostgreSQL collaboration / Redis fallback | Passed |
 | Memgraph outage / outbox recovery / graph rebuild | Passed |
@@ -23,15 +25,21 @@ Readiness remains **8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT
 | CycloneDX / npm audit | 200 components / 201 dependencies; zero audit vulnerabilities |
 | Exact-main Actions | 7/7 jobs successful |
 
-### F1.81 candidate — community report-list capability revalidation (PR #326 / issue #325; open review)
+### F1.81 merged — community report-list capability revalidation (PR #326 / issue #325)
 
-Source review found the same preflight-to-disclosure race in GET /api/v1/sites/:siteId/community/reports. The handler performed a request-time community:moderate check and then used a pool-level SELECT to return reporter identity and report details. The test-first hosted PostgreSQL run #46085459119 reproduced disclosure after an isolated Site B moderator role lost community:moderate.
+PR [#326](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/326) merged to main at 109c9dfe146ec3261c394d5b4a6e27c7ce64a90a, closing issue [#325](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/325). GET /api/v1/sites/:siteId/community/reports previously checked community:moderate at request time and then selected report/reporter details outside the authorization transaction. A moderator capability revocation after preflight could still disclose those rows.
 
-The candidate fix reuses assertSiteCapabilityInTransaction inside the same withTransaction client that selects the report details. It preserves the preflight, 403 contract, status filter, ordering, limit, site predicate and response shape. It adds an active/revoked moderator unit test and a deterministic two-site PostgreSQL barrier test covering no report/PII disclosure, role-lock serialization and unchanged Site A/Site B snapshots. No duplicate authorization helper, schema migration, dependency or SemVer change.
+The merged route now revalidates community:moderate with shared assertSiteCapabilityInTransaction on the same withTransaction client used for the detail SELECT. It preserves preflight, 403 contract, status filter, ordering, limit, site predicate and response shape, using the existing site-first authorization lock order. No duplicate authorization SQL, migration, dependency, lockfile, response-shape or SemVer change.
 
-PR [#326](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/326) is open against main from security/f1-81-community-report-list-capability-2026-11-27; issue [#325](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/325) remains open pending merge. Candidate run [#46085853863](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/46085853863) completed successfully: Node 22.23.4 and 24.22.1 each passed 1,148/1,148 with zero skips; hosted PostgreSQL/Memgraph passed 207/207 with zero skips including the new regression; browser smoke 9/9; CodeQL passed; npm audit reported zero vulnerabilities; CycloneDX 1.5 included 200 components and 201 dependency records. The PR-branch attestation job was skipped by workflow design; exact-main attestation remains required after merge.
+Hosted pre-fix run [#46085459119](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/46085459119) reproduced disclosure. Candidate [#46085853863](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/46085853863), PR-context [#46086099190](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/46086099190), and exact-main [#46086982574](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/46086982574) passed. Exact-main CI recorded 1,148/1,148 tests on Node 22/24 and 207/207 hosted PostgreSQL/Memgraph tests, zero skips.
 
-GitHub reports the PR merge state as BLOCKED despite a clean mergeable diff. No approval review is recorded, and repository auto-merge is disabled. The merge was not forced using administrator privileges. The PR-triggered workflow #46086099190 also completed successfully: Node 22/24 (1,148/1,148 each), PostgreSQL/Memgraph integration (207/207; zero failures/skips), browser smoke, CodeQL and candidate evidence consolidation passed. Its signed-attestation job was skipped by design for this PR event; an exact-main attestation run remains required after merge. F1.81 is not yet merged and does not change the exact-main release evidence above.
+### F1.82 verified PR candidate — friendship-list membership revalidation (PR #329 / issue #328)
+
+GET /api/v1/sites/:siteId/community/friends had a stale-membership read race: after request-time site membership preflight, the route selected persisted friendship rows and participant display names through a separate pool-level query. The hosted pre-fix test-first run [#46087361864](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/46087361864) reproduced the race: the friendship-list request returned while an independent Site B revocation transaction held the site row lock, so the expected serialization was not observed.
+
+PR [#329](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/329) moves the GET detail read into withTransaction and calls the shared assertActiveSiteMembership helper on that same transaction client before selecting friendship rows and participant display names. It preserves initial site preflight, site predicate, ordering, limit, response shape and denial contract. The PostgreSQL regression verifies the active-member positive control, request blocking until revocation commits, post-revocation 403, absence of friendship rows and participant email/display-name disclosure, unchanged Site A/Site B snapshots and fixture cleanup. Route-level authorization unit tests assert site and membership locks precede the detail SELECT.
+
+Post-fix hosted workflow [#46088039996](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/46088039996) passed all required PR checks: PostgreSQL/Memgraph 208/208 with zero failures/skips (including the new regression); Node 22.23.4 and 24.22.1 each 1,149/1,149 unit/security tests with zero skips; EnginEx 94/94; browser smoke 9/9; CodeQL scanned 316 JavaScript and 2 HTML files; npm audit found zero vulnerabilities. The PR-event signed-attestation job was skipped by workflow design; an exact-main attestation remains required after merge. PR #329 is awaiting independent review. No schema/migration, dependency/lockfile, external response-shape or SemVer change. Maintainer verification does not close independent tenant review #14 or platform security assessment #25.
 ### F1.80 merged security change — PR #324 / issue #321
 
 The group-members GET now revalidates community:moderate through the shared assertSiteCapabilityInTransaction helper on the same PostgreSQL transaction client used to read member details. The request-time preflight, 403 contract, site/group predicates and response shape remain unchanged. A deterministic two-site PostgreSQL barrier regression reproduces the pre-fix email disclosure after role-capability revocation and verifies that the corrected handler denies disclosure; exact-main workflow #46084252994 passed it. The route fixture and source-anchored tenant-isolation JSON/Markdown inventory were updated in the same change. This maintainer fix does not replace independent review #14.
@@ -56,19 +64,19 @@ Evidence must identify the exact candidate version and full source SHA. A source
 
 ## Current GitHub disposition
 
-- PR #324 (F1.80) merged; issue #321 closed. Main: 275f4685ce6e37369c1f341d1358f71979fbd008; exact-main workflow #46084252994 passed 7/7.
-- One open PR: #326 (F1.81 report-list capability revalidation), awaiting required review/policy clearance.
+- PR #326 (F1.81) merged; issue #325 closed. Current main: 109c9dfe146ec3261c394d5b4a6e27c7ce64a90a; exact-main workflow #46086982574 passed 7/7 jobs.
+- PR #329 (F1.82 friendship-list membership revalidation) is open and all required PR CI checks pass; awaiting independent review. Issue #328 is tracked as the PR's closing issue.
 - P0: #13 provider/scope approval; #14 independent tenant/site review; #25 independent security assessment; #26 operations/release-owner approval; #32 governance/capital controls.
 - P1: #23 human dependency/SBOM review; #24 load/restore; #124 remaining tenant-isolation work; #234 SAST/secret-history triage; #277 autofix triage. P2: #235 scan freshness/asset coverage.
 - Package 0.6.2 remains private/unreleased; production remains NO-GO.
 
 ## Recommended development sequence
 
-1. Continue #124 using the refreshed route-capability inventory; require a reproducible hosted PostgreSQL barrier, positive control and unchanged two-site snapshots before another bounded fix.
-2. Reuse shared transaction-time authorization helpers and site-first lock order; avoid duplicate authorization SQL and preserve API contracts.
-3. Complete independent tenant/security reviews #14/#25 and qualified dependency/SBOM review #23.
-4. Complete load/restore #24, operations/release-owner #26, scope/provider approval #13 and governance #32.
-5. Triage SAST/Aikido work #234/#235/#277 against exact source and fresh scans.
+1. Complete independent review of F1.82 PR #329 and merge only after repository review policy is satisfied; then rerun exact-main migration, attestation and source-bound readiness gates.
+2. Continue #124 using the refreshed route-capability inventory; require a reproducible hosted PostgreSQL barrier, positive control and unchanged two-site snapshots before another bounded fix.
+3. Reuse shared transaction-time authorization helpers and site-first lock order; avoid duplicate authorization SQL and preserve API contracts.
+4. Complete independent tenant/security reviews #14/#25 and qualified dependency/SBOM review #23.
+5. Complete load/restore #24, operations/release-owner #26, scope/provider approval #13 and governance #32; triage SAST/Aikido work #234/#235/#277 against exact source and fresh scans.
 
 ## F1.74 merged implementation
 

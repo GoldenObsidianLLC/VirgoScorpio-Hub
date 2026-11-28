@@ -1,20 +1,20 @@
 # VirgoScorpio Hub 0.6.2 — Release Gate and Development Status Report
 
-## Current exact-main readiness — 27 November 2026 (America/Chicago; post-F1.80 / PR #324 merge)
+## Current exact-main readiness — 27 November 2026 (America/Chicago; post-F1.81 / PR #326 merge)
 
-Main is 275f4685ce6e37369c1f341d1358f71979fbd008 after PR #324 (F1.80) merged. Exact-main workflow [#46084252994](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/46084252994) completed successfully with all seven jobs. Canonical release-readiness artifact [#15237933738](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/46084252994/artifacts/15237933738) is bound to that exact source revision. Archive SHA-256: b23b4ca83f306d57eb00680817d9975d7ba7c3b9391ae7d29401708f489af164. Readiness JSON SHA-256: 054ea0282db168d7b59330c080d8939dda65db11e299263b48208648d74d2ff2; readiness Markdown SHA-256: 0b17ced7a293ace363fced50946b4cdfca72fca3960b53d7c5b091a527d7d8a3. CI evidence JSON SHA-256: 892aaec5583aea1c4fd1f5a9bd149d4be92d15eb16cc6563c8567523971d8e0f; CI evidence Markdown SHA-256: cce37c60e1e01ac9146f6da78bee6a4f7fbb25cc6dd73d90aaa857bd13bb198f. Finalization validated exact-source producers, migrations, checksums and required attestation status; production certification remains separate.
+Main is 109c9dfe146ec3261c394d5b4a6e27c7ce64a90a after PR #326 merged. Exact-main workflow [#46086982574](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/46086982574) passed all seven jobs, including signed lockfile/SBOM attestation and final evidence consolidation. Canonical readiness bundle [#15239283305](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/46086982574/artifacts/15239283305) is source-bound to that exact SHA; archive SHA-256 c645c8e48e73042dcf8e5905c8da76c7fc00a7c8f152f996552ed67a9ddfd13f. Readiness JSON/Markdown SHA-256: c5851944c81cdbfa500973a9c4c685f4455274d1275e51d5f4ca95aec6d85b40 / 24bcff3b5b287e0a4166bd19415b1e75c71872dea399f776ef22f932494aed45; CI evidence JSON/Markdown SHA-256: 97c352ac8876c417cecb2e3c25dfe813e97498400ee8a2d91e268b2a5545155e / 7a287542571c38bd9c217f9cf057141d5038741088bbc8afd51cb6e4676e44f0.
 
-Node.js 22.23.4 and 24.22.1 each passed 1,147/1,147 Hub tests with zero failures/skips; vendored EnginEx passed 94/94. Hosted PostgreSQL/Memgraph passed 206/206 with zero failures/skips. All 22 migrations applied to a fresh disposable database and all 22 were skipped on idempotent re-entry; cleanup dropped the database. PostgreSQL multi-node collaboration, Redis outage/authorization fallback and recovery, Memgraph outage/outbox recovery, and canonical graph rebuild passed. Browser smoke passed 9/9; CodeQL passed. npm audit reported zero vulnerabilities. Signed lockfile/SBOM attestation passed; CycloneDX 1.5 inventories matched across Node runtimes at 200 components / 201 dependency records.
+Node.js 22.23.4 and 24.22.1 each passed 1,148/1,148 Hub tests with zero failures/skips; vendored EnginEx passed 94/94. Hosted PostgreSQL/Memgraph passed 207/207 with zero failures/skips. All 22 migrations applied to a fresh disposable database and all 22 were skipped on idempotent re-entry; cleanup dropped the database. PostgreSQL multi-node collaboration, Redis outage/authorization fallback and recovery, Memgraph outage/outbox recovery, and canonical graph rebuild passed. Browser smoke passed 9/9; CodeQL passed. npm audit reported zero vulnerabilities. Signed lockfile/SBOM attestation passed; CycloneDX 1.5 parity: 200 components / 201 dependency records.
 
-Readiness remains **8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN**; readyForProduction=false, NOT_PRODUCTION_CERTIFIED. Decision: **NO-GO**. PARTIAL items are qualified human dependency/license review and service-less integration diagnostics (1 pass / 56 skips); those skips are not the live hosted database suite and do not count as production validation.
+Readiness remains **8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT_RUN**; readyForProduction=false, NOT_PRODUCTION_CERTIFIED / **NO-GO**. PARTIAL items are qualified human dependency/license review and service-less diagnostics (1 pass / 56 skips); those skips are not live integration evidence.
 
 ### Current exact-main matrix
 
 | Gate | Exact-main result |
 |---|---|
-| Node.js 22.23.4 / 24.22.1 | 1,147/1,147 Hub tests each; zero skips |
+| Node.js 22.23.4 / 24.22.1 | 1,148/1,148 Hub tests each; zero skips |
 | Vendored EnginEx | 94/94 tests |
-| PostgreSQL/Memgraph | 206/206; zero failures/skips |
+| PostgreSQL/Memgraph | 207/207; zero failures/skips |
 | Fresh / idempotent migrations | 22/22 applied; 22/22 skipped on second pass |
 | PostgreSQL collaboration / Redis fallback | Passed |
 | Memgraph outage / outbox recovery / graph rebuild | Passed |
@@ -23,15 +23,19 @@ Readiness remains **8 PASS / 2 PARTIAL / 0 BLOCKED / 14 MISSING_EVIDENCE / 0 NOT
 | CycloneDX / npm audit | 200 components / 201 dependencies; zero audit vulnerabilities |
 | Exact-main Actions | 7/7 jobs successful |
 
-### F1.81 candidate — community report-list capability revalidation (PR #326 / issue #325; open review)
+### F1.81 merged implementation — community report-list capability revalidation (PR #326 / issue #325)
 
-Source review found the same preflight-to-disclosure race in GET /api/v1/sites/:siteId/community/reports. The handler performed a request-time community:moderate check and then used a pool-level SELECT to return reporter identity and report details. The test-first hosted PostgreSQL run #46085459119 reproduced disclosure after an isolated Site B moderator role lost community:moderate.
+PR [#326](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/326) merged to main at 109c9dfe146ec3261c394d5b4a6e27c7ce64a90a, closing issue #325. GET community reports now revalidates community:moderate through the shared assertSiteCapabilityInTransaction helper inside the same transaction as the report/reporter detail SELECT. Existing request preflight, 403 contract, status filter, ordering, limit, site predicate and response shape remain unchanged.
 
-The candidate fix reuses assertSiteCapabilityInTransaction inside the same withTransaction client that selects the report details. It preserves the preflight, 403 contract, status filter, ordering, limit, site predicate and response shape. It adds an active/revoked moderator unit test and a deterministic two-site PostgreSQL barrier test covering no report/PII disclosure, role-lock serialization and unchanged Site A/Site B snapshots. No duplicate authorization helper, schema migration, dependency or SemVer change.
+Hosted pre-fix workflow #46085459119 reproduced disclosure after capability revocation. Candidate #46085853863, PR-context #46086099190 and exact-main #46086982574 passed. No schema/migration, dependency/lockfile, external response-shape or SemVer change.
 
-PR [#326](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/326) is open against main from security/f1-81-community-report-list-capability-2026-11-27; issue [#325](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/325) remains open pending merge. Candidate run [#46085853863](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/46085853863) completed successfully: Node 22.23.4 and 24.22.1 each passed 1,148/1,148 with zero skips; hosted PostgreSQL/Memgraph passed 207/207 with zero skips including the new regression; browser smoke 9/9; CodeQL passed; npm audit reported zero vulnerabilities; CycloneDX 1.5 included 200 components and 201 dependency records. The PR-branch attestation job was skipped by workflow design; exact-main attestation remains required after merge.
+### F1.82 verified PR candidate — friendship-list membership revalidation (PR #329 / issue #328)
 
-GitHub reports the PR merge state as BLOCKED despite a clean mergeable diff. No approval review is recorded, and repository auto-merge is disabled. The merge was not forced using administrator privileges. The PR-triggered workflow #46086099190 also completed successfully: Node 22/24 (1,148/1,148 each), PostgreSQL/Memgraph integration (207/207; zero failures/skips), browser smoke, CodeQL and candidate evidence consolidation passed. Its signed-attestation job was skipped by design for this PR event; an exact-main attestation run remains required after merge. F1.81 is not yet merged and does not change the exact-main release evidence above.
+GET community friends previously authorized the site at request time and then selected retained friendship rows and participant display names using a separate pool-level query. Hosted pre-fix workflow [#46087361864](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/actions/runs/46087361864) reproduced the race: the request returned before an independent transaction holding the Site B row lock could commit the membership revocation.
+
+PR [#329](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/329) now reuses withTransaction and assertActiveSiteMembership on the same transaction client as the friendship detail SELECT. The two-site barrier regression covers active-member access, blocking during revocation, post-commit 403, no friendship-row or participant email/display-name disclosure, unchanged Site A/Site B snapshots and fixture cleanup.
+
+Post-fix hosted workflow #46088039996 passed PostgreSQL/Memgraph 208/208 with zero failures/skips; Node 22/24 each 1,149/1,149 unit/security tests; EnginEx 94/94; browser smoke 9/9; CodeQL scanned 316 JavaScript and 2 HTML files; npm audit found zero vulnerabilities. PR-event signed attestation is skipped by design; exact-main attestation is required after merge. No schema/migration, dependency/lockfile, external response-shape or SemVer change.
 ### F1.80 merged implementation — PR #324 / issue #321
 
 PR [#324](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/pull/324) merged to main at 275f4685ce6e37369c1f341d1358f71979fbd008; issue [#321](https://github.com/GoldenObsidianLLC/VirgoScorpio-Hub/issues/321) is closed. GET /api/v1/sites/:siteId/community/groups/:groupId/members previously performed a request-time community:moderate preflight followed by a separate pool-level query returning member identity and email fields. A role revocation between those steps could still disclose details.
@@ -87,20 +91,20 @@ The fourteen missing evidence categories remain those listed in release readines
 
 ### 5. Current GitHub issue and PR disposition
 
-- PR #324 (F1.80) merged; issue #321 closed. Main: 275f4685ce6e37369c1f341d1358f71979fbd008. Exact-main workflow #46084252994 passed 7/7 jobs.
-- One open PR: #326 (F1.81 report-list capability revalidation), awaiting required review/policy clearance.
-- P0: #13, #14, #25, #26 and #32. P1: #23, #24, #124, #234 and #277. P2: #235.
+- PR #326 (F1.81) merged; issue #325 closed. Main: 109c9dfe146ec3261c394d5b4a6e27c7ce64a90a. Exact-main workflow #46086982574 passed 7/7 jobs.
+- PR #329 (F1.82 friendship-list membership revalidation) is open and all required PR CI jobs passed; awaiting independent review. It closes issue #328 when merged.
+- Parent #124 and independent reviews #14/#25 remain open. P0: #13, #14, #25, #26 and #32. P1: #23, #24, #124, #234 and #277. P2: #235.
 
 ### 6. Recommended development sequence
 
-1. Continue #124 with the refreshed source-anchored capability inventory; use hosted PostgreSQL race barriers, active-member positive controls and unchanged two-site snapshots.
-2. Reuse shared transaction helpers and site-first lock order; avoid duplicate authorization SQL.
+1. Complete independent review of PR #329 and merge only after repository review policy is satisfied; then rerun exact-main migrations, signed attestations and source-bound readiness.
+2. Continue #124 using the refreshed tenant capability inventory; require hosted PostgreSQL barriers, active-member positive controls and unchanged two-site snapshots for each new finding.
 3. Complete independent reviews #14/#25 and qualified dependency review #23; then #24 load/restore, #26 operations, #13 scope/provider and #32 governance.
-4. Continue SAST/Aikido triage #234/#235/#277 against fresh evidence.
+4. Continue SAST/Aikido triage #234/#235/#277 against fresh source-bound evidence.
 
 ### 7. Compatibility and release boundary
 
-F1.80 changes no schema/migration, dependency/lockfile, external response shape or SemVer. Package 0.6.2 remains private and unreleased. No tag, publication, deployment or production promotion is authorized. Production remains NOT_PRODUCTION_CERTIFIED / NO-GO.
+F1.81 and the F1.82 PR candidate change no schema/migration, dependency/lockfile, external response shape or SemVer. Package 0.6.2 remains private and unreleased. No tag, publication, deployment or production promotion is authorized. Production remains NOT_PRODUCTION_CERTIFIED / NO-GO.
 
 ## Historical report baseline — original executive decision (superseded by the current snapshot above)
 
